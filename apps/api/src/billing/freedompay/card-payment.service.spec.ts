@@ -322,6 +322,22 @@ describe('Оплата подписки картой', () => {
             expect(s.billing.updateCompanySubscription).not.toHaveBeenCalled();
         });
 
+        it('отказ по уже оплаченному платежу оплату не отменяет', async () => {
+            // Так быть не должно, но если пришло — деньги у нас, и снимать
+            // подписку по такому сообщению нельзя.
+            const s = стенд();
+            const id = await начать(s);
+            await s.service.handleResult(РЕЗУЛЬТАТ, оплачено(id));
+
+            const xml = await s.service.handleResult(РЕЗУЛЬТАТ, {
+                ...оплачено(id), pg_result: '0', pg_failure_description: 'Возврат',
+            });
+
+            expect(parseFlatXml(xml).pg_status).toBe('ok');
+            expect(s.платежи.строки.get(id).status).toBe('SUCCESS');
+            expect(s.платежи.строки.get(id).appliedAt).toBeTruthy();
+        });
+
         it('списали не ту сумму — деньги приняты, подписка не продлена, владелец предупреждён', async () => {
             const s = стенд();
             const id = await начать(s);

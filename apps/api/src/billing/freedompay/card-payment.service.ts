@@ -251,6 +251,15 @@ export class CardPaymentService {
                         failureDescription: тело.pg_failure_description || 'Банк отклонил оплату',
                     },
                 });
+            } else if (платёж.status === SubscriptionPaymentStatus.SUCCESS) {
+                // Отказ по уже оплаченному — так быть не должно. Оплату не
+                // отменяем (деньги на нашем счету, и решать тут человеку), но
+                // в журнале след оставляем: с этой строки начнётся разбор,
+                // если однажды не сойдётся выписка.
+                this.logger.error(
+                    `Отказ по уже оплаченному платежу ${платёж.id}: `
+                    + `${тело.pg_failure_code || ''} ${тело.pg_failure_description || ''}`.trim(),
+                );
             }
             return this.freedompay.ответ(url, { pg_status: 'ok', pg_description: 'Отказ принят' });
         }
