@@ -301,3 +301,69 @@ describe('проверка настройки оплаты картой', () => 
         expect(сервис({ ...ПОЛНЫЙ, FREEDOMPAY_TESTING_MODE: '1' }).диагностика().testingMode).toBe(true);
     });
 });
+
+/**
+ * Разбор сетевой ошибки.
+ *
+ * `fetch` в Node на любую сетевую беду отвечает двумя словами — «fetch
+ * failed». Владелец платформы видит их в админке и не может понять, чинить
+ * ему адрес, сеть или сертификат. Проверяем, что настоящая причина
+ * доезжает до текста.
+ */
+describe('причина сетевой ошибки', () => {
+    const сервис = () => new FreedomPayService({
+        get: (имя: string) => ({
+            FREEDOMPAY_MERCHANT_ID: '589160',
+            FREEDOMPAY_SECRET_KEY: 'k',
+            API_PUBLIC_URL: 'https://api.example.com',
+            FREEDOMPAY_API_URL: 'https://шлюз.example',
+        } as Record<string, string>)[имя],
+    } as any);
+
+    /** Так выглядит отказ DNS, каким его отдаёт `fetch`. */
+    const несуществующийУзел = () => {
+        const низ: any = new Error('getaddrinfo ENOTFOUND шлюз.example');
+        низ.code = 'ENOTFOUND';
+        низ.hostname = 'шлюз.example';
+        const верх: any = new TypeError('fetch failed');
+        верх.cause = низ;
+        return верх;
+    };
+
+    const запрос = async (ошибка: any) => {
+        const прежний = global.fetch;
+        (global as any).fetch = jest.fn().mockRejectedValue(ошибка);
+        try {
+            await сервис().initPayment({
+                paymentId: 'p1', amount: 5000, currency: 'KZT', description: 'тест',
+                successUrl: 'https://app/ok', failureUrl: 'https://app/no',
+            });
+            throw new Error('должно было упасть');
+        } catch (e: any) {
+            return e.message as string;
+        } finally {
+            global.fetch = прежний;
+        }
+    };
+
+    it('называет узел и код вместо «fetch failed»', async () => {
+        const текст = await запрос(несуществующийУзел());
+
+        expect(текст).toContain('ENOTFOUND');
+        expect(текст).toContain('шлюз.example');
+        // Два бесполезных слова сами по себе в тексте не остаются.
+        expect(текст).not.toBe('fetch failed');
+    });
+
+    it('показывает адрес, до которого не дошли', async () => {
+        const текст = await запрос(несуществующийУзел());
+
+        expect(текст).toContain('https://шлюз.example/init_payment.php');
+    });
+
+    it('ошибка без вложенной причины не теряется', async () => {
+        const текст = await запрос(new Error('соединение сброшено'));
+
+        expect(текст).toContain('соединение сброшено');
+    });
+});
