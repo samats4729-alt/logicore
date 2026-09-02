@@ -46,6 +46,23 @@ const LIFETIME_SECONDS = 3600;
 const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
+ * Адрес шлюза по умолчанию — казахстанский.
+ *
+ * Здесь стоял `api.freedompay.money`, и это была ошибка: такого имени не
+ * существует вовсе. Первая же попытка оплаты на боевом сервере упёрлась в
+ * `getaddrinfo ENOTFOUND`, и по одному «fetch failed» причина не читалась.
+ *
+ * Проверено разрешением имён: `api.freedompay.kz` существует и указывает на
+ * тот же сервер, что и `test-api.freedompay.kz`; `api.freedompay.money` не
+ * разрешается ни во что. Магазин у нас казахстанский, кабинет на
+ * `freedompay.kz` — этот адрес ему и родной.
+ *
+ * Если платёжная система выдаст магазину другой адрес, он задаётся
+ * переменной `FREEDOMPAY_API_URL` и перекрывает это значение.
+ */
+const ШЛЮЗ_ПО_УМОЛЧАНИЮ = 'https://api.freedompay.kz';
+
+/**
  * Платёжная система ответила и отказала — с объяснением.
  *
  * Отличается от «не дозвонились» намеренно: это разные поломки и разные
@@ -109,7 +126,7 @@ export class FreedomPayService {
         return {
             merchantId,
             secretKey,
-            apiUrl: (this.config.get<string>('FREEDOMPAY_API_URL') || 'https://api.freedompay.money')
+            apiUrl: (this.config.get<string>('FREEDOMPAY_API_URL') || ШЛЮЗ_ПО_УМОЛЧАНИЮ)
                 .trim()
                 .replace(/\/+$/, ''),
             testingMode: (this.config.get<string>('FREEDOMPAY_TESTING_MODE') || '').trim() === '1',

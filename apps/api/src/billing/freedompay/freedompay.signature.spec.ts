@@ -38,7 +38,7 @@ describe('подпись FreedomPay', () => {
         });
 
         it('у запроса ссылки имя скрипта — имя файла', () => {
-            expect(scriptNameFromUrl('https://api.freedompay.money/init_payment.php'))
+            expect(scriptNameFromUrl('https://api.freedompay.kz/init_payment.php'))
                 .toBe('init_payment.php');
         });
     });
@@ -179,7 +179,7 @@ describe('XML платёжной системы', () => {
 <response>
     <pg_status>ok</pg_status>
     <pg_payment_id>123456</pg_payment_id>
-    <pg_redirect_url>https://api.freedompay.money/pay.html?customer=1&amp;order=2</pg_redirect_url>
+    <pg_redirect_url>https://api.freedompay.kz/pay.html?customer=1&amp;order=2</pg_redirect_url>
     <pg_salt>соль</pg_salt>
     <pg_sig>abc</pg_sig>
 </response>`;
@@ -189,7 +189,7 @@ describe('XML платёжной системы', () => {
             pg_payment_id: '123456',
             // Амперсанд в ссылке приходит экранированным — не расшифруй мы его,
             // человек ушёл бы на битый адрес.
-            pg_redirect_url: 'https://api.freedompay.money/pay.html?customer=1&order=2',
+            pg_redirect_url: 'https://api.freedompay.kz/pay.html?customer=1&order=2',
             pg_salt: 'соль',
             pg_sig: 'abc',
         });
@@ -365,5 +365,39 @@ describe('причина сетевой ошибки', () => {
         const текст = await запрос(new Error('соединение сброшено'));
 
         expect(текст).toContain('соединение сброшено');
+    });
+});
+
+/**
+ * Адрес шлюза по умолчанию.
+ *
+ * Здесь стоял `api.freedompay.money` — имя, которого не существует. Ошибка
+ * дошла до боевого сервера и там же и вскрылась: первая попытка оплаты
+ * упёрлась в отказ разрешения имени. Тест закрепляет исправленное значение,
+ * чтобы неверный адрес не вернулся молча.
+ */
+describe('адрес платёжной системы', () => {
+    const базовые = {
+        FREEDOMPAY_MERCHANT_ID: '589160',
+        FREEDOMPAY_SECRET_KEY: 'k',
+        API_PUBLIC_URL: 'https://api.example.com',
+    } as Record<string, string>;
+
+    const сервис = (env: Record<string, string>) =>
+        new FreedomPayService({ get: (имя: string) => env[имя] } as any);
+
+    it('по умолчанию — казахстанский', () => {
+        expect(сервис(базовые).диагностика().apiUrl).toBe('https://api.freedompay.kz');
+    });
+
+    it('несуществующий `freedompay.money` не вернулся', () => {
+        expect(сервис(базовые).диагностика().apiUrl).not.toContain('freedompay.money');
+    });
+
+    it('переменная перекрывает умолчание', () => {
+        const свой = { ...базовые, FREEDOMPAY_API_URL: 'https://api.paybox.money/' };
+
+        // И хвостовой слэш не даёт двойного в собранном адресе.
+        expect(сервис(свой).диагностика().apiUrl).toBe('https://api.paybox.money');
     });
 });
