@@ -89,3 +89,62 @@
     display: flex;
     gap: 8px;
 }
+
+/* Проверка настройки оплаты картой.
+
+   Блок читают один раз — в тот день, когда настраивают, — и он должен
+   отвечать на один вопрос без чтения между строк. Поэтому строки в столбик
+   и адреса целиком, а не многоточием: адрес, обрезанный посередине,
+   проверить глазами нельзя. */
+
+.setup {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0 2px;
+}
+
+.setupRow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.setupRow b {
+    color: var(--nova-fg);
+    font-weight: 600;
+    text-align: right;
+}
+
+.setupUrl {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    /* Адреса длинные: переносим по любому месту, но не прячем. */
+    word-break: break-all;
+}
+
+.setupNote {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--nova-fg-2);
+}
+
+.setupMissing {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding-left: 18px;
+}
+
+.setupMissing code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    color: var(--nova-fg);
+    background: var(--nova-hover);
+    border-radius: 5px;
+    padding: 2px 6px;
+}

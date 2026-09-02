@@ -8,6 +8,7 @@ import {
     randomSalt,
 } from './freedompay.signature';
 import { parseFlatXml, buildXmlResponse } from './freedompay.xml';
+import { FreedomPayService } from './freedompay.service';
 
 /**
  * Подпись — единственный замок на обработчике оплаты: адрес открыт всем,
@@ -222,5 +223,81 @@ describe('XML платёжной системы', () => {
 
         expect(xml).toContain('&lt;');
         expect(parseFlatXml(xml).pg_description).toBe('Счёт «Ромашка» < 1 & 2');
+    });
+});
+
+/**
+ * Проверка настройки — то, что владелец видит в админке вместо отсутствия
+ * кнопки. Здесь важно ровно одно: секретный ключ не должен утечь наружу
+ * никаким полем, а список нехватки должен называть переменные поимённо,
+ * иначе настройка снова превращается в перебор наугад.
+ */
+describe('проверка настройки оплаты картой', () => {
+    const сервис = (env: Record<string, string | undefined>) =>
+        new FreedomPayService({ get: (имя: string) => env[имя] } as any);
+
+    const ПОЛНЫЙ = {
+        FREEDOMPAY_MERCHANT_ID: '589160',
+        FREEDOMPAY_SECRET_KEY: 'очень-секретный-ключ',
+        API_PUBLIC_URL: 'https://api.example.com',
+        FRONTEND_URL: 'https://app.example.com',
+    };
+
+    it('всё задано — настроено', () => {
+        const д = сервис(ПОЛНЫЙ).диагностика();
+
+        expect(д.ready).toBe(true);
+        expect(д.missing).toEqual([]);
+        expect(д.merchantId).toBe('589160');
+        expect(д.secretKeySet).toBe(true);
+    });
+
+    it('секретный ключ наружу не выходит ни одним полем', () => {
+        const д = сервис(ПОЛНЫЙ).диагностика();
+
+        expect(JSON.stringify(д)).not.toContain('очень-секретный-ключ');
+    });
+
+    it('называет поимённо, чего не хватает', () => {
+        const д = сервис({ FREEDOMPAY_SECRET_KEY: 'x' }).диагностика();
+
+        expect(д.ready).toBe(false);
+        expect(д.missing).toEqual(['FREEDOMPAY_MERCHANT_ID', 'API_PUBLIC_URL']);
+    });
+
+    it('пустая строка — это не заданное значение', () => {
+        // Переменная, заведённая в панели хостинга, но с пустым значением,
+        // выглядит как заданная. Для нас она не задана.
+        const д = сервис({ ...ПОЛНЫЙ, FREEDOMPAY_MERCHANT_ID: '   ' }).диагностика();
+
+        expect(д.ready).toBe(false);
+        expect(д.missing).toContain('FREEDOMPAY_MERCHANT_ID');
+    });
+
+    it('показывает адрес, на который придёт подтверждение оплаты', () => {
+        // Ошибка в нём самая дорогая: деньги спишутся, подписка не продлится.
+        const д = сервис(ПОЛНЫЙ).диагностика();
+
+        expect(д.resultUrl).toBe('https://api.example.com/billing/freedompay/result');
+        expect(д.frontendUrl).toBe('https://app.example.com');
+    });
+
+    it('хвостовой слэш в адресе не даёт двойного', () => {
+        const д = сервис({ ...ПОЛНЫЙ, API_PUBLIC_URL: 'https://api.example.com/' }).диагностика();
+
+        expect(д.resultUrl).toBe('https://api.example.com/billing/freedompay/result');
+    });
+
+    it('пока не настроено, адреса обработчика нет', () => {
+        const д = сервис({}).диагностика();
+
+        expect(д.resultUrl).toBeNull();
+        expect(д.merchantId).toBeNull();
+        expect(д.secretKeySet).toBe(false);
+    });
+
+    it('тестовый режим виден отдельно', () => {
+        expect(сервис(ПОЛНЫЙ).диагностика().testingMode).toBe(false);
+        expect(сервис({ ...ПОЛНЫЙ, FREEDOMPAY_TESTING_MODE: '1' }).диагностика().testingMode).toBe(true);
     });
 });

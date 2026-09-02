@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, Popconfirm, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { BadgeCheck, CreditCard, Inbox, Layers, Wallet } from 'lucide-react';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -113,6 +114,22 @@ interface SubscriptionRequest {
     company: { id: string; name: string; bin?: string | null };
 }
 
+/**
+ * Настроена ли оплата картой. Собирает сервер: ключи живут в переменных
+ * хостинга, и экран о них ничего не знает.
+ */
+interface CardPaymentSetup {
+    ready: boolean;
+    /** Имена незаданных переменных — ровно то, что надо вписать. */
+    missing: string[];
+    merchantId: string | null;
+    secretKeySet: boolean;
+    apiUrl: string | null;
+    testingMode: boolean;
+    resultUrl: string | null;
+    frontendUrl: string | null;
+}
+
 interface CardPayment {
     id: string;
     months: number;
@@ -135,6 +152,7 @@ export default function AdminBillingPage() {
     const [subs, setSubs] = useState<any[]>([]);
     const [requests, setRequests] = useState<SubscriptionRequest[]>([]);
     const [payments, setPayments] = useState<CardPayment[]>([]);
+    const [setup, setSetup] = useState<CardPaymentSetup | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Черновик формы тарифа: сумма и сроки правятся вместе и сохраняются
@@ -158,7 +176,7 @@ export default function AdminBillingPage() {
     const loadAll = async () => {
         setLoading(true);
         try {
-            const [settingsRes, tariffRes, plansRes, subsRes, requestsRes, paymentsRes] = await Promise.all([
+            const [settingsRes, tariffRes, plansRes, subsRes, requestsRes, paymentsRes, setupRes] = await Promise.all([
                 api.get('/billing/admin/settings'),
                 api.get('/billing/admin/tariff'),
                 api.get('/billing/admin/plans'),
@@ -168,12 +186,14 @@ export default function AdminBillingPage() {
                 // службами, и пока одна догоняет другую, отсутствие нового
                 // адреса не должно ронять всю страницу с ценой и подписками.
                 api.get('/billing/admin/payments').catch(() => ({ data: [] })),
+                api.get('/billing/admin/card-payment-setup').catch(() => ({ data: null })),
             ]);
             setSettings(settingsRes.data);
             setPlans(plansRes.data || []);
             setSubs(subsRes.data || []);
             setRequests(requestsRes.data || []);
             setPayments(paymentsRes.data || []);
+            setSetup(setupRes.data || null);
             setDraft({
                 // Пока оплата выключена, тариф отдаёт ноль — цену для формы
                 // берём из самого плана, иначе сохранение обнулило бы её.
@@ -589,6 +609,74 @@ export default function AdminBillingPage() {
                     </div>
                 )}
             </section>
+
+            {/* Настройка оплаты идёт в панели хостинга, вслепую: платформа на
+                нехватку переменной отвечает единственным способом — не
+                показывает кнопку. Отличить «не задал ключ» от «не задал
+                адрес» по отсутствию кнопки нельзя, и настройка превращается
+                в перебор наугад. Этот блок и отвечает на «настроено или
+                нет» — прямо, словами. */}
+            {setup && (
+                <section className={nova.card}>
+                    <div className={nova.cardHead}>
+                        {setup.ready ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                        <h2 className={nova.cardTitle}>Оплата картой</h2>
+                        <span className={`${nova.chip}${setup.ready ? '' : ` ${nova.chipWarn}`}`}>
+                            {setup.ready ? 'настроена' : 'не настроена'}
+                        </span>
+                        {setup.ready && setup.testingMode && (
+                            <span className={`${nova.chip} ${nova.chipWarn}`}>тестовый режим</span>
+                        )}
+                    </div>
+                    <div className={nova.cardBody}>
+                        {setup.ready ? (
+                            <div className={styles.setup}>
+                                <div className={styles.setupRow}>
+                                    <span>Номер магазина</span>
+                                    <b>{setup.merchantId}</b>
+                                </div>
+                                <div className={styles.setupRow}>
+                                    <span>Секретный ключ</span>
+                                    <b>задан</b>
+                                </div>
+                                {/* Самая дорогая ошибка настройки и самая
+                                    незаметная: адрес неверен — деньги
+                                    спишутся, а подтверждение к нам не придёт.
+                                    Поэтому он не спрятан, а показан. */}
+                                <div className={styles.setupRow}>
+                                    <span>Куда придёт подтверждение оплаты</span>
+                                    <b className={styles.setupUrl}>{setup.resultUrl}</b>
+                                </div>
+                                <div className={styles.setupRow}>
+                                    <span>Куда вернётся человек из банка</span>
+                                    <b className={styles.setupUrl}>{setup.frontendUrl || 'не задан'}</b>
+                                </div>
+                                <div className={styles.setupNote}>
+                                    {setup.testingMode
+                                        ? 'Магазин в тестовом режиме: платят тестовые карты, настоящие деньги не списываются. Когда переведёте магазин в боевой — уберите переменную FREEDOMPAY_TESTING_MODE.'
+                                        : 'Боевой режим: списываются настоящие деньги.'}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className={styles.setup}>
+                                <div className={styles.setupNote}>
+                                    Кнопка «Оплатить картой» компаниям не показывается — платят по
+                                    счёту. Чтобы включить, задайте в переменных сервера:
+                                </div>
+                                <ul className={styles.setupMissing}>
+                                    {setup.missing.map((имя) => (
+                                        <li key={имя}><code>{имя}</code></li>
+                                    ))}
+                                </ul>
+                                <div className={styles.setupNote}>
+                                    После сохранения сервер перезапустится, и эта плашка станет
+                                    зелёной. Обновите страницу через минуту.
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </section>
+            )}
 
             {/* Оплаты картой продлевают подписку сами, без вашего участия.
                 Тем более их нужно видеть: иначе про деньги, пришедшие

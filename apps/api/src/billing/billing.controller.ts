@@ -5,6 +5,7 @@ import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole, SubscriptionStatus } from '@prisma/client';
 import { BillingService } from './billing.service';
 import { CardPaymentService } from './freedompay/card-payment.service';
+import { FreedomPayService } from './freedompay/freedompay.service';
 import { AuditService } from '../audit/audit.service';
 
 @ApiTags('billing')
@@ -15,6 +16,7 @@ export class BillingController {
     constructor(
         private billingService: BillingService,
         private cardPayments: CardPaymentService,
+        private freedompay: FreedomPayService,
         private auditService: AuditService,
     ) { }
 
@@ -161,6 +163,20 @@ export class BillingController {
     @ApiOperation({ summary: 'Оплаты подписки картой' })
     async listPayments() {
         return this.cardPayments.listPayments();
+    }
+
+    /**
+     * Настроена ли оплата картой и чего не хватает.
+     *
+     * Только владельцу платформы: адрес обработчика и номер магазина не
+     * секрет, но и показывать их всем подряд незачем. Сам секретный ключ не
+     * отдаётся — только «задан» или «не задан».
+     */
+    @Get('admin/card-payment-setup')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Проверка настройки оплаты картой' })
+    async getCardPaymentSetup() {
+        return this.freedompay.диагностика();
     }
 
     @Get('admin/plans')

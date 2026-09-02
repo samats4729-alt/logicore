@@ -107,6 +107,49 @@ export class FreedomPayService {
         return this.настройки() !== null;
     }
 
+    /**
+     * Что видно владельцу платформы: настроена оплата или нет, и если нет —
+     * чего именно не хватает.
+     *
+     * Без этого настройка идёт вслепую. Переменные задаются в панели
+     * хостинга, а платформа на нехватку отвечает единственным способом —
+     * не показывает кнопку. Отличить «не задал ключ» от «не задал адрес» по
+     * отсутствию кнопки нельзя, и человек перебирает наугад.
+     *
+     * Секретный ключ отсюда не отдаётся ни при каких условиях — только сам
+     * факт, задан он или нет. Всё остальное (номер магазина, адреса) не
+     * секрет: номер уходит в каждом запросе, адреса и так наши собственные.
+     */
+    диагностика() {
+        const merchantId = (this.config.get<string>('FREEDOMPAY_MERCHANT_ID') || '').trim();
+        const secretKey = (this.config.get<string>('FREEDOMPAY_SECRET_KEY') || '').trim();
+        const apiPublicUrl = (this.config.get<string>('API_PUBLIC_URL') || '').trim().replace(/\/+$/, '');
+
+        const нехватает: string[] = [];
+        if (!merchantId) нехватает.push('FREEDOMPAY_MERCHANT_ID');
+        if (!secretKey) нехватает.push('FREEDOMPAY_SECRET_KEY');
+        if (!apiPublicUrl) нехватает.push('API_PUBLIC_URL');
+
+        const настройки = this.настройки();
+        return {
+            ready: настройки !== null,
+            missing: нехватает,
+            merchantId: merchantId || null,
+            /** Только факт: сам ключ наружу не выходит. */
+            secretKeySet: secretKey.length > 0,
+            apiUrl: настройки?.apiUrl ?? null,
+            testingMode: настройки?.testingMode ?? false,
+            /**
+             * Адрес, который уйдёт в платёжную систему. Показан намеренно:
+             * ошибка именно в нём самая дорогая и самая незаметная — деньги
+             * спишутся, а подтверждение к нам не придёт.
+             */
+            resultUrl: настройки ? this.resultUrl() : null,
+            /** Куда вернётся человек из банка. */
+            frontendUrl: (this.config.get<string>('FRONTEND_URL') || '').trim().replace(/\/+$/, '') || null,
+        };
+    }
+
     /** Адрес, на который платёжная система присылает результат оплаты. */
     resultUrl(): string {
         return `${this.настройки()?.apiPublicUrl ?? ''}/billing/freedompay/result`;
