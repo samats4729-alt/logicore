@@ -1,6 +1,12 @@
-import { BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import {
+    BadGatewayException,
+    BadRequestException,
+    NotFoundException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { CardPaymentService } from './card-payment.service';
 import { buildXmlResponse, parseFlatXml } from './freedompay.xml';
+import { FreedomPayRefusal } from './freedompay.service';
 
 /**
  * Оплата подписки картой.
@@ -220,6 +226,35 @@ describe('Оплата подписки картой', () => {
             const [платёж] = [...платежи.строки.values()];
             expect(платёж.status).toBe('FAILED');
             expect(платёж.failureDescription).toContain('нет сети');
+        });
+
+        it('отказ шлюза называется отказом, а не «попробуйте позже»', async () => {
+            // «Попробуйте позже» на отказе по неверному ключу — прямая ложь:
+            // позже будет ровно то же самое, чинить надо настройку.
+            const { service, платежи, freedompay, telegram } = стенд();
+            freedompay.initPayment.mockRejectedValue(
+                new FreedomPayRefusal('Ошибка проверки подписи', '101'),
+            );
+
+            await expect(service.start(КОМПАНИЯ, {}, { months: 1 }))
+                .rejects.toBeInstanceOf(BadGatewayException);
+
+            const [платёж] = [...платежи.строки.values()];
+            expect(платёж.status).toBe('FAILED');
+            expect(платёж.failureDescription).toContain('Ошибка проверки подписи');
+            expect(платёж.failureCode).toBe('101');
+            // Сломанная настройка сама не починится — владелец должен узнать.
+            expect(telegram.send.mock.calls[0][0]).toContain('Ошибка проверки подписи');
+        });
+
+        it('о сорвавшейся оплате узнаёт владелец, а не только журнал', async () => {
+            const { service, freedompay, telegram } = стенд();
+            freedompay.initPayment.mockRejectedValue(new Error('нет сети'));
+
+            await expect(service.start(КОМПАНИЯ, {}, { months: 1 })).rejects.toThrow();
+
+            expect(telegram.send).toHaveBeenCalled();
+            expect(telegram.send.mock.calls[0][0]).toContain('не запускается');
         });
 
         it('пока оплата на платформе выключена, платить нечего', async () => {

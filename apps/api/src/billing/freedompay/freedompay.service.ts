@@ -45,6 +45,20 @@ const LIFETIME_SECONDS = 3600;
 /** Сколько ждём ответа шлюза, прежде чем сказать человеку «не получилось». */
 const REQUEST_TIMEOUT_MS = 20_000;
 
+/**
+ * Платёжная система ответила и отказала — с объяснением.
+ *
+ * Отличается от «не дозвонились» намеренно: это разные поломки и разные
+ * действия. Не дозвонились — подождать и повторить. Отказала — идти
+ * проверять номер магазина, ключ и адреса, само не пройдёт.
+ */
+export class FreedomPayRefusal extends Error {
+    constructor(public readonly причина: string, public readonly code?: string) {
+        super(`Платёжная система отклонила запрос: ${причина}`);
+        this.name = 'FreedomPayRefusal';
+    }
+}
+
 export interface FreedomPayReady {
     merchantId: string;
     secretKey: string;
@@ -203,10 +217,10 @@ export class FreedomPayService {
             this.logger.error(
                 `FreedomPay отказал в ссылке на оплату ${input.paymentId}: ${причина}`,
             );
-            throw new Error(`Платёжная система отказала: ${причина}`);
+            throw new FreedomPayRefusal(причина, ответ.pg_error_code);
         }
         if (!ответ.pg_redirect_url) {
-            throw new Error('Платёжная система не прислала адрес формы оплаты');
+            throw new FreedomPayRefusal('ответ без адреса формы оплаты');
         }
 
         return {
@@ -261,9 +275,15 @@ export class FreedomPayService {
             return parseFlatXml(текст);
         } catch (error: any) {
             if (error?.name === 'AbortError') {
-                throw new Error('Платёжная система не ответила вовремя');
+                throw new Error(`Платёжная система не ответила за ${REQUEST_TIMEOUT_MS / 1000} с (${url})`);
             }
-            throw error;
+            // Причину сетевой ошибки узла нет смысла прятать: «getaddrinfo
+            // ENOTFOUND api.freedompay.money» прямо называет неверный адрес
+            // шлюза, а без неё это неотличимо от «сервис лежит».
+            const низ = error?.cause?.code || error?.code;
+            throw new Error(
+                `Не удалось связаться с ${url}${низ ? ` (${низ})` : ''}: ${error?.message || error}`,
+            );
         } finally {
             clearTimeout(таймер);
         }

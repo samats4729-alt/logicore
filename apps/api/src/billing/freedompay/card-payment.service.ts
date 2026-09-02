@@ -2,6 +2,7 @@ import {
     Injectable,
     Logger,
     BadRequestException,
+    BadGatewayException,
     ServiceUnavailableException,
     NotFoundException,
 } from '@nestjs/common';
@@ -10,7 +11,7 @@ import { SubscriptionPaymentStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../../telegram/telegram.service';
 import { BillingService } from '../billing.service';
-import { FreedomPayService } from './freedompay.service';
+import { FreedomPayService, FreedomPayRefusal } from './freedompay.service';
 
 /**
  * Оплата подписки картой: сторона платформы.
@@ -137,6 +138,8 @@ export class CardPaymentService {
                 months: платёж.months,
             };
         } catch (error: any) {
+            const причина = String(error?.message || error).slice(0, 300);
+
             // Платёж уже заведён, а ссылки нет: помечаем сразу, иначе он
             // навсегда останется висеть «в ожидании» и попадёт в отчёт как
             // неоплаченный.
@@ -144,10 +147,31 @@ export class CardPaymentService {
                 where: { id: платёж.id },
                 data: {
                     status: SubscriptionPaymentStatus.FAILED,
-                    failureDescription: String(error?.message || error).slice(0, 300),
+                    failureCode: error?.code ?? null,
+                    failureDescription: причина,
                 },
             });
-            this.logger.error(`Не удалось начать оплату ${платёж.id}: ${error?.message || error}`);
+            this.logger.error(`Не удалось начать оплату ${платёж.id}: ${причина}`);
+
+            // Владельцу платформы — сразу. Сорвавшаяся оплата это не «сбой у
+            // клиента», а сломанная настройка: сама она не починится, а
+            // компания в это время не может заплатить.
+            await this.сообщитьВладельцу(
+                'Оплата картой не запускается\n\n'
+                + `${счёт.companyName}\n`
+                + `${причина}\n\n`
+                + 'Проверьте плашку «Оплата картой» в админке.',
+            );
+
+            // Отказ шлюза и «не дозвонились» — разные поломки, и человеку
+            // это разные новости. «Попробуйте позже» на отказе по неверному
+            // ключу — прямая ложь: позже будет ровно то же самое.
+            if (error instanceof FreedomPayRefusal) {
+                throw new BadGatewayException(
+                    `Платёжная система отклонила запрос: ${error.причина}. `
+                    + 'Мы уже знаем об этом — пока можно попросить счёт.',
+                );
+            }
             throw new ServiceUnavailableException(
                 'Платёжная система сейчас не отвечает. Попробуйте через несколько минут или попросите счёт.',
             );
