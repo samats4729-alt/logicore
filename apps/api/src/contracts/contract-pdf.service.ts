@@ -334,38 +334,86 @@ export class ContractPdfService {
         const rightX = startX + colWidth;
         const cellPadding = 5;
         const текстШирина = colWidth - cellPadding * 2;
+
+        // Длину реквизитов никто не ограничивает: их пишет человек, и они
+        // могут не поместиться не то что в остаток страницы, а и в целую.
+        // Поэтому режем по строкам — сколько влезло, то и печатаем, остальное
+        // переносим вместе с заголовком таблицы.
+        let слева = left ? left.split('\n') : [];
+        let справа = right ? right.split('\n') : [];
+
+        this.ensureSpace(doc, 75); // заголовок таблицы плюс ячейка минимальной высоты
         let y = doc.y;
 
-        // Заголовок таблицы — тот же, что и у таблицы из карточек.
-        const headerHeight = 25;
-        doc.rect(startX, y, colWidth, headerHeight).stroke();
-        doc.rect(rightX, y, colWidth, headerHeight).stroke();
-        doc.fontSize(10).font('Roboto-Bold');
-        doc.text('ЭКСПЕДИТОР', startX + cellPadding, y + 7, { width: текстШирина, align: 'center' });
-        doc.text('ЗАКАЗЧИК', rightX + cellPadding, y + 7, { width: текстШирина, align: 'center' });
-        y += headerHeight;
+        for (;;) {
+            // Заголовок таблицы — тот же, что и у таблицы из карточек.
+            const headerHeight = 25;
+            doc.rect(startX, y, colWidth, headerHeight).stroke();
+            doc.rect(rightX, y, colWidth, headerHeight).stroke();
+            doc.fontSize(10).font('Roboto-Bold');
+            doc.text('ЭКСПЕДИТОР', startX + cellPadding, y + 7, { width: текстШирина, align: 'center' });
+            doc.text('ЗАКАЗЧИК', rightX + cellPadding, y + 7, { width: текстШирина, align: 'center' });
+            y += headerHeight;
 
-        // Высота ячейки — по той стороне, где текста больше: рамка должна
-        // охватывать обе колонки целиком, иначе текст вылезет за таблицу.
-        doc.font('Roboto').fontSize(9);
-        const высотаЛевой = doc.heightOfString(left, { width: текстШирина });
-        const высотаПравой = doc.heightOfString(right, { width: текстШирина });
-        const высота = Math.max(высотаЛевой, высотаПравой, 40) + cellPadding * 2;
+            doc.font('Roboto').fontSize(9);
+            const запас = doc.page.height - doc.page.margins.bottom - y - cellPadding * 2;
+            const л = this.вместитьСтроки(doc, слева, текстШирина, запас);
+            const п = this.вместитьСтроки(doc, справа, текстШирина, запас);
 
-        if (y + высота > doc.page.height - doc.page.margins.bottom) {
+            // Высота ячейки — по той стороне, где текста больше: рамка должна
+            // охватывать обе колонки целиком, иначе текст вылезет за таблицу.
+            const высота = Math.max(л.высота, п.высота, 40) + cellPadding * 2;
+            const текстЛевой = слева.slice(0, л.строк).join('\n');
+            const текстПравой = справа.slice(0, п.строк).join('\n');
+
+            doc.rect(startX, y, colWidth, высота).stroke();
+            doc.rect(rightX, y, colWidth, высота).stroke();
+            if (текстЛевой) doc.text(текстЛевой, startX + cellPadding, y + cellPadding, { width: текстШирина });
+            if (текстПравой) doc.text(текстПравой, rightX + cellPadding, y + cellPadding, { width: текстШирина });
+
+            doc.y = y + высота;
+
+            слева = слева.slice(л.строк);
+            справа = справа.slice(п.строк);
+            if (!слева.length && !справа.length) return;
+
             doc.addPage();
             y = doc.page.margins.top;
         }
+    }
 
-        doc.rect(startX, y, colWidth, высота).stroke();
-        doc.rect(rightX, y, colWidth, высота).stroke();
-        if (left) doc.text(left, startX + cellPadding, y + cellPadding, { width: текстШирина });
-        if (right) doc.text(right, rightX + cellPadding, y + cellPadding, { width: текстШирина });
-
-        doc.y = y + высота;
+    /**
+     * Сколько строк из начала списка влезает в отведённую высоту.
+     *
+     * Меряем не построчно, а начало целиком: строка может переноситься по
+     * ширине ячейки, и сумма отдельных замеров с итоговой высотой не
+     * сходится. Если не влезает даже одна строка — берём её всё равно,
+     * иначе перенос зациклится на пустом месте.
+     */
+    private вместитьСтроки(
+        doc: PDFKit.PDFDocument,
+        строки: string[],
+        ширина: number,
+        запас: number,
+    ): { строк: number; высота: number } {
+        let результат = { строк: 0, высота: 0 };
+        for (let n = 1; n <= строки.length; n++) {
+            const высота = doc.heightOfString(строки.slice(0, n).join('\n'), { width: ширина });
+            if (высота > запас && n > 1) break;
+            результат = { строк: n, высота };
+        }
+        return результат;
     }
 
     // ============ БЛОК ДЛЯ ПОДПИСЕЙ И ПЕЧАТЕЙ (без рамок) ============
+
+    /**
+     * Высота блока подписей: от места, где он начинается, до нижнего края
+     * печати. Печать крупнее самих строк и свисает ниже них — считаем по
+     * ней, иначе «место есть» окажется правдой только для текста.
+     */
+    private static readonly ВЫСОТА_ПОДПИСЕЙ = 165;
+
     private drawSignatureBlock(
         doc: PDFKit.PDFDocument,
         forwarder: any,
@@ -377,6 +425,14 @@ export class ContractPdfService {
     ) {
         const leftX = 60;
         doc.moveDown(2);
+
+        // Блок рисуется по готовым координатам, и печать — картинкой: сама
+        // она страницу не переносит и при нехватке места просто уезжает под
+        // обрез. Поэтому место под весь блок, до нижнего края печати,
+        // проверяем заранее.
+        if (doc.y + ContractPdfService.ВЫСОТА_ПОДПИСЕЙ > doc.page.height - doc.page.margins.bottom) {
+            doc.addPage();
+        }
 
         const signBlockY = doc.y;
         const signColWidth = 230;
