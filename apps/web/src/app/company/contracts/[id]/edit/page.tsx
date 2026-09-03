@@ -20,9 +20,25 @@ interface ContractParagraph {
     text: string;
 }
 
+/**
+ * Реквизиты сторон — две половины страницы, а не сплошной текст.
+ *
+ * Пока такого блока не было, реквизиты вписывали в обычный пункт, и обе
+ * стороны сваливались в одно поле: где кончается экспедитор и начинается
+ * заказчик, в готовом договоре было не разобрать.
+ */
+interface ContractRequisites {
+    /** Левая половина — экспедитор. */
+    left: string;
+    /** Правая половина — заказчик. */
+    right: string;
+}
+
 interface ContractArticle {
     title: string;
     paragraphs: ContractParagraph[];
+    /** Заполнено — статья печатается двумя колонками, а не списком пунктов. */
+    requisites?: ContractRequisites;
 }
 
 export default function EditContractContentPage() {
@@ -35,12 +51,23 @@ export default function EditContractContentPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+    /**
+     * Какие статьи раскрыты.
+     *
+     * Раскрытые панели были заданы один раз при первой отрисовке, и
+     * добавленная статья появлялась свёрнутой: человек нажимал кнопку и
+     * не видел ничего. Поэтому состояние теперь своё, и новая статья
+     * открывается сразу.
+     */
+    const [openKeys, setOpenKeys] = useState<string[]>([]);
 
     const fetchContent = useCallback(async () => {
         try {
             setLoading(true);
             const contentRes = await api.get(`/contracts/${contractId}/content`);
-            setArticles(contentRes.data as ContractArticle[]);
+            const загруженные = contentRes.data as ContractArticle[];
+            setArticles(загруженные);
+            setOpenKeys(загруженные.map((_, i) => String(i)));
 
             // Try to get contract number from content endpoint or contracts list
             try {
@@ -98,11 +125,48 @@ export default function EditContractContentPage() {
     const addArticle = () => {
         const num = articles.length + 1;
         setArticles([...articles, { title: `${num}. Новая статья`, paragraphs: [{ number: `${num}.1.`, text: '' }] }]);
+        setOpenKeys([...openKeys, String(articles.length)]);
         setHasChanges(true);
     };
 
     const removeArticle = (idx: number) => {
         setArticles(articles.filter((_, i) => i !== idx));
+        setHasChanges(true);
+    };
+
+    /** Есть ли уже статья с реквизитами: вторая такая договору не нужна. */
+    const реквизитыЕсть = articles.some((a) => a.requisites);
+
+    /**
+     * Добавить статью с реквизитами.
+     *
+     * Обе колонки заранее заполняются из карточек компаний: перепечатывать
+     * банковские реквизиты руками — это лишний повод ошибиться в счёте.
+     * Текст остаётся обычным, его правят как угодно.
+     */
+    const addRequisites = async () => {
+        let заготовка: ContractRequisites = { left: '', right: '' };
+        try {
+            const { data } = await api.get(`/contracts/${contractId}/requisites-draft`);
+            заготовка = { left: data?.left || '', right: data?.right || '' };
+        } catch {
+            // Не подтянулось — не беда: две пустые колонки лучше, чем
+            // отказ добавить блок.
+        }
+        setArticles([...articles, {
+            title: `${articles.length + 1}. Юридические адреса и реквизиты сторон`,
+            paragraphs: [],
+            requisites: заготовка,
+        }]);
+        setOpenKeys([...openKeys, String(articles.length)]);
+        setHasChanges(true);
+    };
+
+    const updateRequisites = (idx: number, сторона: keyof ContractRequisites, text: string) => {
+        const updated = [...articles];
+        const прежние = updated[idx].requisites || { left: '', right: '' };
+        updated[idx] = { ...updated[idx], requisites: { ...прежние, [сторона]: text } };
+        setArticles(updated);
         setHasChanges(true);
     };
 
@@ -213,7 +277,8 @@ export default function EditContractContentPage() {
             <div className="lc-card" style={{ padding: '24px', marginTop: 0 }}>
             {/* Articles */}
             <Collapse
-                defaultActiveKey={articles.map((_, i) => String(i))}
+                activeKey={openKeys}
+                onChange={(k) => setOpenKeys(Array.isArray(k) ? k as string[] : [k as string])}
             >
                 {articles.map((article, articleIdx) => (
                     <Panel
@@ -247,7 +312,36 @@ export default function EditContractContentPage() {
                             </div>
                         }
                     >
-                        {article.paragraphs.map((para, paraIdx) => (
+                        {article.requisites ? (
+                            /* Две ячейки вместо одного поля: слева экспедитор,
+                               справа заказчик. Ровно так реквизиты и стоят в
+                               бумажном договоре, и ровно так они печатаются
+                               в PDF — половина страницы на сторону. */
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <Text strong style={{ display: 'block', marginBottom: 6 }}>
+                                        ЭКСПЕДИТОР
+                                    </Text>
+                                    <TextArea
+                                        value={article.requisites.left}
+                                        onChange={(e) => updateRequisites(articleIdx, 'left', e.target.value)}
+                                        autoSize={{ minRows: 8, maxRows: 24 }}
+                                        placeholder="Название, юр. адрес, БИН, банк, счёт, директор"
+                                    />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <Text strong style={{ display: 'block', marginBottom: 6 }}>
+                                        ЗАКАЗЧИК
+                                    </Text>
+                                    <TextArea
+                                        value={article.requisites.right}
+                                        onChange={(e) => updateRequisites(articleIdx, 'right', e.target.value)}
+                                        autoSize={{ minRows: 8, maxRows: 24 }}
+                                        placeholder="Название, юр. адрес, БИН, банк, счёт, директор"
+                                    />
+                                </div>
+                            </div>
+                        ) : article.paragraphs.map((para, paraIdx) => (
                             <div
                                 key={paraIdx}
                                 style={{
@@ -280,29 +374,48 @@ export default function EditContractContentPage() {
                                 </Tooltip>
                             </div>
                         ))}
-                        <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            onClick={() => addParagraph(articleIdx)}
-                            block
-                            size="small"
-                        >
-                            Добавить пункт
-                        </Button>
+                        {!article.requisites && (
+                            <Button
+                                type="dashed"
+                                icon={<PlusOutlined />}
+                                onClick={() => addParagraph(articleIdx)}
+                                block
+                                size="small"
+                            >
+                                Добавить пункт
+                            </Button>
+                        )}
                     </Panel>
                 ))}
             </Collapse>
 
             {/* Add article button */}
-            <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={addArticle}
-                block
-                style={{ marginTop: 16, height: 48 }}
-            >
-                Добавить статью
-            </Button>
+            <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                <Button
+                    type="dashed"
+                    icon={<PlusOutlined />}
+                    onClick={addArticle}
+                    block
+                    style={{ height: 48 }}
+                >
+                    Добавить статью
+                </Button>
+                {/* Отдельная кнопка, а не «ещё одна статья»: у реквизитов
+                    свой вид — две колонки, и пунктов внутри не бывает.
+                    Второй такой блок договору не нужен, поэтому после
+                    добавления кнопка исчезает. */}
+                {!реквизитыЕсть && (
+                    <Button
+                        type="dashed"
+                        icon={<PlusOutlined />}
+                        onClick={addRequisites}
+                        block
+                        style={{ height: 48 }}
+                    >
+                        Добавить реквизиты сторон
+                    </Button>
+                )}
+            </div>
             </div>
 
             {/* Bottom save bar */}

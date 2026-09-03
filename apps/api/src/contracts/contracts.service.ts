@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { getDefaultContractTemplate } from './contract-template';
+import { getDefaultContractTemplate, companyRequisitesText } from './contract-template';
 
 @Injectable()
 export class ContractsService {
@@ -737,6 +737,36 @@ export class ContractsService {
     }
 
     /**
+     * Заготовка реквизитов обеих сторон — чтобы не перепечатывать руками.
+     *
+     * Собирается из карточек компаний тем же кодом, которым реквизиты
+     * печатаются в PDF. Это заготовка, а не жёсткая связь: экспедитор
+     * правит текст как угодно, и в договоре останется именно правленое.
+     * В карточке может не быть половины полей, а в договоре они нужны — и
+     * наоборот, у конкретного договора бывают свои банковские реквизиты.
+     */
+    async getRequisitesDraft(contractId: string, companyId: string) {
+        const contract = await this.prisma.contract.findUnique({
+            where: { id: contractId },
+            select: {
+                customerCompanyId: true,
+                forwarderCompanyId: true,
+                customerCompany: { select: РЕКВИЗИТЫ_КОМПАНИИ },
+                forwarderCompany: { select: РЕКВИЗИТЫ_КОМПАНИИ },
+            },
+        });
+        if (!contract) throw new NotFoundException('Договор не найден');
+        if (contract.customerCompanyId !== companyId && contract.forwarderCompanyId !== companyId) {
+            throw new ForbiddenException('Нет доступа к этому договору');
+        }
+
+        return {
+            left: companyRequisitesText(contract.forwarderCompany),
+            right: companyRequisitesText(contract.customerCompany),
+        };
+    }
+
+    /**
      * Сбросить содержимое договора к шаблону по умолчанию
      */
     async resetContractContent(contractId: string, companyId: string) {
@@ -756,3 +786,18 @@ export class ContractsService {
         });
     }
 }
+
+/** Поля карточки компании, которые попадают в реквизиты договора. */
+const РЕКВИЗИТЫ_КОМПАНИИ = {
+    name: true,
+    address: true,
+    actualAddress: true,
+    bin: true,
+    bankAccount: true,
+    bankName: true,
+    bankBic: true,
+    kbe: true,
+    phone: true,
+    email: true,
+    directorName: true,
+} as const;

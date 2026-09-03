@@ -8,9 +8,88 @@ export interface ContractParagraph {
     text: string;     // Текст пункта
 }
 
+/**
+ * Реквизиты сторон — две половины страницы, а не сплошной текст.
+ *
+ * Пока такого блока не было, реквизиты вписывали в обычный пункт, и обе
+ * стороны сваливались в одно поле: где кончается экспедитор и начинается
+ * заказчик, в готовом договоре разобрать было нельзя. Поэтому здесь ровно
+ * две колонки — по одной на сторону, как в бумажном договоре.
+ */
+export interface ContractRequisites {
+    /** Левая половина — экспедитор, то есть наша компания. */
+    left: string;
+    /** Правая половина — заказчик. */
+    right: string;
+}
+
 export interface ContractArticle {
     title: string;              // "1. Предмет договора"
     paragraphs: ContractParagraph[];
+    /**
+     * Если заполнено — статья печатается таблицей в две колонки, а пункты
+     * не печатаются вовсе. Поле необязательное: договоры, заведённые до
+     * появления реквизитов, остаются как были.
+     */
+    requisites?: ContractRequisites;
+}
+
+/** Компания в том виде, в каком её реквизиты попадают в договор. */
+export interface CompanyRequisitesSource {
+    name?: string | null;
+    address?: string | null;
+    actualAddress?: string | null;
+    bin?: string | null;
+    bankAccount?: string | null;
+    bankName?: string | null;
+    bankBic?: string | null;
+    kbe?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    directorName?: string | null;
+}
+
+/**
+ * Реквизиты одной компании текстом — по строке на поле.
+ *
+ * Список полей и их подписи держатся здесь одним местом: этим же текстом
+ * заполняется колонка в редакторе и печатается таблица в PDF. Разъедься
+ * они — в договоре и на экране оказались бы разные наборы строк.
+ *
+ * Пустые поля пропускаются: строка «БИН/ИИН:» без номера в договоре
+ * выглядит как недоделка, а не как пустое место.
+ */
+export function companyRequisitesText(company: CompanyRequisitesSource): string {
+    const строки: string[] = [];
+    if (company.name) строки.push(company.name);
+
+    const поле = (подпись: string, значение?: string | null) => {
+        if (значение) строки.push(`${подпись}: ${значение}`);
+    };
+    поле('Юр. адрес', company.address);
+    поле('Факт. адрес', company.actualAddress);
+    поле('БИН/ИИН', company.bin);
+    поле('р/счёт', company.bankAccount);
+    поле('Банк', company.bankName);
+    поле('БИК/SWIFT', company.bankBic);
+    поле('КБЕ', company.kbe);
+    поле('тел.', company.phone);
+    поле('E-mail', company.email);
+    поле('Директор', company.directorName);
+
+    return строки.join('\n');
+}
+
+/**
+ * Есть ли в договоре своя статья с реквизитами.
+ *
+ * От этого зависит, печатать ли автоматический раздел «15. Юридические
+ * адреса и реквизиты сторон»: две одинаковые таблицы подряд — это не
+ * подстраховка, а брак.
+ */
+export function findRequisitesArticle(articles: ContractArticle[]): ContractArticle | undefined {
+    return articles.find((статья) => статья?.requisites
+        && (статья.requisites.left?.trim() || статья.requisites.right?.trim()));
 }
 
 export function getDefaultContractTemplate(): ContractArticle[] {

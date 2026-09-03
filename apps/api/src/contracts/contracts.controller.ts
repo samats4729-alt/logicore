@@ -103,6 +103,13 @@ export class ContractsController {
         return this.contractsService.updateContractContent(id, req.user.companyId, dto.content);
     }
 
+    @Get(':id/requisites-draft')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Заготовка реквизитов сторон из карточек компаний' })
+    async getRequisitesDraft(@Param('id') id: string, @Request() req: any) {
+        return this.contractsService.getRequisitesDraft(id, req.user.companyId);
+    }
+
     @Post(':id/reset-content')
     @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
     @ApiOperation({ summary: 'Сбросить текст договора к шаблону по умолчанию' })

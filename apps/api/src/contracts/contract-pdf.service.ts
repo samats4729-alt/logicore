@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
-import { getDefaultContractTemplate } from './contract-template';
+import {
+    getDefaultContractTemplate,
+    findRequisitesArticle,
+    type ContractArticle,
+} from './contract-template';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -150,7 +154,19 @@ export class ContractPdfService {
             // ============ СТАТЬИ ДОГОВОРА (из сохранённого содержимого или шаблона) ============
             const articles: any[] = (contract.content as any[]) || getDefaultContractTemplate();
 
+            // Своя статья с реквизитами, если экспедитор её завёл. Тогда
+            // автоматический раздел 15 не печатается: две одинаковые таблицы
+            // подряд — это не подстраховка, а брак.
+            const своиРеквизиты = findRequisitesArticle(articles as ContractArticle[]);
+
             for (const article of articles) {
+                if (article === своиРеквизиты) {
+                    // Реквизиты идут последней страницей вместе с подписями —
+                    // печатаем их не здесь, а ниже, где бы они ни стояли в
+                    // списке статей.
+                    continue;
+                }
+
                 this.addArticle(doc, article.title);
 
                 // Специальная обработка для статьи 5 (подзаголовок)
@@ -159,7 +175,7 @@ export class ContractPdfService {
                     doc.moveDown(0.3);
                 }
 
-                for (const para of article.paragraphs) {
+                for (const para of article.paragraphs || []) {
                     // Определяем подзаголовки: пункты вида "X.Y." (без третьего уровня) с коротким текстом-заголовком
                     const isSubheading = /^\d+\.\d+\.$/.test(para.number) && para.text.endsWith(':');
                     if (isSubheading) {
@@ -170,15 +186,29 @@ export class ContractPdfService {
                 }
             }
 
-            // ============ 15. ЮРИДИЧЕСКИЕ АДРЕСА И РЕКВИЗИТЫ СТОРОН ============
+            // ============ ЮРИДИЧЕСКИЕ АДРЕСА И РЕКВИЗИТЫ СТОРОН ============
             doc.addPage();
             doc.moveDown(0.5);
             doc.fontSize(12).font('Roboto-Bold');
-            doc.text('15.    ЮРИДИЧЕСКИЕ АДРЕСА И РЕКВИЗИТЫ СТОРОН:', { align: 'center' });
+            doc.text(
+                (своиРеквизиты?.title || '15.    ЮРИДИЧЕСКИЕ АДРЕСА И РЕКВИЗИТЫ СТОРОН:').toUpperCase(),
+                { align: 'center' },
+            );
             doc.moveDown(1);
 
-            // Рисуем таблицу реквизитов как в оригинале
-            this.drawRequisitesTable(
+            if (своиРеквизиты) {
+                // Что вписал экспедитор — то и печатаем, слово в слово.
+                this.drawRequisitesColumns(
+                    doc,
+                    своиРеквизиты.requisites!.left || '',
+                    своиРеквизиты.requisites!.right || '',
+                );
+            } else {
+                // Своих реквизитов нет — собираем из карточек компаний, как и раньше.
+                this.drawRequisitesTable(doc, forwarder, customer);
+            }
+
+            this.drawSignatureBlock(
                 doc,
                 forwarder,
                 customer,
@@ -206,10 +236,6 @@ export class ContractPdfService {
         doc: PDFKit.PDFDocument,
         forwarder: any,
         customer: any,
-        forwarderStampBuffer: Buffer | null,
-        forwarderSignatureBuffer: Buffer | null,
-        customerStampBuffer: Buffer | null,
-        customerSignatureBuffer: Buffer | null
     ) {
         const startX = 60;
         const tableWidth = 475;
@@ -290,8 +316,66 @@ export class ContractPdfService {
         }
 
         doc.y = y;
+    }
 
-        // ============ БЛОК ДЛЯ ПОДПИСЕЙ И ПЕЧАТЕЙ (без рамок) ============
+    /**
+     * Реквизиты, вписанные в сам договор: две колонки, каждая — половина
+     * ширины таблицы.
+     *
+     * Отдельно от таблицы из карточек: там строки собираются по полям и
+     * выравниваются построчно, а здесь стороны написаны человеком, и
+     * подгонять их строка к строке не только незачем, но и вредно —
+     * у сторон разное число строк.
+     */
+    private drawRequisitesColumns(doc: PDFKit.PDFDocument, left: string, right: string) {
+        const startX = 60;
+        const tableWidth = 475;
+        const colWidth = tableWidth / 2;
+        const rightX = startX + colWidth;
+        const cellPadding = 5;
+        const текстШирина = colWidth - cellPadding * 2;
+        let y = doc.y;
+
+        // Заголовок таблицы — тот же, что и у таблицы из карточек.
+        const headerHeight = 25;
+        doc.rect(startX, y, colWidth, headerHeight).stroke();
+        doc.rect(rightX, y, colWidth, headerHeight).stroke();
+        doc.fontSize(10).font('Roboto-Bold');
+        doc.text('ЭКСПЕДИТОР', startX + cellPadding, y + 7, { width: текстШирина, align: 'center' });
+        doc.text('ЗАКАЗЧИК', rightX + cellPadding, y + 7, { width: текстШирина, align: 'center' });
+        y += headerHeight;
+
+        // Высота ячейки — по той стороне, где текста больше: рамка должна
+        // охватывать обе колонки целиком, иначе текст вылезет за таблицу.
+        doc.font('Roboto').fontSize(9);
+        const высотаЛевой = doc.heightOfString(left, { width: текстШирина });
+        const высотаПравой = doc.heightOfString(right, { width: текстШирина });
+        const высота = Math.max(высотаЛевой, высотаПравой, 40) + cellPadding * 2;
+
+        if (y + высота > doc.page.height - doc.page.margins.bottom) {
+            doc.addPage();
+            y = doc.page.margins.top;
+        }
+
+        doc.rect(startX, y, colWidth, высота).stroke();
+        doc.rect(rightX, y, colWidth, высота).stroke();
+        if (left) doc.text(left, startX + cellPadding, y + cellPadding, { width: текстШирина });
+        if (right) doc.text(right, rightX + cellPadding, y + cellPadding, { width: текстШирина });
+
+        doc.y = y + высота;
+    }
+
+    // ============ БЛОК ДЛЯ ПОДПИСЕЙ И ПЕЧАТЕЙ (без рамок) ============
+    private drawSignatureBlock(
+        doc: PDFKit.PDFDocument,
+        forwarder: any,
+        customer: any,
+        forwarderStampBuffer: Buffer | null,
+        forwarderSignatureBuffer: Buffer | null,
+        customerStampBuffer: Buffer | null,
+        customerSignatureBuffer: Buffer | null
+    ) {
+        const leftX = 60;
         doc.moveDown(2);
 
         const signBlockY = doc.y;
@@ -513,8 +597,22 @@ export class ContractPdfService {
     }
 
     /** Убирает префикс ТОО/TOO из названия компании */
+    /**
+     * Имя компании без «ТОО» и без кавычек — его потом оборачивают в
+     * кавычки заново.
+     *
+     * Кавычки снимаются потому, что в карточке название обычно уже записано
+     * целиком: «ТОО «ЛогиКор Экспедиция»». Снимали только «ТОО», и в
+     * договоре под подписью директора выходило «ТОО ««ЛогиКор Экспедиция»»»
+     * — с двойными кавычками с обеих сторон.
+     */
     private stripCompanyPrefix(name: string): string {
-        return name.replace(/^(ТОО|TOO|тоо)\s+/i, '').trim();
+        return name
+            .replace(/^(ТОО|TOO|тоо)\s+/i, '')
+            .trim()
+            .replace(/^[«"„]+/, '')
+            .replace(/[»"“]+$/, '')
+            .trim();
     }
 
     private async getImageBuffer(relativePath: string): Promise<Buffer | null> {
