@@ -1,0 +1,44 @@
+name: FreedomPay probe
+
+# Разовая диагностика: жив ли шлюз и тот ли у нас адрес.
+# Секретов не использует, денег не двигает — только неподписанный запрос,
+# чтобы увидеть, каким сообщением шлюз отвечает.
+on:
+  push:
+    branches: [ claude/fp-probe ]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Куда разрешается имя
+        run: |
+          for h in api.freedompay.kz test-api.freedompay.kz; do
+            echo "--- $h ---"
+            getent hosts "$h" || echo "не разрешается"
+          done
+
+      - name: Ответ боевого шлюза на неподписанный запрос
+        run: |
+          echo "=== POST https://api.freedompay.kz/init_payment.php ==="
+          curl -sS -m 30 -w '\n[http=%{http_code} time=%{time_total}]\n' \
+            -X POST 'https://api.freedompay.kz/init_payment.php' \
+            -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
+            --data 'pg_merchant_id=000000&pg_order_id=probe&pg_amount=100&pg_description=probe&pg_salt=probe&pg_sig=00000000000000000000000000000000' \
+            || echo "[запрос не удался]"
+
+      - name: Ответ тестового шлюза на неподписанный запрос
+        run: |
+          echo "=== POST https://test-api.freedompay.kz/init_payment.php ==="
+          curl -sS -m 30 -w '\n[http=%{http_code} time=%{time_total}]\n' \
+            -X POST 'https://test-api.freedompay.kz/init_payment.php' \
+            -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
+            --data 'pg_merchant_id=000000&pg_order_id=probe&pg_amount=100&pg_description=probe&pg_salt=probe&pg_sig=00000000000000000000000000000000' \
+            || echo "[запрос не удался]"
+
+      - name: Тот же запрос на несуществующий адрес — для сравнения
+        run: |
+          echo "=== POST https://api.freedompay.money/init_payment.php ==="
+          curl -sS -m 20 -w '\n[http=%{http_code}]\n' \
+            -X POST 'https://api.freedompay.money/init_payment.php' --data 'x=1' \
+            || echo "[имя не разрешается — как и ожидалось]"
