@@ -1,8 +1,5 @@
 name: FreedomPay probe
 
-# Разовая диагностика настройки оплаты. Секретный ключ сюда не попадает:
-# подпись посчитана заранее, а подпись — не секрет, она уходит в каждом
-# обычном запросе. Денег ничто не двигает: это только выдача ссылки.
 on:
   push:
     branches: [ claude/fp-probe ]
@@ -11,16 +8,25 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Номер магазина существует? (подпись заведомо неверная)
+      - name: Состояние выданного платежа (get_status)
         run: |
-          curl -sS -m 30 -w '\n[http=%{http_code}]\n' \
-            -X POST 'https://api.freedompay.kz/init_payment.php' \
+          curl -sS -m 30 -X POST 'https://api.freedompay.kz/get_status.php' \
             -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
-            --data 'pg_merchant_id=589160&pg_order_id=probe0&pg_amount=100&pg_description=probe&pg_salt=probe&pg_sig=00000000000000000000000000000000'
+            --data 'pg_merchant_id=589160&pg_payment_id=1844430566&pg_salt=yl377l360a&pg_sig=2c571df78b2b19e4ba26c41770a0d5f6'
+          echo
 
-      - name: Настоящий запрос ссылки на оплату — боевой шлюз
+      - name: Состояние подробно (get_status2)
         run: |
-          curl -sS -m 30 -w '\n[http=%{http_code}]\n' \
-            -X POST 'https://api.freedompay.kz/init_payment.php' \
+          curl -sS -m 30 -X POST 'https://api.freedompay.kz/get_status2.php' \
             -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
-            --data 'pg_merchant_id=589160&pg_order_id=probe-1788493084875&pg_amount=15000&pg_currency=KZT&pg_description=LogiCore%2C+%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0+%D0%BD%D0%B0%D1%81%D1%82%D1%80%D0%BE%D0%B9%D0%BA%D0%B8&pg_salt=jm2pqs0sgk&pg_lifetime=3600&pg_result_url=https%3A%2F%2Fapi.logicore.kz%2Fbilling%2Ffreedompay%2Fresult&pg_check_url=https%3A%2F%2Fapi.logicore.kz%2Fbilling%2Ffreedompay%2Fcheck&pg_success_url=https%3A%2F%2Flogicore.kz%2Fbilling%2Fpayment%2Fprobe&pg_failure_url=https%3A%2F%2Flogicore.kz%2Fbilling%2Fpayment%2Fprobe%3Ffailed%3D1&pg_language=ru&pg_testing_mode=1&pg_sig=807b14d43a049f9a373bf05c0c244ab0'
+            --data 'pg_merchant_id=589160&pg_payment_id=1844430566&pg_salt=uaakg74ljk&pg_sig=0ff6f623ad865e7e20f8c2c10be0e91b'
+          echo
+
+      - name: Что показывает страница оплаты
+        run: |
+          curl -sS -m 30 -L -o page.html -w '[http=%{http_code} bytes=%{size_download}]\n' \
+            'https://customer.freedompay.kz/pay.html?customer=01a06a7f-2c7b-72c2-a5a4-c272716fdad5&lang=ru' || true
+          echo "--- признаки тестового режима ---"
+          grep -o -i -E '.{0,60}(тестов|test mode|testing|demo).{0,60}' page.html | head -20 || echo "упоминаний теста нет"
+          echo "--- заголовок ---"
+          grep -o -i -E '<title>[^<]*</title>' page.html | head -3 || true
