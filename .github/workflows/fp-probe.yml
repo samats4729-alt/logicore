@@ -1,8 +1,5 @@
 name: FreedomPay probe
 
-# Разовая диагностика зависимостей: сколько предупреждений приходится на
-# сервер и кабинет, а сколько — на инструменты мобильного приложения,
-# которые никуда не разворачиваются.
 on:
   push:
     branches: [ claude/fp-probe ]
@@ -16,28 +13,30 @@ jobs:
         with: { version: 9.0.0 }
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
-
-      - name: Предупреждения по всей мастерской
-        run: pnpm audit --prod --json > all.json || true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --json > all.json || true
 
       - name: Разложить по приложениям
         run: |
           node -e "
           const a = (JSON.parse(require('fs').readFileSync('all.json','utf8')).advisories)||{};
-          const по = {api:{},web:{},mobile:{},'не определено':{}};
-          const важные = {api:new Set(), web:new Set()};
-          for (const k in a) {
+          const ключи = Object.keys(a);
+          console.log('Всего записей:', ключи.length);
+          const образец = (a[ключи[0]].findings||[]).flatMap(f=>f.paths||[]).slice(0,3);
+          console.log('Как выглядит путь:', JSON.stringify(образец));
+          const по = {};
+          const важные = new Set();
+          for (const k of ключи) {
             const v = a[k];
             const пути = (v.findings||[]).flatMap(f => f.paths||[]);
-            const где = new Set(пути.map(p => (p.match(/apps__(api|web|mobile)/)||[])[1]).filter(Boolean));
-            if (!где.size) по['не определено'][v.severity] = (по['не определено'][v.severity]||0)+1;
+            const где = new Set(пути.map(p => String(p).split('>')[0]));
             for (const g of где) {
+              по[g] = по[g] || {};
               по[g][v.severity] = (по[g][v.severity]||0)+1;
-              if ((v.severity==='critical'||v.severity==='high') && g!=='mobile') важные[g].add(v.severity+' — '+v.module_name+' '+v.vulnerable_versions);
+              if ((v.severity==='critical'||v.severity==='high') && !/mobile/.test(g)) важные.add(g+' :: '+v.severity+' — '+v.module_name+' '+v.vulnerable_versions);
             }
           }
-          console.log('Всего записей:', Object.keys(a).length);
-          for (const g of Object.keys(по)) console.log(g + ':', JSON.stringify(по[g]));
-          console.log('--- высокие и критические на сервере и в кабинете ---');
-          for (const g of ['api','web']) [...важные[g]].forEach(s => console.log('  ' + g + ' :: ' + s));
+          for (const g of Object.keys(по).sort()) console.log(g + ':', JSON.stringify(по[g]));
+          console.log('--- высокое и критическое вне мобильного ---');
+          [...важные].sort().forEach(s => console.log('  ' + s));
           "
