@@ -1,0 +1,26 @@
+name: FreedomPay probe
+
+# Разбор одной неудавшейся оплаты: что платёжная система записала по ней.
+# Секретов нет — подпись посчитана заранее и не секрет, она уходит в
+# каждом обычном запросе.
+on:
+  push:
+    branches: [ claude/fp-probe ]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Что записано по платежу 1845381931
+        run: |
+          curl -sS -m 30 -X POST 'https://api.freedompay.kz/get_status2.php' \
+            -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
+            --data 'pg_merchant_id=589160&pg_payment_id=1845381931&pg_salt=pc1etz6aodb&pg_sig=589a4e5cb74f23faff3265958cf0cf03'
+          echo
+
+      - name: То же подробнее (get_status3)
+        run: |
+          curl -sS -m 30 -X POST 'https://api.freedompay.kz/get_status3.php' \
+            -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
+            --data 'pg_merchant_id=589160&pg_payment_id=1845381931&pg_salt=ldspn1oiyfd&pg_sig=ca2d0b786feb69ca0ba6fdb8da4329e2'
+          echo
