@@ -1,0 +1,22 @@
+name: FreedomPay probe
+
+on:
+  push:
+    branches: [ claude/fp-probe ]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Что записано по платежу 1845399479
+        run: |
+          curl -sS -m 30 -X POST 'https://api.freedompay.kz/get_status3.php' \
+            -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
+            --data 'pg_merchant_id=589160&pg_payment_id=1845399479&pg_salt=azv7dz0yiza&pg_sig=5f6bdca9020200e78fa3706cb5a74ded'
+          echo
+
+      - name: Что видно на самой платёжной странице
+        run: |
+          curl -sSL -m 40 'https://customer.freedompay.kz/pay.html?customer=01a07113-9dad-73b4-b289-7fc203e33256&lang=ru' -o pay.html
+          echo "байт: $(wc -c < pay.html)"
+          tr -s '<>' '\n\n' < pay.html | grep -iE 'тест|test|карт|card|method|метод' | head -30
