@@ -38,7 +38,24 @@ interface User {
     id: string;
     firstName: string;
     lastName: string;
+    middleName?: string | null;
     role: string;
+}
+
+/**
+ * Как человек подписан в списке выбора.
+ *
+ * Раньше рядом с именем печаталось `role` как есть: «Ербай Айжан
+ * (LOGISTICIAN)». Это внутреннее слово системы, к тому же не совпадающее с
+ * должностью из карточки: у человека в таблице сотрудников написано
+ * «Финансист», а здесь — «LOGISTICIAN». В списке нужен человек, а не то,
+ * как он назван в коде.
+ *
+ * Отчество печатаем, когда оно есть: полных тёзок по имени и фамилии в
+ * одной компании встретить проще, чем кажется.
+ */
+function фио(u: User): string {
+    return [u.lastName, u.firstName, u.middleName].filter(Boolean).join(' ').trim();
 }
 
 /**
@@ -614,8 +631,8 @@ export default function PayrollAdminPage() {
                             ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
                         }>
                             {users.map(u => (
-                                <Select.Option key={u.id} value={u.id} label={`${u.lastName || ''} ${u.firstName || ''}`}>
-                                    {u.lastName || ''} {u.firstName || ''} ({u.role})
+                                <Select.Option key={u.id} value={u.id} label={фио(u)}>
+                                    {фио(u)}
                                 </Select.Option>
                             ))}
                         </Select>
@@ -691,8 +708,8 @@ export default function PayrollAdminPage() {
                             ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
                         }>
                             {users.map(u => (
-                                <Select.Option key={u.id} value={u.id} label={`${u.lastName || ''} ${u.firstName || ''}`}>
-                                    {u.lastName || ''} {u.firstName || ''} ({u.role})
+                                <Select.Option key={u.id} value={u.id} label={фио(u)}>
+                                    {фио(u)}
                                 </Select.Option>
                             ))}
                         </Select>
