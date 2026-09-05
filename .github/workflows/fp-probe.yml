@@ -1,0 +1,49 @@
+name: FreedomPay probe
+
+# Достаём документацию FreedomPay: из песочницы агента эти домены закрыты.
+on:
+  push:
+    branches: [ claude/fp-probe ]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Карта сайта документации
+        run: |
+          for u in \
+            "https://freedompay.kz/sitemap.xml" \
+            "https://docs.freedompay.kz/sitemap.xml" \
+            "https://freedompay.kz/doc" ; do
+            echo "=========== $u ==========="
+            curl -sSL -m 40 -w '\n[http=%{http_code} bytes=%{size_download}]\n' "$u" -o page.out || true
+            head -c 1500 page.out; echo
+          done
+
+      - name: Страницы про тесты и ошибки
+        run: |
+          for u in \
+            "https://freedompay.kz/docs/merchant-api/intro" \
+            "https://freedompay.kz/docs/merchant-api/pay" \
+            "https://freedompay.kz/docs/gateway-api/intro" \
+            "https://freedompay.kz/docs/gateway-api/error-list" \
+            "https://freedompay.kz/docs/gateway-api/test" \
+            "https://docs.freedompay.kz/info-32186131e0" ; do
+            echo "=========== $u ==========="
+            curl -sSL -m 40 -w '[http=%{http_code} bytes=%{size_download}]\n' "$u" -o p.html || true
+            python3 - <<'PY'
+import re,io
+try:
+    s=io.open('p.html',encoding='utf-8',errors='ignore').read()
+except Exception as e:
+    print('нет файла',e); raise SystemExit
+s=re.sub(r'(?is)<(script|style).*?</\1>',' ',s)
+t=re.sub(r'(?s)<[^>]+>',' ',s)
+t=re.sub(r'\s+',' ',t).strip()
+print('текста символов:', len(t))
+for kw in ['тестов','10005','карточн','Тестовые карты','test card','Разработ']:
+    for m in re.finditer(kw, t, re.I):
+        a=max(0,m.start()-200); b=min(len(t),m.end()+300)
+        print('  •', t[a:b].strip()[:480]); break
+PY
+          done
