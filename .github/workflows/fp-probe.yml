@@ -8,15 +8,22 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Что записано по платежу 1845399479
+      - name: Официальный справочник ошибок
         run: |
-          curl -sS -m 30 -X POST 'https://api.freedompay.kz/get_status3.php' \
-            -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
-            --data 'pg_merchant_id=589160&pg_payment_id=1845399479&pg_salt=azv7dz0yiza&pg_sig=5f6bdca9020200e78fa3706cb5a74ded'
-          echo
+          curl -sSL -m 40 'https://customer.freedompay.kz/dev/error' -o err.html
+          echo "байт: $(wc -c < err.html)"
+          tr -s '<>' '\n\n' < err.html | grep -B2 -A2 -E '10005|10009|10001' | head -40
 
-      - name: Что видно на самой платёжной странице
+      - name: Какие методы оплаты доступны магазину в тесте
         run: |
-          curl -sSL -m 40 'https://customer.freedompay.kz/pay.html?customer=01a07113-9dad-73b4-b289-7fc203e33256&lang=ru' -o pay.html
-          echo "байт: $(wc -c < pay.html)"
-          tr -s '<>' '\n\n' < pay.html | grep -iE 'тест|test|карт|card|method|метод' | head -30
+          for pair in \
+            "get_payment_methods.php|pg_merchant_id=589160&pg_amount=5000&pg_currency=KZT&pg_testing_mode=1&pg_salt=lx5v0fbsrme&pg_sig=3e37286c1c5d7019a2939cba5d8416c5" \
+            "payment_methods.php|pg_merchant_id=589160&pg_amount=5000&pg_currency=KZT&pg_testing_mode=1&pg_salt=qvf2f6nesul&pg_sig=744d07249543fc6329b71e095e72d577" \
+            "get_methods.php|pg_merchant_id=589160&pg_amount=5000&pg_currency=KZT&pg_testing_mode=1&pg_salt=r0dxjlp1t1&pg_sig=c0072a24efe50a7bc163622cc2d366f4" \
+            "ps_list.php|pg_merchant_id=589160&pg_amount=5000&pg_currency=KZT&pg_testing_mode=1&pg_salt=ll21mjd1q3f&pg_sig=6a59a060ce104aed95a34280c343bbaa" ; do
+            s="${pair%%|*}"; d="${pair#*|}"
+            echo "===== $s ====="
+            curl -sS -m 25 -w '\n[http=%{http_code}]\n' -X POST "https://api.freedompay.kz/$s" \
+              -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' --data "$d" | head -c 900
+            echo
+          done
