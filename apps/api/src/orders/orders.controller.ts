@@ -499,8 +499,19 @@ export class OrdersController {
             : null;
         const senderCompanyName = company?.name || 'LogiCore';
 
-        // Generate the PDF buffer
-        const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId);
+        // Доверенность уходит письмом заверенной.
+        //
+        // Раньше флажок сюда не передавался, и на почту улетал чистый бланк:
+        // скачанная доверенность была с печатью, отправленная — без. На
+        // погрузке по такой бумаге машину не пускают, а человек об этом
+        // узнаёт уже от водителя.
+        //
+        // Ставить печать безопасно: `generatePdf` сам рисует её, только если
+        // доверенность выписала та самая компания, которая её отправляет.
+        // Чужую печать система не поставит и здесь.
+        const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId, {
+            withStamp: true,
+        });
 
         // Собираем ключевые данные водителя для отображения в письме
         const driver = (order as any).driver;
