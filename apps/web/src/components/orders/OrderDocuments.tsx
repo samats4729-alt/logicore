@@ -8,6 +8,7 @@ import {
     ChevronUp,
     CircleAlert,
     Download,
+    Eye,
     FileCheck2,
     FilePen,
     FileText,
@@ -32,6 +33,7 @@ import {
 } from '@/lib/accounting-documents';
 import { useAuthStore } from '@/store/auth';
 import { canAccounting } from '@/lib/permissions';
+import FilePreviewModal from '@/components/ui/FilePreviewModal';
 import styles from './order-documents.module.css';
 
 /**
@@ -83,6 +85,8 @@ interface OrderFile {
     type: string;
     fileName: string;
     fileSize: number;
+    /** Чем файл считается — от этого зависит, можно ли показать его без скачивания. */
+    mimeType?: string | null;
     createdAt: string;
     uploadedById?: string;
     uploadedBy?: { firstName?: string; lastName?: string };
@@ -424,6 +428,17 @@ export default function OrderDocuments({
         }
     };
 
+    /**
+     * Что сейчас смотрят. Файл не хранится: окно само заберёт его по
+     * `load`, когда откроется, и отпустит, когда закроется.
+     */
+    const [просмотр, setПросмотр] = useState<{
+        title: string;
+        fileName: string;
+        mimeType?: string | null;
+        load: () => Promise<Blob>;
+    } | null>(null);
+
     const downloadFormed = async (row: FormedDocument, withStamp = false) => {
         try {
             const res = await api.get(`/orders/documents/${row.id}/pdf`, {
@@ -557,6 +572,20 @@ export default function OrderDocuments({
                         )}
                     </span>
                     <span className={styles.docActs}>
+                        <button
+                            type="button"
+                            className={`${styles.act} ${styles.actSm}`}
+                            onClick={() => setПросмотр({
+                                title: `${KIND_TITLE[row.kind]}, версия ${row.version}`,
+                                fileName: `${KIND_TITLE[row.kind]}_${orderNumber || orderId}_v${row.version}.pdf`,
+                                mimeType: 'application/pdf',
+                                load: () => api
+                                    .get(`/orders/documents/${row.id}/pdf`, { responseType: 'blob' })
+                                    .then((r) => r.data as Blob),
+                            })}
+                        >
+                            <Eye size={13} /> Смотреть
+                        </button>
                         <button type="button" className={`${styles.act} ${styles.actSm}`} onClick={() => downloadFormed(row)}>
                             <Download size={13} /> Скачать
                         </button>
@@ -750,6 +779,20 @@ export default function OrderDocuments({
                                     </span>
                                 </span>
                                 <span className={styles.docActs}>
+                                    <button
+                                        type="button"
+                                        className={`${styles.act} ${styles.actSm}`}
+                                        onClick={() => setПросмотр({
+                                            title: FILE_TITLE[row.type] || 'Файл',
+                                            fileName: row.fileName,
+                                            mimeType: row.mimeType,
+                                            load: () => api
+                                                .get(`/documents/${row.id}/download`, { responseType: 'blob' })
+                                                .then((r) => r.data as Blob),
+                                        })}
+                                    >
+                                        <Eye size={13} /> Смотреть
+                                    </button>
                                     <button type="button" className={`${styles.act} ${styles.actSm}`} onClick={() => downloadFile(row)}>
                                         <Download size={13} /> Скачать
                                     </button>
@@ -849,6 +892,15 @@ export default function OrderDocuments({
                     </div>
                 )}
             </Modal>
+
+            <FilePreviewModal
+                open={!!просмотр}
+                onClose={() => setПросмотр(null)}
+                title={просмотр?.title || ''}
+                fileName={просмотр?.fileName || ''}
+                mimeType={просмотр?.mimeType}
+                load={просмотр?.load || (() => Promise.reject(new Error('нечего показывать')))}
+            />
         </section>
     );
 }

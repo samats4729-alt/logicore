@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import StatusPill from '@/components/ui/StatusPill';
+import FilePreviewModal from '@/components/ui/FilePreviewModal';
 
 /**
  * Документы, вложенные в рейсы: накладные, акты, счета, доверенности.
@@ -120,21 +121,40 @@ export default function DocumentsPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    /** Открыть или скачать вложение. Файл берём через API — прямой ссылки нет. */
-    const openFile = async (row: DocumentRow, mode: 'view' | 'download') => {
+    /**
+     * Что сейчас смотрят. Окно само заберёт файл, когда откроется.
+     *
+     * Раньше «Открыть» звало `window.open` по ссылке `blob:` с типом из
+     * самой записи. Тип файла задаёт тот, кто его прислал, а вкладка с
+     * `blob:` наследует наш адрес — то есть присланная под видом накладной
+     * страница выполнялась бы на домене кабинета, поверх куки сессии. На
+     * сервере эту дыру закрыли (`allowed-files.ts`), а здесь она открывалась
+     * заново. Теперь показ идёт через общее окно, где тип назначаем мы сами
+     * и только из списка безопасных.
+     */
+    const [просмотр, setПросмотр] = useState<DocumentRow | null>(null);
+
+    /**
+     * Загрузчик для окна просмотра. Обёрнут в `useCallback`, чтобы не менять
+     * личность между перерисовками: окно перечитывает файл, когда меняется
+     * `load`, и без этого запрос уходил бы по кругу.
+     */
+    const загрузчик = useCallback(async () => {
+        if (!просмотр) throw new Error('нечего показывать');
+        const res = await api.get(`/documents/${просмотр.id}/download`, { responseType: 'blob' });
+        return res.data as Blob;
+    }, [просмотр]);
+
+    /** Скачать вложение. Файл берём через API — прямой ссылки нет. */
+    const openFile = async (row: DocumentRow) => {
         try {
             const res = await api.get(`/documents/${row.id}/download`, { responseType: 'blob' });
-            const url = URL.createObjectURL(new Blob([res.data], { type: row.mimeType || 'application/octet-stream' }));
-            if (mode === 'view') {
-                window.open(url, '_blank', 'noopener');
-            } else {
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = row.fileName;
-                link.click();
-            }
-            // Ссылку освобождаем не сразу: вкладка не успеет открыть файл.
-            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = row.fileName;
+            link.click();
+            URL.revokeObjectURL(url);
         } catch (e: any) {
             toast.error(e?.response?.data?.message || 'Не удалось открыть файл');
         }
@@ -281,7 +301,7 @@ export default function DocumentsPage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             aria-label="Открыть файл"
-                                                            onClick={() => openFile(row, 'view')}
+                                                            onClick={() => setПросмотр(row)}
                                                         >
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
@@ -289,7 +309,7 @@ export default function DocumentsPage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             aria-label="Скачать файл"
-                                                            onClick={() => openFile(row, 'download')}
+                                                            onClick={() => openFile(row)}
                                                         >
                                                             <Download className="h-4 w-4" />
                                                         </Button>
@@ -309,6 +329,15 @@ export default function DocumentsPage() {
                         Показаны последние 300 документов. Сузьте период или уточните поиск.
                     </p>
                 )}
+
+                <FilePreviewModal
+                    open={!!просмотр}
+                    onClose={() => setПросмотр(null)}
+                    title={просмотр?.fileName || ''}
+                    fileName={просмотр?.fileName || ''}
+                    mimeType={просмотр?.mimeType}
+                    load={загрузчик}
+                />
             </div>
         </div>
     );
