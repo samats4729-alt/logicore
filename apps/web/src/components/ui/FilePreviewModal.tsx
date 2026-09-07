@@ -56,6 +56,12 @@ export function видФайла(mimeType?: string | null, fileName?: string | n
     return 'нет';
 }
 
+function эточHeic(mimeType?: string | null, fileName?: string | null): boolean {
+    const тип = (mimeType || '').toLowerCase().split(';')[0].trim();
+    if (БЕЗ_ПРОСМОТРА.includes(тип)) return true;
+    return /\.(heic|heif)$/i.test(fileName || '');
+}
+
 export interface FilePreviewProps {
     open: boolean;
     onClose: () => void;
@@ -139,7 +145,13 @@ export default function FilePreviewModal({
                 {!загрузка && вид === 'нет' && (
                     <div className={styles.state}>
                         <FileQuestion size={22} />
-                        <span>Этот файл браузер показать не умеет — его можно скачать.</span>
+                        <span>
+                            {/* HEIC называем прямо: человек снял накладную на айфон, и
+                                «браузер не умеет» звучит как поломка у нас. */}
+                            {эточHeic(mimeType, fileName)
+                                ? 'Фото снято айфоном в формате HEIC — в браузере он не открывается. Скачайте: на телефоне и на компьютере оно откроется как обычная фотография.'
+                                : 'Этот файл браузер показать не умеет — его можно скачать.'}
+                        </span>
                     </div>
                 )}
 
