@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DatePicker } from 'antd';
 import type { DatePickerProps, GetProps } from 'antd';
 import dayjs from 'dayjs';
@@ -9,6 +9,7 @@ import {
     ПОДСКАЗКА_МЕСЯЦА,
     ФОРМАТ_ДАТЫ,
     ФОРМАТ_МЕСЯЦА,
+    похожеНаДату,
     разобратьДату,
 } from '@/lib/ru-date';
 
@@ -46,9 +47,20 @@ export function DateField({
     format = ФОРМАТ_ДАТЫ,
     placeholder = ПОДСКАЗКА_ДАТЫ,
     onChange,
+    status,
     ...props
 }: DateFieldProps) {
     const ссылка = useRef<any>(null);
+
+    /**
+     * Дату дописали, а такой не бывает.
+     *
+     * Своё состояние, а не класс antd: `ant-picker-invalid` у него
+     * залипает — остаётся висеть даже после того, как дату выбрали мышкой
+     * в календаре, — и красить по нему значит красить исправные поля.
+     * Проверено в браузере.
+     */
+    const [ошибкаДаты, setОшибкаДаты] = useState(false);
 
     // Свежий обработчик — в ссылке, чтобы подписка ниже не пересоздавалась
     // на каждый ререндер формы: поле ввода живёт столько же, сколько сам
@@ -82,11 +94,32 @@ export function DateField({
 
         const слушать = () => {
             const дата = разобратьДату(поле.value);
-            if (дата) свежий.current?.(дата, дата.format(ФОРМАТ_ДАТЫ));
+            if (дата) {
+                setОшибкаДаты(false);
+                свежий.current?.(дата, дата.format(ФОРМАТ_ДАТЫ));
+                return;
+            }
+            // Ошибка — только когда дату дописали до конца. Пока набирают,
+            // «20.05.20» ещё не ошибка, а незаконченная строка.
+            //
+            // Через таймер, а не сразу: перерисовка прямо в обработчике
+            // ввода съедает последнюю набранную цифру — в поле остаётся
+            // «31.02.202». Проверено в браузере. Пометка об ошибке никуда
+            // не спешит, поэтому ждёт, пока нажатие доработает.
+            const дописано = похожеНаДату(поле.value);
+            setTimeout(() => setОшибкаДаты(дописано), 0);
         };
 
+        // Из поля ушли — antd вернул прежнюю дату, значит и краснеть больше
+        // нечему: на экране снова то, что записано.
+        const забыть = () => setОшибкаДаты(false);
+
         поле.addEventListener('input', слушать);
-        return () => поле.removeEventListener('input', слушать);
+        поле.addEventListener('blur', забыть);
+        return () => {
+            поле.removeEventListener('input', слушать);
+            поле.removeEventListener('blur', забыть);
+        };
     }, [соВременем]);
 
     return (
@@ -95,6 +128,9 @@ export function DateField({
             format={format}
             placeholder={placeholder}
             onChange={onChange}
+            // Своё «красное» уступает тому, что задал экран: там про эту
+            // дату могут знать больше — например, что она вне договора.
+            status={status ?? (ошибкаДаты ? 'error' : undefined)}
             {...props}
         />
     );
