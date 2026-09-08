@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { Typography, Form, Input, InputNumber, Select, DatePicker, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox } from 'antd';
+import { Typography, Form, Input, InputNumber, Select, Row, Col, Card, Modal, Steps, Divider, theme, Tag, AutoComplete, Checkbox } from 'antd';
 import {
     EnvironmentOutlined, FlagOutlined,
     DeleteOutlined, SendOutlined, CheckCircleOutlined, ExclamationCircleOutlined
@@ -47,6 +47,7 @@ import nova from '@/components/nova/nova.module.css';
 import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 import CurrencySelect from '@/components/orders/CurrencySelect';
+import { DateField } from '@/components/ui/DateField';
 
 interface LocationState {
     city: string;
@@ -859,7 +860,7 @@ export default function CreateOrderPage() {
     const stepRoute = (
         <Card size="small" className="lc-wiz-panel">
             <Form.Item name="pickupDate" label="Дата и время погрузки" rules={[{ required: true, message: 'Укажите дату' }]} data-guide="wizard-pickup-date">
-                <DatePicker
+                <DateField
                     style={{ width: '100%' }}
                     format="DD.MM.YYYY HH:mm"
                     showTime={{ format: 'HH:mm' }}
@@ -1511,12 +1512,12 @@ export default function CreateOrderPage() {
                             <Row gutter={12}>
                                 <Col span={8}>
                                     <Form.Item name="docIssuedAt" label="Дата выдачи">
-                                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                        <DateField style={{ width: '100%' }} />
                                     </Form.Item>
                                 </Col>
                                 <Col span={8}>
                                     <Form.Item name="docExpiresAt" label="Срок действия">
-                                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                        <DateField style={{ width: '100%' }} />
                                     </Form.Item>
                                 </Col>
                                 <Col span={8}>

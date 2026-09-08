@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Table, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, InputNumber, Row, Col, DatePicker, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
+import { Table, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, InputNumber, Row, Col, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
 import dayjs from 'dayjs';
 
-const { RangePicker } = DatePicker;
 import {
     CheckCircleOutlined,
     EnvironmentOutlined, FlagOutlined, SearchOutlined,
@@ -35,6 +34,7 @@ import { useIsMobile } from '@/lib/useIsMobile';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
+import { DateRangeField } from '@/components/ui/DateField';
 import {
     DEBT_RED,
     getNextStatuses,
@@ -1645,8 +1645,8 @@ export default function CompanyOrdersPage() {
                             <Select.Option value="pickup">По погрузке</Select.Option>
                             <Select.Option value="created">По заведению</Select.Option>
                         </Select>
-                        <RangePicker
-                            size="small" style={{ width: 220 }} format="DD.MM.YYYY"
+                        <DateRangeField
+                            size="small" style={{ width: 220 }}
                             placeholder={['Дата с', 'Дата по']}
                             value={periodFrom || periodTo ? [periodFrom, periodTo] as any : null}
                             onChange={(range) => {

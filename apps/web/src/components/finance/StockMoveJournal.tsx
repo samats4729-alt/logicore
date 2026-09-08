@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Space, Tag, DatePicker, Input, Select, InputNumber, Modal, Form, App, Tooltip } from 'antd';
+import { Table, Button, Space, Tag, Input, Select, InputNumber, Modal, Form, App, Tooltip } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, InboxOutlined, SwapOutlined, ExportOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import { DateField } from '@/components/ui/DateField';
 
 type MoveType = 'receipt' | 'transfer' | 'writeoff';
 
@@ -207,7 +208,7 @@ export default function StockMoveJournal({ type }: { type: MoveType }) {
                 <Form form={form} layout="vertical" onFinish={handleSave} style={{ marginTop: 8 }}>
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                         <Form.Item name="date" label="Дата" rules={[{ required: true, message: 'Укажите дату' }]} style={{ flex: '0 0 160px' }}>
-                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                            <DateField style={{ width: '100%' }} />
                         </Form.Item>
                         <Form.Item name="warehouseId" label={cfg.whLabel} rules={[{ required: true, message: 'Укажите склад' }]} style={{ flex: 1, minWidth: 200 }}>
                             <Select showSearch optionFilterProp="label" options={warehouses.map(w => ({ value: w.id, label: w.name }))} />

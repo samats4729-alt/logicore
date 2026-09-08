@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Table, Form, InputNumber, Select, Button, Row, Col, Modal, DatePicker, Popconfirm } from 'antd';
+import { Table, Form, InputNumber, Select, Button, Row, Col, Modal, Popconfirm } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { Plus, Table2, Target, UserRound, Wallet } from 'lucide-react';
 import styles from '@/components/nova/nova.module.css';
@@ -10,8 +10,8 @@ import { ROLE_LABELS } from '@/lib/vocabulary';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import { MonthRangeField } from '@/components/ui/DateField';
 
-const { RangePicker } = DatePicker;
 
 interface Scheme {
     id: string;
@@ -418,8 +418,7 @@ export default function PayrollAdminPage() {
                 </div>
                 {activeTab === '2' && (
                     <div className={styles.heroActions}>
-                        <RangePicker
-                            picker="month"
+                        <MonthRangeField
                             value={dates}
                             onChange={(val) => {
                                 if (val && val[0] && val[1]) setDates([val[0], val[1]]);

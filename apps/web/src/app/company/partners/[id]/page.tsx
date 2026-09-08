@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, Table, Button, Typography, Space, Tag, Avatar, Descriptions, Modal, Form, Input, Select, Row, Col, Divider, DatePicker, Popconfirm, Empty, theme } from 'antd';
+import { Card, Table, Button, Typography, Space, Tag, Avatar, Descriptions, Modal, Form, Input, Select, Row, Col, Divider, Popconfirm, Empty, theme } from 'antd';
 import {
     ShopOutlined, EditOutlined, DeleteOutlined,
     PlusOutlined, UserOutlined, UserAddOutlined, CarOutlined,
@@ -22,6 +22,7 @@ import { canAccounting } from '@/lib/permissions';
 import { vatLabel } from '@/lib/settlement-terms';
 import nova from '@/components/nova/nova.module.css';
 import StatusPill from '@/components/ui/StatusPill';
+import { DateField } from '@/components/ui/DateField';
 
 const { Title, Text } = Typography;
 
@@ -840,12 +841,12 @@ export default function PartnerDetailPage() {
                     <Row gutter={16}>
                         <Col span={8}>
                             <Form.Item name="docIssuedAt" label="Дата выдачи">
-                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                <DateField style={{ width: '100%' }} />
                             </Form.Item>
                         </Col>
                         <Col span={8}>
                             <Form.Item name="docExpiresAt" label="Срок действия">
-                                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                <DateField style={{ width: '100%' }} />
                             </Form.Item>
                         </Col>
                         <Col span={8}>

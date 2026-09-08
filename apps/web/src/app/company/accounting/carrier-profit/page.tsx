@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, DatePicker, Tag } from 'antd';
+import { Table, Button, Tag } from 'antd';
 import { ArrowLeftOutlined, CalendarOutlined, WalletOutlined, BarChartOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -10,9 +10,9 @@ import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
+import { DateRangeField } from '@/components/ui/DateField';
 dayjs.extend(quarterOfYear);
 
-const { RangePicker } = DatePicker;
 
 interface Row { carrier: string; orders: number; revenue: number; cost: number; margin: number; marginPct: number }
 interface Totals { orders: number; revenue: number; cost: number; margin: number }
@@ -68,7 +68,7 @@ export default function CarrierProfitPage() {
                     </p>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <CalendarOutlined style={{ color: 'var(--lc-text-ter)' }} />
-                        <RangePicker value={dates} onChange={(v) => setDates(v as any)} format="DD.MM.YYYY" presets={[
+                        <DateRangeField value={dates} onChange={(v) => setDates(v as any)} presets={[
                             { label: 'Текущий месяц', value: [dayjs().startOf('month'), dayjs().endOf('month')] },
                             { label: 'Прошлый месяц', value: [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
                             { label: 'Квартал', value: [dayjs().startOf('quarter'), dayjs().endOf('quarter')] },

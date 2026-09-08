@@ -1,6 +1,6 @@
 'use client';
 
-import {  AutoComplete, Button, Col, DatePicker, Divider, Form, Input, InputNumber, Row, Select, Typography } from 'antd';
+import { AutoComplete, Button, Col, Divider, Form, Input, InputNumber, Row, Select, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import { CheckCircleOutlined, DeleteOutlined, EnvironmentOutlined, FlagOutlined, InboxOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import { VEHICLE_TYPES } from '@/lib/constants';
@@ -14,6 +14,7 @@ import { MoneyInput } from '@/components/ui/MoneyInput';
 import nova from '@/components/nova/nova.module.css';
 import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
 import type { OrderSettlements } from '@/lib/settlement-terms';
+import { DateField } from '@/components/ui/DateField';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -120,7 +121,7 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                         </div>
                         <div className={nova.cardBody}>
                         <Form.Item name="pickupDate" label="Дата погрузки" rules={[{ required: true, message: 'Укажите дату' }]}>
-                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
+                            <DateField style={{ width: '100%' }} format="DD.MM.YYYY HH:mm" showTime={{ format: 'HH:mm' }} placeholder="Дата и время" />
                         </Form.Item>
                         {routePointsState.map((pt, i) => (
                             /* Точки различаются подписью, а не цветом заливки:

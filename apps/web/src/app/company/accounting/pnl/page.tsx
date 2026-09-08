@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Alert, Typography, Button, DatePicker, Table, Space, Tag, theme } from 'antd';
+import { Alert, Typography, Button, Table, Space, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, FileExcelOutlined, DollarOutlined, LineChartOutlined, WalletOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -9,9 +9,9 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
 import Loader from '@/components/ui/Loader';
+import { DateRangeField } from '@/components/ui/DateField';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 interface PnLReport {
     revenueNet: number;
@@ -219,7 +219,7 @@ export default function PnLReportPage() {
                         />
                     )}
                     <Space wrap>
-                        <RangePicker
+                        <DateRangeField
                             value={dates}
                             onChange={(val) => setDates(val as any)}
                             allowClear={false}

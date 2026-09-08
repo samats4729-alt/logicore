@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Tag, theme } from 'antd';
+import { Typography, Button, Table, Tabs, Switch, Modal, Form, Input, InputNumber, Select, Space, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import CurrencySelect from '@/components/orders/CurrencySelect';
@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import Loader from '@/components/ui/Loader';
+import { DateField } from '@/components/ui/DateField';
 
 const { Text } = Typography;
 
@@ -620,7 +621,7 @@ export default function FinanceSettingsPage() {
                         <InputNumber size="large" style={{ width: '100%' }} min={0} placeholder="0" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} />
                     </Form.Item>
                     <Form.Item name="openingDate" label="На дату" extra="Движения с этой даты прибавляются к остатку">
-                        <DatePicker size="large" style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="Дата начала учёта" />
+                        <DateField size="large" style={{ width: '100%' }} placeholder="Дата начала учёта" />
                     </Form.Item>
                 </Form>
             </Modal>

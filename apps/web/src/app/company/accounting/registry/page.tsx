@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, DatePicker, Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress, Modal, Form, InputNumber, theme } from 'antd';
+import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress, Modal, Form, InputNumber, theme } from 'antd';
 import {
     ArrowUpOutlined, ArrowDownOutlined, DollarOutlined,
     SearchOutlined, EyeOutlined, PlusOutlined, FileExcelOutlined,
@@ -18,9 +18,9 @@ import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
 import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 import Loader from '@/components/ui/Loader';
+import { DateField, DateRangeField } from '@/components/ui/DateField';
 
 const { Title, Text } = Typography;
-const { RangePicker } = DatePicker;
 
 // Подписи статусов — из общего словаря `lib/vocabulary`,
 // чтобы один и тот же статус везде назывался одинаково.
@@ -621,9 +621,8 @@ export default function FinancialRegistryPage() {
                         allowClear
                         size="middle"
                     />
-                    <RangePicker
+                    <DateRangeField
                         size="middle"
-                        format="DD.MM.YYYY"
                         onChange={(dates) => setDateRange(dates as any)}
                         placeholder={['От', 'До']}
                     />
@@ -860,7 +859,7 @@ export default function FinancialRegistryPage() {
                             label="Дата платежа"
                             rules={[{ required: true, message: 'Укажите дату' }]}
                         >
-                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" size="large" />
+                            <DateField style={{ width: '100%' }} size="large" />
                         </Form.Item>
 
                         <Form.Item

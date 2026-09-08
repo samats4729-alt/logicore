@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Alert, Typography, Button, DatePicker, Table, Tabs, Space, Tag, theme } from 'antd';
+import { Alert, Typography, Button, Table, Tabs, Space, Tag, theme } from 'antd';
 import { ArrowLeftOutlined, FileExcelOutlined, ArrowUpOutlined, ArrowDownOutlined, WalletOutlined, SwapOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -10,9 +10,9 @@ import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { money as formatCurrency } from '@/lib/money-format';
 import Loader from '@/components/ui/Loader';
+import { DateRangeField } from '@/components/ui/DateField';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 interface FlowItem {
     id: string;
@@ -257,7 +257,7 @@ export default function CashflowReportPage() {
                         Живые деньги: сколько фактически пришло и ушло по счетам и кассам за период — все оплаты, доходы и расходы вместе.
                     </p>
                     <Space wrap>
-                        <RangePicker
+                        <DateRangeField
                             value={dates}
                             onChange={(val) => setDates(val as any)}
                             allowClear={false}

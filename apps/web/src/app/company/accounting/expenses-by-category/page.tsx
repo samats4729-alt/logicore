@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, DatePicker, Progress } from 'antd';
+import { Table, Button, Progress } from 'antd';
 import { ArrowLeftOutlined, CalendarOutlined, ArrowUpOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -9,9 +9,9 @@ import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { toast } from 'sonner';
+import { DateRangeField } from '@/components/ui/DateField';
 dayjs.extend(quarterOfYear);
 
-const { RangePicker } = DatePicker;
 
 interface Row { category: string; amount: number; count: number; pct: number }
 
@@ -62,7 +62,7 @@ export default function ExpensesByCategoryPage() {
                     </p>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <CalendarOutlined style={{ color: 'var(--lc-text-ter)' }} />
-                        <RangePicker value={dates} onChange={(v) => setDates(v as any)} format="DD.MM.YYYY" presets={[
+                        <DateRangeField value={dates} onChange={(v) => setDates(v as any)} presets={[
                             { label: 'Текущий месяц', value: [dayjs().startOf('month'), dayjs().endOf('month')] },
                             { label: 'Прошлый месяц', value: [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
                             { label: 'Квартал', value: [dayjs().startOf('quarter'), dayjs().endOf('quarter')] },

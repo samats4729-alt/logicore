@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
-import { Alert, Button, DatePicker, Empty } from 'antd';
+import { Alert, Button, Empty } from 'antd';
 import {
     ArrowLeftOutlined,
     CalendarOutlined,
@@ -20,8 +20,8 @@ import { calendarDate } from '@/lib/ru-date';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import { DateRangeField } from '@/components/ui/DateField';
 
-const { RangePicker } = DatePicker;
 
 interface ActRow {
     date: string;
@@ -154,11 +154,10 @@ function ReconciliationActInner() {
                 </Button>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <CalendarOutlined style={{ color: 'var(--lc-text-ter)' }} />
-                    <RangePicker
+                    <DateRangeField
                         value={range}
                         onChange={(value) => handleRangeChange(value as [dayjs.Dayjs, dayjs.Dayjs] | null)}
                         allowClear={false}
-                        format="DD.MM.YYYY"
                         presets={[
                             { label: 'Текущий год', value: [dayjs().startOf('year'), dayjs().endOf('day')] },
                             { label: 'Прошлый год', value: [dayjs().subtract(1, 'year').startOf('year'), dayjs().subtract(1, 'year').endOf('year')] },

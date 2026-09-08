@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button as AntButton, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { Alert, Button as AntButton, Form, Input, InputNumber, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import dayjs from 'dayjs';
 import {
@@ -13,6 +13,7 @@ import {
 import Loader from '@/components/ui/Loader';
 import { OrderPaymentRegister } from './OrderPaymentRegister';
 import styles from './order-finance-modals.module.css';
+import { DateField } from '@/components/ui/DateField';
 
 const { TextArea } = Input;
 
@@ -196,7 +197,7 @@ export default function OrderFinanceModals({
         <>
         <Modal title="Добавить поступление" open={incomeModalOpen} onCancel={() => setIncomeModalOpen(false)} onOk={() => incomeForm.submit()} okText="Добавить" cancelText="Отмена" confirmLoading={incomeLoading}>
             <Form form={incomeForm} layout="vertical" onFinish={handleAddIncome}>
-                <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
+                <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DateField style={{ width: '100%' }} /></Form.Item>
                 <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={incomeCategories} /></Form.Item>
                 <Form.Item name="description" label="Описание" rules={[{ required: true }]}><Input placeholder="Описание" /></Form.Item>
                 <Form.Item name="amount" label="Сумма ₸" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
@@ -207,7 +208,7 @@ export default function OrderFinanceModals({
         {/* =================== EXPENSE MODAL =================== */}
         <Modal title="Добавить расход" open={expenseModalOpen} onCancel={() => setExpenseModalOpen(false)} onOk={() => expenseForm.submit()} okText="Добавить" cancelText="Отмена" confirmLoading={expenseLoading}>
             <Form form={expenseForm} layout="vertical" onFinish={handleAddExpense}>
-                <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" /></Form.Item>
+                <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DateField style={{ width: '100%' }} /></Form.Item>
                 <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={expenseCategories} /></Form.Item>
                 <Form.Item name="description" label="Описание" rules={[{ required: true }]}><Input placeholder="Описание" /></Form.Item>
                 <Form.Item name="amount" label="Сумма ₸" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
@@ -259,7 +260,7 @@ export default function OrderFinanceModals({
                     </Form.Item>
 
                     <Form.Item name="date" label="Дата платежа" rules={[{ required: true }]}>
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DateField style={{ width: '100%' }} />
                     </Form.Item>
 
                     <Form.Item name="method" label="Способ оплаты" rules={[{ required: true }]}>

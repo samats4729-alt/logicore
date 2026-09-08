@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, DatePicker, Dropdown, Input, Modal, Select, Space, Table, Tabs, Tooltip, theme } from 'antd';
+import { Alert, Button, Dropdown, Input, Modal, Select, Space, Table, Tabs, Tooltip, theme } from 'antd';
 import {
     EyeOutlined,
     MoreOutlined,
@@ -29,8 +29,7 @@ import {
 import { toast } from 'sonner';
 import RecordLink from '@/components/ui/RecordLink';
 import Loader from '@/components/ui/Loader';
-
-const { RangePicker } = DatePicker;
+import { DateRangeField } from '@/components/ui/DateField';
 
 const DEFAULT_PERIOD: [Dayjs, Dayjs] = [dayjs().startOf('year'), dayjs().endOf('day')];
 
@@ -359,12 +358,11 @@ export default function ActsJournalPage() {
                         onChange={(value) => { setCounterpartyId(value); setPage(1); }}
                         options={counterparties.map((c) => ({ value: c.id, label: c.bin ? `${c.name} · БИН ${c.bin}` : c.name }))}
                     />
-                    <RangePicker
+                    <DateRangeField
                         value={period}
                         onChange={(value) => {
                             if (value?.[0] && value?.[1]) { setPeriod([value[0], value[1]]); setPage(1); }
                         }}
-                        format="DD.MM.YYYY"
                         allowClear={false}
                     />
                     <Select

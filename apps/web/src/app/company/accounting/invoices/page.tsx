@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, DatePicker, Dropdown, Input, Select, Space, Table, Tabs, Tooltip, theme } from 'antd';
+import { Button, Dropdown, Input, Select, Space, Table, Tabs, Tooltip, theme } from 'antd';
 import {
     EyeOutlined,
     MoreOutlined,
@@ -28,8 +28,7 @@ import {
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
 import RecordLink from '@/components/ui/RecordLink';
-
-const { RangePicker } = DatePicker;
+import { DateRangeField } from '@/components/ui/DateField';
 
 /** Журнал ведётся за период — как в 1С, где список всегда ограничен датами. */
 const DEFAULT_PERIOD: [Dayjs, Dayjs] = [dayjs().startOf('year'), dayjs().endOf('day')];
@@ -408,12 +407,11 @@ export default function InvoicesRegistryPage() {
                         onChange={(value) => { setCounterpartyId(value); setPage(1); }}
                         options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
                     />
-                    <RangePicker
+                    <DateRangeField
                         value={period}
                         onChange={(value) => {
                             if (value?.[0] && value?.[1]) { setPeriod([value[0], value[1]]); setPage(1); }
                         }}
-                        format="DD.MM.YYYY"
                         allowClear={false}
                     />
                     <Select

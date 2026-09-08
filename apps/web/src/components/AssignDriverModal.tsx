@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Form, Radio, Select, Button, Row, Col, Divider, Input, DatePicker, Steps, theme } from 'antd';
+import { Modal, Form, Radio, Select, Button, Row, Col, Divider, Input, Steps, theme } from 'antd';
 import {
     CarOutlined, UserOutlined, FileTextOutlined, PlusOutlined,
     CheckCircleOutlined
@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
+import { DateField } from '@/components/ui/DateField';
 
 interface AssignDriverModalProps {
     open: boolean;
@@ -536,12 +537,12 @@ export default function AssignDriverModal({
                                 <Row gutter={16}>
                                     <Col span={8}>
                                         <Form.Item name="docIssuedAt" label="Дата выдачи">
-                                            <DatePicker style={{ width: '100%' }} size="large" format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                            <DateField style={{ width: '100%' }} size="large" />
                                         </Form.Item>
                                     </Col>
                                     <Col span={8}>
                                         <Form.Item name="docExpiresAt" label="Срок действия">
-                                            <DatePicker style={{ width: '100%' }} size="large" format="DD.MM.YYYY" placeholder="ДД.ММ.ГГГГ" />
+                                            <DateField style={{ width: '100%' }} size="large" />
                                         </Form.Item>
                                     </Col>
                                     <Col span={8}>
