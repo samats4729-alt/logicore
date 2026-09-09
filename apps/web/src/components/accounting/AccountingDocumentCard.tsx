@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, DatePicker, Dropdown, Input, InputNumber, Modal, Select, Space, Switch, Table, Tooltip, theme } from 'antd';
+import { Alert, Button, Dropdown, Input, InputNumber, Modal, Select, Space, Switch, Table, Tooltip, theme } from 'antd';
 import {
     ArrowLeftOutlined,
     CheckOutlined,
@@ -49,6 +49,7 @@ import { VAT_RATES } from '@/lib/tax';
 import Loader from '@/components/ui/Loader';
 import nova from '@/components/nova/nova.module.css';
 import styles from './accounting-document-card.module.css';
+import { DateField } from '@/components/ui/DateField';
 
 /**
  * Сумма со знаком валюты документа.
@@ -920,9 +921,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     }}
                 >
                     {headerField('Дата', editable ? (
-                        <DatePicker
+                        <DateField
                             size="small"
-                            format="DD.MM.YYYY"
                             allowClear={false}
                             style={{ width: 150 }}
                             value={documentDate}
@@ -931,10 +931,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     ) : dayjs(document.documentDate).format('DD.MM.YYYY'))}
 
                     {kind.showDueDate && headerField('Срок оплаты', editable ? (
-                        <DatePicker
+                        <DateField
                             size="small"
-                            format="DD.MM.YYYY"
-                            placeholder="Не указан"
                             style={{ width: 150 }}
                             value={dueDate}
                             onChange={(value) => { setDueDate(value); touch(); }}
@@ -961,10 +959,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     {document.direction === 'INCOMING' && headerField(
                         'Дата у контрагента',
                         editable ? (
-                            <DatePicker
+                            <DateField
                                 size="small"
-                                format="DD.MM.YYYY"
-                                placeholder="Не указана"
                                 style={{ width: 150 }}
                                 value={externalDate}
                                 onChange={(value) => { setExternalDate(value); touch(); }}

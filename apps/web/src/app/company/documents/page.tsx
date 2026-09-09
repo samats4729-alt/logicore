@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import StatusPill from '@/components/ui/StatusPill';
 import FilePreviewModal from '@/components/ui/FilePreviewModal';
+import { DateStringField } from '@/components/ui/DateField';
 
 /**
  * Документы, вложенные в рейсы: накладные, акты, счета, доверенности.
@@ -198,9 +199,9 @@ export default function DocumentsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Вложены с</span>
-                        <Input type="date" className="w-[150px]" value={from} onChange={(e) => setFrom(e.target.value)} />
+                        <DateStringField className="w-[150px]" value={from} onChange={setFrom} />
                         <span className="text-xs text-muted-foreground">по</span>
-                        <Input type="date" className="w-[150px]" value={to} onChange={(e) => setTo(e.target.value)} />
+                        <DateStringField className="w-[150px]" value={to} onChange={setTo} />
                     </div>
                     {hasFilters && (
                         <Button

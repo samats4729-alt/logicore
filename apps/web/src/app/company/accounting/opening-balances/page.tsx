@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Tabs, Table, Button, Typography, Modal, Form, InputNumber, DatePicker, Input, Tag } from 'antd';
+import { Tabs, Table, Button, Typography, Modal, Form, InputNumber, Input, Tag } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, BankOutlined, InboxOutlined, CarOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { fetchCounterparties } from '@/lib/counterparties';
@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
+import { DateField } from '@/components/ui/DateField';
 
 const { Text } = Typography;
 
@@ -217,7 +218,7 @@ export default function OpeningBalancesPage() {
                         <InputNumber size="large" style={{ width: '100%' }} min={0} formatter={moneyFmt} parser={moneyParse} addonAfter="₸" />
                     </Form.Item>
                     <Form.Item name="openingDate" label="Дата начала учёта">
-                        <DatePicker size="large" style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="Дата" />
+                        <DateField size="large" style={{ width: '100%' }} />
                     </Form.Item>
                 </Form>
             </Modal>
@@ -229,7 +230,7 @@ export default function OpeningBalancesPage() {
                         <InputNumber size="large" style={{ width: '100%' }} min={0} formatter={moneyFmt} parser={moneyParse} addonAfter="₸" />
                     </Form.Item>
                     <Form.Item name="openingDate" label="На дату">
-                        <DatePicker size="large" style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="Дата" />
+                        <DateField size="large" style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item name="note" label="Примечание (необязательно)">
                         <Input placeholder="Например: акт сверки на 01.01" />

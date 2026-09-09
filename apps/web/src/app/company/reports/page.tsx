@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Table, Statistic, Row, Col, Button, DatePicker, Tag, Alert, Divider } from 'antd';
+import { Table, Statistic, Row, Col, Button, Tag, Alert, Divider } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import {
     ChartColumn,
@@ -25,8 +25,8 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import { DateRangeField } from '@/components/ui/DateField';
 
-const { RangePicker } = DatePicker;
 
 type ReportType = 'pnl' | 'counterparties' | 'profitability' | 'drivers' | 'summary';
 
@@ -431,10 +431,9 @@ export default function ReportsPage() {
                     </p>
                 </div>
                 <div className={styles.heroActions}>
-                    <RangePicker
+                    <DateRangeField
                         value={dateRange as any}
                         onChange={(d) => { setDateRange(d as any); setActivePreset(null); }}
-                        format="DD.MM.YYYY"
                         allowClear={false}
                     />
                     <button type="button" className={styles.action} disabled={loading} onClick={fetchAll}>

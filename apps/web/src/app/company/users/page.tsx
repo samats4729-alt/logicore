@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Table, Button, Tag, Modal, Form, Input, Select, Typography, Space, Popconfirm, Alert, Checkbox, Divider, Empty, Row, Col, DatePicker, Tooltip, Switch } from 'antd';
+import { Table, Button, Tag, Modal, Form, Input, Select, Typography, Space, Popconfirm, Alert, Checkbox, Divider, Empty, Row, Col, Tooltip, Switch } from 'antd';
 import dayjs from 'dayjs';
 import { 
     MailOutlined, EditOutlined, DeleteOutlined, CopyOutlined, SettingOutlined, BankOutlined, 
@@ -19,6 +19,7 @@ import EmployeeAccessModal from '@/components/company/EmployeeAccessModal';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import PillTabs from '@/components/ui/PillTabs';
+import { DateField } from '@/components/ui/DateField';
 
 const ROLE_OPTIONS = [
     { label: 'Менеджер', value: 'LOGISTICIAN' },
@@ -2273,7 +2274,7 @@ export default function CompanyUsersPage() {
                                             name="docIssuedAt"
                                             label="Дата выдачи"
                                         >
-                                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2020" />
+                                            <DateField style={{ width: '100%' }} />
                                         </Form.Item>
                                     </Col>
                                     <Col span={12}>
@@ -2281,7 +2282,7 @@ export default function CompanyUsersPage() {
                                             name="docExpiresAt"
                                             label="Действителен до"
                                         >
-                                            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" placeholder="01.01.2030" />
+                                            <DateField style={{ width: '100%' }} />
                                         </Form.Item>
                                     </Col>
                                 </Row>

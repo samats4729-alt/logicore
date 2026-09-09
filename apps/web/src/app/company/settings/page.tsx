@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Form, Input,
-    Select, Button, Checkbox, DatePicker, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
+import { Form, Input, Select, Button, Checkbox, Typography, Upload, Image, Row, Col, Tabs, Modal, Popconfirm, Tag } from 'antd';
 import { UploadOutlined, BankOutlined, FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -12,6 +11,7 @@ import CompanyFormFields from '@/components/CompanyFormFields';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
+import { DateField } from '@/components/ui/DateField';
 
 const { Text } = Typography;
 
@@ -525,7 +525,7 @@ export default function SettingsPage() {
                                             </Col>
                                             <Col xs={24} md={8}>
                                                 <Form.Item name="vatCertificateDate" label="Дата выдачи">
-                                                    <DatePicker size="large" format="DD.MM.YYYY" style={{ width: '100%' }} />
+                                                    <DateField size="large" style={{ width: '100%' }} />
                                                 </Form.Item>
                                             </Col>
                                         </Row>

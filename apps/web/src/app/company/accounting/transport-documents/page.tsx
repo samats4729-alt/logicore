@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, DatePicker, Dropdown, Empty, Input, Space, Table, Tabs, Tag, Tooltip, theme } from 'antd';
+import { Alert, Button, Dropdown, Empty, Input, Space, Table, Tabs, Tag, Tooltip, theme } from 'antd';
 import {
     DownOutlined,
     EyeOutlined,
@@ -15,8 +15,8 @@ import { api } from '@/lib/api';
 import StatusPill from '@/components/ui/StatusPill';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
+import { DateRangeField } from '@/components/ui/DateField';
 
-const { RangePicker } = DatePicker;
 
 type DocumentKind = 'POWER_OF_ATTORNEY' | 'CONTRACT';
 
@@ -266,10 +266,9 @@ export default function TransportDocumentsPage() {
                 />
 
                 <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-                    <RangePicker
+                    <DateRangeField
                         value={period}
                         onChange={(value) => { if (value?.[0] && value?.[1]) setPeriod([value[0], value[1]]); }}
-                        format="DD.MM.YYYY"
                         allowClear={false}
                     />
                     <Input

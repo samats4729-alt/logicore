@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Button, Tag, Space, Modal, Typography, Collapse, Table, Empty, Badge, Input, Tooltip, Tabs, Form, Select, DatePicker, InputNumber, Row, Col, Popconfirm, Divider, Dropdown, theme } from 'antd';
+import { Card, Button, Tag, Space, Modal, Typography, Collapse, Table, Empty, Badge, Input, Tooltip, Tabs, Form, Select, InputNumber, Row, Col, Popconfirm, Divider, Dropdown, theme } from 'antd';
 import {
     CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined,
     ExclamationCircleOutlined, PlusOutlined, SendOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, DownOutlined
@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
+import { DateField, DateRangeField } from '@/components/ui/DateField';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -776,12 +777,12 @@ export default function CompanyContractsPage() {
                     <Row gutter={16}>
                         <Col span={12}>
                             <Form.Item name="startDate" label="Дата начала">
-                                <DatePicker style={{ width: '100%' }} />
+                                <DateField style={{ width: '100%' }} />
                             </Form.Item>
                         </Col>
                         <Col span={12}>
                             <Form.Item name="endDate" label="Дата окончания">
-                                <DatePicker style={{ width: '100%' }} />
+                                <DateField style={{ width: '100%' }} />
                             </Form.Item>
                         </Col>
                     </Row>
@@ -810,7 +811,7 @@ export default function CompanyContractsPage() {
                         <Input placeholder="Например: ДС-1" />
                     </Form.Item>
                     <Form.Item name="dates" label="Период действия">
-                        <DatePicker.RangePicker style={{ width: '100%' }} />
+                        <DateRangeField style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item name="notes" label="Примечания">
                         <Input.TextArea rows={3} placeholder="Особые условия..." />

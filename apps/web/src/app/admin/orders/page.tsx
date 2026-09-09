@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import StatusPill from '@/components/ui/StatusPill';
 import { FileText } from 'lucide-react';
 import nova from '@/components/nova/nova.module.css';
+import { DateStringField } from '@/components/ui/DateField';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -393,7 +394,7 @@ export default function OrdersPage() {
                             </Select>
                         </Form.Item>
                         <Form.Item name="customerPaymentDate" label="Дата оплаты">
-                            <Input type="date" style={{ width: 140 }} />
+                            <DateStringField style={{ width: 140 }} />
                         </Form.Item>
                     </Space>
 
@@ -409,7 +410,7 @@ export default function OrdersPage() {
                             </Select>
                         </Form.Item>
                         <Form.Item name="driverPaymentDate" label="Дата оплаты">
-                            <Input type="date" style={{ width: 140 }} />
+                            <DateStringField style={{ width: 140 }} />
                         </Form.Item>
                     </Space>
 
@@ -511,7 +512,7 @@ export default function OrdersPage() {
                             </Select>
                         </Form.Item>
                         <Form.Item name="customerPaymentDate" label="Дата оплаты">
-                            <Input type="date" style={{ width: 140 }} />
+                            <DateStringField style={{ width: 140 }} />
                         </Form.Item>
                     </Space>
 
@@ -527,7 +528,7 @@ export default function OrdersPage() {
                             </Select>
                         </Form.Item>
                         <Form.Item name="driverPaymentDate" label="Дата оплаты">
-                            <Input type="date" style={{ width: 140 }} />
+                            <DateStringField style={{ width: 140 }} />
                         </Form.Item>
                     </Space>
 

@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { DatePicker } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { FileCheck2, FileClock, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { paymentTermsLabel, type OrderSettlements, type SettlementSide } from '@/lib/settlement-terms';
 import nova from '@/components/nova/nova.module.css';
+import { DateField } from '@/components/ui/DateField';
 
 /**
  * Оригиналы накладных: пришли или ещё едут.
@@ -74,10 +74,9 @@ function OriginalsRow({ side, title, sideKey, busy, picking, setPicking, save }:
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {busy === sideKey && <Loader2 size={14} className="animate-spin" />}
                 {picking === sideKey ? (
-                    <DatePicker
+                    <DateField
                         open
                         autoFocus
-                        format="DD.MM.YYYY"
                         placeholder="дата"
                         style={{ width: 150 }}
                         // Задним числом — можно: конверт идёт почтой, а отметку

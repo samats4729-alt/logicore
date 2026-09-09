@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, DatePicker, Empty, Input, InputNumber, Modal, Segmented, Select, Space, Switch, Table, Tooltip, theme } from 'antd';
+import { Alert, Button, Empty, Input, InputNumber, Modal, Segmented, Select, Space, Switch, Table, Tooltip, theme } from 'antd';
 import {
     ArrowLeftOutlined,
     DeleteOutlined,
@@ -27,6 +27,7 @@ import {
 } from '@/lib/accounting-documents';
 import { toast } from 'sonner';
 import CurrencySelect from '@/components/orders/CurrencySelect';
+import { DateField } from '@/components/ui/DateField';
 import { VAT_RATES } from '@/lib/tax';
 import Loader from '@/components/ui/Loader';
 
@@ -510,9 +511,8 @@ export default function CreateInvoicePage() {
                     ))}
 
                     {headerField('Дата', (
-                        <DatePicker
+                        <DateField
                             size="small"
-                            format="DD.MM.YYYY"
                             allowClear={false}
                             style={{ width: 150 }}
                             value={documentDate}
@@ -537,10 +537,8 @@ export default function CreateInvoicePage() {
                     ))}
 
                     {direction === 'INCOMING' && headerField('Дата у перевозчика', (
-                        <DatePicker
+                        <DateField
                             size="small"
-                            format="DD.MM.YYYY"
-                            placeholder="Не указана"
                             style={{ width: 150 }}
                             value={externalDate}
                             onChange={setExternalDate}
@@ -552,10 +550,8 @@ export default function CreateInvoicePage() {
                         пустая графа без объяснения читается как поломка. */}
                     {headerField('Срок оплаты', (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <DatePicker
+                            <DateField
                                 size="small"
-                                format="DD.MM.YYYY"
-                                placeholder="Не указан"
                                 style={{ width: 150 }}
                                 value={dueDate}
                                 onChange={(value) => { setDueDate(value); setDueDateEdited(true); }}

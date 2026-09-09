@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Typography, Table, Tag, Empty, Button, Modal, Form, Input, DatePicker, Tooltip, Alert, Checkbox, Select } from 'antd';
+import { Typography, Table, Tag, Empty, Button, Modal, Form, Input, Tooltip, Alert, Checkbox, Select } from 'antd';
 import {
     CheckCircleFilled,
     ClockCircleFilled,
@@ -20,6 +20,7 @@ const { Title, Text } = Typography;
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
 import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
+import { DateField } from '@/components/ui/DateField';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -1353,11 +1354,11 @@ export default function SharedReportPage() {
                     </Form.Item>
 
                     <Form.Item name="externalDate" label="Дата счёта">
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DateField style={{ width: '100%' }} />
                     </Form.Item>
 
                     <Form.Item name="dueDate" label="Оплатить до">
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DateField style={{ width: '100%' }} />
                     </Form.Item>
 
                     <Form.Item name="note" label="Комментарий">
@@ -1522,7 +1523,7 @@ export default function SharedReportPage() {
                     </Form.Item>
 
                     <Form.Item name="claimedDate" label="Дата поступления">
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DateField style={{ width: '100%' }} />
                     </Form.Item>
 
                     <Form.Item name="note" label="Комментарий">
@@ -1592,7 +1593,7 @@ export default function SharedReportPage() {
                     </Form.Item>
 
                     <Form.Item name="claimedDate" label="Дата платежа">
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DateField style={{ width: '100%' }} />
                     </Form.Item>
 
                     <Form.Item name="note" label="Комментарий">

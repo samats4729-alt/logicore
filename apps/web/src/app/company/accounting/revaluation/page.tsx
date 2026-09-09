@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { money, moneyShort } from '@/lib/money-format';
 import { cn } from '@/lib/utils';
+import { DateStringField } from '@/components/ui/DateField';
 
 /**
  * Переоценка валютных остатков на конец месяца.
@@ -157,10 +158,9 @@ export default function RevaluationPage() {
                         <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                             Переоценить на дату
                         </label>
-                        <Input
-                            type="date"
+                        <DateStringField
                             value={date}
-                            onChange={(e) => setDate(e.target.value)}
+                            onChange={setDate}
                             className="w-44"
                         />
                     </div>

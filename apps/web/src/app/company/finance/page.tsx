@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { DatePicker } from 'antd';
 import {
     ArrowDownLeft,
     ArrowLeftRight,
@@ -33,9 +32,9 @@ import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { toast } from 'sonner';
 import styles from './finance-hub.module.css';
+import { DateRangeField } from '@/components/ui/DateField';
 dayjs.extend(quarterOfYear);
 
-const { RangePicker } = DatePicker;
 
 interface DashboardSummary {
     revenue: number;
@@ -287,11 +286,10 @@ export default function FinanceHubPage() {
                             ))}
                         </div>
                         {/* Логика выбора дат прежняя — меняется только вид. */}
-                        <RangePicker
+                        <DateRangeField
                             value={dates}
                             onChange={(val) => { setDates(val as any); setPeriod(null); }}
                             allowClear
-                            format="DD.MM.YYYY"
                         />
                     </div>
                 )}

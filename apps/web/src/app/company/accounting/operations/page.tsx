@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Typography, Space, Tag, DatePicker, Input, Segmented, Modal, Form, InputNumber, Select } from 'antd';
+import { Table, Button, Typography, Space, Tag, Input, Segmented, Modal, Form, InputNumber, Select } from 'antd';
 import { SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import OrderSelect from '@/components/orders/OrderSelect';
@@ -10,9 +10,9 @@ import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
+import { DateField, DateRangeField } from '@/components/ui/DateField';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 // Единая строка операции (нормализованная из платежей / доходов / расходов)
 interface OpRow {
@@ -418,7 +418,7 @@ export default function AllOperationsPage() {
                         ]}
                     />
                     <Input placeholder="Поиск: контрагент, заявка, примечание..." prefix={<SearchOutlined />} value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 260 }} allowClear />
-                    <RangePicker value={dateRange} onChange={(d) => setDateRange(d as any)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} />
+                    <DateRangeField value={dateRange} onChange={(d) => setDateRange(d as any)} placeholder={['С даты', 'По дату']} />
                     <Select
                         allowClear
                         showSearch
@@ -476,7 +476,7 @@ export default function AllOperationsPage() {
                 </p>
                 <Form form={form} layout="vertical" onFinish={handleSaveOp} initialValues={{ date: dayjs() }}>
                     <Form.Item name="date" label="Дата" rules={[{ required: true, message: 'Укажите дату' }]}>
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DateField style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item name="category" label="Статья" rules={[{ required: true, message: 'Выберите статью' }]} extra="Не хватает статьи? Добавьте в справочнике: Кабинет → Статьи доходов и расходов">
                         <Select
@@ -555,7 +555,7 @@ export default function AllOperationsPage() {
                         <InputNumber style={{ width: '100%' }} min={0.01} />
                     </Form.Item>
                     <Form.Item name="date" label="Дата возврата" rules={[{ required: true, message: 'Укажите дату' }]}>
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DateField style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item name="note" label="Причина возврата">
                         <Input.TextArea rows={2} placeholder="Например: переплата заказчика, отмена рейса" />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Button, Typography, Space, Tag, DatePicker, Input, Select, InputNumber, Modal, Form, Divider, App, Tooltip } from 'antd';
+import { Table, Button, Typography, Space, Tag, Input, Select, InputNumber, Modal, Form, Divider, App, Tooltip } from 'antd';
 import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { fetchCounterparties } from '@/lib/counterparties';
@@ -11,9 +11,9 @@ import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { money as formatMoney, currencySign, formatMoneyInput, parseMoneyInput } from '@/lib/money-format';
+import { DateField, DateRangeField } from '@/components/ui/DateField';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 interface Account { id: string; name: string; kind: string; isDefault: boolean; isActive?: boolean; currency?: string }
 interface Category { id: string; name: string; direction: 'IN' | 'OUT'; costType?: string | null; isActive: boolean }
@@ -282,7 +282,7 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
             <div className="lc-card" style={{ padding: 16, marginBottom: 12 }}>
                 <Space wrap>
                     <Input placeholder="Поиск: статья, контрагент, заявка, примечание…" prefix={<SearchOutlined />} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 300 }} allowClear />
-                    <RangePicker value={dateRange} onChange={d => setDateRange(d as any)} format="DD.MM.YYYY" placeholder={['С даты', 'По дату']} />
+                    <DateRangeField value={dateRange} onChange={d => setDateRange(d as any)} placeholder={['С даты', 'По дату']} />
                     <Select
                         placeholder="Статья"
                         value={categoryFilter}
@@ -321,7 +321,7 @@ export default function CashJournal({ direction }: { direction: 'IN' | 'OUT' }) 
             >
                 <Form form={form} layout="vertical" onFinish={handleSave} style={{ marginTop: 8 }}>
                     <Form.Item name="date" label="Дата" rules={[{ required: true, message: 'Укажите дату' }]}>
-                        <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+                        <DateField style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item name="categoryId" label="Статья движения денег" rules={[{ required: true, message: 'Выберите статью' }]}>
                         <Select

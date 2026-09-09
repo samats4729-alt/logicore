@@ -16,6 +16,7 @@ import { CityOption, CityPicker } from './CityPicker';
 import { AddressPicker } from '@/components/orders/AddressPicker';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import { QuoteMemory, QuoteMemoryPanel } from './QuoteMemoryPanel';
+import { DateStringField } from '@/components/ui/DateField';
 
 export interface QuoteFormValues {
     id?: string;
@@ -335,10 +336,9 @@ export function QuoteFormDialog({
 
                     <div className="grid gap-3 sm:grid-cols-3">
                         <Field label="Груз готов">
-                            <Input
-                                type="date"
+                            <DateStringField
                                 value={values.readyDate}
-                                onChange={(e) => set('readyDate', e.target.value)}
+                                onChange={(v) => set('readyDate', v)}
                                 className="h-9 text-[13px]"
                             />
                         </Field>

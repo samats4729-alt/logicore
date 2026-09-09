@@ -1,15 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DatePicker, Table } from 'antd';
+import { Table } from 'antd';
 import { Banknote, CalendarDays, Route, Star } from 'lucide-react';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import Link from 'next/link';
 import Loader from '@/components/ui/Loader';
 import styles from '@/components/nova/nova.module.css';
-
-const { RangePicker } = DatePicker;
+import { MonthRangeField } from '@/components/ui/DateField';
 
 /**
  * Что человеку начислили — его собственный экран.
@@ -151,8 +150,7 @@ export default function MySalaryPage() {
                     </p>
                 </div>
                 <div className={styles.heroActions}>
-                    <RangePicker
-                        picker="month"
+                    <MonthRangeField
                         value={dates}
                         onChange={(val) => {
                             if (val && val[0] && val[1]) setDates([val[0], val[1]]);
