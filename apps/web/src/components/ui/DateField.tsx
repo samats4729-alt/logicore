@@ -9,6 +9,7 @@ import {
     ПОДСКАЗКА_МЕСЯЦА,
     ФОРМАТ_ДАТЫ,
     ФОРМАТ_МЕСЯЦА,
+    поМаске,
     похожеНаДату,
     разобратьДату,
 } from '@/lib/ru-date';
@@ -39,6 +40,58 @@ import {
 const { RangePicker } = DatePicker;
 
 type RangeProps = GetProps<typeof RangePicker>;
+
+/**
+ * Записать значение так, чтобы его увидел React.
+ *
+ * У полей под управлением React на самом объекте подменён `value`: там
+ * сидит сторож, который сравнивает новое значение с прежним и «то же
+ * самое» до обработчика не пропускает. Пишем через сеттер прототипа —
+ * мимо сторожа, иначе antd не узнает про расставленные нами точки.
+ */
+function записать(поле: HTMLInputElement, значение: string) {
+    const сеттер = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (сеттер) сеттер.call(поле, значение);
+    else поле.value = значение;
+}
+
+/**
+ * Расставлять разделители прямо во время набора.
+ *
+ * Слушаем на перехвате: обработчик antd висит выше по дереву, и к моменту,
+ * когда он прочитает значение, точки уже должны стоять. Тогда antd видит
+ * готовую «25.12.2026», а не «25122026», и разбирает её обычным путём.
+ */
+function повеситьМаску(
+    поле: HTMLInputElement,
+    формат: string,
+    послеВвода?: (значение: string) => void,
+) {
+    const наВвод = (событие: Event) => {
+        const было = поле.value;
+        const удаление = String((событие as InputEvent).inputType || '').startsWith('delete');
+        const { значение, курсор } = поМаске(
+            формат,
+            было,
+            поле.selectionStart ?? было.length,
+            удаление,
+        );
+        if (значение !== было) {
+            записать(поле, значение);
+            поле.setSelectionRange(курсор, курсор);
+        }
+        послеВвода?.(значение);
+    };
+
+    поле.addEventListener('input', наВвод, true);
+    return () => поле.removeEventListener('input', наВвод, true);
+}
+
+/** Поля ввода внутри пикера: у периода их два. */
+function поляПикера(ссылка: React.RefObject<any>): HTMLInputElement[] {
+    const корень: HTMLElement | undefined = ссылка.current?.nativeElement;
+    return корень ? Array.from(корень.querySelectorAll('input')) : [];
+}
 
 export type DateFieldProps = DatePickerProps;
 
@@ -80,47 +133,49 @@ export function DateField({
         || (typeof format === 'string' && /[HhmsAa]/.test(format));
 
     /**
-     * Поставить дату, как только её дописали.
+     * Маска на набор и подстановка даты, как только её дописали.
      *
-     * Слушаем само поле ввода, а не `onChange` пикера: тот срабатывает
-     * уже после подтверждения — то есть после того, чего мы и хотим
-     * избежать.
+     * Дату ставим по самому полю ввода, а не по `onChange` пикера: тот
+     * срабатывает уже после подтверждения — то есть после того, чего мы и
+     * хотим избежать.
      */
     useEffect(() => {
-        if (соВременем) return;
-        const поле: HTMLInputElement | null | undefined =
-            ссылка.current?.nativeElement?.querySelector('input');
-        if (!поле) return;
+        const [поле] = поляПикера(ссылка);
+        if (!поле || typeof format !== 'string') return;
 
-        const слушать = () => {
-            const дата = разобратьДату(поле.value);
+        const снять = повеситьМаску(поле, format, (значение) => {
+            // У поля со временем дату на лету не ставим: «25.12.2026»
+            // мелькает посреди набора «25.12.2026 14:30», и поле переписало
+            // бы себя на «00:00» ровно когда человек взялся за часы.
+            if (соВременем) return;
+
+            const дата = разобратьДату(значение);
             if (дата) {
                 setОшибкаДаты(false);
                 свежий.current?.(дата, дата.format(ФОРМАТ_ДАТЫ));
                 return;
             }
             // Ошибка — только когда дату дописали до конца. Пока набирают,
-            // «20.05.20» ещё не ошибка, а незаконченная строка.
+            // «25.12.20» ещё не ошибка, а незаконченная строка.
             //
             // Через таймер, а не сразу: перерисовка прямо в обработчике
             // ввода съедает последнюю набранную цифру — в поле остаётся
             // «31.02.202». Проверено в браузере. Пометка об ошибке никуда
             // не спешит, поэтому ждёт, пока нажатие доработает.
-            const дописано = похожеНаДату(поле.value);
+            const дописано = похожеНаДату(значение);
             setTimeout(() => setОшибкаДаты(дописано), 0);
-        };
+        });
 
         // Из поля ушли — antd вернул прежнюю дату, значит и краснеть больше
         // нечему: на экране снова то, что записано.
         const забыть = () => setОшибкаДаты(false);
-
-        поле.addEventListener('input', слушать);
         поле.addEventListener('blur', забыть);
+
         return () => {
-            поле.removeEventListener('input', слушать);
+            снять();
             поле.removeEventListener('blur', забыть);
         };
-    }, [соВременем]);
+    }, [format, соВременем]);
 
     return (
         <DatePicker
@@ -168,9 +223,9 @@ export function DateStringField({ value, onChange, ...props }: DateStringFieldPr
 export type DateRangeFieldProps = RangeProps;
 
 /**
- * Период «с — по».
+ * Период «с — по». Маска — на оба поля, их тут два.
  *
- * Здесь дату не ставим на лету намеренно: пока набрано только начало,
+ * Дату на лету здесь не подставляем намеренно: пока набрано только начало,
  * периода ещё нет, и подставлять половину не во что. Antd сам переводит
  * курсор во второе поле, когда первое дописано, а по Enter или уходу из
  * поля ставит период целиком — этого достаточно.
@@ -180,7 +235,9 @@ export function DateRangeField({
     placeholder = [ПОДСКАЗКА_ДАТЫ, ПОДСКАЗКА_ДАТЫ],
     ...props
 }: DateRangeFieldProps) {
-    return <RangePicker format={format} placeholder={placeholder} {...props} />;
+    const ссылка = useRef<any>(null);
+    useEffect(() => маскаНаПериод(ссылка, format), [format]);
+    return <RangePicker ref={ссылка} format={format} placeholder={placeholder} {...props} />;
 }
 
 /** Период по месяцам: «05.2026 — 09.2026». */
@@ -189,5 +246,22 @@ export function MonthRangeField({
     placeholder = [ПОДСКАЗКА_МЕСЯЦА, ПОДСКАЗКА_МЕСЯЦА],
     ...props
 }: DateRangeFieldProps) {
-    return <RangePicker picker="month" format={format} placeholder={placeholder} {...props} />;
+    const ссылка = useRef<any>(null);
+    useEffect(() => маскаНаПериод(ссылка, format), [format]);
+    return (
+        <RangePicker
+            ref={ссылка}
+            picker="month"
+            format={format}
+            placeholder={placeholder}
+            {...props}
+        />
+    );
+}
+
+/** Общее для обоих периодов: разделители расставляются в каждом поле. */
+function маскаНаПериод(ссылка: React.RefObject<any>, format: RangeProps['format']) {
+    if (typeof format !== 'string') return () => { };
+    const снятия = поляПикера(ссылка).map((поле) => повеситьМаску(поле, format));
+    return () => снятия.forEach((снять) => снять());
 }
