@@ -607,7 +607,15 @@ export default function PartnersPage() {
                     onFinish={handleSave}
                     onValuesChange={(changed) => подставитьПоБин(changed, form)}
                 >
-                    <PartnerFormFields officeUsers={officeUsers} canAssignManager={isCompanyAdmin} />
+                    {/*
+                      * При заведении ответственного не показываем: им
+                      * становится тот, кто завёл, — так решает сервер.
+                      * Поле в окне было, но выбор молча пропадал.
+                      */}
+                    <PartnerFormFields
+                        officeUsers={officeUsers}
+                        canAssignManager={isCompanyAdmin && !!editingCompany}
+                    />
                 </Form>
             </Modal>
         </div>
