@@ -16,6 +16,7 @@ import dayjs from 'dayjs';
 import styles from '@/components/nova/nova.module.css';
 import dash from './dashboard.module.css';
 import Loader from '@/components/ui/Loader';
+import { monthLabel } from '@/lib/ru-date';
 
 // ==================== Типы ====================
 
@@ -36,6 +37,8 @@ interface DashboardActivity {
     today: ActivityBucket;
     current: ActivityBucket;
     previous: ActivityBucket;
+    /** Какими месяцами подписать колонки — считает сервер, «2026-09». */
+    months?: { current: string; previous: string };
     inWorkNow: number;
     pendingNow: number;
     problemNow: number;
@@ -178,6 +181,16 @@ export default function CompanyDashboard() {
     const cur = activity?.current;
     const prev = activity?.previous;
     const tdy = activity?.today;
+
+    // Колонки подписаны настоящими месяцами — «Август», «Сентябрь», — а не
+    // «этот» и «прошлый». Владелец сверяет таблицу с бумагами за конкретный
+    // месяц, и лишний шаг «а какой сейчас месяц» тут ни к чему.
+    //
+    // Пока данные не пришли, подписи остаются прежними: подставлять месяц
+    // по часам браузера нельзя — он в своём поясе, и первого числа ночью
+    // подпись разошлась бы с числами под ней.
+    const этотМесяц = monthLabel(activity?.months?.current) || 'Этот месяц';
+    const прошлыйМесяц = monthLabel(activity?.months?.previous) || 'Прошлый месяц';
 
     // Строки таблицы «Активности»: Сегодня / Этот месяц / Прошлый месяц / Динамика
     const activityRows = useMemo(() => {
@@ -346,8 +359,8 @@ export default function CompanyDashboard() {
                                     <tr>
                                         <th>Показатель</th>
                                         <th className={dash.right}>Сегодня</th>
-                                        <th className={dash.right}>Этот месяц</th>
-                                        <th className={dash.right}>Прошлый месяц</th>
+                                        <th className={dash.right}>{прошлыйМесяц}</th>
+                                        <th className={dash.right}>{этотМесяц}</th>
                                         <th className={dash.right}>Динамика</th>
                                     </tr>
                                 </thead>
@@ -356,8 +369,8 @@ export default function CompanyDashboard() {
                                         <tr key={r.key}>
                                             <td>{r.label}</td>
                                             <td className={dash.right}>{r.money ? fmt(r.today) : r.today}</td>
-                                            <td className={`${dash.right} ${dash.strong}`}>{r.money ? fmt(r.current) : r.current}</td>
                                             <td className={`${dash.right} ${dash.muted}`}>{r.money ? fmt(r.previous) : r.previous}</td>
+                                            <td className={`${dash.right} ${dash.strong}`}>{r.money ? fmt(r.current) : r.current}</td>
                                             <td className={dash.right}><Delta cur={r.current} prevVal={r.previous} money={r.money} neutral={(r as { neutral?: boolean }).neutral} /></td>
                                         </tr>
                                     ))}

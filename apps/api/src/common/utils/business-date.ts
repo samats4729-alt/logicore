@@ -66,6 +66,19 @@ export function kzCurrentMonth(at: Date = new Date()): string {
     return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Месяц Казахстана со сдвигом строкой `YYYY-MM`: -1 — прошлый.
+ *
+ * Нужен, чтобы подписать колонку тем самым месяцем, по которому считали.
+ * Определять месяц на стороне браузера нельзя: он живёт в своём поясе, и
+ * первого числа ночью подпись разошлась бы с числами под ней.
+ */
+export function kzMonthShifted(shift: number, at: Date = new Date()): string {
+    const { year, month } = kzParts(at);
+    const сдвинутый = new Date(Date.UTC(year, month + shift, 1));
+    return `${сдвинутый.getUTCFullYear()}-${String(сдвинутый.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 /** Сегодняшняя дата Казахстана строкой `YYYY-MM-DD`. */
 export function kzTodayString(at: Date = new Date()): string {
     return kzToday(at).toISOString().slice(0, 10);

@@ -16,7 +16,7 @@ import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
-import { kzStartOfMonth, kzStartOfMonthShifted, kzStartOfToday } from '../common/utils/business-date';
+import { kzMonthShifted, kzStartOfMonth, kzStartOfMonthShifted, kzStartOfToday } from '../common/utils/business-date';
 import {
     FinanceCalculatorService,
     ORDER_FINANCE_RELATIONS_SELECT,
@@ -828,6 +828,13 @@ export class CompanyService {
             today: pack(today),
             current: pack(cur),
             previous: pack(prev),
+            // Какими месяцами подписать колонки. Считает сервер — он же и
+            // раскладывал заявки по этим месяцам; браузер в своём поясе
+            // первого числа ночью назвал бы их иначе, чем посчитано.
+            months: {
+                current: kzMonthShifted(0),
+                previous: kzMonthShifted(-1),
+            },
             inWorkNow,
             pendingNow,
             problemNow,

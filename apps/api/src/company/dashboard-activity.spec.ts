@@ -150,6 +150,19 @@ describe('Активность на дашборде', () => {
         expect(current.activeCarriers).toBe(1);
     });
 
+    it('называет месяцы, по которым посчитано', async () => {
+        // Подпись колонки должна приходить оттуда же, откуда числа: браузер
+        // в своём поясе первого числа ночью назвал бы месяц другим.
+        const { service } = служба([]);
+        const { months } = await service.getDashboardActivity(КОМПАНИЯ);
+
+        expect(months.current).toMatch(/^\d{4}-\d{2}$/);
+        expect(months.previous).toMatch(/^\d{4}-\d{2}$/);
+
+        const месяцем = (s: string) => Number(s.slice(0, 4)) * 12 + Number(s.slice(5, 7));
+        expect(месяцем(months.current) - месяцем(months.previous)).toBe(1);
+    });
+
     it('в выборку не просятся черновики, отмены и неподтверждённые ожидания', async () => {
         const { prisma, service } = служба([]);
         await service.getDashboardActivity(КОМПАНИЯ);
