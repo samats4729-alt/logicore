@@ -16,7 +16,13 @@ import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
-import { kzStartOfMonth, kzStartOfMonthShifted, kzStartOfToday } from '../common/utils/business-date';
+import { kzMonthShifted, kzStartOfMonth, kzStartOfMonthShifted, kzStartOfToday } from '../common/utils/business-date';
+import {
+    FinanceCalculatorService,
+    ORDER_FINANCE_RELATIONS_SELECT,
+    ORDER_FINANCE_SELECT,
+    orderFinancePayments,
+} from '../accounting/services/finance-calculator.service';
 
 const ROLE_LABELS_RU: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -36,6 +42,7 @@ export class CompanyService {
         private redisService: RedisService,
         private emailService: EmailService,
         private identityService: IdentityService,
+        private financeCalculator: FinanceCalculatorService,
     ) { }
 
     async getCompanyUsers(companyId: string, query: any = {}) {
@@ -701,6 +708,18 @@ export class CompanyService {
      * Активность компании для дашборда: текущий месяц против прошлого.
      * Деньги и контрагенты считаются по месяцу создания заявки,
      * «завершено» — по месяцу фактического завершения.
+     *
+     * Выручка и маржа берутся общим калькулятором — тем же, которым считает
+     * «Реестр заявок», отчёт по перевозчикам и зарплата. Складывать здесь
+     * ставки руками нельзя: маржа в продукте — это не «ставка заказчика
+     * минус ставка перевозчика», в ней учтены НДС с обеих сторон, доплаты и
+     * расходы по рейсу. Своя формула на дашборде означала бы вторую правду,
+     * и владелец увидел бы в двух местах разные числа за один месяц.
+     *
+     * По той же причине отбор заявок здесь дословно повторяет реестровый —
+     * участник сделки или ответственный менеджер, без черновиков, отмен и
+     * неподтверждённых заявок «в ожидании». Иначе «создано заявок» считалось
+     * бы по одному набору, а выручка по другому.
      */
     async getDashboardActivity(companyId: string) {
         // Границы месяцев и суток — по Казахстану, а не по часовому поясу
@@ -721,16 +740,20 @@ export class CompanyService {
             this.prisma.order.findMany({
                 where: {
                     AND: [
-                        { OR: participant },
+                        { OR: [...participant, { responsibleManager: { companyId } }] },
+                        // Заявка «в ожидании», которую ещё не подтвердили, —
+                        // не работа и не деньги: договорённости по ней нет.
+                        { OR: [{ isConfirmed: true }, { status: { not: 'PENDING' } }] },
                         { OR: [{ createdAt: { gte: prevStart } }, { completedAt: { gte: prevStart } }] },
                     ],
                     // Отменённые заявки не считаем — ни в активность, ни в деньги
                     status: { notIn: ['DRAFT', 'CANCELLED'] },
                 },
                 select: {
+                    ...ORDER_FINANCE_SELECT,
+                    ...ORDER_FINANCE_RELATIONS_SELECT,
                     createdAt: true, completedAt: true, status: true,
                     customerCompanyId: true, forwarderId: true, partnerId: true, subForwarderId: true,
-                    customerPrice: true, subForwarderPrice: true, driverCost: true,
                 },
             }),
             this.prisma.order.count({ where: { OR: participant, status: { in: IN_WORK } } }),
@@ -739,7 +762,7 @@ export class CompanyService {
         ]);
 
         const makeBucket = () => ({
-            created: 0, completed: 0, income: ZERO, expense: ZERO,
+            created: 0, completed: 0, revenue: ZERO, cost: ZERO, margin: ZERO,
             customers: new Set<string>(), carriers: new Set<string>(),
         });
         const today = makeBucket();
@@ -754,34 +777,35 @@ export class CompanyService {
         };
 
         for (const o of monthOrders) {
-            for (const b of bucketsOf(new Date(o.createdAt))) {
-                b.created++;
+            const корзины = bucketsOf(new Date(o.createdAt));
+
+            // Считаем деньги только по заявкам месяца, попавшего в таблицу.
+            // В выборку заходят и заявки постарше — ради «завершено», которое
+            // считается по дате завершения; их суммы в месяц не попадают.
+            if (корзины.length) {
+                const fin = this.financeCalculator.computeOrderFinance({
+                    order: o as any,
+                    payments: orderFinancePayments(o as any),
+                    incomes: (o as any).incomes,
+                    expenses: (o as any).expenses,
+                    companyId,
+                });
 
                 const isCust = o.customerCompanyId === companyId;
                 const isFwd = o.forwarderId === companyId || o.partnerId === companyId;
                 const isSub = o.subForwarderId === companyId;
 
-                // Доход: нам платит заказчик (мы экспедитор) или экспедитор (мы суб-экспедитор)
-                if (isFwd && o.customerCompanyId && !isCust) {
-                    b.income = b.income.plus(D(o.customerPrice));
-                    b.customers.add(o.customerCompanyId);
-                }
-                if (isSub && o.forwarderId && o.forwarderId !== companyId) {
-                    b.income = b.income.plus(D(o.subForwarderPrice));
-                    b.customers.add(o.forwarderId);
-                }
-                // Расход: мы платим экспедитору (мы заказчик),
-                // суб-экспедитору или перевозчику (мы экспедитор)
-                if (isCust && o.forwarderId && !isFwd) {
-                    b.expense = b.expense.plus(D(o.customerPrice));
-                    b.carriers.add(o.forwarderId);
-                }
-                if (isFwd && o.subForwarderId && !isSub) {
-                    b.expense = b.expense.plus(D(o.subForwarderPrice));
-                    b.carriers.add(o.subForwarderId);
-                }
-                if (isFwd && !o.subForwarderId && D(o.driverCost).gt(0)) {
-                    b.expense = b.expense.plus(D(o.driverCost));
+                for (const b of корзины) {
+                    b.created++;
+                    b.revenue = b.revenue.plus(fin.revenue);
+                    b.cost = b.cost.plus(fin.executorCost);
+                    b.margin = b.margin.plus(fin.margin);
+
+                    // Кто нам платит — тот заказчик, кому платим мы — перевозчик.
+                    if (isFwd && o.customerCompanyId && !isCust) b.customers.add(o.customerCompanyId);
+                    if (isSub && o.forwarderId && o.forwarderId !== companyId) b.customers.add(o.forwarderId);
+                    if (isCust && o.forwarderId && !isFwd) b.carriers.add(o.forwarderId);
+                    if (isFwd && o.subForwarderId && !isSub) b.carriers.add(o.subForwarderId);
                 }
             }
 
@@ -793,8 +817,9 @@ export class CompanyService {
         const pack = (b: ReturnType<typeof makeBucket>) => ({
             created: b.created,
             completed: b.completed,
-            income: Math.round(toNum(b.income)),
-            expense: Math.round(toNum(b.expense)),
+            revenue: Math.round(toNum(b.revenue)),
+            cost: Math.round(toNum(b.cost)),
+            margin: Math.round(toNum(b.margin)),
             activeCustomers: b.customers.size,
             activeCarriers: b.carriers.size,
         });
@@ -803,6 +828,13 @@ export class CompanyService {
             today: pack(today),
             current: pack(cur),
             previous: pack(prev),
+            // Какими месяцами подписать колонки. Считает сервер — он же и
+            // раскладывал заявки по этим месяцам; браузер в своём поясе
+            // первого числа ночью назвал бы их иначе, чем посчитано.
+            months: {
+                current: kzMonthShifted(0),
+                previous: kzMonthShifted(-1),
+            },
             inWorkNow,
             pendingNow,
             problemNow,
