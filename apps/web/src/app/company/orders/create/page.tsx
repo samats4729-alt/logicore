@@ -45,7 +45,7 @@ import { EMPTY_CARGO, totalPallets, type CargoState } from '@/lib/cargo';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
-import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
+import PartnerFormFields, { partnerFormToBody, подставитьПоБин, ОКНО_КОНТРАГЕНТА } from '@/components/partners/PartnerFormFields';
 import CurrencySelect from '@/components/orders/CurrencySelect';
 import { DateField } from '@/components/ui/DateField';
 
@@ -548,22 +548,39 @@ export default function CreateOrderPage() {
         } catch { setAppliedTariff(null); }
     };
 
+    /** Открыть заведение контрагента с ролью того списка, откуда нажали. */
+    const открытьЗаведениеКонтрагента = (роль: 'CUSTOMER' | 'CARRIER') => {
+        setQuickPartnerTarget(роль);
+        quickPartnerForm.resetFields();
+        quickPartnerForm.setFieldsValue({
+            roles: [роль === 'CUSTOMER' ? 'customer' : 'carrier'],
+        });
+        setQuickPartnerModalOpen(true);
+    };
+
+    /**
+     * Завести контрагента, не выходя из мастера.
+     *
+     * Роль берётся из галочек в окне. Раньше проставлялись обе сразу, кто
+     * бы что ни заводил: фирма, которую вбили как перевозчика, появлялась
+     * и в списке заказчиков. Окно открывается с отмеченной ролью того
+     * списка, из которого нажали, — а поправить её можно тут же.
+     *
+     * Подставляем нового контрагента в тот список, откуда пришли, только
+     * если роль ему оставили. Иначе его в этом списке нет, и выбор был бы
+     * пустым местом.
+     */
     const handleCreateQuickPartner = async (values: any) => {
         setQuickPartnerLoading(true);
         try {
-            const res = await api.post('/external-companies', {
-                ...values,
-                isCustomer: true,
-                isCarrier: true,
-                type: 'FORWARDER'
-            });
+            const res = await api.post('/external-companies', partnerFormToBody(values));
             toast.success('Контрагент добавлен');
             setQuickPartnerModalOpen(false);
             quickPartnerForm.resetFields();
             await fetchPartners();
-            if (quickPartnerTarget === 'CUSTOMER') {
+            if (quickPartnerTarget === 'CUSTOMER' && res.data.isCustomer) {
                 setSelectedCustomer(res.data.id);
-            } else if (quickPartnerTarget === 'CARRIER') {
+            } else if (quickPartnerTarget === 'CARRIER' && res.data.isCarrier) {
                 setSelectedCarrier(res.data.id);
             }
         } catch (error: any) {
@@ -1142,10 +1159,7 @@ export default function CreateOrderPage() {
                                     <Button
                                         variant="ghost"
                                         className="h-auto w-full justify-start px-3 py-2 font-medium text-[#1677ff]"
-                                        onClick={() => {
-                                            setQuickPartnerTarget('CUSTOMER');
-                                            setQuickPartnerModalOpen(true);
-                                        }}
+                                        onClick={() => открытьЗаведениеКонтрагента('CUSTOMER')}
                                     >
                                         <Plus className="h-3.5 w-3.5" /> Добавить контрагента
                                     </Button>
@@ -1188,10 +1202,7 @@ export default function CreateOrderPage() {
                                     <Button
                                         variant="ghost"
                                         className="h-auto w-full justify-start px-3 py-2 font-medium text-[#1677ff]"
-                                        onClick={() => {
-                                            setQuickPartnerTarget('CARRIER');
-                                            setQuickPartnerModalOpen(true);
-                                        }}
+                                        onClick={() => открытьЗаведениеКонтрагента('CARRIER')}
                                     >
                                         <Plus className="h-3.5 w-3.5" /> Добавить контрагента
                                     </Button>
@@ -1654,7 +1665,15 @@ export default function CreateOrderPage() {
                 </div>
             </div>
 
-            {/* Quick Partner Modal */}
+            {/*
+              * Заведение контрагента прямо из мастера заявки.
+              *
+              * Здесь было своё окно на четыре поля — название, БИН, телефон,
+              * почта. Заведённый отсюда контрагент приходилось потом
+              * дозаполнять в справочнике: без банковских реквизитов договор
+              * и счёт печатаются с пустыми строками. Окно то же самое, что
+              * в справочнике, — чтобы не заводить фирму дважды.
+              */}
             <Modal
                 title="Новый контрагент"
                 open={quickPartnerModalOpen}
@@ -1663,36 +1682,20 @@ export default function CreateOrderPage() {
                 confirmLoading={quickPartnerLoading}
                 okText="Создать"
                 cancelText="Отмена"
+                {...ОКНО_КОНТРАГЕНТА}
             >
                 <Form
                     form={quickPartnerForm}
                     layout="vertical"
                     onFinish={handleCreateQuickPartner}
-                    onValuesChange={async (changedValues) => {
-                        if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
-                            const found = await lookupCompanyByBin(changedValues.bin);
-                            if (found) quickPartnerForm.setFieldsValue(companyFieldsFromLookup(found));
-                        }
-                    }}
+                    onValuesChange={(changed) => подставитьПоБин(changed, quickPartnerForm)}
                 >
-                    <Form.Item name="name" label="Название компании" rules={[{ required: true, message: 'Введите название' }]}>
-                        <Input placeholder="ТОО Пример" />
-                    </Form.Item>
-                    <Form.Item
-                        name="bin" label="БИН/ИИН"
-                        rules={[
-                            { required: true, message: 'Введите БИН/ИИН' },
-                            { pattern: /^\d{12}$/, message: 'Должен быть ровно 12 цифр' }
-                        ]}
-                    >
-                        <Input placeholder="123456789012" maxLength={12} />
-                    </Form.Item>
-                    <Form.Item name="phone" label="Телефон">
-                        <Input placeholder="+77001234567" />
-                    </Form.Item>
-                    <Form.Item name="email" label="Email">
-                        <Input placeholder="company@example.com" />
-                    </Form.Item>
+                    {/*
+                      * Ответственного при заведении не показываем: им
+                      * становится тот, кто завёл, — так решает сервер, и
+                      * выбор здесь всё равно бы не сохранился.
+                      */}
+                    <PartnerFormFields />
                 </Form>
             </Modal>
 
