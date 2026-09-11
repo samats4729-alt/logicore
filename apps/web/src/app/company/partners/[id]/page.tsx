@@ -23,7 +23,7 @@ import { vatLabel } from '@/lib/settlement-terms';
 import nova from '@/components/nova/nova.module.css';
 import StatusPill from '@/components/ui/StatusPill';
 import { DateField } from '@/components/ui/DateField';
-import PartnerFormFields, { partnerFormToBody, partnerToFormValues, подставитьПоБин } from '@/components/partners/PartnerFormFields';
+import PartnerFormFields, { partnerFormToBody, partnerToFormValues, подставитьПоБин, ОКНО_КОНТРАГЕНТА } from '@/components/partners/PartnerFormFields';
 
 const { Title, Text } = Typography;
 
@@ -43,6 +43,12 @@ export default function PartnerDetailPage() {
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [editForm] = Form.useForm();
     const [editSubmitting, setEditSubmitting] = useState(false);
+    // Ответственного назначает только администратор — и окно правки здесь
+    // должно быть тем же самым, что в списке, иначе поле пропадает в
+    // зависимости от того, с какой стороны зашли в одного и того же
+    // контрагента.
+    const [officeUsers, setOfficeUsers] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+    const isCompanyAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
 
     // Drivers
     const [drivers, setDrivers] = useState<any[]>([]);
@@ -70,6 +76,13 @@ export default function PartnerDetailPage() {
     useEffect(() => {
         fetchPartner();
     }, [partnerId]);
+
+    useEffect(() => {
+        if (!isCompanyAdmin) return;
+        api.get('/company/managers')
+            .then(res => setOfficeUsers(res.data || []))
+            .catch(() => { });
+    }, [isCompanyAdmin]);
 
     useEffect(() => {
         if (partner?.isCarrier) {
@@ -207,7 +220,10 @@ export default function PartnerDetailPage() {
     const handleSavePartner = async (values: any) => {
         setEditSubmitting(true);
         try {
-            await api.patch(`/external-companies/${partnerId}`, partnerFormToBody(values));
+            await api.patch(
+                `/external-companies/${partnerId}`,
+                partnerFormToBody(values, { withManager: isCompanyAdmin }),
+            );
             toast.success('Данные контрагента обновлены');
             setEditModalOpen(false);
             fetchPartner();
@@ -695,6 +711,7 @@ export default function PartnerDetailPage() {
                 confirmLoading={editSubmitting}
                 okText="Сохранить"
                 cancelText="Отмена"
+                {...ОКНО_КОНТРАГЕНТА}
             >
                 <Form
                     form={editForm}
@@ -702,7 +719,7 @@ export default function PartnerDetailPage() {
                     onFinish={handleSavePartner}
                     onValuesChange={(changed) => подставитьПоБин(changed, editForm)}
                 >
-                    <PartnerFormFields />
+                    <PartnerFormFields officeUsers={officeUsers} canAssignManager={isCompanyAdmin} />
                 </Form>
             </Modal>
 

@@ -12,7 +12,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
-import PartnerFormFields, { partnerFormToBody, partnerToFormValues, подставитьПоБин } from '@/components/partners/PartnerFormFields';
+import PartnerFormFields, { partnerFormToBody, partnerToFormValues, подставитьПоБин, ОКНО_КОНТРАГЕНТА } from '@/components/partners/PartnerFormFields';
 
 const { Title, Text } = Typography;
 
@@ -599,6 +599,7 @@ export default function PartnersPage() {
                 onOk={() => form.submit()}
                 okText="Сохранить"
                 cancelText="Отмена"
+                {...ОКНО_КОНТРАГЕНТА}
             >
                 <Form
                     form={form}
