@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, List, Modal, Form, Select, Popconfirm, Checkbox } from 'antd';
+import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, List, Modal, Form, Popconfirm } from 'antd';
 import nova from '@/components/nova/nova.module.css';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
@@ -12,7 +12,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
-import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
+import PartnerFormFields, { partnerFormToBody, partnerToFormValues, подставитьПоБин } from '@/components/partners/PartnerFormFields';
 
 const { Title, Text } = Typography;
 
@@ -172,20 +172,7 @@ export default function PartnersPage() {
     };
 
     const handleSave = async (values: any) => {
-        const { roles, ...rest } = values;
-        const isCustomer = roles?.includes('customer') ?? true;
-        const isCarrier = roles?.includes('carrier') ?? false;
-        
-        const body: any = {
-            ...rest,
-            isCustomer,
-            isCarrier,
-            type: isCustomer ? 'CUSTOMER' : 'FORWARDER'
-        };
-        // Пустое значение = снять ответственного (иначе undefined не уйдёт на сервер)
-        if (isCompanyAdmin && editingCompany) {
-            body.responsibleManagerId = rest.responsibleManagerId ?? null;
-        }
+        const body = partnerFormToBody(values, { withManager: isCompanyAdmin && !!editingCompany });
 
         try {
             if (editingCompany) {
@@ -216,13 +203,7 @@ export default function PartnersPage() {
 
     const openEdit = (company: any) => {
         setEditingCompany(company);
-        const roles = [];
-        if (company.isCustomer) roles.push('customer');
-        if (company.isCarrier) roles.push('carrier');
-        form.setFieldsValue({
-            ...company,
-            roles
-        });
+        form.setFieldsValue(partnerToFormValues(company));
         setModalOpen(true);
     };
 
@@ -619,98 +600,13 @@ export default function PartnersPage() {
                 okText="Сохранить"
                 cancelText="Отмена"
             >
-                <Form 
-                    form={form} 
-                    layout="vertical" 
+                <Form
+                    form={form}
+                    layout="vertical"
                     onFinish={handleSave}
-                    onValuesChange={async (changedValues) => {
-                        if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
-                            const found = await lookupCompanyByBin(changedValues.bin);
-                            if (found) {
-                                form.setFieldsValue(companyFieldsFromLookup(found, {
-                                    withAddress: true, withDirector: true,
-                                }));
-                            }
-                        }
-                    }}
+                    onValuesChange={(changed) => подставитьПоБин(changed, form)}
                 >
-                    <Form.Item name="name" label="Название компании" rules={[{ required: true, message: 'Введите название' }]}>
-                        <Input placeholder="ТОО Пример" />
-                    </Form.Item>
-                    <Form.Item 
-                        name="roles" 
-                        label="Роль контрагента" 
-                        rules={[{ required: true, message: 'Выберите хотя бы одну роль' }]}
-                    >
-                        <Checkbox.Group style={{ width: '100%' }}>
-                            <Space direction="horizontal" size="large">
-                                <Checkbox value="customer">Заказчик</Checkbox>
-                                <Checkbox value="carrier">Перевозчик</Checkbox>
-                            </Space>
-                        </Checkbox.Group>
-                    </Form.Item>
-                    {/* Тип скрыт, т.к. компании универсальны */}
-                    <Form.Item 
-                        name="bin" 
-                        label="БИН/ИИН" 
-                        rules={[
-                            { required: true, message: 'Введите БИН/ИИН' },
-                            { pattern: /^\d{12}$/, message: 'БИН/ИИН должен состоять ровно из 12 цифр' }
-                        ]}
-                    >
-                        <Input placeholder="123456789012" maxLength={12} />
-                    </Form.Item>
-                    <Form.Item name="phone" label="Телефон">
-                        <Input placeholder="+77001234567" />
-                    </Form.Item>
-                    <Form.Item name="email" label="Email">
-                        <Input placeholder="company@example.com" />
-                    </Form.Item>
-                    <Form.Item name="address" label="Адрес">
-                        <Input placeholder="г. Алматы, ул. Абая 1" />
-                    </Form.Item>
-                    <Form.Item name="directorName" label="ФИО директора">
-                        <Input placeholder="Иванов Иван Иванович" />
-                    </Form.Item>
-                    {/*
-                      * Номер перевозки у самого заказчика. У крупных клиентов
-                      * заявка живёт и в их системе под своим номером — у одного
-                      * это «ID», у другого «Номер ТТН», — и счёт они сверяют по
-                      * нему. Название задаёт заказчик, поэтому это настройка, а
-                      * не поле с готовым именем.
-                      */}
-                    <Form.Item
-                        name="customerRefLabel"
-                        label="Как заказчик называет свой номер перевозки"
-                        help="Появится отдельной графой в заявке. Пусто — графы не будет"
-                    >
-                        <Input placeholder="Например: ID, Номер ТТН, Номер заказа" />
-                    </Form.Item>
-                    <Form.Item
-                        name="customerRefPrintInvoice"
-                        valuePropName="checked"
-                        help="Заказчик сверяет счёт по своему номеру — без него счёт возвращают на переделку"
-                    >
-                        <Checkbox>Печатать этот номер в счёте</Checkbox>
-                    </Form.Item>
-                    {isCompanyAdmin && (
-                        <Form.Item
-                            name="responsibleManagerId"
-                            label="Ответственный менеджер"
-                            help="Кто ведёт этого контрагента. Если включена настройка «менеджеры видят только своих контрагентов», его будет видеть только ответственный"
-                        >
-                            <Select
-                                allowClear
-                                showSearch
-                                optionFilterProp="label"
-                                filterOption={(input, option) =>
-                                    String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                                }
-                                placeholder="Не назначен (виден всем менеджерам)"
-                                options={officeUsers.map(u => ({ value: u.id, label: `${u.lastName} ${u.firstName}` }))}
-                            />
-                        </Form.Item>
-                    )}
+                    <PartnerFormFields officeUsers={officeUsers} canAssignManager={isCompanyAdmin} />
                 </Form>
             </Modal>
         </div>
