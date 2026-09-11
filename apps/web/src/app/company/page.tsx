@@ -22,8 +22,12 @@ import Loader from '@/components/ui/Loader';
 interface ActivityBucket {
     created: number;
     completed: number;
-    income: number;
-    expense: number;
+    /** Оборот: сколько выставлено заказчикам по заявкам месяца. */
+    revenue: number;
+    /** Сколько из этого уходит перевозчикам. */
+    cost: number;
+    /** Что остаётся компании — считает сервер, а не вычитание на глаз. */
+    margin: number;
     activeCustomers: number;
     activeCarriers: number;
 }
@@ -56,15 +60,28 @@ function greeting(): string {
     return 'Добрый вечер';
 }
 
-/** Стрелка сравнения с прошлым месяцем */
-function Delta({ cur, prevVal, money }: { cur: number; prevVal: number; money?: boolean }) {
+/**
+ * Стрелка сравнения с прошлым месяцем.
+ *
+ * `neutral` — для строк, где рост сам по себе ни хорош, ни плох. Затраты на
+ * перевозчиков растут вместе с выручкой, и это обычное дело: зелёный на них
+ * читается как похвала, красный — как тревога, а верно ни то, ни другое.
+ * Судить надо по марже, у неё цвет и остаётся.
+ */
+function Delta({ cur, prevVal, money, neutral }: {
+    cur: number;
+    prevVal: number;
+    money?: boolean;
+    neutral?: boolean;
+}) {
     const diff = cur - prevVal;
     if (diff === 0) {
         return <span className={dash.muted}>без изменений</span>;
     }
     const up = diff > 0;
+    const тон = neutral ? dash.muted : up ? styles.valuePos : styles.valueNeg;
     return (
-        <span className={`${dash.delta} ${up ? styles.valuePos : styles.valueNeg}`}>
+        <span className={`${dash.delta} ${тон}`}>
             {up ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
             {up ? '+' : '−'}{money ? fmt(Math.abs(diff)) : Math.abs(diff)}
         </span>
@@ -167,13 +184,19 @@ export default function CompanyDashboard() {
         if (!cur || !prev || !tdy) return [];
         // Значки из строк убраны: шесть цветных пятен в столбце подписей
         // спорили с числами, ради которых в таблицу и смотрят.
+        // Порядок строк — как читают отчёт: сколько заказчиков, сколько
+        // перевозок, сколько денег пришло, сколько из них ушло и что
+        // осталось. Раньше здесь стояли «Доход» и «Расходы» без третьей
+        // строки, и главное число — что компания на этом заработала —
+        // приходилось считать в уме.
         const rows = [
-            { label: 'Создано заявок', key: 'created' as const },
-            { label: 'Завершено заявок', key: 'completed' as const },
-            { label: 'Доход, ₸', key: 'income' as const, money: true },
-            { label: 'Расходы, ₸', key: 'expense' as const, money: true },
             { label: 'Активные заказчики', key: 'activeCustomers' as const },
             { label: 'Активные перевозчики', key: 'activeCarriers' as const },
+            { label: 'Создано заявок', key: 'created' as const },
+            { label: 'Завершено заявок', key: 'completed' as const },
+            { label: 'Выручка с заявок, ₸', key: 'revenue' as const, money: true },
+            { label: 'Затраты на перевозчиков, ₸', key: 'cost' as const, money: true, neutral: true },
+            { label: 'Маржа с заявок, ₸', key: 'margin' as const, money: true },
         ];
         return rows.map(r => ({
             ...r,
@@ -335,7 +358,7 @@ export default function CompanyDashboard() {
                                             <td className={dash.right}>{r.money ? fmt(r.today) : r.today}</td>
                                             <td className={`${dash.right} ${dash.strong}`}>{r.money ? fmt(r.current) : r.current}</td>
                                             <td className={`${dash.right} ${dash.muted}`}>{r.money ? fmt(r.previous) : r.previous}</td>
-                                            <td className={dash.right}><Delta cur={r.current} prevVal={r.previous} money={r.money} /></td>
+                                            <td className={dash.right}><Delta cur={r.current} prevVal={r.previous} money={r.money} neutral={(r as { neutral?: boolean }).neutral} /></td>
                                         </tr>
                                     ))}
                                 </tbody>

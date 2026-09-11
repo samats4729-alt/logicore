@@ -14,6 +14,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EmailModule } from '../email/email.module';
 import { IdentityModule } from '../identity/identity.module';
 import { AuthModule } from '../auth/auth.module';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
     imports: [
@@ -24,6 +25,9 @@ import { AuthModule } from '../auth/auth.module';
         EmailModule,
         BillingModule,
         IdentityModule,
+        // Выручка и маржа на дашборде считаются общим калькулятором —
+        // тем же, что в «Реестре заявок». Своя формула означала бы вторую правду.
+        forwardRef(() => AccountingModule),
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => {

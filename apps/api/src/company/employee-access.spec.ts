@@ -63,7 +63,7 @@ function makeService(relations: { userId: string; companyId: string; role: UserR
     };
 
     const identity: any = { syncMembership: jest.fn().mockResolvedValue(undefined) };
-    const service = new CompanyService(prisma, {} as any, {} as any, {} as any, {} as any, identity);
+    const service = new CompanyService(prisma, {} as any, {} as any, {} as any, {} as any, identity, {} as any);
     return { service, prisma, rows, identity };
 }
 
