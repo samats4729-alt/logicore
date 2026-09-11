@@ -23,6 +23,7 @@ import { vatLabel } from '@/lib/settlement-terms';
 import nova from '@/components/nova/nova.module.css';
 import StatusPill from '@/components/ui/StatusPill';
 import { DateField } from '@/components/ui/DateField';
+import PartnerFormFields, { partnerFormToBody, partnerToFormValues, подставитьПоБин, ОКНО_КОНТРАГЕНТА } from '@/components/partners/PartnerFormFields';
 
 const { Title, Text } = Typography;
 
@@ -42,6 +43,12 @@ export default function PartnerDetailPage() {
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [editForm] = Form.useForm();
     const [editSubmitting, setEditSubmitting] = useState(false);
+    // Ответственного назначает только администратор — и окно правки здесь
+    // должно быть тем же самым, что в списке, иначе поле пропадает в
+    // зависимости от того, с какой стороны зашли в одного и того же
+    // контрагента.
+    const [officeUsers, setOfficeUsers] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+    const isCompanyAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
 
     // Drivers
     const [drivers, setDrivers] = useState<any[]>([]);
@@ -69,6 +76,13 @@ export default function PartnerDetailPage() {
     useEffect(() => {
         fetchPartner();
     }, [partnerId]);
+
+    useEffect(() => {
+        if (!isCompanyAdmin) return;
+        api.get('/company/managers')
+            .then(res => setOfficeUsers(res.data || []))
+            .catch(() => { });
+    }, [isCompanyAdmin]);
 
     useEffect(() => {
         if (partner?.isCarrier) {
@@ -199,14 +213,17 @@ export default function PartnerDetailPage() {
 
     // ===== Partner Edit =====
     const handleEditPartner = () => {
-        editForm.setFieldsValue(partner);
+        editForm.setFieldsValue(partnerToFormValues(partner));
         setEditModalOpen(true);
     };
 
     const handleSavePartner = async (values: any) => {
         setEditSubmitting(true);
         try {
-            await api.patch(`/external-companies/${partnerId}`, values);
+            await api.patch(
+                `/external-companies/${partnerId}`,
+                partnerFormToBody(values, { withManager: isCompanyAdmin }),
+            );
             toast.success('Данные контрагента обновлены');
             setEditModalOpen(false);
             fetchPartner();
@@ -694,53 +711,15 @@ export default function PartnerDetailPage() {
                 confirmLoading={editSubmitting}
                 okText="Сохранить"
                 cancelText="Отмена"
+                {...ОКНО_КОНТРАГЕНТА}
             >
                 <Form
                     form={editForm}
                     layout="vertical"
                     onFinish={handleSavePartner}
-                    onValuesChange={async (changedValues) => {
-                        if (changedValues.bin && /^\d{12}$/.test(changedValues.bin)) {
-                            try {
-                                const res = await api.get(`/auth/company-lookup/${changedValues.bin}`);
-                                if (res.data) {
-                                    const updateObj: any = {};
-                                    if (res.data.name) updateObj.name = res.data.name;
-                                    if (res.data.phone) updateObj.phone = res.data.phone;
-                                    if (res.data.email) updateObj.email = res.data.email;
-                                    if (res.data.address) updateObj.address = res.data.address;
-                                    if (res.data.directorName) updateObj.directorName = res.data.directorName;
-                                    editForm.setFieldsValue(updateObj);
-                                    toast.success('Реквизиты компании подтянуты');
-                                }
-                            } catch {}
-                        }
-                    }}
+                    onValuesChange={(changed) => подставитьПоБин(changed, editForm)}
                 >
-                    <Form.Item name="name" label="Название компании" rules={[{ required: true, message: 'Введите название' }]}>
-                        <Input placeholder="ТОО Пример" />
-                    </Form.Item>
-                    <Form.Item
-                        name="bin" label="БИН/ИИН"
-                        rules={[
-                            { required: true, message: 'Введите БИН/ИИН' },
-                            { pattern: /^\d{12}$/, message: 'Должен состоять ровно из 12 цифр' }
-                        ]}
-                    >
-                        <Input placeholder="123456789012" maxLength={12} />
-                    </Form.Item>
-                    <Form.Item name="phone" label="Телефон">
-                        <Input placeholder="+77001234567" />
-                    </Form.Item>
-                    <Form.Item name="email" label="Email">
-                        <Input placeholder="company@example.com" />
-                    </Form.Item>
-                    <Form.Item name="address" label="Юридический адрес">
-                        <Input placeholder="г. Алматы, ул. Толе би 50" />
-                    </Form.Item>
-                    <Form.Item name="directorName" label="ФИО руководителя">
-                        <Input placeholder="Иванов Иван Иванович" />
-                    </Form.Item>
+                    <PartnerFormFields officeUsers={officeUsers} canAssignManager={isCompanyAdmin} />
                 </Form>
             </Modal>
 

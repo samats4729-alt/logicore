@@ -3,6 +3,48 @@ import { CompanyVerificationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isInvoiceTiming, isPaymentAnchor } from '../common/utils/payment-terms';
 
+/**
+ * Что разрешено записывать в карточку контрагента.
+ *
+ * Список закрытый и по нему же собирается запрос в базу. Раньше тело
+ * запроса уходило в `update` целиком: глобальная проверка входящих данных
+ * срезает лишнее только у описанных классов, а здесь тип объявлен на месте,
+ * и она такие тела пропускает как есть. То есть вместе с названием можно
+ * было прислать `isExternal` или `createdByCompanyId` и переписать их —
+ * карточка чужой компании достаётся тому, кто угадал имя колонки.
+ *
+ * Банковские реквизиты и подписант попали сюда не для полноты: они
+ * печатаются в договоре и счёте (см. `contract-pdf.service`), а заполнить
+ * их было негде — по БИН из госреестра приходят только название, адрес,
+ * директор и контакты, банковских счетов там нет.
+ */
+export interface ВнешняяКомпанияПоля {
+    name?: string;
+    bin?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    actualAddress?: string;
+    directorName?: string;
+    bankAccount?: string;
+    bankName?: string;
+    bankBic?: string;
+    kbe?: string;
+    paymentPurposeCode?: string;
+    signatoryName?: string;
+    signatoryPosition?: string;
+    customerRefLabel?: string | null;
+    customerRefPrintInvoice?: boolean;
+}
+
+/** Поля карточки, одним списком: по нему собирается запрос в базу. */
+const ПОЛЯ_КАРТОЧКИ: (keyof ВнешняяКомпанияПоля)[] = [
+    'name', 'bin', 'phone', 'email', 'address', 'actualAddress', 'directorName',
+    'bankAccount', 'bankName', 'bankBic', 'kbe', 'paymentPurposeCode',
+    'signatoryName', 'signatoryPosition',
+    'customerRefLabel', 'customerRefPrintInvoice',
+];
+
 @Injectable()
 export class ExternalCompaniesService {
     constructor(private prisma: PrismaService) { }
@@ -46,6 +88,18 @@ export class ExternalCompaniesService {
                 isCarrier: true,
                 address: true,
                 directorName: true,
+                // Реквизиты для документов. Нужны в списке, потому что окно
+                // правки заполняется строкой из него: без них оно открывалось
+                // с пустыми полями, даже когда в базе всё записано, — и
+                // человек заполнял заново то, что уже есть.
+                actualAddress: true,
+                bankAccount: true,
+                bankName: true,
+                bankBic: true,
+                kbe: true,
+                paymentPurposeCode: true,
+                signatoryName: true,
+                signatoryPosition: true,
                 // Как называется у этого заказчика его номер перевозки и
                 // печатать ли его в счёте.
                 customerRefLabel: true,
@@ -70,18 +124,11 @@ export class ExternalCompaniesService {
     /**
      * Создать внешнюю компанию
      */
-    async createExternalCompany(companyId: string, data: {
+    async createExternalCompany(companyId: string, data: ВнешняяКомпанияПоля & {
         name: string;
-        bin?: string;
-        phone?: string;
-        email?: string;
         type: 'CUSTOMER' | 'FORWARDER';
         isCustomer?: boolean;
         isCarrier?: boolean;
-        address?: string;
-        directorName?: string;
-        customerRefLabel?: string | null;
-        customerRefPrintInvoice?: boolean;
     }, creatorUserId?: string) {
         const isCustomer = data.isCustomer !== undefined ? data.isCustomer : (data.type === 'CUSTOMER');
         const isCarrier = data.isCarrier !== undefined ? data.isCarrier : (data.type === 'FORWARDER');
@@ -130,6 +177,15 @@ export class ExternalCompaniesService {
                 isCarrier,
                 address: data.address || onPlatform?.address || null,
                 directorName: data.directorName || onPlatform?.directorName || null,
+                // Реквизиты для документов: их печатают в договоре и счёте.
+                actualAddress: data.actualAddress || null,
+                bankAccount: data.bankAccount || null,
+                bankName: data.bankName || null,
+                bankBic: data.bankBic || null,
+                kbe: data.kbe || null,
+                paymentPurposeCode: data.paymentPurposeCode || null,
+                signatoryName: data.signatoryName || null,
+                signatoryPosition: data.signatoryPosition || null,
                 customerRefLabel: data.customerRefLabel?.trim() || null,
                 customerRefPrintInvoice: data.customerRefPrintInvoice ?? false,
                 isExternal: true,
@@ -144,18 +200,10 @@ export class ExternalCompaniesService {
     /**
      * Обновить внешнюю компанию
      */
-    async updateExternalCompany(companyId: string, externalId: string, data: {
-        name?: string;
-        bin?: string;
-        phone?: string;
-        email?: string;
-        address?: string;
-        directorName?: string;
+    async updateExternalCompany(companyId: string, externalId: string, data: ВнешняяКомпанияПоля & {
         isCustomer?: boolean;
         isCarrier?: boolean;
         responsibleManagerId?: string | null;
-        customerRefLabel?: string | null;
-        customerRefPrintInvoice?: boolean;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: externalId },
@@ -198,9 +246,21 @@ export class ExternalCompaniesService {
             if (!target) throw new ForbiddenException('Ответственным может быть только сотрудник вашей компании');
         }
 
+        // Запрос собирается по закрытому списку, а не из тела целиком:
+        // лишние ключи в базу не попадают, даже если их прислали.
+        const изменения: Record<string, unknown> = {};
+        for (const поле of ПОЛЯ_КАРТОЧКИ) {
+            if (data[поле] !== undefined) изменения[поле] = data[поле];
+        }
+        if (data.isCustomer !== undefined) изменения.isCustomer = data.isCustomer;
+        if (data.isCarrier !== undefined) изменения.isCarrier = data.isCarrier;
+        if (data.responsibleManagerId !== undefined) {
+            изменения.responsibleManagerId = data.responsibleManagerId;
+        }
+
         return this.prisma.company.update({
             where: { id: externalId },
-            data,
+            data: изменения,
         });
     }
 

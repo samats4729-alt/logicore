@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole } from '@prisma/client';
-import { ExternalCompaniesService } from './external-companies.service';
+import { ExternalCompaniesService, ВнешняяКомпанияПоля } from './external-companies.service';
 import { AuditService } from '../audit/audit.service';
 
 @ApiTags('external-companies')
@@ -25,20 +25,11 @@ export class ExternalCompaniesController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
     @RequirePermissions('partners', 'orders')
     @ApiOperation({ summary: 'Создать внешнюю компанию' })
-    async create(@Req() req: any, @Body() dto: {
+    async create(@Req() req: any, @Body() dto: ВнешняяКомпанияПоля & {
         name: string;
-        bin?: string;
-        phone?: string;
-        email?: string;
         type: 'CUSTOMER' | 'FORWARDER';
         isCustomer?: boolean;
         isCarrier?: boolean;
-        address?: string;
-        directorName?: string;
-        // Как называется у этого заказчика его собственный номер перевозки и
-        // печатать ли его в счёте.
-        customerRefLabel?: string | null;
-        customerRefPrintInvoice?: boolean;
     }) {
         const result = await this.service.createExternalCompany(req.user.companyId, dto, req.user.sub || req.user.id);
         await this.auditService.log({
@@ -52,18 +43,10 @@ export class ExternalCompaniesController {
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
     @RequirePermissions('partners')
     @ApiOperation({ summary: 'Обновить внешнюю компанию' })
-    async update(@Req() req: any, @Param('id') id: string, @Body() dto: {
-        name?: string;
-        bin?: string;
-        phone?: string;
-        email?: string;
-        address?: string;
-        directorName?: string;
+    async update(@Req() req: any, @Param('id') id: string, @Body() dto: ВнешняяКомпанияПоля & {
         isCustomer?: boolean;
         isCarrier?: boolean;
         responsibleManagerId?: string | null;
-        customerRefLabel?: string | null;
-        customerRefPrintInvoice?: boolean;
     }) {
         // Переназначать ответственного менеджера может только администратор компании
         if (dto.responsibleManagerId !== undefined && !['COMPANY_ADMIN', 'FORWARDER', 'ADMIN'].includes(req.user.role)) {
