@@ -34,10 +34,13 @@ export class ContractsController {
             startDate?: Date;
             endDate?: Date;
             notes?: string;
+            myCompanyId?: string;
         },
         @Request() req: any,
     ) {
-        return this.contractsService.createContract(req.user.companyId, req.user.role, dto);
+        return this.contractsService.createContract(
+            req.user.companyId, req.user.role, dto, req.user.sub,
+        );
     }
 
     @Get()
@@ -45,6 +48,13 @@ export class ContractsController {
     @ApiOperation({ summary: 'Получить список договоров' })
     async getContracts(@Request() req: any) {
         return this.contractsService.getContracts(req.user.companyId);
+    }
+
+    @Get('my-companies')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Организации, от имени которых можно заключить договор' })
+    async getMyContractCompanies(@Request() req: any) {
+        return this.contractsService.getMyContractCompanies(req.user.sub, req.user.companyId);
     }
 
     @Get('pending-agreements')
@@ -108,6 +118,22 @@ export class ContractsController {
     @ApiOperation({ summary: 'Заготовка реквизитов сторон из карточек компаний' })
     async getRequisitesDraft(@Param('id') id: string, @Request() req: any) {
         return this.contractsService.getRequisitesDraft(id, req.user.companyId);
+    }
+
+    @Put(':id/organization')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN)
+    @ApiOperation({
+        summary: 'Сменить свою организацию — сторону договора',
+        description: 'Только пока по договору не выписано ни одного документа.',
+    })
+    async changeContractOrganization(
+        @Param('id') id: string,
+        @Body() dto: { companyId: string },
+        @Request() req: any,
+    ) {
+        return this.contractsService.changeContractOrganization(
+            id, req.user.sub, req.user.companyId, dto.companyId,
+        );
     }
 
     @Post(':id/reset-content')

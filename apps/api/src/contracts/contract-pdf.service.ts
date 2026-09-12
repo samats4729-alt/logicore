@@ -4,7 +4,10 @@ import { S3Service } from '../s3/s3.service';
 import {
     getDefaultContractTemplate,
     findRequisitesArticle,
+    реквизитыПолями,
+    строкиРеквизитов,
     type ContractArticle,
+    type СтрокаРеквизитов,
 } from './contract-template';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
@@ -196,16 +199,21 @@ export class ContractPdfService {
             );
             doc.moveDown(1);
 
-            if (своиРеквизиты) {
-                // Что вписал экспедитор — то и печатаем, слово в слово.
+            if (своиРеквизиты && !реквизитыПолями(своиРеквизиты.requisites)) {
+                // Блок набран свободным текстом — печатаем слово в слово.
+                // Так сделаны договоры, заведённые до появления полей, и
+                // те, где реквизиты нестандартные.
                 this.drawRequisitesColumns(
                     doc,
                     своиРеквизиты.requisites!.left || '',
                     своиРеквизиты.requisites!.right || '',
                 );
             } else {
-                // Своих реквизитов нет — собираем из карточек компаний, как и раньше.
-                this.drawRequisitesTable(doc, forwarder, customer);
+                // Карточки плюс правки этого договора, строка на поле.
+                this.drawRequisitesTable(
+                    doc, forwarder, customer,
+                    своиРеквизиты?.requisites?.overrides,
+                );
             }
 
             this.drawSignatureBlock(
@@ -232,10 +240,19 @@ export class ContractPdfService {
     }
 
     // ============ ТАБЛИЦА РЕКВИЗИТОВ ============
+    /**
+     * Реквизиты строкой на поле: «Банк» слева напротив «Банка» справа.
+     *
+     * Пустое поле печатается пустой клеткой, а не пропускается: иначе
+     * строки сторон разъезжаются и сверить колонки нельзя. Исключение —
+     * поле, пустое у обеих сторон: печатать полосу из двух пустых клеток
+     * незачем.
+     */
     private drawRequisitesTable(
         doc: PDFKit.PDFDocument,
         forwarder: any,
         customer: any,
+        overrides?: Parameters<typeof строкиРеквизитов>[2],
     ) {
         const startX = 60;
         const tableWidth = 475;
@@ -254,28 +271,25 @@ export class ContractPdfService {
         doc.text('ЗАКАЗЧИК', rightX + cellPadding, y + 7, { width: colWidth - cellPadding * 2, align: 'center' });
         y += headerHeight;
 
-        // Строки таблицы: подтягиваем все реквизиты из карточек компаний
-        const rows: string[][] = [
-            [
-                `ТОО «${this.stripCompanyPrefix(forwarder.name)}»`,
-                `ТОО «${this.stripCompanyPrefix(customer.name)}»`
-            ],
-        ];
-        const addRow = (label: string, fVal?: string | null, cVal?: string | null) => {
-            const l = fVal ? `${label}${fVal}` : '';
-            const r = cVal ? `${label}${cVal}` : '';
-            if (l || r) rows.push([l, r]);
-        };
-        addRow('Юр. адрес: ', forwarder.address, customer.address);
-        addRow('Факт. адрес: ', forwarder.actualAddress, customer.actualAddress);
-        addRow('БИН/ИИН: ', forwarder.bin, customer.bin);
-        addRow('р/счёт: ', forwarder.bankAccount, customer.bankAccount);
-        addRow('Банк: ', forwarder.bankName, customer.bankName);
-        addRow('БИК/SWIFT: ', forwarder.bankBic, customer.bankBic);
-        addRow('КБЕ: ', forwarder.kbe, customer.kbe);
-        addRow('тел.: ', forwarder.phone, customer.phone);
-        addRow('E-mail: ', forwarder.email, customer.email);
-        addRow('Директор: ', forwarder.directorName, customer.directorName);
+        // Строки таблицы: карточки компаний плюс правки этого договора.
+        const строки: СтрокаРеквизитов[] = строкиРеквизитов(forwarder, customer, overrides);
+        const rows: string[][] = [];
+        for (const строка of строки) {
+            if (!строка.left && !строка.right) continue;
+            if (строка.key === 'name') {
+                // Название идёт шапкой, без подписи поля: подпись «Название:»
+                // перед названием компании в договоре выглядит как анкета.
+                rows.push([
+                    строка.left ? `ТОО «${this.stripCompanyPrefix(строка.left)}»` : '',
+                    строка.right ? `ТОО «${this.stripCompanyPrefix(строка.right)}»` : '',
+                ]);
+                continue;
+            }
+            rows.push([
+                строка.left ? `${строка.label}: ${строка.left}` : '',
+                строка.right ? `${строка.label}: ${строка.right}` : '',
+            ]);
+        }
 
         doc.font('Roboto').fontSize(9);
 

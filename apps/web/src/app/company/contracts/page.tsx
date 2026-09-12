@@ -93,6 +93,11 @@ export default function CompanyContractsPage() {
     const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
     const [contractForm] = Form.useForm();
     const [contractMyRole, setContractMyRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
+    /**
+     * Организации холдинга — от любой из них можно заключить договор.
+     * Пока она одна, выбирать нечего, и поле не показывается.
+     */
+    const [мойСписокОрганизаций, setМойСписокОрганизаций] = useState<{ id: string; name: string }[]>([]);
 
     // ДС и тарифы — создание
     const [agreementModalOpen, setAgreementModalOpen] = useState(false);
@@ -187,6 +192,9 @@ export default function CompanyContractsPage() {
         fetchPendingAgreements();
         fetchCountries();
         fetchPartners();
+        api.get('/contracts/my-companies')
+            .then(res => setМойСписокОрганизаций(res.data || []))
+            .catch(() => { /* Одна организация — выбирать нечего. */ });
     }, []);
 
     // === Создание договора ===
@@ -199,6 +207,9 @@ export default function CompanyContractsPage() {
                 startDate: values.startDate?.toISOString(),
                 endDate: values.endDate?.toISOString(),
                 notes: values.notes,
+                // В холдинге договор заключает не обязательно та организация,
+                // в которую сейчас переключён человек.
+                myCompanyId: values.myCompanyId,
             });
             toast.success('Договор создан');
             setContractModalOpen(false);
@@ -742,6 +753,23 @@ export default function CompanyContractsPage() {
                 destroyOnClose
             >
                 <Form form={contractForm} layout="vertical" onFinish={handleCreateContract} initialValues={{ myRole: 'CUSTOMER' }}>
+                    {/*
+                      * От какой организации заключается договор. Показываем
+                      * только в холдинге: где организация одна, поле с одним
+                      * вариантом — лишний вопрос.
+                      */}
+                    {мойСписокОрганизаций.length > 1 && (
+                        <Form.Item
+                            name="myCompanyId"
+                            label="Договор от организации"
+                            rules={[{ required: true, message: 'Выберите организацию' }]}
+                        >
+                            <Select
+                                placeholder="Выберите свою организацию"
+                                options={мойСписокОрганизаций.map(о => ({ label: о.name, value: о.id }))}
+                            />
+                        </Form.Item>
+                    )}
                     <Form.Item
                         name="myRole"
                         label="Моя роль в этом договоре"
