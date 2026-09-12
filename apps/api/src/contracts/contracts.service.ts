@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { getDefaultContractTemplate, companyRequisitesText } from './contract-template';
+import { getDefaultContractTemplate, companyRequisitesText, строкиРеквизитов } from './contract-template';
 
 @Injectable()
 export class ContractsService {
@@ -20,7 +20,12 @@ export class ContractsService {
         startDate?: Date;
         endDate?: Date;
         notes?: string;
-    }) {
+        /**
+         * От какой из своих организаций заключается договор. Нет значения —
+         * от текущей, как было до холдингов.
+         */
+        myCompanyId?: string;
+    }, userId?: string) {
         // Определяем кто заказчик, а кто экспедитор.
         // Приоритет — явный выбор роли в форме (myRole + partnerCompanyId);
         // если его нет — старое поведение по глобальной роли пользователя.
@@ -33,20 +38,27 @@ export class ContractsService {
         const partnerId = data.partnerCompanyId
             || (myRole === 'FORWARDER' ? data.customerCompanyId : data.forwarderCompanyId);
 
+        // В холдинге организаций несколько, и договор заключает не обязательно
+        // та, в которую сейчас переключён человек. Выбор проверяем: подставить
+        // сюда чужую организацию — значит завести договор от чужого имени.
+        const моя = data.myCompanyId
+            ? await this.свояОрганизация(userId, data.myCompanyId)
+            : companyId;
+
         if (!partnerId) {
             throw new BadRequestException('Укажите вторую компанию договора');
         }
-        if (partnerId === companyId) {
+        if (partnerId === моя) {
             throw new BadRequestException('Нельзя заключить договор с самим собой');
         }
 
         if (myRole === 'FORWARDER') {
             // Моя компания — экспедитор, партнёр — заказчик
-            forwarderCompanyId = companyId;
+            forwarderCompanyId = моя;
             customerCompanyId = partnerId;
         } else {
             // Моя компания — заказчик, партнёр — экспедитор
-            customerCompanyId = companyId;
+            customerCompanyId = моя;
             forwarderCompanyId = partnerId;
         }
         partnerCompanyId = partnerId;
@@ -95,6 +107,119 @@ export class ContractsService {
             if (e?.code === 'P2002') {
                 throw new BadRequestException(
                     `Договор № ${data.contractNumber} между этими компаниями уже существует. Укажите другой номер или откройте существующий договор.`,
+                );
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Убедиться, что организация действительно своя.
+     *
+     * В холдинге у человека несколько организаций, и любая из них может быть
+     * стороной договора. Но список приходит из браузера, а значит подставить
+     * туда можно что угодно — вплоть до чужой компании. Поэтому сверяем с
+     * тем, где человек числится на самом деле.
+     */
+    private async свояОрганизация(userId: string | undefined, companyId: string): Promise<string> {
+        if (!userId) throw new ForbiddenException('Не удалось определить пользователя');
+
+        const [связь, пользователь] = await Promise.all([
+            this.prisma.userCompanyRelation.findFirst({
+                where: { userId, companyId },
+                select: { companyId: true },
+            }),
+            this.prisma.user.findUnique({ where: { id: userId }, select: { companyId: true } }),
+        ]);
+        // Текущая организация может не иметь записи в связях — так заведены
+        // те, кто работает в одной компании и холдинга не создавал.
+        if (!связь && пользователь?.companyId !== companyId) {
+            throw new ForbiddenException('Это не ваша организация');
+        }
+        return companyId;
+    }
+
+    /** Организации, от имени которых человек может заключать договор. */
+    async getMyContractCompanies(userId: string, activeCompanyId: string) {
+        const связи = await this.prisma.userCompanyRelation.findMany({
+            where: { userId },
+            select: { company: { select: { id: true, name: true, bin: true } } },
+        });
+        const организации = связи.map(с => с.company);
+
+        if (!организации.some(о => о.id === activeCompanyId)) {
+            const текущая = await this.prisma.company.findUnique({
+                where: { id: activeCompanyId },
+                select: { id: true, name: true, bin: true },
+            });
+            if (текущая) организации.push(текущая);
+        }
+        return организации;
+    }
+
+    /**
+     * Сменить свою сторону договора на другую организацию холдинга.
+     *
+     * Зачем: договор завели не от той организации — скажем, машинально, пока
+     * были переключены в другую. Раньше это чинилось только заведением
+     * договора заново, а вместе с ним терялись правленый текст, реквизиты и
+     * доп. соглашения.
+     *
+     * Чего делать нельзя: перевешивать договор, по которому уже выписаны
+     * документы. Счёт и акт ссылаются на договор, и в них напечатана та
+     * организация, что была стороной в момент выписки. Сменишь её — бумаги
+     * начнут расходиться с базой, а исправить уже выданное нельзя.
+     */
+    async changeContractOrganization(
+        contractId: string,
+        userId: string,
+        activeCompanyId: string,
+        newCompanyId: string,
+    ) {
+        const contract = await this.prisma.contract.findUnique({
+            where: { id: contractId },
+            select: {
+                id: true, contractNumber: true,
+                customerCompanyId: true, forwarderCompanyId: true,
+                _count: { select: { accountingDocuments: true } },
+            },
+        });
+        if (!contract) throw new NotFoundException('Договор не найден');
+
+        const яЭкспедитор = contract.forwarderCompanyId === activeCompanyId;
+        const яЗаказчик = contract.customerCompanyId === activeCompanyId;
+        if (!яЭкспедитор && !яЗаказчик) {
+            throw new ForbiddenException('Нет доступа к этому договору');
+        }
+
+        await this.свояОрганизация(userId, newCompanyId);
+
+        const вторая = яЭкспедитор ? contract.customerCompanyId : contract.forwarderCompanyId;
+        if (newCompanyId === вторая) {
+            throw new BadRequestException('Эта организация уже вторая сторона договора');
+        }
+        if (contract._count.accountingDocuments > 0) {
+            throw new BadRequestException(
+                'По договору уже выписаны документы — организацию сменить нельзя. '
+                + 'Заведите договор от нужной организации.',
+            );
+        }
+
+        try {
+            return await this.prisma.contract.update({
+                where: { id: contractId },
+                data: яЭкспедитор
+                    ? { forwarderCompanyId: newCompanyId }
+                    : { customerCompanyId: newCompanyId },
+                include: {
+                    customerCompany: { select: { id: true, name: true } },
+                    forwarderCompany: { select: { id: true, name: true } },
+                },
+            });
+        } catch (e: any) {
+            if (e?.code === 'P2002') {
+                throw new BadRequestException(
+                    `У этой организации уже есть договор № ${contract.contractNumber} с той же второй стороной.`,
                 );
             }
             throw e;
@@ -761,6 +886,11 @@ export class ContractsService {
         }
 
         return {
+            // Строка на поле — этим редактор рисует таблицу и показывает,
+            // чего в карточках не хватает.
+            fields: строкиРеквизитов(contract.forwarderCompany, contract.customerCompany),
+            // Тот же набор сплошным текстом — для блоков, которые вписывают
+            // свободным текстом, и для договоров, заведённых до полей.
             left: companyRequisitesText(contract.forwarderCompany),
             right: companyRequisitesText(contract.customerCompany),
         };
