@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { SharedReportLinkService } from '../accounting/services/shared-report-link.service';
 import { counterpartyIsExecutor, counterpartyIsPayer } from '../common/utils/settlement';
+import { decodeUploadName } from '../common/utils/upload-name';
 
 /** Что контрагент вправе приложить к расчётам. */
 export const COUNTERPARTY_DOCUMENT_TYPES: DocumentType[] = [
@@ -129,7 +130,7 @@ export class SharedReportDocumentService {
         await this.prisma.document.createMany({
             data: orders.map((order) => ({
                 type,
-                fileName: file.originalname,
+                fileName: decodeUploadName(file.originalname),
                 fileUrl: key,
                 fileSize: file.size,
                 mimeType: file.mimetype,
@@ -141,7 +142,7 @@ export class SharedReportDocumentService {
         });
 
         return {
-            fileName: file.originalname,
+            fileName: decodeUploadName(file.originalname),
             type,
             orders: orders.map((order) => ({ id: order.id, orderNumber: order.orderNumber })),
             message: orders.length === 1

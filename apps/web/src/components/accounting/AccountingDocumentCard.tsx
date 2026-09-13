@@ -50,6 +50,7 @@ import Loader from '@/components/ui/Loader';
 import nova from '@/components/nova/nova.module.css';
 import styles from './accounting-document-card.module.css';
 import { DateField } from '@/components/ui/DateField';
+import RecordLink from '@/components/ui/RecordLink';
 
 /**
  * Сумма со знаком валюты документа.
@@ -162,6 +163,32 @@ const DOCUMENT_KIND = {
 
 type CardDocumentType = keyof typeof DOCUMENT_KIND;
 
+/**
+ * Бумага к счёту: файл, приложенный к одному из рейсов документа.
+ *
+ * Своей связи «файл → счёт» в базе нет, и заводить её не понадобилось:
+ * контрагент прикладывает пакет к сделкам, а счёт эти сделки знает.
+ */
+interface Вложение {
+    id: string;
+    type: string;
+    fileName: string;
+    fileSize: number;
+    createdAt: string;
+    orderId: string | null;
+    orderNumber: string | null;
+    uploadedBy: { name: string; fromCounterparty: boolean } | null;
+}
+
+/** Подписи видов файлов — те же слова, что в документах рейса. */
+const ВИД_ФАЙЛА: Record<string, string> = {
+    TTN: 'накладная',
+    ACT: 'акт',
+    INVOICE: 'счёт',
+    POWER_OF_ATTORNEY: 'доверенность',
+    OTHER: 'файл',
+};
+
 interface AccountingDocumentCardProps {
     documentId: string;
     /** Вид документа — определяет заголовки и набор полей шапки. */
@@ -217,6 +244,8 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     // Кому можно отправить документ прямо на платформе. Определяется по БИН
     // контрагента: справочная копия — это не арендатор, доставлять ей некуда.
     const [delivery, setDelivery] = useState<DocumentDelivery | null>(null);
+    /** Бумаги к счёту: файлы, приложенные к рейсам этого документа. */
+    const [attachments, setAttachments] = useState<Вложение[]>([]);
 
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
@@ -258,12 +287,31 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             // возможность, и её недоступность не должна мешать открыть
             // карточку документа.
             fetchDocumentDelivery(id).then(setDelivery).catch(() => setDelivery(null));
+            // Так же молча: без списка бумаг карточка счёта остаётся рабочей.
+            api.get(`/accounting-documents/${id}/attachments`)
+                .then((res) => setAttachments(res.data || []))
+                .catch(() => setAttachments([]));
         } catch {
             setNotFound(true);
         } finally {
             setLoading(false);
         }
     }, [id, applyDocument]);
+
+    /** Скачать приложенную бумагу. Файл отдаётся вложением, не открывается. */
+    const downloadAttachment = async (file: Вложение) => {
+        try {
+            const res = await api.get(`/documents/${file.id}/download`, { responseType: 'blob' });
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const a = window.document.createElement('a');
+            a.href = url;
+            a.download = file.fileName;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось скачать файл');
+        }
+    };
 
     const sendToCounterparty = async () => {
         try {
@@ -1166,6 +1214,50 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                                 </div>
                             );
                         })()}
+                    </div>
+                )}
+
+                {/*
+                  * Бумаги к счёту: накладные, акт, свой счёт контрагента.
+                  *
+                  * Присылают их давно — по ссылке на взаиморасчёты, из блока
+                  * «Документы к счёту», — но ложатся они в документы рейсов, и
+                  * на карточке счёта их не было видно. Бухгалтер открывал счёт,
+                  * не находил бумаг и шёл искать по рейсам, хотя присланы они
+                  * были именно к этому счёту.
+                  */}
+                {attachments.length > 0 && (
+                    <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary, marginBottom: 8 }}>
+                            Документы к счёту
+                        </div>
+                        {attachments.map((file) => (
+                            <div
+                                key={file.id}
+                                style={{
+                                    display: 'flex', justifyContent: 'space-between', gap: 16,
+                                    alignItems: 'baseline', fontSize: 12.5, padding: '5px 0',
+                                    borderBottom: `1px dashed ${token.colorBorderSecondary}`,
+                                }}
+                            >
+                                <span style={{ minWidth: 0 }}>
+                                    <RecordLink onClick={() => downloadAttachment(file)}>{file.fileName}</RecordLink>
+                                    <span style={{ color: token.colorTextTertiary }}>
+                                        {' '}· {ВИД_ФАЙЛА[file.type] || 'Приложенный файл'}
+                                        {file.orderNumber ? ` · ${file.orderNumber}` : ''}
+                                    </span>
+                                </span>
+                                <span style={{ textAlign: 'right', whiteSpace: 'nowrap', color: token.colorTextTertiary, fontSize: 11 }}>
+                                    {file.uploadedBy && (
+                                        <>
+                                            {file.uploadedBy.fromCounterparty ? 'прислал ' : ''}
+                                            {file.uploadedBy.name} ·{' '}
+                                        </>
+                                    )}
+                                    {dayjs(file.createdAt).format('DD.MM.YYYY')}
+                                </span>
+                            </div>
+                        ))}
                     </div>
                 )}
 

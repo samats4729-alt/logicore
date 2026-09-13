@@ -407,6 +407,16 @@ export class AccountingDocumentsController {
         return this.documents.getById(req.user.companyId, id);
     }
 
+    @Get(':id/attachments')
+    @Roles(...VIEW_ROLES)
+    @ApiOperation({
+        summary: 'Бумаги к счёту — файлы по рейсам этого документа',
+        description: 'Накладные и акты, приложенные нами или контрагентом по ссылке на взаиморасчёты.',
+    })
+    listAttachments(@Request() req: any, @Param('id') id: string) {
+        return this.documents.listAttachments(req.user.companyId, id);
+    }
+
     @Patch(':id')
     @Roles(...CHANGE_ROLES)
     @ApiOperation({
