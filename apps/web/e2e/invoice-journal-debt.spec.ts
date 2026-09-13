@@ -84,4 +84,23 @@ test.describe('Журнал счетов: долг целиком', () => {
 
         await expect(page.getByRole('button', { name: /Не в календаре/ })).toBeVisible();
     });
+
+    test('плитка на дашборде говорит о том же, что и страница календаря', async ({ page }) => {
+        // Плитка и страница обязаны отвечать одинаково: на дашборд смотрят
+        // каждый день, а на страницу заходят специально. Умолчи плитка о
+        // неоформленном — человек так и не узнает, что счёт не выставлен.
+        await login(page);
+        await page.goto('/company/accounting/planned');
+        await expect(page.getByText(/Счетов в плане:/)).toBeVisible();
+        const есть = await page.getByText(/Счёт не выставлен:/).count();
+
+        await page.goto('/company');
+        const плитка = page.locator('section').filter({ hasText: 'Платёжный календарь' }).first();
+        await expect(плитка).toBeVisible();
+        // Ждём ответа сервера: до него полосы нет и у рабочей плитки.
+        await expect(плитка.getByText(/платежей нет|₸|тыс|млн/).first()).toBeVisible();
+        if (!есть) test.skip(true, 'На стенде всё оформлено — показывать нечего');
+
+        await expect(плитка.getByText(/Счёт не выставлен:/)).toBeVisible();
+    });
 });

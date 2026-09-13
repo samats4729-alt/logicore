@@ -18,6 +18,7 @@ import {
     shortMoney,
     WEEKDAYS_SHORT,
     weekdayIndex,
+    WithoutInvoice,
 } from '@/lib/planned-payments';
 import { MONTHS_GEN } from '@/lib/ru-date';
 import Loader from '@/components/ui/Loader';
@@ -42,6 +43,8 @@ import card from './payment-calendar-card.module.css';
 export default function PaymentCalendarCard() {
     const router = useRouter();
     const [rows, setRows] = useState<PlannedRow[]>([]);
+    /** Долг по сделкам, где счёта ещё нет: в сетку ему встать не на что. */
+    const [withoutInvoice, setWithoutInvoice] = useState<WithoutInvoice | null>(null);
     const [loading, setLoading] = useState(true);
     const [month, setMonth] = useState<Dayjs>(dayjs().startOf('month'));
     const [selected, setSelected] = useState<Dayjs>(dayjs());
@@ -49,9 +52,10 @@ export default function PaymentCalendarCard() {
     useEffect(() => {
         let актуально = true;
         fetchPlannedPayments()
-            .then(({ rows: полученные }) => {
+            .then(({ rows: полученные, withoutInvoice: без }) => {
                 if (!актуально) return;
                 setRows(полученные);
+                setWithoutInvoice(без);
                 // Открываем день, где есть платежи: пустая панель при заходе —
                 // потраченная впустую половина плитки.
                 const день = firstDayToShow(полученные);
@@ -230,6 +234,31 @@ export default function PaymentCalendarCard() {
                                 </span>
                             </button>
                         )}
+
+                        {/*
+                          * Долг, по которому счёта нет вовсе. Полоса выше — про
+                          * счета без срока; эта про сделки, где счёт ещё не
+                          * выставлен, и срок оплаты потому не начался.
+                          *
+                          * Без неё плитка показывает часть картины с видом
+                          * полной: пустая неделя читается как «платить нечего»,
+                          * хотя счёт просто не оформлен. Та же полоса стоит на
+                          * странице календаря — разъедься они, дашборд и
+                          * страница отвечали бы на один вопрос по-разному.
+                          */}
+                        {withoutInvoice && withoutInvoice.count > 0 && (
+                            <button
+                                type="button"
+                                className={card.noDate}
+                                onClick={() => router.push('/company/accounting/planned')}
+                            >
+                                <AlertCircle size={13} style={{ color: '#e67e22', flexShrink: 0 }} />
+                                <span>
+                                    Счёт не выставлен: {moneyKzt(withoutInvoice.totalIn + withoutInvoice.totalOut)}
+                                    {' '}по&nbsp;{withoutInvoice.count}&nbsp;{сделокСловом(withoutInvoice.count)} — оформить
+                                </span>
+                            </button>
+                        )}
                     </>
                 )}
             </div>
@@ -245,6 +274,14 @@ function счётСловом(count: number): string {
     if (последняя === 1) return 'счёт';
     if (последняя >= 2 && последняя <= 4) return 'счёта';
     return 'счетов';
+}
+
+/** «сделке» / «сделкам» — в строке «по N …». */
+function сделокСловом(count: number): string {
+    const хвост = count % 100;
+    const последняя = count % 10;
+    if (хвост > 10 && хвост < 20) return 'сделкам';
+    return последняя === 1 ? 'сделке' : 'сделкам';
 }
 
 /**
