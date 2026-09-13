@@ -25,6 +25,7 @@ import type { FinancialReportsService } from '../accounting/services/financial-r
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
 import { OrderSettlementsService } from '../orders/order-settlements.service';
 import { toNum } from '../common/utils/money';
+import { resolveJournalCompany } from '../common/journal-company';
 import { invoiceDueDate, OrderPaymentTerms } from './invoice-due-date';
 import {
     AccountingDocumentListQueryDto,
@@ -456,24 +457,12 @@ export class AccountingDocumentsService {
         requestedCompanyId: string | undefined,
         allowedRoles: UserRole[],
     ): Promise<string> {
-        if (!requestedCompanyId || requestedCompanyId === activeCompanyId) {
-            if (!activeCompanyId) {
-                throw new ForbiddenException('Организация не выбрана');
-            }
-            return activeCompanyId;
-        }
-
-        const relation = await this.prisma.userCompanyRelation.findUnique({
-            where: { userId_companyId: { userId, companyId: requestedCompanyId } },
-            select: { role: true },
+        // Само правило живёт одним местом: тем же отбором пользуются итоги
+        // над журналом, и разъедься они — список показывал бы одну
+        // организацию, а суммы над ним другую.
+        return resolveJournalCompany(this.prisma, {
+            userId, activeCompanyId, requestedCompanyId, allowedRoles,
         });
-        if (!relation) {
-            throw new ForbiddenException('Вы не состоите в этой организации');
-        }
-        if (!allowedRoles.includes(relation.role)) {
-            throw new ForbiddenException('В этой организации у вас нет доступа к бухгалтерии');
-        }
-        return requestedCompanyId;
     }
 
     /**

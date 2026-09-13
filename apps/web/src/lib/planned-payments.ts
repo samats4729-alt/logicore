@@ -38,6 +38,62 @@ export interface PlannedTotals {
     overdueOut: number;
 }
 
+/**
+ * Долг, по которому счёт ещё не выставлен.
+ *
+ * Пока счёта нет, срок оплаты не начался, и в календаре такому долгу негде
+ * встать. Но существовать он не перестаёт: без этого блока и журнал, и
+ * календарь показывают только часть картины, а выглядят как вся.
+ */
+export interface WithoutInvoice {
+    count: number;
+    totalIn: number;
+    totalOut: number;
+    items: { orderId: string; orderNumber: string; party: string | null; amountIn: number; amountOut: number }[];
+}
+
+/**
+ * Весь долг стороны: что уже оформлено счетами и что ещё нет.
+ *
+ * Считает сервер, здесь только складывается: выставлено плюс неоформленное.
+ * Своей формулы тут нет намеренно — «сколько нам должны» обязано совпадать с
+ * тем, что показывают реестр и планируемые платежи.
+ */
+export interface DebtPicture {
+    /** Выставлено счетами и не оплачено. */
+    invoiced: number;
+    /** Долг по сделкам, где счёта ещё нет. */
+    notInvoiced: number;
+    /** Сколько таких сделок. */
+    notInvoicedCount: number;
+    /** Просрочено из выставленного. */
+    overdue: number;
+    /** Всё вместе — то, что обычно называют дебиторкой или кредиторкой. */
+    total: number;
+}
+
+/** Сторона долга: нам должны или должны мы. */
+export type DebtSide = 'IN' | 'OUT';
+
+export function debtPicture(
+    totals: PlannedTotals | null,
+    withoutInvoice: WithoutInvoice | null,
+    side: DebtSide,
+): DebtPicture {
+    const invoiced = (side === 'IN' ? totals?.totalIn : totals?.totalOut) ?? 0;
+    const notInvoiced = (side === 'IN' ? withoutInvoice?.totalIn : withoutInvoice?.totalOut) ?? 0;
+    const overdue = (side === 'IN' ? totals?.overdueIn : totals?.overdueOut) ?? 0;
+    return {
+        invoiced,
+        notInvoiced,
+        // Сделки считаются по обеим сторонам сразу: в одной и той же сделке
+        // может не хватать и счёта заказчику, и счёта от перевозчика.
+        notInvoicedCount: withoutInvoice?.count ?? 0,
+        overdue,
+        total: invoiced + notInvoiced,
+    };
+}
+
 /** Один день календаря: сколько придёт, сколько уйдёт и чем именно. */
 export interface DayBucket {
     in: number;
@@ -76,9 +132,21 @@ export function shortMoney(value: number): string {
     return String(Math.round(value));
 }
 
-export async function fetchPlannedPayments(): Promise<{ rows: PlannedRow[]; totals: PlannedTotals | null }> {
-    const res = await api.get('/accounting/planned-payments');
-    return { rows: res.data?.rows || [], totals: res.data?.totals || null };
+export async function fetchPlannedPayments(companyId?: string): Promise<{
+    rows: PlannedRow[];
+    totals: PlannedTotals | null;
+    withoutInvoice: WithoutInvoice | null;
+}> {
+    const res = await api.get('/accounting/planned-payments', {
+        // Организация журнала: в холдинге их несколько, и итоги обязаны
+        // считаться по той же, по которой отобран список.
+        params: companyId ? { companyId } : undefined,
+    });
+    return {
+        rows: res.data?.rows || [],
+        totals: res.data?.totals || null,
+        withoutInvoice: res.data?.withoutInvoice || null,
+    };
 }
 
 /**

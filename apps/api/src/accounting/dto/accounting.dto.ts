@@ -291,6 +291,15 @@ export class JournalQueryDto extends PaginationQueryDto {
     @IsOptional()
     @IsDateString()
     to?: string;
+
+    /**
+     * Организация холдинга, по которой ведётся журнал. Нет значения —
+     * активная в сессии. Право на чужую проверяется отдельно: название
+     * приходит из браузера.
+     */
+    @IsOptional()
+    @IsString()
+    companyId?: string;
 }
 
 /**
