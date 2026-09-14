@@ -8,6 +8,7 @@ import {
     CheckOutlined,
     DownOutlined,
     DeleteOutlined,
+    DollarOutlined,
     FileTextOutlined,
     LinkOutlined,
     SendOutlined,
@@ -35,6 +36,7 @@ import {
     fetchBillableOrders,
     fetchDocumentDelivery,
     sendAccountingDocument,
+    applyAllocations,
     fetchCompanyBankAccounts,
     openAccountingDocumentPdf,
     orderRouteLabel,
@@ -247,6 +249,20 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     /** Бумаги к счёту: файлы, приложенные к рейсам этого документа. */
     const [attachments, setAttachments] = useState<Вложение[]>([]);
 
+    /**
+     * Оплата прямо из счёта.
+     *
+     * Раньше бухгалтер видел здесь сумму и остаток, а вносить платёж уходил
+     * в кассу, искал там того же контрагента и разносил платёж по счетам
+     * заново. Здесь остаток уже известен, и он подставляется суммой.
+     */
+    const [payOpen, setPayOpen] = useState(false);
+    const [payAmount, setPayAmount] = useState<number | null>(null);
+    const [payDate, setPayDate] = useState<Dayjs | null>(null);
+    const [payAccountId, setPayAccountId] = useState<string | undefined>();
+    const [payNote, setPayNote] = useState('');
+    const [paying, setPaying] = useState(false);
+
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
         [user],
@@ -310,6 +326,58 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             URL.revokeObjectURL(url);
         } catch (e: any) {
             toast.error(e.response?.data?.message || 'Не удалось скачать файл');
+        }
+    };
+
+    /** Открыть оплату: сумма — весь непогашенный остаток, дата — сегодня. */
+    const openPayment = () => {
+        setPayAmount(Number(document?.balanceDue ?? 0) || null);
+        setPayDate(dayjs());
+        setPayAccountId(bankAccounts.find((a) => a.isDefault)?.id ?? bankAccounts[0]?.id);
+        setPayNote('');
+        setPayOpen(true);
+    };
+
+    /**
+     * Записать оплату и сразу закрыть ею этот счёт.
+     *
+     * Два шага, а не один: платёж и разнесение — разные вещи, и так это
+     * работает во всей платформе. Ошибка разнесения не отменяет платёж —
+     * деньги уже учтены, и прятать их было бы хуже, чем оставить счёт
+     * незакрытым.
+     */
+    const savePayment = async () => {
+        if (!document || !payAmount || payAmount <= 0) {
+            toast.warning('Укажите сумму оплаты');
+            return;
+        }
+        setPaying(true);
+        try {
+            const { data: payment } = await api.post('/accounting/payments', {
+                counterpartyId: document.counterparty?.id,
+                // Наш счёт покупателю — деньги приходят; счёт поставщика —
+                // уходят. Спрашивать об этом нечего, направление известно.
+                direction: document.direction === 'OUTGOING' ? 'IN' : 'OUT',
+                amount: payAmount,
+                date: (payDate ?? dayjs()).format('YYYY-MM-DD'),
+                accountId: payAccountId,
+                currency: document.currency,
+                note: payNote || undefined,
+            });
+            try {
+                await applyAllocations(payment.id, [
+                    { documentId: document.id, amount: payAmount.toFixed(2) },
+                ]);
+                toast.success('Оплата внесена и разнесена на счёт');
+            } catch (e: any) {
+                toast.warning(e.response?.data?.message || 'Платёж записан, но не разнесён на счёт');
+            }
+            setPayOpen(false);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось внести оплату');
+        } finally {
+            setPaying(false);
         }
     };
 
@@ -865,6 +933,18 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                                 // он сам конец цепочки.
                                 ...(type === 'PAYMENT_INVOICE' ? [
                                     {
+                                        // Оплата прямо отсюда: остаток уже
+                                        // известен, а бухгалтер иначе уходит
+                                        // в кассу и разносит платёж заново.
+                                        key: 'pay',
+                                        icon: <DollarOutlined />,
+                                        label: 'Внести оплату',
+                                        disabled: !canChange
+                                            || document.status !== 'POSTED'
+                                            || Number(document.balanceDue) <= 0,
+                                        onClick: openPayment,
+                                    },
+                                    {
                                         key: 'act',
                                         icon: <FileTextOutlined />,
                                         label: 'Создать акт на основании',
@@ -1381,6 +1461,65 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         ]}
                     />
                 )}
+            </Modal>
+
+            {/*
+              * Оплата по счёту. Сумма подставлена остатком — чаще всего платят
+              * его целиком, а частичную оплату правят одним движением.
+              */}
+            <Modal
+                title={`Оплата по счёту № ${document.number}`}
+                open={payOpen}
+                onCancel={() => setPayOpen(false)}
+                onOk={savePayment}
+                confirmLoading={paying}
+                okText="Внести оплату"
+                cancelText="Отмена"
+                width={480}
+            >
+                <div style={{ display: 'grid', gap: 12 }}>
+                    <div>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Сумма</div>
+                        <InputNumber
+                            value={payAmount}
+                            onChange={(value) => setPayAmount(value)}
+                            min={0.01}
+                            max={Number(document.balanceDue) || undefined}
+                            step={1000}
+                            style={{ width: '100%' }}
+                            addonAfter={document.currency}
+                        />
+                        <div style={{ fontSize: 11.5, color: token.colorTextTertiary, marginTop: 4 }}>
+                            Остаток по счёту: {money(document.balanceDue, document.currency)}
+                        </div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Дата платежа</div>
+                        <DateField value={payDate} onChange={setPayDate} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Счёт зачисления</div>
+                        <Select
+                            value={payAccountId}
+                            onChange={setPayAccountId}
+                            style={{ width: '100%' }}
+                            placeholder="Выберите счёт"
+                            options={bankAccounts.map((account) => ({
+                                value: account.id,
+                                label: account.name,
+                            }))}
+                        />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Примечание</div>
+                        <Input
+                            value={payNote}
+                            onChange={(e) => setPayNote(e.target.value)}
+                            placeholder="Номер платёжного поручения, например"
+                            maxLength={2000}
+                        />
+                    </div>
+                </div>
             </Modal>
         </div>
     );

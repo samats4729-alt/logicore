@@ -252,9 +252,13 @@ export class AccountingController {
 
     @Post('share-report')
     @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Ссылка контрагенту на взаиморасчёты',
+        description: 'Без ourRole роль подбирается по отчёту — из журнала счетов она неизвестна.',
+    })
     async shareReport(
         @Request() req: any,
-        @Body() body: { counterpartyId: string; ourRole: string; email?: string },
+        @Body() body: { counterpartyId: string; ourRole?: string; email?: string },
     ) {
         const result = await this.accountingService.generateShareToken(
             req.user.companyId,

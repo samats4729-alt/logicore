@@ -1870,16 +1870,41 @@ export class FinancialReportsService {
     async generateShareToken(
         companyId: string,
         counterpartyId: string,
-        ourRole: string,
+        ourRole: string | undefined,
         userId: string,
         sentToEmail?: string,
     ): Promise<{ token: string; shareUrl: string; expiresAt: Date }> {
         const link = await this.shareLinks.create(companyId, userId, {
             counterpartyId,
-            ourRole,
+            ourRole: ourRole || await this.ourRoleWith(companyId, counterpartyId),
             sentToEmail,
         });
         return { token: link.token, shareUrl: link.shareUrl, expiresAt: link.expiresAt };
+    }
+
+    /**
+     * Кем мы приходимся этому контрагенту.
+     *
+     * Роль — часть ключа, по которому ссылка находит свою строку отчёта:
+     * не та роль — контрагент открывает пустую страницу. На странице
+     * взаиморасчётов роль известна, она стоит прямо в строке. Из журнала
+     * счетов её знать неоткуда, и угадывать её на клиенте нельзя: с одним и
+     * тем же контрагентом мы можем быть и заказчиком, и экспедитором.
+     *
+     * Поэтому роль подбирается здесь, по самому отчёту: берётся та, где с
+     * этим контрагентом есть непогашенный долг, а если долгов нет — просто
+     * первая найденная.
+     */
+    private async ourRoleWith(companyId: string, counterpartyId: string): Promise<string> {
+        const report = await this.getCounterpartyReport(companyId);
+        const свои = (report.counterparties as any[])
+            .filter((c) => c.counterparty?.id === counterpartyId);
+        if (!свои.length) return 'Контрагент';
+
+        const сДолгом = свои.find((c) =>
+            (c.theyOweUs ?? 0) - (c.theyOweUsPaid ?? 0) > 0
+            || (c.weOweThem ?? 0) - (c.weOweThemPaid ?? 0) > 0);
+        return (сДолгом ?? свои[0]).ourRole;
     }
 
     async getSharedReport(token: string) {

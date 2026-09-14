@@ -5,7 +5,7 @@ import { Typography, Card, Row, Col, Statistic, Input, Select, Table, Tag, Colla
 import {
     SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined,
     CheckCircleOutlined, CloseCircleOutlined, TeamOutlined,
-    RightOutlined, DownOutlined, ShareAltOutlined, CopyOutlined, SendOutlined, LinkOutlined,
+    RightOutlined, DownOutlined, ShareAltOutlined,
     FileExcelOutlined, DollarOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
@@ -17,6 +17,7 @@ import { money } from '@/lib/money-format';
 import { ORDER_STATUS_COLORS as statusColors } from '@/lib/order-status';
 import Loader from '@/components/ui/Loader';
 import nova from '@/components/nova/nova.module.css';
+import ShareReportModal from '@/components/accounting/ShareReportModal';
 
 const { Title, Text } = Typography;
 
@@ -141,48 +142,13 @@ export default function CounterpartyReportPage() {
     const [exporting, setExporting] = useState(false);
 
     // Share modal state
+    // Окно ссылки общее с журналом счетов: копия здесь означала бы, что срок
+    // жизни ссылки и текст письма рано или поздно разъедутся, а понять по
+    // виду, какая из двух ссылок «правильная», нельзя.
     const [shareModal, setShareModal] = useState<{ open: boolean; counterpartyId: string; ourRole: string; counterpartyName: string }>({ open: false, counterpartyId: '', ourRole: '', counterpartyName: '' });
-    const [shareUrl, setShareUrl] = useState('');
-    const [shareLoading, setShareLoading] = useState(false);
-    const [shareEmail, setShareEmail] = useState('');
-    const [emailSending, setEmailSending] = useState(false);
 
-    const handleShare = async (counterpartyId: string, ourRole: string, counterpartyName: string) => {
+    const handleShare = (counterpartyId: string, ourRole: string, counterpartyName: string) => {
         setShareModal({ open: true, counterpartyId, ourRole, counterpartyName });
-        setShareUrl('');
-        setShareEmail('');
-        setShareLoading(true);
-        try {
-            const res = await api.post('/accounting/share-report', { counterpartyId, ourRole });
-            setShareUrl(res.data.shareUrl);
-        } catch {
-            toast.error('Ошибка генерации ссылки');
-        } finally {
-            setShareLoading(false);
-        }
-    };
-
-    const handleCopyLink = () => {
-        navigator.clipboard.writeText(shareUrl);
-        toast.success('Ссылка скопирована!');
-    };
-
-    const handleSendEmail = async () => {
-        if (!shareEmail) { toast.warning('Введите email'); return; }
-        if (!shareUrl) { toast.warning('Сначала дождитесь генерации ссылки'); return; }
-        setEmailSending(true);
-        try {
-            await api.post('/accounting/send-report-email', {
-                shareUrl,
-                email: shareEmail,
-            });
-            toast.success('Отчёт отправлен на ' + shareEmail);
-            setShareEmail('');
-        } catch (e: any) {
-            toast.error(e.response?.data?.message || 'Ошибка отправки письма');
-        } finally {
-            setEmailSending(false);
-        }
     };
 
     const handleExportExcel = async () => {
@@ -755,66 +721,14 @@ export default function CounterpartyReportPage() {
                 })()}
             </Drawer>
 
-            {/* SHARE MODAL */}
-            <Modal
-                title={<><ShareAltOutlined style={{ marginRight: 8 }} />Поделиться отчётом — {shareModal.counterpartyName}</>}
+            {/* Ссылка контрагенту — общее окно с журналом счетов. */}
+            <ShareReportModal
                 open={shareModal.open}
-                onCancel={() => setShareModal({ open: false, counterpartyId: '', ourRole: '', counterpartyName: '' })}
-                footer={null}
-                width={520}
-            >
-                {shareLoading ? (
-                    <div style={{ textAlign: 'center', padding: 32 }}><Loader /></div>
-                ) : shareUrl ? (
-                    <div>
-                        <div style={{ marginBottom: 20 }}>
-                            <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
-                                Ссылка на отчёт (действительна 7 дней):
-                            </Text>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <Input
-                                    value={shareUrl}
-                                    readOnly
-                                    prefix={<LinkOutlined style={{ color: token.colorTextDisabled }} />}
-                                    style={{ flex: 1, fontSize: 13 }}
-                                />
-                                <Button
-                                    type="primary"
-                                    icon={<CopyOutlined />}
-                                    onClick={handleCopyLink}
-                                >
-                                    Копировать
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div style={{ borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 16 }}>
-                            <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
-                                Или отправить на email:
-                            </Text>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <Input
-                                    placeholder="email@example.com"
-                                    value={shareEmail}
-                                    onChange={(e) => setShareEmail(e.target.value)}
-                                    onPressEnter={handleSendEmail}
-                                    style={{ flex: 1 }}
-                                    type="email"
-                                />
-                                <Button
-                                    icon={<SendOutlined />}
-                                    onClick={handleSendEmail}
-                                    loading={emailSending}
-                                >
-                                    Отправить
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <Empty description="Не удалось сгенерировать ссылку" />
-                )}
-            </Modal>
+                counterpartyId={shareModal.counterpartyId}
+                counterpartyName={shareModal.counterpartyName}
+                ourRole={shareModal.ourRole}
+                onClose={() => setShareModal({ open: false, counterpartyId: '', ourRole: '', counterpartyName: '' })}
+            />
 
             {/* COMPACT TABLE STYLES */}
             <style jsx global>{`

@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import RecordLink from '@/components/ui/RecordLink';
 import { DateRangeField } from '@/components/ui/DateField';
 import nova from '@/components/nova/nova.module.css';
+import ShareReportModal from '@/components/accounting/ShareReportModal';
 import {
     debtPicture,
     fetchPlannedPayments,
@@ -80,6 +81,15 @@ export default function InvoicesRegistryPage() {
      */
     const [plannedTotals, setPlannedTotals] = useState<PlannedTotals | null>(null);
     const [withoutInvoice, setWithoutInvoice] = useState<WithoutInvoice | null>(null);
+
+    /**
+     * Кому выдаём ссылку на взаиморасчёты.
+     *
+     * Ссылку выдавали только со страницы взаиморасчётов, а счёт от
+     * перевозчика ждут здесь, в журнале. Приходилось уходить на другую
+     * страницу, искать там того же контрагента и звать ссылку оттуда.
+     */
+    const [shareFor, setShareFor] = useState<{ id: string; name: string } | null>(null);
 
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'FORWARDER', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
@@ -365,10 +375,22 @@ export default function InvoicesRegistryPage() {
                                 },
                                 { type: 'divider' as const },
                                 {
+                                    // Ссылка на сам документ: контрагент его
+                                    // смотрит и скачивает, но приложить ничего
+                                    // не может — для этого ссылка ниже.
                                     key: 'copy',
-                                    label: 'Скопировать ссылку',
+                                    label: 'Ссылка на этот счёт',
                                     disabled: record.status !== 'POSTED' || Boolean(record.shareRevokedAt),
                                     onClick: () => copyShareLink(record),
+                                },
+                                {
+                                    key: 'share-report',
+                                    label: 'Ссылка на взаиморасчёты — приложить документы',
+                                    disabled: !canChange || !record.counterparty,
+                                    onClick: () => setShareFor({
+                                        id: record.counterparty!.id,
+                                        name: record.counterparty!.name || 'контрагент',
+                                    }),
                                 },
                                 {
                                     key: 'revoke',
@@ -579,6 +601,13 @@ export default function InvoicesRegistryPage() {
                     )}
                 />
             </div>
+
+            <ShareReportModal
+                open={Boolean(shareFor)}
+                counterpartyId={shareFor?.id || ''}
+                counterpartyName={shareFor?.name || ''}
+                onClose={() => setShareFor(null)}
+            />
         </div>
     );
 }
