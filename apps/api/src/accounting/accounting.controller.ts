@@ -26,6 +26,23 @@ import {
 const FINANCE_VIEW_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER];
 const FINANCE_CHANGE_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT];
 
+/**
+ * Отчёты закрыты отдельным правом — «Отчёты», а не «Бухгалтерией».
+ *
+ * Разница простая: по «Бухгалтерии» человек ведёт деньги — заводит счета,
+ * проводит оплаты, сверяется с контрагентами. Отчёты отвечают на другой
+ * вопрос: сколько компания заработала, какая маржа по заявке, сколько принёс
+ * каждый перевозчик. В финансовом отделе это часто разные люди, и одной
+ * галочкой их не разделить.
+ *
+ * Право на методе перебивает право контроллера (`getAllAndOverride` берёт
+ * метаданные обработчика), поэтому «Бухгалтерия» сюда уже не пускает.
+ * Взаиморасчёты (`counterparty-report`) намеренно остались на «Бухгалтерии»:
+ * это не отчёт о прибыли, а ежедневная работа — по ним выставляют счета и
+ * шлют ссылку контрагенту.
+ */
+const REPORTS_PERMISSION = 'reports';
+
 @Controller('accounting')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @RequirePermissions('accounting')
@@ -52,6 +69,7 @@ export class AccountingController {
 
     @Get('financial-registry')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getFinancialRegistry(@Request() req: any, @Query() query: JournalQueryDto) {
         return this.accountingService.getFinancialRegistry(req.user.companyId, query);
     }
@@ -307,6 +325,10 @@ export class AccountingController {
 
     @Get('payments')
     @Roles(...FINANCE_VIEW_ROLES)
+    // Достаточно любого из двух прав. Сводка на «Отчётах» считается из этих
+    // же платежей: требуй здесь только «Бухгалтерию» — и человек с одними
+    // отчётами открыл бы страницу с нулями вместо цифр.
+    @RequirePermissions('accounting', REPORTS_PERMISSION)
     async getPayments(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string; direction?: any },
@@ -447,6 +469,7 @@ export class AccountingController {
 
     @Get('financial-registry/export')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async exportFinancialRegistry(@Request() req: any, @Res() res: Response) {
         const buffer = await this.accountingService.exportFinancialRegistry(req.user.companyId);
         res.set({
@@ -703,6 +726,7 @@ export class AccountingController {
 
     @Get('cashflow')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getCashflowReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -712,6 +736,7 @@ export class AccountingController {
 
     @Get('cashflow/export')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async exportCashflowReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -728,6 +753,7 @@ export class AccountingController {
 
     @Get('pnl')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getPnLReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -737,6 +763,7 @@ export class AccountingController {
 
     @Get('carrier-profit')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getCarrierProfitReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -746,6 +773,7 @@ export class AccountingController {
 
     @Get('expenses-by-category')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getExpensesByCategoryReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -755,6 +783,7 @@ export class AccountingController {
 
     @Get('pnl/export')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async exportPnLReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },

@@ -5,7 +5,9 @@ import { ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { RolesGuard } from './guards/roles.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
+import { MODULE_PERMISSIONS } from './module-permissions';
 
+import { AccountingController } from '../accounting/accounting.controller';
 import { AccountingDocumentsController } from '../accounting-documents/accounting-documents.controller';
 import { PaymentProofController } from '../payment-proofs/payment-proof.controller';
 import { DocumentsController } from '../documents/documents.controller';
@@ -40,8 +42,12 @@ const ALL_ROLES: UserRole[] = [
     UserRole.FORWARDER,
 ];
 
-/** Права разделов, которые выдаются офисным ролям в «Сотрудниках». */
-const ALL_PERMISSIONS = ['orders', 'documents', 'accounting', 'partners', 'tracking', 'drivers'];
+/**
+ * Права разделов, которые выдаются офисным ролям в «Сотрудниках».
+ * Список берём из кода, а не переписываем: иначе тест «нет прав, которых
+ * нельзя выдать» проверял бы копию списка, а не сам список.
+ */
+const ALL_PERMISSIONS: string[] = [...MODULE_PERMISSIONS];
 
 const reflector = new Reflector();
 const rolesGuard = new RolesGuard(reflector);
@@ -190,18 +196,15 @@ describe('Матрица доступов', () => {
 
     describe('выгрузка отчётов', () => {
         it('бухгалтер выгружает отчёт — это его работа', () => {
-            // Требовалось право `reports`, которого нет ни в списке, что
-            // руководитель выдаёт в «Сотрудниках», ни где-либо ещё. Выдать
-            // его было нельзя, поэтому кнопка выгрузки на экране была, а
-            // ответом всегда был отказ.
             expect(whoCanReach(ReportsController, 'exportReport')).toContain(UserRole.ACCOUNTANT);
         });
 
-        it('право раздела при этом спрашивается — «Бухгалтерия»', () => {
-            // Не «пустили всех»: бухгалтер без права раздела по-прежнему не
-            // проходит.
-            expect(allowed(ReportsController, 'exportReport', UserRole.ACCOUNTANT, ['accounting'])).toBe(true);
-            expect(allowed(ReportsController, 'exportReport', UserRole.ACCOUNTANT, ['orders'])).toBe(false);
+        it('спрашивается право «Отчёты», и одной «Бухгалтерии» мало', () => {
+            // Прежде выгрузка шла под «Бухгалтерией», потому что права
+            // «Отчёты» не существовало в «Сотрудниках» и выдать его было
+            // нечем. Теперь оно есть — и «Бухгалтерия» сюда больше не пускает.
+            expect(allowed(ReportsController, 'exportReport', UserRole.ACCOUNTANT, ['reports'])).toBe(true);
+            expect(allowed(ReportsController, 'exportReport', UserRole.ACCOUNTANT, ['accounting'])).toBe(false);
         });
 
         it('водитель и завсклад к выгрузке не допущены', () => {
@@ -215,8 +218,9 @@ describe('Матрица доступов', () => {
             // Требование права вне списка означает вечный отказ у трёх
             // офисных ролей — и заметить это по коду невозможно.
             const controllers = [
-                AccountingDocumentsController, PaymentProofController, DocumentsController,
-                OrdersController, WarehouseController, CompanyController, ReportsController,
+                AccountingController, AccountingDocumentsController, PaymentProofController,
+                DocumentsController, OrdersController, WarehouseController, CompanyController,
+                ReportsController,
             ];
             const unknown = new Set<string>();
             for (const controller of controllers) {
@@ -228,6 +232,63 @@ describe('Матрица доступов', () => {
                 }
             }
             expect([...unknown]).toEqual([]);
+        });
+    });
+
+    /**
+     * Отчёты о прибыли отделены от ежедневной работы с деньгами.
+     *
+     * Смысл разделения: по «Бухгалтерии» человек ведёт счета, оплаты и сверки;
+     * отчёты отвечают на другой вопрос — сколько компания заработала. В одном
+     * финансовом отделе это часто разные люди, и одной галочкой их не развести.
+     */
+    describe('отчёты о прибыли — отдельное право', () => {
+        const ОТЧЁТЫ = [
+            'getPnLReport', 'getCarrierProfitReport', 'getCashflowReport',
+            'getExpensesByCategoryReport', 'getFinancialRegistry',
+            'exportPnLReport', 'exportCashflowReport', 'exportFinancialRegistry',
+        ];
+
+        it('одной «Бухгалтерии» для них уже недостаточно', () => {
+            for (const метод of ОТЧЁТЫ) {
+                expect(allowed(AccountingController, метод, UserRole.ACCOUNTANT, ['accounting']))
+                    .toBe(false);
+            }
+        });
+
+        it('с правом «Отчёты» открываются все до одного', () => {
+            for (const метод of ОТЧЁТЫ) {
+                expect(allowed(AccountingController, метод, UserRole.ACCOUNTANT, ['reports']))
+                    .toBe(true);
+            }
+        });
+
+        it('ежедневную работу с деньгами разделение не задело', () => {
+            // Взаиморасчёты — не отчёт о прибыли: по ним выставляют счета и
+            // шлют ссылку контрагенту. Забрать их вместе с отчётами значило бы
+            // остановить работу бухгалтера.
+            expect(allowed(AccountingController, 'getCounterpartyReport', UserRole.ACCOUNTANT, ['accounting']))
+                .toBe(true);
+            expect(allowed(AccountingDocumentsController, 'create', UserRole.ACCOUNTANT, ['accounting']))
+                .toBe(true);
+        });
+
+        it('платежи открыты по любому из двух прав', () => {
+            // Сводка на «Отчётах» считается из платежей: требуй здесь только
+            // «Бухгалтерию» — и человек с одними отчётами увидел бы нули.
+            expect(allowed(AccountingController, 'getPayments', UserRole.ACCOUNTANT, ['accounting']))
+                .toBe(true);
+            expect(allowed(AccountingController, 'getPayments', UserRole.ACCOUNTANT, ['reports']))
+                .toBe(true);
+            expect(allowed(AccountingController, 'getPayments', UserRole.ACCOUNTANT, ['orders']))
+                .toBe(false);
+        });
+
+        it('администратора компании разделение не ограничивает', () => {
+            // Права раздела он выдаёт сам — иначе запер бы себя без отчётов.
+            for (const метод of ОТЧЁТЫ) {
+                expect(allowed(AccountingController, метод, UserRole.COMPANY_ADMIN, [])).toBe(true);
+            }
         });
     });
 

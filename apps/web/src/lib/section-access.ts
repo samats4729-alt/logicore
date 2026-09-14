@@ -11,6 +11,8 @@
  * человеку понятную причину вместо пустоты.
  */
 
+import { REPORTS_ROUTES } from './cabinet-nav';
+
 /** Роли, которым права выдаются поимённо. Остальным раздел открыт. */
 const PERMISSION_MANAGED_ROLES = ['LOGISTICIAN', 'ACCOUNTANT', 'WAREHOUSE_MANAGER', 'MANAGER'];
 
@@ -29,7 +31,13 @@ const FULL_ACCESS_ROLES = ['COMPANY_ADMIN', 'FORWARDER', 'ADMIN'];
  * пустой экран.
  */
 const SECTIONS: { prefix: string; permission?: string; roles?: string[]; title: string }[] = [
+    // Отчёты идут первыми, и порядок здесь — это поведение. Почти все они
+    // лежат по адресам внутри `/company/accounting`, и при обратном порядке
+    // их подобрало бы правило «Бухгалтерии» — то есть отчёт открывался бы по
+    // той самой галочке, от которой его и отделяли.
+    ...REPORTS_ROUTES.map((prefix) => ({ prefix, permission: 'reports', title: 'Отчёты' })),
     { prefix: '/company/accounting', permission: 'accounting', title: 'Бухгалтерия' },
+    { prefix: '/company/finance', permission: 'accounting', title: 'Деньги' },
     { prefix: '/company/orders', permission: 'orders', title: 'Заявки' },
     { prefix: '/company/requests', permission: 'orders', title: 'Запросы' },
     { prefix: '/company/tracking', permission: 'tracking', title: 'GPS-мониторинг' },

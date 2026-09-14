@@ -26,6 +26,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
 import { DateRangeField } from '@/components/ui/DateField';
+import { useAuthStore } from '@/store/auth';
+import { checkSectionAccess } from '@/lib/section-access';
 
 
 type ReportType = 'pnl' | 'counterparties' | 'profitability' | 'drivers' | 'summary';
@@ -156,6 +158,19 @@ interface DriverReportEntry {
 
 export default function ReportsPage() {
     const router = useRouter();
+    const { user } = useAuthStore();
+
+    /**
+     * Ссылки, которые этому человеку откроются.
+     *
+     * «Взаиморасчёты» лежат под правом «Бухгалтерия», а не «Отчёты»: это
+     * ежедневная работа, по ним выставляют счета. У того, кому открыли только
+     * отчёты, ссылка вела бы в отказ — лучше её не показывать вовсе.
+     */
+    const доступныеОтчёты = useMemo(
+        () => MORE_REPORTS.filter((r) => checkSectionAccess(r.href, user).allowed),
+        [user],
+    );
 
     const [reportType, setReportType] = useState<ReportType>('pnl');
     const [activePreset, setActivePreset] = useState<string | null>(null);
@@ -523,10 +538,10 @@ export default function ReportsPage() {
                     <div className={styles.cardHead}>
                         <ChartColumn size={15} />
                         <h2 className={styles.cardTitle}>Отчёты бухгалтерии</h2>
-                        <span className={styles.cardCount}>{MORE_REPORTS.length}</span>
+                        <span className={styles.cardCount}>{доступныеОтчёты.length}</span>
                     </div>
                     <div className={styles.list}>
-                        {MORE_REPORTS.map((item) => (
+                        {доступныеОтчёты.map((item) => (
                             <button
                                 key={item.href}
                                 type="button"
