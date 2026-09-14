@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button, Dropdown, Input, Select, Space, Table, Tabs, Tooltip, theme } from 'antd';
 import {
     EyeOutlined,
+    LinkOutlined,
     MoreOutlined,
     PlusOutlined,
     PrinterOutlined,
@@ -419,15 +420,31 @@ export default function InvoicesRegistryPage() {
                         Исходящие — покупателям, входящие — от поставщиков. Это документы на оплату, а не сами деньги.
                     </p>
                     {canChange && (
-                        <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={() => router.push('/company/accounting/invoices/create')}
-                            className="lc-cta"
-                            data-guide="invoice-create"
-                        >
-                            Выставить счёт
-                        </Button>
+                        <Space size={8} wrap>
+                            <Button
+                                type="primary"
+                                icon={<PlusOutlined />}
+                                onClick={() => router.push('/company/accounting/invoices/create')}
+                                className="lc-cta"
+                                data-guide="invoice-create"
+                            >
+                                Выставить счёт
+                            </Button>
+                            {/*
+                              * Ссылку шлют, когда счёта ещё нет: перевозчик
+                              * отработал рейс и должен выставить свой. В меню
+                              * строки такая ссылка тоже есть, но строка
+                              * появляется только после счёта — то есть ровно
+                              * тогда, когда ссылка уже не нужна. Поэтому
+                              * отдельная кнопка, с выбором контрагента.
+                              */}
+                            <Button
+                                icon={<LinkOutlined />}
+                                onClick={() => setShareFor({ id: '', name: '' })}
+                            >
+                                Ссылка контрагенту
+                            </Button>
+                        </Space>
                     )}
                 </div>
 
@@ -602,10 +619,12 @@ export default function InvoicesRegistryPage() {
                 />
             </div>
 
+            {/* Из строки контрагент известен, из шапки его выбирают здесь. */}
             <ShareReportModal
                 open={Boolean(shareFor)}
-                counterpartyId={shareFor?.id || ''}
-                counterpartyName={shareFor?.name || ''}
+                counterpartyId={shareFor?.id || undefined}
+                counterpartyName={shareFor?.name || undefined}
+                counterparties={shareFor?.id ? undefined : counterparties}
                 onClose={() => setShareFor(null)}
             />
         </div>
