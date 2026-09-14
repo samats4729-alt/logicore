@@ -25,6 +25,7 @@ import type { FinancialReportsService } from '../accounting/services/financial-r
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
 import { OrderSettlementsService } from '../orders/order-settlements.service';
 import { toNum } from '../common/utils/money';
+import { resolveJournalCompany } from '../common/journal-company';
 import { invoiceDueDate, OrderPaymentTerms } from './invoice-due-date';
 import {
     AccountingDocumentListQueryDto,
@@ -456,24 +457,12 @@ export class AccountingDocumentsService {
         requestedCompanyId: string | undefined,
         allowedRoles: UserRole[],
     ): Promise<string> {
-        if (!requestedCompanyId || requestedCompanyId === activeCompanyId) {
-            if (!activeCompanyId) {
-                throw new ForbiddenException('Организация не выбрана');
-            }
-            return activeCompanyId;
-        }
-
-        const relation = await this.prisma.userCompanyRelation.findUnique({
-            where: { userId_companyId: { userId, companyId: requestedCompanyId } },
-            select: { role: true },
+        // Само правило живёт одним местом: тем же отбором пользуются итоги
+        // над журналом, и разъедься они — список показывал бы одну
+        // организацию, а суммы над ним другую.
+        return resolveJournalCompany(this.prisma, {
+            userId, activeCompanyId, requestedCompanyId, allowedRoles,
         });
-        if (!relation) {
-            throw new ForbiddenException('Вы не состоите в этой организации');
-        }
-        if (!allowedRoles.includes(relation.role)) {
-            throw new ForbiddenException('В этой организации у вас нет доступа к бухгалтерии');
-        }
-        return requestedCompanyId;
     }
 
     /**
@@ -571,6 +560,73 @@ export class AccountingDocumentsService {
         });
         if (!document) throw new NotFoundException('Бухгалтерский документ не найден');
         return document;
+    }
+
+    /**
+     * Бумаги к счёту: накладные, акт, свой счёт контрагента.
+     *
+     * Прикладывать их умеют давно — контрагент шлёт пакет по ссылке на
+     * взаиморасчёты, из блока «Документы к счёту», и файлы ложатся в
+     * документы отмеченных рейсов. Но на карточке счёта их не было видно:
+     * бухгалтер открывал счёт, не находил бумаг и шёл искать их по рейсам,
+     * хотя присланы они были именно к этому счёту.
+     *
+     * Собираем по рейсам документа: своего поля у файла нет, а связь
+     * «счёт → рейсы → документы» есть и без него. Поэтому здесь нет
+     * миграции: файл и так лежит там, где его ищет бухгалтерия рейса.
+     */
+    async listAttachments(companyId: string, id: string) {
+        // Только своему счёту: получателю доставленного документа бумаги по
+        // нашим рейсам показывать нельзя — это чужие сделки и чужие файлы,
+        // а виден ему сам счёт, а не наша папка по рейсу.
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: {
+                orders: { select: { orderId: true, order: { select: { orderNumber: true } } } },
+            },
+        });
+        if (!document) return [];
+
+        const orderIds = document.orders.map((link) => link.orderId);
+        if (!orderIds.length) return [];
+
+        // По компании файлы не отбираем: у приложенного из кабинета
+        // `companyId` пустой, и такой отбор прятал бы ровно те бумаги, что
+        // положил свой же сотрудник. Право на файлы даёт сам счёт — он
+        // проверен выше, а рейсы принадлежат этой сделке.
+        const files = await this.prisma.document.findMany({
+            where: { orderId: { in: orderIds } },
+            orderBy: { createdAt: 'desc' },
+            take: 200,
+            select: {
+                id: true,
+                type: true,
+                fileName: true,
+                fileSize: true,
+                createdAt: true,
+                orderId: true,
+                order: { select: { orderNumber: true } },
+                uploadedBy: { select: { firstName: true, lastName: true } },
+                uploadedByCounterparty: { select: { name: true } },
+            },
+        });
+
+        return files.map((file) => ({
+            id: file.id,
+            type: file.type,
+            fileName: file.fileName,
+            fileSize: file.fileSize,
+            createdAt: file.createdAt,
+            orderId: file.orderId,
+            orderNumber: file.order?.orderNumber ?? null,
+            // Кто приложил: наш сотрудник или контрагент по ссылке. Для
+            // спора об оплате это половина смысла файла.
+            uploadedBy: file.uploadedByCounterparty
+                ? { name: file.uploadedByCounterparty.name, fromCounterparty: true }
+                : file.uploadedBy
+                    ? { name: `${file.uploadedBy.lastName} ${file.uploadedBy.firstName}`.trim(), fromCounterparty: false }
+                    : null,
+        }));
     }
 
     /**

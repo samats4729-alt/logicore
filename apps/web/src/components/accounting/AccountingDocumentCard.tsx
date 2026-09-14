@@ -8,6 +8,7 @@ import {
     CheckOutlined,
     DownOutlined,
     DeleteOutlined,
+    DollarOutlined,
     FileTextOutlined,
     LinkOutlined,
     SendOutlined,
@@ -35,6 +36,7 @@ import {
     fetchBillableOrders,
     fetchDocumentDelivery,
     sendAccountingDocument,
+    applyAllocations,
     fetchCompanyBankAccounts,
     openAccountingDocumentPdf,
     orderRouteLabel,
@@ -50,6 +52,7 @@ import Loader from '@/components/ui/Loader';
 import nova from '@/components/nova/nova.module.css';
 import styles from './accounting-document-card.module.css';
 import { DateField } from '@/components/ui/DateField';
+import RecordLink from '@/components/ui/RecordLink';
 
 /**
  * Сумма со знаком валюты документа.
@@ -162,6 +165,32 @@ const DOCUMENT_KIND = {
 
 type CardDocumentType = keyof typeof DOCUMENT_KIND;
 
+/**
+ * Бумага к счёту: файл, приложенный к одному из рейсов документа.
+ *
+ * Своей связи «файл → счёт» в базе нет, и заводить её не понадобилось:
+ * контрагент прикладывает пакет к сделкам, а счёт эти сделки знает.
+ */
+interface Вложение {
+    id: string;
+    type: string;
+    fileName: string;
+    fileSize: number;
+    createdAt: string;
+    orderId: string | null;
+    orderNumber: string | null;
+    uploadedBy: { name: string; fromCounterparty: boolean } | null;
+}
+
+/** Подписи видов файлов — те же слова, что в документах рейса. */
+const ВИД_ФАЙЛА: Record<string, string> = {
+    TTN: 'накладная',
+    ACT: 'акт',
+    INVOICE: 'счёт',
+    POWER_OF_ATTORNEY: 'доверенность',
+    OTHER: 'файл',
+};
+
 interface AccountingDocumentCardProps {
     documentId: string;
     /** Вид документа — определяет заголовки и набор полей шапки. */
@@ -217,6 +246,22 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     // Кому можно отправить документ прямо на платформе. Определяется по БИН
     // контрагента: справочная копия — это не арендатор, доставлять ей некуда.
     const [delivery, setDelivery] = useState<DocumentDelivery | null>(null);
+    /** Бумаги к счёту: файлы, приложенные к рейсам этого документа. */
+    const [attachments, setAttachments] = useState<Вложение[]>([]);
+
+    /**
+     * Оплата прямо из счёта.
+     *
+     * Раньше бухгалтер видел здесь сумму и остаток, а вносить платёж уходил
+     * в кассу, искал там того же контрагента и разносил платёж по счетам
+     * заново. Здесь остаток уже известен, и он подставляется суммой.
+     */
+    const [payOpen, setPayOpen] = useState(false);
+    const [payAmount, setPayAmount] = useState<number | null>(null);
+    const [payDate, setPayDate] = useState<Dayjs | null>(null);
+    const [payAccountId, setPayAccountId] = useState<string | undefined>();
+    const [payNote, setPayNote] = useState('');
+    const [paying, setPaying] = useState(false);
 
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
@@ -258,12 +303,83 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             // возможность, и её недоступность не должна мешать открыть
             // карточку документа.
             fetchDocumentDelivery(id).then(setDelivery).catch(() => setDelivery(null));
+            // Так же молча: без списка бумаг карточка счёта остаётся рабочей.
+            api.get(`/accounting-documents/${id}/attachments`)
+                .then((res) => setAttachments(res.data || []))
+                .catch(() => setAttachments([]));
         } catch {
             setNotFound(true);
         } finally {
             setLoading(false);
         }
     }, [id, applyDocument]);
+
+    /** Скачать приложенную бумагу. Файл отдаётся вложением, не открывается. */
+    const downloadAttachment = async (file: Вложение) => {
+        try {
+            const res = await api.get(`/documents/${file.id}/download`, { responseType: 'blob' });
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const a = window.document.createElement('a');
+            a.href = url;
+            a.download = file.fileName;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось скачать файл');
+        }
+    };
+
+    /** Открыть оплату: сумма — весь непогашенный остаток, дата — сегодня. */
+    const openPayment = () => {
+        setPayAmount(Number(document?.balanceDue ?? 0) || null);
+        setPayDate(dayjs());
+        setPayAccountId(bankAccounts.find((a) => a.isDefault)?.id ?? bankAccounts[0]?.id);
+        setPayNote('');
+        setPayOpen(true);
+    };
+
+    /**
+     * Записать оплату и сразу закрыть ею этот счёт.
+     *
+     * Два шага, а не один: платёж и разнесение — разные вещи, и так это
+     * работает во всей платформе. Ошибка разнесения не отменяет платёж —
+     * деньги уже учтены, и прятать их было бы хуже, чем оставить счёт
+     * незакрытым.
+     */
+    const savePayment = async () => {
+        if (!document || !payAmount || payAmount <= 0) {
+            toast.warning('Укажите сумму оплаты');
+            return;
+        }
+        setPaying(true);
+        try {
+            const { data: payment } = await api.post('/accounting/payments', {
+                counterpartyId: document.counterparty?.id,
+                // Наш счёт покупателю — деньги приходят; счёт поставщика —
+                // уходят. Спрашивать об этом нечего, направление известно.
+                direction: document.direction === 'OUTGOING' ? 'IN' : 'OUT',
+                amount: payAmount,
+                date: (payDate ?? dayjs()).format('YYYY-MM-DD'),
+                accountId: payAccountId,
+                currency: document.currency,
+                note: payNote || undefined,
+            });
+            try {
+                await applyAllocations(payment.id, [
+                    { documentId: document.id, amount: payAmount.toFixed(2) },
+                ]);
+                toast.success('Оплата внесена и разнесена на счёт');
+            } catch (e: any) {
+                toast.warning(e.response?.data?.message || 'Платёж записан, но не разнесён на счёт');
+            }
+            setPayOpen(false);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось внести оплату');
+        } finally {
+            setPaying(false);
+        }
+    };
 
     const sendToCounterparty = async () => {
         try {
@@ -817,6 +933,18 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                                 // он сам конец цепочки.
                                 ...(type === 'PAYMENT_INVOICE' ? [
                                     {
+                                        // Оплата прямо отсюда: остаток уже
+                                        // известен, а бухгалтер иначе уходит
+                                        // в кассу и разносит платёж заново.
+                                        key: 'pay',
+                                        icon: <DollarOutlined />,
+                                        label: 'Внести оплату',
+                                        disabled: !canChange
+                                            || document.status !== 'POSTED'
+                                            || Number(document.balanceDue) <= 0,
+                                        onClick: openPayment,
+                                    },
+                                    {
                                         key: 'act',
                                         icon: <FileTextOutlined />,
                                         label: 'Создать акт на основании',
@@ -1169,6 +1297,50 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     </div>
                 )}
 
+                {/*
+                  * Бумаги к счёту: накладные, акт, свой счёт контрагента.
+                  *
+                  * Присылают их давно — по ссылке на взаиморасчёты, из блока
+                  * «Документы к счёту», — но ложатся они в документы рейсов, и
+                  * на карточке счёта их не было видно. Бухгалтер открывал счёт,
+                  * не находил бумаг и шёл искать по рейсам, хотя присланы они
+                  * были именно к этому счёту.
+                  */}
+                {attachments.length > 0 && (
+                    <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary, marginBottom: 8 }}>
+                            Документы к счёту
+                        </div>
+                        {attachments.map((file) => (
+                            <div
+                                key={file.id}
+                                style={{
+                                    display: 'flex', justifyContent: 'space-between', gap: 16,
+                                    alignItems: 'baseline', fontSize: 12.5, padding: '5px 0',
+                                    borderBottom: `1px dashed ${token.colorBorderSecondary}`,
+                                }}
+                            >
+                                <span style={{ minWidth: 0 }}>
+                                    <RecordLink onClick={() => downloadAttachment(file)}>{file.fileName}</RecordLink>
+                                    <span style={{ color: token.colorTextTertiary }}>
+                                        {' '}· {ВИД_ФАЙЛА[file.type] || 'Приложенный файл'}
+                                        {file.orderNumber ? ` · ${file.orderNumber}` : ''}
+                                    </span>
+                                </span>
+                                <span style={{ textAlign: 'right', whiteSpace: 'nowrap', color: token.colorTextTertiary, fontSize: 11 }}>
+                                    {file.uploadedBy && (
+                                        <>
+                                            {file.uploadedBy.fromCounterparty ? 'прислал ' : ''}
+                                            {file.uploadedBy.name} ·{' '}
+                                        </>
+                                    )}
+                                    {dayjs(file.createdAt).format('DD.MM.YYYY')}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 <div
                     style={{
                         marginTop: 16,
@@ -1289,6 +1461,65 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         ]}
                     />
                 )}
+            </Modal>
+
+            {/*
+              * Оплата по счёту. Сумма подставлена остатком — чаще всего платят
+              * его целиком, а частичную оплату правят одним движением.
+              */}
+            <Modal
+                title={`Оплата по счёту № ${document.number}`}
+                open={payOpen}
+                onCancel={() => setPayOpen(false)}
+                onOk={savePayment}
+                confirmLoading={paying}
+                okText="Внести оплату"
+                cancelText="Отмена"
+                width={480}
+            >
+                <div style={{ display: 'grid', gap: 12 }}>
+                    <div>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Сумма</div>
+                        <InputNumber
+                            value={payAmount}
+                            onChange={(value) => setPayAmount(value)}
+                            min={0.01}
+                            max={Number(document.balanceDue) || undefined}
+                            step={1000}
+                            style={{ width: '100%' }}
+                            addonAfter={document.currency}
+                        />
+                        <div style={{ fontSize: 11.5, color: token.colorTextTertiary, marginTop: 4 }}>
+                            Остаток по счёту: {money(document.balanceDue, document.currency)}
+                        </div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Дата платежа</div>
+                        <DateField value={payDate} onChange={setPayDate} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Счёт зачисления</div>
+                        <Select
+                            value={payAccountId}
+                            onChange={setPayAccountId}
+                            style={{ width: '100%' }}
+                            placeholder="Выберите счёт"
+                            options={bankAccounts.map((account) => ({
+                                value: account.id,
+                                label: account.name,
+                            }))}
+                        />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>Примечание</div>
+                        <Input
+                            value={payNote}
+                            onChange={(e) => setPayNote(e.target.value)}
+                            placeholder="Номер платёжного поручения, например"
+                            maxLength={2000}
+                        />
+                    </div>
+                </div>
             </Modal>
         </div>
     );

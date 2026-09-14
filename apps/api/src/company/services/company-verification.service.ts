@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3Service } from '../../s3/s3.service';
+import { decodeUploadName } from '../../common/utils/upload-name';
 
 /** Рубильник: требовать ли подтверждение организации для работы. */
 const SETTING_VERIFICATION_REQUIRED = 'verification_required';
@@ -91,7 +92,7 @@ export class CompanyVerificationService {
             return tx.document.create({
                 data: {
                     type,
-                    fileName: file.originalname,
+                    fileName: decodeUploadName(file.originalname),
                     fileUrl: relativePath,
                     fileSize: file.size,
                     mimeType: file.mimetype,

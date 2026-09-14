@@ -8,6 +8,7 @@ import { SharedReportLinkService } from '../accounting/services/shared-report-li
 import { counterpartyIsExecutor, counterpartyIsPayer } from '../common/utils/settlement';
 import { toNumOrNull } from '../common/utils/money';
 import { SubmitPaymentProofDto } from './dto/submit-payment-proof.dto';
+import { decodeUploadName } from '../common/utils/upload-name';
 
 /** Чем можно подтвердить оплату: скан, фотография, выписка. */
 export const ALLOWED_MIME_TYPES = [
@@ -105,7 +106,7 @@ export class PaymentProofService {
             const ext = path.extname(file.originalname) || '';
             const key = `uploads/payment-proofs/proof_${order.id}_${Date.now()}${ext}`;
             await this.storeFile(key, file);
-            stored = { key, name: file.originalname, size: file.size, mime: file.mimetype };
+            stored = { key, name: decodeUploadName(file.originalname), size: file.size, mime: file.mimetype };
         }
 
         const proof = await this.prisma.orderPaymentProof.create({

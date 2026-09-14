@@ -7,6 +7,7 @@ import { OrderStatus, DocumentType } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
 import { OrdersService } from '../orders/orders.service';
+import { decodeUploadName } from '../common/utils/upload-name';
 
 // Простой линейный сценарий для водителя: текущий статус → следующее действие
 const DRIVER_FLOW: { from: OrderStatus[]; to: OrderStatus; label: string }[] = [
@@ -224,7 +225,7 @@ export class DriverService {
         const doc = await this.prisma.document.create({
             data: {
                 type: DocumentType.TTN,
-                fileName: file.originalname || 'ТТН.jpg',
+                fileName: decodeUploadName(file.originalname) || 'ТТН.jpg',
                 fileUrl: relativePath,
                 fileSize: file.size,
                 mimeType: file.mimetype,

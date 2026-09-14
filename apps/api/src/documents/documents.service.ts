@@ -5,6 +5,7 @@ import { S3Service } from '../s3/s3.service';
 import * as path from 'path';
 import * as fs from 'fs';
 import { assertAllowedUpload } from './allowed-files';
+import { decodeUploadName } from '../common/utils/upload-name';
 
 @Injectable()
 export class DocumentsService {
@@ -105,7 +106,7 @@ export class DocumentsService {
         return this.prisma.document.create({
             data: {
                 type,
-                fileName: file.originalname,
+                fileName: decodeUploadName(file.originalname),
                 fileUrl: relativePath,
                 fileSize: file.size,
                 mimeType: file.mimetype,

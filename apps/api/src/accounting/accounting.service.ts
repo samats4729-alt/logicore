@@ -182,7 +182,7 @@ export class AccountingService {
     async generateShareToken(
         companyId: string,
         counterpartyId: string,
-        ourRole: string,
+        ourRole: string | undefined,
         userId: string,
         sentToEmail?: string,
     ) {

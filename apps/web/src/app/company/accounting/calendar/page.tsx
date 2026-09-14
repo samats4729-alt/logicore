@@ -23,6 +23,7 @@ import {
     PlannedTotals,
     shortMoney,
     WEEKDAYS_SHORT,
+    WithoutInvoice,
 } from '@/lib/planned-payments';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -34,6 +35,15 @@ export default function PaymentCalendarPage() {
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState<PlannedRow[]>([]);
     const [totals, setTotals] = useState<PlannedTotals | null>(null);
+    /**
+     * Долг, по которому счёта ещё нет.
+     *
+     * В сетку он не встанет: срок оплаты начинается со счёта, а без срока
+     * дня у платежа нет. Но молчать о нём нельзя — календарь показывал бы
+     * часть картины с видом полной, и «на этой неделе платежей нет» значило
+     * бы только «счетов не выставили».
+     */
+    const [withoutInvoice, setWithoutInvoice] = useState<WithoutInvoice | null>(null);
     const [month, setMonth] = useState<Dayjs>(dayjs().startOf('month'));
     const [selected, setSelected] = useState<Dayjs>(dayjs());
 
@@ -42,9 +52,10 @@ export default function PaymentCalendarPage() {
     const fetchPlanned = async () => {
         setLoading(true);
         try {
-            const { rows: полученные, totals: итоги } = await fetchPlannedPayments();
+            const { rows: полученные, totals: итоги, withoutInvoice: без } = await fetchPlannedPayments();
             setRows(полученные);
             setTotals(итоги);
+            setWithoutInvoice(без);
         } catch {
             toast.error('Не удалось загрузить платёжный календарь');
         } finally {
@@ -133,6 +144,34 @@ export default function PaymentCalendarPage() {
                     <Money label={SETTLEMENT_SIDES.receivableShort} value={money(totalIn)} tone="in" />
                     <Money label={SETTLEMENT_SIDES.payableShort} value={money(totalOut)} tone="out" />
                     {overdueTotal > 0 && <Money label="Просрочено" value={money(overdueTotal)} tone="out" alert />}
+                    {/*
+                      * Долг без счёта в сетку не встаёт — дня у него нет.
+                      * Показываем отдельно, иначе пустая неделя читается как
+                      * «платить нечего», хотя счёт просто не выставлен.
+                      */}
+                    {withoutInvoice && withoutInvoice.count > 0 && (
+                        <button
+                            onClick={() => router.push('/company/accounting/planned')}
+                            className="flex h-[42px] items-center gap-2.5 rounded-[10px] border border-solid border-warning/40 bg-warning/10 px-3.5 text-left font-[inherit] transition-colors hover:bg-warning/15"
+                            style={{
+                                borderColor: 'var(--nova-warn)',
+                                background: 'var(--nova-warn-soft)',
+                            }}
+                        >
+                            <Clock className="h-3.5 w-3.5" style={{ color: 'var(--nova-warn)' }} />
+                            <span>
+                                <span className="block text-[10.5px] leading-tight" style={{ color: 'var(--nova-warn)' }}>
+                                    Не в календаре
+                                </span>
+                                <span
+                                    className="block text-[13px] font-semibold leading-tight tabular-nums"
+                                    style={{ color: 'var(--nova-warn)' }}
+                                >
+                                    {money(withoutInvoice.totalIn + withoutInvoice.totalOut)}
+                                </span>
+                            </span>
+                        </button>
+                    )}
                     <Button
                         variant="outline"
                         size="sm"

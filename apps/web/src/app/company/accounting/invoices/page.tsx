@@ -29,6 +29,14 @@ import {
 import { toast } from 'sonner';
 import RecordLink from '@/components/ui/RecordLink';
 import { DateRangeField } from '@/components/ui/DateField';
+import nova from '@/components/nova/nova.module.css';
+import ShareReportModal from '@/components/accounting/ShareReportModal';
+import {
+    debtPicture,
+    fetchPlannedPayments,
+    type PlannedTotals,
+    type WithoutInvoice,
+} from '@/lib/planned-payments';
 
 /** Журнал ведётся за период — как в 1С, где список всегда ограничен датами. */
 const DEFAULT_PERIOD: [Dayjs, Dayjs] = [dayjs().startOf('year'), dayjs().endOf('day')];
@@ -63,6 +71,26 @@ export default function InvoicesRegistryPage() {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [actFromId, setActFromId] = useState<string | null>(null);
 
+    /**
+     * Долг целиком — что уже оформлено счетами и что ещё нет.
+     *
+     * Журнал — это список выставленных счетов, и по нему нельзя было понять
+     * главного: покрывают ли эти счета весь долг. Бухгалтер видел сумму
+     * выставленного и не знал, осталось ли что-то неоформленным. Считает то
+     * же место, что и планируемые платежи, — своей формулы здесь нет.
+     */
+    const [plannedTotals, setPlannedTotals] = useState<PlannedTotals | null>(null);
+    const [withoutInvoice, setWithoutInvoice] = useState<WithoutInvoice | null>(null);
+
+    /**
+     * Кому выдаём ссылку на взаиморасчёты.
+     *
+     * Ссылку выдавали только со страницы взаиморасчётов, а счёт от
+     * перевозчика ждут здесь, в журнале. Приходилось уходить на другую
+     * страницу, искать там того же контрагента и звать ссылку оттуда.
+     */
+    const [shareFor, setShareFor] = useState<{ id: string; name: string } | null>(null);
+
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'FORWARDER', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
         [user],
@@ -95,6 +123,29 @@ export default function InvoicesRegistryPage() {
     useEffect(() => {
         load();
     }, [load]);
+
+    useEffect(() => {
+        // Долг — остаток на сегодня, а не оборот за период: от дат в фильтре
+        // он не зависит и вместе с ними не меняется.
+        fetchPlannedPayments(companyId)
+            .then(({ totals, withoutInvoice: без }) => {
+                setPlannedTotals(totals);
+                setWithoutInvoice(без);
+            })
+            .catch(() => { setPlannedTotals(null); setWithoutInvoice(null); });
+    }, [companyId]);
+
+    /**
+     * Что показывать над журналом. Вкладка «Исходящие» — это дебиторка, то
+     * есть долг заказчиков нам; «Входящие» — кредиторка, наш долг
+     * перевозчикам.
+     */
+    const долг = useMemo(
+        () => debtPicture(plannedTotals, withoutInvoice, direction === 'OUTGOING' ? 'IN' : 'OUT'),
+        [plannedTotals, withoutInvoice, direction],
+    );
+    const сторонаДолга = direction === 'OUTGOING' ? 'Дебиторка' : 'Кредиторка';
+    const чейДолг = direction === 'OUTGOING' ? 'должны нам' : 'должны мы';
 
     useEffect(() => {
         api.get('/company/my-companies')
@@ -324,10 +375,22 @@ export default function InvoicesRegistryPage() {
                                 },
                                 { type: 'divider' as const },
                                 {
+                                    // Ссылка на сам документ: контрагент его
+                                    // смотрит и скачивает, но приложить ничего
+                                    // не может — для этого ссылка ниже.
                                     key: 'copy',
-                                    label: 'Скопировать ссылку',
+                                    label: 'Ссылка на этот счёт',
                                     disabled: record.status !== 'POSTED' || Boolean(record.shareRevokedAt),
                                     onClick: () => copyShareLink(record),
+                                },
+                                {
+                                    key: 'share-report',
+                                    label: 'Ссылка на взаиморасчёты — приложить документы',
+                                    disabled: !canChange || !record.counterparty,
+                                    onClick: () => setShareFor({
+                                        id: record.counterparty!.id,
+                                        name: record.counterparty!.name || 'контрагент',
+                                    }),
                                 },
                                 {
                                     key: 'revoke',
@@ -366,6 +429,50 @@ export default function InvoicesRegistryPage() {
                             Выставить счёт
                         </Button>
                     )}
+                </div>
+
+                {/*
+                  * Общая картина по долгу той стороны, что открыта вкладкой.
+                  *
+                  * Журнал показывает выставленные счета, и по нему нельзя
+                  * было понять, весь ли долг ими закрыт: бухгалтер видел
+                  * сумму счетов и не знал, осталось ли что-то неоформленным.
+                  * Это остаток на сегодня, а не оборот за период, — от дат в
+                  * фильтре он не зависит.
+                  */}
+                <div className={`${nova.tiles} ${nova.tiles3}`} style={{ marginBottom: 0, minWidth: 480 }}>
+                    <div className={nova.tile}>
+                        <div className={nova.tileLabel}>{сторонаДолга}</div>
+                        <div className={nova.tileValue}>{money(долг.total)}</div>
+                        <div className={nova.tileSub}>всего {чейДолг} на сегодня</div>
+                    </div>
+                    <div className={nova.tile}>
+                        <div className={nova.tileLabel}>Выставлено счетами</div>
+                        <div className={nova.tileValue}>{money(долг.invoiced)}</div>
+                        <div className={`${nova.tileSub}${долг.overdue > 0 ? ` ${nova.valueWarn}` : ''}`}>
+                            {долг.overdue > 0 ? `просрочено ${money(долг.overdue)}` : 'срок не вышел'}
+                        </div>
+                    </div>
+                    {/* Неоформленное — работа бухгалтера, а не платёж: пока
+                        счёта нет, срок оплаты не начался. Ведёт в список
+                        сделок, по которым его надо выставить. */}
+                    <div
+                        className={`${nova.tile} ${nova.tileClickable}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push('/company/accounting/planned')}
+                        onKeyDown={(e) => { if (e.key === 'Enter') router.push('/company/accounting/planned'); }}
+                    >
+                        <div className={nova.tileLabel}>Счёт не выставлен</div>
+                        <div className={`${nova.tileValue}${долг.notInvoiced > 0 ? ` ${nova.valueWarn}` : ''}`}>
+                            {money(долг.notInvoiced)}
+                        </div>
+                        <div className={nova.tileSub}>
+                            {долг.notInvoicedCount > 0
+                                ? `по ${долг.notInvoicedCount} сделкам — оформить`
+                                : 'всё оформлено'}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -494,6 +601,13 @@ export default function InvoicesRegistryPage() {
                     )}
                 />
             </div>
+
+            <ShareReportModal
+                open={Boolean(shareFor)}
+                counterpartyId={shareFor?.id || ''}
+                counterpartyName={shareFor?.name || ''}
+                onClose={() => setShareFor(null)}
+            />
         </div>
     );
 }

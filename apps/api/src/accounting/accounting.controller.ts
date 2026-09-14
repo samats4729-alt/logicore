@@ -9,6 +9,8 @@ import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions
 import { UserRole, PaymentDirection, CostType, DictionaryKind } from '@prisma/client';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { resolveJournalCompany } from '../common/journal-company';
 import { Response } from 'express';
 import {
     CreateFinanceAccountDto,
@@ -34,6 +36,7 @@ export class AccountingController {
         private readonly auditService: AuditService,
         private readonly shareLinks: SharedReportLinkService,
         private readonly revaluations: CurrencyRevaluationService,
+        private readonly prisma: PrismaService,
     ) { }
 
     // ==================== ORDER FINANCIALS ====================
@@ -56,7 +59,16 @@ export class AccountingController {
     @Get('planned-payments')
     @Roles(...FINANCE_VIEW_ROLES)
     async getPlannedPayments(@Request() req: any, @Query() query: JournalQueryDto) {
-        return this.accountingService.getPlannedPayments(req.user.companyId, query);
+        // Журнал счетов ведётся по выбранной организации холдинга, и итоги
+        // над ним обязаны считаться по ней же: иначе список показывает одну
+        // организацию, а суммы над списком — другую.
+        const companyId = await resolveJournalCompany(this.prisma, {
+            userId: req.user.id,
+            activeCompanyId: req.user.companyId,
+            requestedCompanyId: query.companyId,
+            allowedRoles: FINANCE_VIEW_ROLES,
+        });
+        return this.accountingService.getPlannedPayments(companyId, query);
     }
 
     // ==================== PAYMENT JOURNAL ====================
@@ -240,9 +252,13 @@ export class AccountingController {
 
     @Post('share-report')
     @Roles(...FINANCE_CHANGE_ROLES)
+    @ApiOperation({
+        summary: 'Ссылка контрагенту на взаиморасчёты',
+        description: 'Без ourRole роль подбирается по отчёту — из журнала счетов она неизвестна.',
+    })
     async shareReport(
         @Request() req: any,
-        @Body() body: { counterpartyId: string; ourRole: string; email?: string },
+        @Body() body: { counterpartyId: string; ourRole?: string; email?: string },
     ) {
         const result = await this.accountingService.generateShareToken(
             req.user.companyId,
