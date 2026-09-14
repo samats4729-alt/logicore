@@ -823,7 +823,7 @@ describe('AccountingDocumentsService', () => {
             const { service, prisma } = makeService();
 
             await expect(service.resolveJournalCompany('user-1', COMPANY, undefined, VIEW_ROLES))
-                .resolves.toBe(COMPANY);
+                .resolves.toEqual({ companyId: COMPANY, role: null });
             expect(prisma.userCompanyRelation.findUnique).not.toHaveBeenCalled();
         });
 
@@ -831,7 +831,7 @@ describe('AccountingDocumentsService', () => {
             const { service, prisma } = makeService();
 
             await expect(service.resolveJournalCompany('user-1', COMPANY, COMPANY, VIEW_ROLES))
-                .resolves.toBe(COMPANY);
+                .resolves.toEqual({ companyId: COMPANY, role: null });
             expect(prisma.userCompanyRelation.findUnique).not.toHaveBeenCalled();
         });
 
@@ -839,8 +839,10 @@ describe('AccountingDocumentsService', () => {
             const { service, prisma } = makeService();
             prisma.userCompanyRelation.findUnique.mockResolvedValue({ role: UserRole.ACCOUNTANT });
 
+            // Роль возвращается вместе с организацией: от неё зависит не
+            // только допуск, но и сужение журнала до своих сделок.
             await expect(service.resolveJournalCompany('user-1', COMPANY, 'company-3', VIEW_ROLES))
-                .resolves.toBe('company-3');
+                .resolves.toEqual({ companyId: 'company-3', role: UserRole.ACCOUNTANT });
         });
 
         it('не пускает в организацию, где пользователь не состоит', async () => {

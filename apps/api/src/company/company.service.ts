@@ -11,6 +11,7 @@ import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
+import { managerOrdersFilter } from '../common/manager-orders';
 import { D, ZERO, toNum } from '../common/utils/money';
 import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
@@ -532,27 +533,16 @@ export class CompanyService {
         // Приватность заявок для менеджеров: видны только свои заявки и заявки,
         // у которых от компании ещё нет ответственного (не принятые — «кто примет,
         // тот и ведёт»). Админ, экспедитор, бухгалтер и завсклад видят всё.
-        // Управляется настройкой компании managersSeeOwnOrdersOnly (по умолчанию включена).
-        if (requesterRole === 'LOGISTICIAN' && userId) {
-            const owner = await this.prisma.company.findUnique({
-                where: { id: companyId },
-                select: { managersSeeOwnOrdersOnly: true },
-            });
-            if (owner?.managersSeeOwnOrdersOnly !== false) {
-                where = {
-                    AND: [
-                        where,
-                        {
-                            OR: [
-                                { responsibles: { some: { companyId, userId } } },
-                                { responsibles: { none: { companyId } } },
-                                { responsibleManagerId: userId },
-                                { customerId: userId },
-                            ],
-                        },
-                    ],
-                };
-            }
+        //
+        // Само правило лежит в `common/manager-orders`: этим же отбором теперь
+        // сужаются журнал счетов, взаиморасчёты и итоги над ними. Пока копия
+        // жила здесь, приватность была наполовину — рейс спрятан, а счёт по
+        // нему виден всем.
+        const свои = await managerOrdersFilter(this.prisma, {
+            companyId, role: requesterRole, userId,
+        });
+        if (свои) {
+            where = { AND: [where, свои] };
         }
 
         const [data, total] = await Promise.all([

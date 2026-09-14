@@ -25,7 +25,8 @@ import type { FinancialReportsService } from '../accounting/services/financial-r
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
 import { OrderSettlementsService } from '../orders/order-settlements.service';
 import { toNum } from '../common/utils/money';
-import { resolveJournalCompany } from '../common/journal-company';
+import { JournalCompany, JournalViewer, resolveJournalCompany } from '../common/journal-company';
+import { documentsOfOwnOrders, managerOrdersFilter } from '../common/manager-orders';
 import { invoiceDueDate, OrderPaymentTerms } from './invoice-due-date';
 import {
     AccountingDocumentListQueryDto,
@@ -456,13 +457,31 @@ export class AccountingDocumentsService {
         activeCompanyId: string | null | undefined,
         requestedCompanyId: string | undefined,
         allowedRoles: UserRole[],
-    ): Promise<string> {
+    ): Promise<JournalCompany> {
         // Само правило живёт одним местом: тем же отбором пользуются итоги
         // над журналом, и разъедься они — список показывал бы одну
         // организацию, а суммы над ним другую.
         return resolveJournalCompany(this.prisma, {
             userId, activeCompanyId, requestedCompanyId, allowedRoles,
         });
+    }
+
+    /**
+     * Чем сузить журнал этому человеку.
+     *
+     * Менеджеру, который видит только свои заявки, журнал счетов показывает
+     * только счета по ним. Прежде он видел деньги всей компании: рейс чужого
+     * менеджера был спрятан в «Заявках», а счёт по этому рейсу — со ставкой
+     * и контрагентом — лежал в журнале открыто.
+     */
+    private async journalNarrowing(
+        companyId: string,
+        viewer: JournalViewer,
+    ): Promise<Prisma.AccountingDocumentWhereInput | null> {
+        const свои = await managerOrdersFilter(this.prisma, {
+            companyId, role: viewer.role, userId: viewer.userId,
+        });
+        return свои ? documentsOfOwnOrders(свои) : null;
     }
 
     /**
@@ -491,10 +510,15 @@ export class AccountingDocumentsService {
         };
     }
 
-    async list(companyId: string, query: AccountingDocumentListQueryDto) {
+    async list(companyId: string, query: AccountingDocumentListQueryDto, viewer: JournalViewer) {
         const page = query.page ?? 1;
         const limit = query.limit ?? 30;
-        const where = this.listWhere(companyId, query);
+        const свои = await this.journalNarrowing(companyId, viewer);
+        const базовый = this.listWhere(companyId, query);
+        // Сужение идёт и в список, и в счётчик, и в итоги — это один и тот же
+        // `where`. Забудь его в итогах, и менеджер видел бы пять своих строк
+        // под суммой всей компании.
+        const where = свои ? { AND: [базовый, свои] } : базовый;
         const [data, total, sums] = await this.prisma.$transaction([
             this.prisma.accountingDocument.findMany({
                 where,
@@ -545,12 +569,17 @@ export class AccountingDocumentsService {
      * чтение — все правки (`updateDraft`, `post`, `cancel`, удаление) как
      * были, так и остались завязаны на `companyId` владельца.
      */
-    async getById(companyId: string, id: string) {
+    async getById(companyId: string, id: string, viewer?: JournalViewer) {
+        // Сужение по своим рейсам ложится только на свои документы. Прятать
+        // за ним доставленный документ нельзя: он пришёл от другой компании и
+        // с нашими рейсами не связан вовсе — под таким условием не нашёлся бы
+        // ни один, и приём документов встал бы.
+        const свои = viewer ? await this.journalNarrowing(companyId, viewer) : null;
         const document = await this.prisma.accountingDocument.findFirst({
             where: {
                 id,
                 OR: [
-                    { companyId },
+                    свои ? { AND: [{ companyId }, свои] } : { companyId },
                     // Доставленный документ — не черновик и не «сам себе»:
                     // отправка возможна только у проведённого.
                     { recipientCompanyId: companyId, sentAt: { not: null } },
@@ -638,11 +667,23 @@ export class AccountingDocumentsService {
      * пересечение с фильтрами, иначе в реестр «за июнь» попал бы отмеченный
      * ранее июльский документ.
      */
-    async listForRegistry(companyId: string, query: AccountingDocumentRegistryQueryDto) {
-        const where: Prisma.AccountingDocumentWhereInput = {
+    async listForRegistry(
+        companyId: string,
+        query: AccountingDocumentRegistryQueryDto,
+        viewer: JournalViewer,
+    ) {
+        // Бумага сужается так же, как экран: иначе менеджер распечатал бы
+        // реестр по всей компании из журнала, где ему видны только свои
+        // сделки, — и отмеченные галочками строки тут не помогут, `ids`
+        // приходят из браузера.
+        const свои = await this.journalNarrowing(companyId, viewer);
+        const базовый: Prisma.AccountingDocumentWhereInput = {
             ...this.listWhere(companyId, query),
             ...(query.ids?.length ? { id: { in: query.ids } } : {}),
         };
+        const where: Prisma.AccountingDocumentWhereInput = свои
+            ? { AND: [базовый, свои] }
+            : базовый;
 
         const [documents, counterparty, company, sums] = await Promise.all([
             this.prisma.accountingDocument.findMany({

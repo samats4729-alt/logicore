@@ -34,9 +34,12 @@ describe('Организация журнала', () => {
             userId: Я, activeCompanyId: АКТИВНАЯ, allowedRoles: БУХГАЛТЕРСКИЕ,
         });
 
-        expect(итог).toBe(АКТИВНАЯ);
+        expect(итог.companyId).toBe(АКТИВНАЯ);
         // За своей же организацией в базу не ходим: право на неё уже есть.
         expect(db.userCompanyRelation.findUnique).not.toHaveBeenCalled();
+        // И роль оттуда не возвращаем — она уже разрешена в сессии. Пусто
+        // здесь означает «бери из сессии», а не «роли нет».
+        expect(итог.role).toBeNull();
     });
 
     it('своя вторая организация открывается', async () => {
@@ -46,7 +49,20 @@ describe('Организация журнала', () => {
             allowedRoles: БУХГАЛТЕРСКИЕ,
         });
 
-        expect(итог).toBe(ВТОРАЯ);
+        expect(итог.companyId).toBe(ВТОРАЯ);
+    });
+
+    it('вместе с организацией возвращается роль именно в ней', async () => {
+        // От роли зависит не только доступ, но и приватность: менеджеру
+        // журнал сужают до своих сделок. Возьми мы роль из сессии — в другой
+        // организации холдинга сужение сработало бы не на том человеке.
+        const db = prisma({ [ВТОРАЯ]: UserRole.LOGISTICIAN });
+        const итог = await resolveJournalCompany(db, {
+            userId: Я, activeCompanyId: АКТИВНАЯ, requestedCompanyId: ВТОРАЯ,
+            allowedRoles: [...БУХГАЛТЕРСКИЕ, UserRole.LOGISTICIAN],
+        });
+
+        expect(итог.role).toBe(UserRole.LOGISTICIAN);
     });
 
     it('чужую организацию открыть нельзя', async () => {

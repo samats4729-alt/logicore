@@ -23,6 +23,8 @@ import * as XLSX from 'xlsx';
 import { SharedReportLinkService } from './shared-report-link.service';
 import { CurrencyRevaluationService } from './currency-revaluation.service';
 import { kzToday } from '../../common/utils/business-date';
+import { documentsOfOwnOrders, managerOrdersFilter } from '../../common/manager-orders';
+import type { JournalViewer } from '../../common/journal-company';
 import { periodStart, periodEnd, calendarDay } from '../../common/utils/period';
 import { exchangeOutcome, paymentInBase } from './exchange-difference';
 
@@ -567,8 +569,17 @@ export class FinancialReportsService {
      * отдельным блоком `withoutInvoice`, чтобы бухгалтер видел, что именно
      * не оформлено, а не короткий список без объяснений.
      */
-    async getPlannedPayments(companyId: string, query?: JournalQueryDto) {
+    async getPlannedPayments(companyId: string, query?: JournalQueryDto, viewer?: JournalViewer) {
         const scope = this.journalScope(query);
+
+        // Менеджеру, который видит только свои заявки, плитки над журналом
+        // считаются по тем же счетам, что он видит в списке. Иначе выходило
+        // бы худшее из двух: пять своих строк под кредиторкой всей компании.
+        const свои = viewer
+            ? await managerOrdersFilter(this.prisma, {
+                companyId, role: viewer.role, userId: viewer.userId,
+            })
+            : null;
 
         const documents = await this.prisma.accountingDocument.findMany({
             where: {
@@ -578,6 +589,7 @@ export class FinancialReportsService {
                 status: AccountingDocumentStatus.POSTED,
                 balanceDue: { gt: 0 },
                 ...(scope.createdAt ? { documentDate: scope.createdAt } : {}),
+                ...(свои ? documentsOfOwnOrders(свои) : {}),
             },
             orderBy: [{ dueDate: 'asc' }, { documentDate: 'asc' }],
             select: {
@@ -634,7 +646,7 @@ export class FinancialReportsService {
         return {
             rows,
             totals: { totalIn, totalOut, overdueIn, overdueOut },
-            withoutInvoice: await this.debtWithoutInvoice(companyId, scope),
+            withoutInvoice: await this.debtWithoutInvoice(companyId, scope, свои),
         };
     }
 
@@ -645,7 +657,11 @@ export class FinancialReportsService {
      * не начался. Показываем сумму и несколько примеров, чтобы из плана
      * платежей было видно, чего в нём не хватает.
      */
-    private async debtWithoutInvoice(companyId: string, scope: ReturnType<FinancialReportsService['journalScope']>) {
+    private async debtWithoutInvoice(
+        companyId: string,
+        scope: ReturnType<FinancialReportsService['journalScope']>,
+        свои?: Prisma.OrderWhereInput | null,
+    ) {
         const orders = await this.prisma.order.findMany({
             where: {
                 AND: [
@@ -664,6 +680,9 @@ export class FinancialReportsService {
                             { status: { not: 'PENDING' } },
                         ],
                     },
+                    // «Счёт не выставлен» у менеджера — про его собственные
+                    // сделки: это подсказка к работе, а не сводка по компании.
+                    ...(свои ? [свои] : []),
                 ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
                 createdAt: scope.createdAt,
@@ -963,7 +982,41 @@ export class FinancialReportsService {
         };
     }
 
-    async getCounterpartyReport(companyId: string, options?: { includeOrders?: boolean }) {
+    /**
+     * @param options.onlyOrders сузить отчёт до этих заявок — так менеджер
+     * видит взаиморасчёты только по своим сделкам. Отбор идёт по самим
+     * рейсам, а не по готовым строкам, поэтому суммы и долги пересчитываются
+     * честно: отфильтруй мы список после подсчёта, итог остался бы от всей
+     * компании, а строк под ним было бы пять.
+     */
+    /**
+     * Взаиморасчёты глазами конкретного человека.
+     *
+     * Обёртка над `getCounterpartyReport`: сама она принимает готовый отбор
+     * заявок, потому что её зовут и по ссылке — там «человек» вообще не
+     * авторизован, а сужение берётся от того, кто ссылку выдал.
+     */
+    async getCounterpartyReportFor(
+        companyId: string,
+        options?: { includeOrders?: boolean; viewer?: JournalViewer },
+    ) {
+        const свои = options?.viewer
+            ? await managerOrdersFilter(this.prisma, {
+                companyId,
+                role: options.viewer.role,
+                userId: options.viewer.userId,
+            })
+            : null;
+        return this.getCounterpartyReport(companyId, {
+            includeOrders: options?.includeOrders,
+            onlyOrders: свои,
+        });
+    }
+
+    async getCounterpartyReport(
+        companyId: string,
+        options?: { includeOrders?: boolean; onlyOrders?: Prisma.OrderWhereInput | null },
+    ) {
         const includeOrders = options?.includeOrders !== false;
         const orders = await this.prisma.order.findMany({
             where: {
@@ -982,6 +1035,7 @@ export class FinancialReportsService {
                             { status: { not: 'PENDING' } },
                         ],
                     },
+                    ...(options?.onlyOrders ? [options.onlyOrders] : []),
                 ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
@@ -1874,12 +1928,31 @@ export class FinancialReportsService {
         userId: string,
         sentToEmail?: string,
     ): Promise<{ token: string; shareUrl: string; expiresAt: Date }> {
+        // Роль подбирается по тем же сделкам, что попадут в отчёт. У менеджера
+        // это только его собственные: возьми мы роль по всей компании, ссылка
+        // ушла бы с ключом, под которым его строк нет, — и контрагент открыл
+        // бы пустую страницу.
+        const свои = await this.ownOrdersOf(companyId, userId);
         const link = await this.shareLinks.create(companyId, userId, {
             counterpartyId,
-            ourRole: ourRole || await this.ourRoleWith(companyId, counterpartyId),
+            ourRole: ourRole || await this.ourRoleWith(companyId, counterpartyId, свои),
             sentToEmail,
         });
         return { token: link.token, shareUrl: link.shareUrl, expiresAt: link.expiresAt };
+    }
+
+    /**
+     * Чем сузить отчёт до сделок конкретного сотрудника этой организации.
+     *
+     * Роль берётся по связи с организацией, а не из карточки пользователя: в
+     * другой организации холдинга она другая. `null` — сужать не надо.
+     */
+    private async ownOrdersOf(companyId: string, userId: string): Promise<Prisma.OrderWhereInput | null> {
+        const relation = await this.prisma.userCompanyRelation.findUnique({
+            where: { userId_companyId: { userId, companyId } },
+            select: { role: true },
+        });
+        return managerOrdersFilter(this.prisma, { companyId, role: relation?.role, userId });
     }
 
     /**
@@ -1895,8 +1968,12 @@ export class FinancialReportsService {
      * этим контрагентом есть непогашенный долг, а если долгов нет — просто
      * первая найденная.
      */
-    private async ourRoleWith(companyId: string, counterpartyId: string): Promise<string> {
-        const report = await this.getCounterpartyReport(companyId);
+    private async ourRoleWith(
+        companyId: string,
+        counterpartyId: string,
+        onlyOrders?: Prisma.OrderWhereInput | null,
+    ): Promise<string> {
+        const report = await this.getCounterpartyReport(companyId, { onlyOrders });
         const свои = (report.counterparties as any[])
             .filter((c) => c.counterparty?.id === counterpartyId);
         if (!свои.length) return 'Контрагент';
@@ -1912,7 +1989,17 @@ export class FinancialReportsService {
         await this.shareLinks.trackView(link.id);
         const { companyId, companyName, counterpartyId, ourRole } = link;
         const expiresAt = link.expiresAt;
-        const fullReport = await this.getCounterpartyReport(companyId);
+        /**
+         * Ссылка показывает ровно то, что видит её отправитель.
+         *
+         * Отправил менеджер, который ведёт только свои заявки, — контрагент
+         * увидит рейсы этого менеджера, и ничего сверх. Иначе вышло бы
+         * наоборот: менеджер, открыв собственную ссылку, читал бы сделки
+         * соседа со всеми ставками — то есть приватность, которую мы навели
+         * в журнале, обходилась бы одной кнопкой «Копировать».
+         */
+        const свои = await this.ownOrdersOf(companyId, link.createdById);
+        const fullReport = await this.getCounterpartyReport(companyId, { onlyOrders: свои });
 
         const key = `${counterpartyId}__${ourRole}`;
         const rawCounterparty = fullReport.counterparties.find(
@@ -2772,8 +2859,11 @@ export class FinancialReportsService {
         return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     }
 
-    async exportCounterpartyReport(companyId: string): Promise<Buffer> {
-        const report = await this.getCounterpartyReport(companyId);
+    async exportCounterpartyReport(companyId: string, viewer?: JournalViewer): Promise<Buffer> {
+        // Выгрузка сужается так же, как экран: иначе менеджер, которому видны
+        // только свои сделки, забирал бы в Excel взаиморасчёты всей компании
+        // — со ставками по чужим рейсам.
+        const report = await this.getCounterpartyReportFor(companyId, { viewer });
 
         const rows = report.counterparties.map(item => {
             // Файл уходит контрагенту и его бухгалтеру — слова те же, что

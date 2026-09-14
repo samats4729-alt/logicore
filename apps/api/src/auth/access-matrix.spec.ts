@@ -292,6 +292,39 @@ describe('Матрица доступов', () => {
         });
     });
 
+    describe('ссылка контрагенту на взаиморасчёты', () => {
+        it('менеджер выдаёт её сам — он и переписывается с перевозчиком', () => {
+            // Ссылку шлют, чтобы перевозчик выставил счёт и приложил бумаги.
+            // Пока её выдавала только бухгалтерия, менеджер просил нажать
+            // кнопку за себя — при том, что список выданных ссылок ему был
+            // виден, то есть запрет держался на одной кнопке.
+            const who = whoCanReach(AccountingController, 'shareReport');
+            expect(who).toContain(UserRole.LOGISTICIAN);
+            expect(who).toContain(UserRole.ACCOUNTANT);
+            expect(who).toContain(UserRole.FORWARDER);
+        });
+
+        it('и отправить письмом, и отозвать — там же, где выдал', () => {
+            // Иначе ошибочную ссылку он остановить не может.
+            for (const метод of ['sendReportEmail', 'revokeShareLink']) {
+                expect(whoCanReach(AccountingController, метод)).toContain(UserRole.LOGISTICIAN);
+            }
+        });
+
+        it('но выставлять счета менеджер по-прежнему не может', () => {
+            // Ссылка — это просьба к контрагенту, а счёт создаёт бухгалтерия.
+            expect(whoCanReach(AccountingDocumentsController, 'create'))
+                .not.toContain(UserRole.LOGISTICIAN);
+        });
+
+        it('водитель и грузополучатель ссылку не выдают', () => {
+            const who = whoCanReach(AccountingController, 'shareReport');
+            expect(who).not.toContain(UserRole.DRIVER);
+            expect(who).not.toContain(UserRole.RECIPIENT);
+            expect(who).not.toContain(UserRole.WAREHOUSE_MANAGER);
+        });
+    });
+
     describe('очередь на складе', () => {
         it('свою очередь смотрят завсклад и администратор компании', () => {
             const who = whoCanReach(WarehouseController, 'getMyQueue');

@@ -13,6 +13,8 @@ export interface ResolvedShareLink {
     counterpartyName: string;
     ourRole: string;
     expiresAt: Date;
+    /** Кто выдал ссылку — по нему определяется, что за ней видно. */
+    createdById: string;
 }
 
 /**
@@ -80,6 +82,7 @@ export class SharedReportLinkService {
                 ourRole: true,
                 expiresAt: true,
                 revokedAt: true,
+                createdById: true,
                 company: { select: { name: true } },
                 counterparty: { select: { name: true } },
             },
@@ -99,6 +102,10 @@ export class SharedReportLinkService {
             counterpartyName: link.counterparty.name,
             ourRole: link.ourRole,
             expiresAt: link.expiresAt,
+            // Кто выдал ссылку. Нужен на выдаче отчёта: ссылка показывает
+            // ровно то, что видит отправитель, и у менеджера это только его
+            // собственные сделки с этим контрагентом.
+            createdById: link.createdById,
         };
     }
 

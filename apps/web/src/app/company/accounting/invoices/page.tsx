@@ -97,6 +97,19 @@ export default function InvoicesRegistryPage() {
         [user],
     );
 
+    /**
+     * Ссылку контрагенту менеджер отправляет сам.
+     *
+     * Выставляет счета бухгалтерия, и это не меняется. А вот ссылку шлют,
+     * чтобы перевозчик выставил свой счёт и приложил бумаги, — переписывается
+     * с ним менеджер, он же ведёт сделку. Раньше обе кнопки закрывались одним
+     * условием, и менеджер просил нажать за него.
+     */
+    const canShare = useMemo(
+        () => canChange || user?.role === 'LOGISTICIAN',
+        [canChange, user],
+    );
+
     const load = useCallback(async () => {
         try {
             setLoading(true);
@@ -387,7 +400,7 @@ export default function InvoicesRegistryPage() {
                                 {
                                     key: 'share-report',
                                     label: 'Ссылка на взаиморасчёты — приложить документы',
-                                    disabled: !canChange || !record.counterparty,
+                                    disabled: !canShare || !record.counterparty,
                                     onClick: () => setShareFor({
                                         id: record.counterparty!.id,
                                         name: record.counterparty!.name || 'контрагент',
@@ -397,7 +410,7 @@ export default function InvoicesRegistryPage() {
                                     key: 'revoke',
                                     label: 'Отозвать ссылку',
                                     danger: true,
-                                    disabled: !canChange || Boolean(record.shareRevokedAt),
+                                    disabled: !canShare || Boolean(record.shareRevokedAt),
                                     onClick: () => revokeShare(record),
                                 },
                             ],
@@ -419,17 +432,22 @@ export default function InvoicesRegistryPage() {
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Исходящие — покупателям, входящие — от поставщиков. Это документы на оплату, а не сами деньги.
                     </p>
-                    {canChange && (
+                    {canShare && (
                         <Space size={8} wrap>
-                            <Button
-                                type="primary"
-                                icon={<PlusOutlined />}
-                                onClick={() => router.push('/company/accounting/invoices/create')}
-                                className="lc-cta"
-                                data-guide="invoice-create"
-                            >
-                                Выставить счёт
-                            </Button>
+                            {/* Счета выставляет бухгалтерия — у менеджера этой
+                                кнопки нет, и сервер её действие ему тоже не
+                                разрешит. */}
+                            {canChange && (
+                                <Button
+                                    type="primary"
+                                    icon={<PlusOutlined />}
+                                    onClick={() => router.push('/company/accounting/invoices/create')}
+                                    className="lc-cta"
+                                    data-guide="invoice-create"
+                                >
+                                    Выставить счёт
+                                </Button>
+                            )}
                             {/*
                               * Ссылку шлют, когда счёта ещё нет: перевозчик
                               * отработал рейс и должен выставить свой. В меню

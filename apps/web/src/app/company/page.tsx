@@ -108,10 +108,20 @@ export default function CompanyDashboard() {
     const isManager = user?.role === 'LOGISTICIAN';
     // Полный дашборд (активность, задолженность) — только администратору компании
     const isOwner = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
-    // Очередь чеков от контрагентов — работа бухгалтера, и решение по чеку
-    // сервер разрешает принимать именно ему. Пока карточка висела только на
-    // дашборде владельца, тот, чья это работа, очереди не видел вовсе.
-    const seesPaymentProofs = isOwner || user?.role === 'ACCOUNTANT';
+    /**
+     * Бухгалтерская работа на дашборде: очередь чеков, платёжный календарь и
+     * незакрытые хвосты между рейсами и бухгалтерией.
+     *
+     * Всё это — работа бухгалтера, и сервер ему эти данные отдаёт. Но карточки
+     * висели только у владельца, и тот, чья это работа, их не видел: чтобы
+     * попасть в журнал счетов, бухгалтер шёл через «Деньги», хотя у
+     * администратора ссылка на журнал лежала прямо на дашборде.
+     *
+     * Право раздела спрашиваем и здесь: без «Бухгалтерии» сервер ответит
+     * отказом, и карточка показала бы пустоту вместо работы.
+     */
+    const seesAccountingWork = isOwner
+        || (user?.role === 'ACCOUNTANT' && (user?.permissions ?? []).includes('accounting'));
 
     const [activity, setActivity] = useState<DashboardActivity | null>(null);
     const [activityLoading, setActivityLoading] = useState(true);
@@ -382,15 +392,18 @@ export default function CompanyDashboard() {
             )}
 
             <div className={dash.cards}>
-                {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ (только администратор компании) ===== */}
-                {isOwner && show('pendingWork') && <PendingWorkCard />}
-                {seesPaymentProofs && <PaymentProofsCard />}
+                {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ =====
+                    Рейсы без акта, акты без счёта, просроченные счета — и
+                    ссылка в журнал счетов. Это работа бухгалтера, а видел её
+                    только администратор. */}
+                {seesAccountingWork && show('pendingWork') && <PendingWorkCard />}
+                {seesAccountingWork && <PaymentProofsCard />}
 
                 {/* ===== ПЛАТЁЖНЫЙ КАЛЕНДАРЬ =====
                     Кому видны деньги, тот и видит календарь: те же роли, что
                     и у задолженности с очередью чеков. Менеджеру суммы по
                     контрагентам не показываются нигде, и здесь тоже не место. */}
-                {seesPaymentProofs && show('paymentCalendar') && <PaymentCalendarCard />}
+                {seesAccountingWork && show('paymentCalendar') && <PaymentCalendarCard />}
 
                 {/* ===== ЗАРАБОТОК СОТРУДНИКОВ (администратор компании) =====
 

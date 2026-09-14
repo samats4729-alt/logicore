@@ -130,13 +130,18 @@ export class AccountingDocumentsController {
     @Roles(...VIEW_ROLES)
     @ApiOperation({ summary: 'Получить список бухгалтерских документов' })
     async list(@Request() req: any, @Query() query: AccountingDocumentListQueryDto) {
-        const companyId = await this.documents.resolveJournalCompany(
+        const { companyId, role } = await this.documents.resolveJournalCompany(
             req.user.id,
             req.user.companyId,
             query.companyId,
             VIEW_ROLES,
         );
-        return this.documents.list(companyId, query);
+        return this.documents.list(companyId, query, {
+            userId: req.user.id,
+            // Роль — в той организации, что открыта в журнале. Пусто означает
+            // «та же, что в сессии»; там роль уже разрешена по связи.
+            role: role ?? req.user.role,
+        });
     }
 
     // Объявлено до `:id`, иначе путь съедается параметром.
@@ -184,13 +189,16 @@ export class AccountingDocumentsController {
         @Query() query: AccountingDocumentRegistryQueryDto,
         @Res() res: Response,
     ) {
-        const companyId = await this.documents.resolveJournalCompany(
+        const { companyId, role } = await this.documents.resolveJournalCompany(
             req.user.id,
             req.user.companyId,
             query.companyId,
             VIEW_ROLES,
         );
-        const registry = await this.documents.listForRegistry(companyId, query);
+        const registry = await this.documents.listForRegistry(companyId, query, {
+            userId: req.user.id,
+            role: role ?? req.user.role,
+        });
         const pdfBuffer = await this.pdf.generateRegistryPdf({
             kind: registryKind(query),
             companyName: registry.company?.name ?? null,
@@ -404,7 +412,12 @@ export class AccountingDocumentsController {
     @Roles(...VIEW_ROLES)
     @ApiOperation({ summary: 'Получить бухгалтерский документ' })
     getById(@Request() req: any, @Param('id') id: string) {
-        return this.documents.getById(req.user.companyId, id);
+        // Карточка сужается так же, как журнал: иначе спрятанный из списка
+        // счёт открывался бы по прямой ссылке, и приватность была бы
+        // только на вид.
+        return this.documents.getById(req.user.companyId, id, {
+            userId: req.user.id, role: req.user.role,
+        });
     }
 
     @Get(':id/attachments')
