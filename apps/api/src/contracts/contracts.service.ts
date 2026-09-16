@@ -843,15 +843,26 @@ export class ContractsService {
 
     /**
      * Обновить содержимое договора (сохранить отредактированные статьи)
+     *
+     * Править текст вправе любая сторона договора — та же проверка, что и на
+     * чтение. Раньше правку пускали только со стороны экспедитора, и договор,
+     * заведённый «я — заказчик», оказывался нередактируемым у того, кто его и
+     * создал: редактор открывался, статьи правились, а на «Сохранить»
+     * приходило «Только экспедитор может редактировать текст договора».
+     * Обойти это было нечем — сторону договора после создания не меняют.
+     *
+     * Кто в этой сделке экспедитор, а кто заказчик, решают сами стороны, и
+     * текст до подписания готовит тот, кому он нужен. Договор с чужой
+     * компанией это не открывает: не сторона — не проходит.
      */
     async updateContractContent(contractId: string, companyId: string, content: any) {
         const contract = await this.prisma.contract.findUnique({
             where: { id: contractId },
-            select: { id: true, forwarderCompanyId: true },
+            select: { id: true, customerCompanyId: true, forwarderCompanyId: true },
         });
         if (!contract) throw new NotFoundException('Договор не найден');
-        if (contract.forwarderCompanyId !== companyId) {
-            throw new ForbiddenException('Только экспедитор может редактировать текст договора');
+        if (contract.customerCompanyId !== companyId && contract.forwarderCompanyId !== companyId) {
+            throw new ForbiddenException('Нет доступа к этому договору');
         }
 
         return this.prisma.contract.update({
@@ -898,15 +909,19 @@ export class ContractsService {
 
     /**
      * Сбросить содержимое договора к шаблону по умолчанию
+     *
+     * Круг тот же, что у правки: кто вправе править текст, вправе и вернуть
+     * его к шаблону. Разойдись эти два правила — сторона получила бы
+     * наполовину рабочий редактор: править можно, начать заново нельзя.
      */
     async resetContractContent(contractId: string, companyId: string) {
         const contract = await this.prisma.contract.findUnique({
             where: { id: contractId },
-            select: { id: true, forwarderCompanyId: true },
+            select: { id: true, customerCompanyId: true, forwarderCompanyId: true },
         });
         if (!contract) throw new NotFoundException('Договор не найден');
-        if (contract.forwarderCompanyId !== companyId) {
-            throw new ForbiddenException('Только экспедитор может редактировать текст договора');
+        if (contract.customerCompanyId !== companyId && contract.forwarderCompanyId !== companyId) {
+            throw new ForbiddenException('Нет доступа к этому договору');
         }
 
         return this.prisma.contract.update({
