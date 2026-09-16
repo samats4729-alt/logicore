@@ -179,7 +179,69 @@ interface Вложение {
     createdAt: string;
     orderId: string | null;
     orderNumber: string | null;
+    /** Сделки, к которым приложен этот же файл, — он в базе по записи на каждую. */
+    orderNumbers: string[];
     uploadedBy: { name: string; fromCounterparty: boolean } | null;
+}
+
+/**
+ * Две стопки, а не одна куча.
+ *
+ * `fromCounterparty` — пакет к этому счёту от того контрагента, чей он.
+ * `orderDocuments` — папка рейса: наши накладные, фото водителя, бумаги
+ * другой стороны. Раньше и то и другое валилось в один список, и бухгалтер,
+ * открыв счёт на одну накладную, видел три-четыре документа.
+ */
+interface Бумаги {
+    fromCounterparty: Вложение[];
+    orderDocuments: Вложение[];
+}
+
+const БУМАГ_НЕТ: Бумаги = { fromCounterparty: [], orderDocuments: [] };
+
+/**
+ * Строка бумаги: имя файла, вид, сделки и кто приложил.
+ *
+ * Сделки перечисляются списком: один файл прикладывают сразу к нескольким, и
+ * в базе он лежит записью на каждую. Раньше карточка показывала его столько
+ * же раз — счёт на пять рейсов выглядел как пять разных накладных.
+ */
+function СтрокаБумаги({
+    file, token, onOpen,
+}: {
+    file: Вложение;
+    token: any;
+    onOpen: () => void;
+}) {
+    const сделки = file.orderNumbers?.length
+        ? file.orderNumbers.join(', ')
+        : file.orderNumber || '';
+    return (
+        <div
+            style={{
+                display: 'flex', justifyContent: 'space-between', gap: 16,
+                alignItems: 'baseline', fontSize: 12.5, padding: '5px 0',
+                borderBottom: `1px dashed ${token.colorBorderSecondary}`,
+            }}
+        >
+            <span style={{ minWidth: 0 }}>
+                <RecordLink onClick={onOpen}>{file.fileName}</RecordLink>
+                <span style={{ color: token.colorTextTertiary }}>
+                    {' '}· {ВИД_ФАЙЛА[file.type] || 'Приложенный файл'}
+                    {сделки ? ` · ${сделки}` : ''}
+                </span>
+            </span>
+            <span style={{ textAlign: 'right', whiteSpace: 'nowrap', color: token.colorTextTertiary, fontSize: 11 }}>
+                {file.uploadedBy && (
+                    <>
+                        {file.uploadedBy.fromCounterparty ? 'прислал ' : ''}
+                        {file.uploadedBy.name} ·{' '}
+                    </>
+                )}
+                {dayjs(file.createdAt).format('DD.MM.YYYY')}
+            </span>
+        </div>
+    );
 }
 
 /** Подписи видов файлов — те же слова, что в документах рейса. */
@@ -246,8 +308,10 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     // Кому можно отправить документ прямо на платформе. Определяется по БИН
     // контрагента: справочная копия — это не арендатор, доставлять ей некуда.
     const [delivery, setDelivery] = useState<DocumentDelivery | null>(null);
-    /** Бумаги к счёту: файлы, приложенные к рейсам этого документа. */
-    const [attachments, setAttachments] = useState<Вложение[]>([]);
+    /** Бумаги: присланное контрагентом к счёту и, отдельно, папка рейса. */
+    const [attachments, setAttachments] = useState<Бумаги>(БУМАГ_НЕТ);
+    /** Папка рейса открывается по требованию: в счёт смотрят не за ней. */
+    const [папкаРейса, setПапкаРейса] = useState(false);
 
     /**
      * Оплата прямо из счёта.
@@ -305,8 +369,11 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             fetchDocumentDelivery(id).then(setDelivery).catch(() => setDelivery(null));
             // Так же молча: без списка бумаг карточка счёта остаётся рабочей.
             api.get(`/accounting-documents/${id}/attachments`)
-                .then((res) => setAttachments(res.data || []))
-                .catch(() => setAttachments([]));
+                .then((res) => setAttachments({
+                    fromCounterparty: res.data?.fromCounterparty ?? [],
+                    orderDocuments: res.data?.orderDocuments ?? [],
+                }))
+                .catch(() => setAttachments(БУМАГ_НЕТ));
         } catch {
             setNotFound(true);
         } finally {
@@ -1306,38 +1373,60 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                   * не находил бумаг и шёл искать по рейсам, хотя присланы они
                   * были именно к этому счёту.
                   */}
-                {attachments.length > 0 && (
+                {(attachments.fromCounterparty.length > 0 || attachments.orderDocuments.length > 0) && (
                     <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+                        {/* Пакет контрагента — то, ради чего в этот блок и
+                            смотрят. Если его нет, так и говорим: пустая
+                            подпись честнее, чем папка рейса вместо ответа. */}
                         <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary, marginBottom: 8 }}>
                             Документы к счёту
+                            {document.counterparty?.name ? ` — от ${document.counterparty.name}` : ''}
                         </div>
-                        {attachments.map((file) => (
-                            <div
-                                key={file.id}
-                                style={{
-                                    display: 'flex', justifyContent: 'space-between', gap: 16,
-                                    alignItems: 'baseline', fontSize: 12.5, padding: '5px 0',
-                                    borderBottom: `1px dashed ${token.colorBorderSecondary}`,
-                                }}
-                            >
-                                <span style={{ minWidth: 0 }}>
-                                    <RecordLink onClick={() => downloadAttachment(file)}>{file.fileName}</RecordLink>
-                                    <span style={{ color: token.colorTextTertiary }}>
-                                        {' '}· {ВИД_ФАЙЛА[file.type] || 'Приложенный файл'}
-                                        {file.orderNumber ? ` · ${file.orderNumber}` : ''}
-                                    </span>
-                                </span>
-                                <span style={{ textAlign: 'right', whiteSpace: 'nowrap', color: token.colorTextTertiary, fontSize: 11 }}>
-                                    {file.uploadedBy && (
-                                        <>
-                                            {file.uploadedBy.fromCounterparty ? 'прислал ' : ''}
-                                            {file.uploadedBy.name} ·{' '}
-                                        </>
-                                    )}
-                                    {dayjs(file.createdAt).format('DD.MM.YYYY')}
-                                </span>
+                        {attachments.fromCounterparty.length > 0
+                            ? attachments.fromCounterparty.map((file) => (
+                                <СтрокаБумаги
+                                    key={file.id}
+                                    file={file}
+                                    token={token}
+                                    onOpen={() => downloadAttachment(file)}
+                                />
+                            ))
+                            : (
+                                <div style={{ fontSize: 12.5, color: token.colorTextTertiary, paddingBottom: 4 }}>
+                                    Контрагент пока ничего не приложил к этому счёту.
+                                </div>
+                            )}
+
+                        {/* Папка рейса — рядом, но отдельно и свёрнута. Раньше
+                            она подмешивалась сюда же, и счёт на одну накладную
+                            выглядел как счёт на четыре документа. */}
+                        {attachments.orderDocuments.length > 0 && (
+                            <div style={{ marginTop: 10 }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setПапкаРейса((v) => !v)}
+                                    style={{
+                                        border: 0, background: 'none', padding: 0, cursor: 'pointer',
+                                        fontSize: 12, color: token.colorTextTertiary,
+                                    }}
+                                >
+                                    {папкаРейса ? '−' : '+'} Документы рейса ({attachments.orderDocuments.length})
+                                    {' '}— не относятся к счёту
+                                </button>
+                                {папкаРейса && (
+                                    <div style={{ marginTop: 6 }}>
+                                        {attachments.orderDocuments.map((file) => (
+                                            <СтрокаБумаги
+                                                key={file.id}
+                                                file={file}
+                                                token={token}
+                                                onOpen={() => downloadAttachment(file)}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-                        ))}
+                        )}
                     </div>
                 )}
 

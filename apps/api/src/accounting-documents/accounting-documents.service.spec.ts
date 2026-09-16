@@ -868,4 +868,139 @@ describe('AccountingDocumentsService', () => {
                 .rejects.toBeInstanceOf(ForbiddenException);
         });
     });
+
+    /**
+     * Бумаги к счёту.
+     *
+     * Своей связи «файл → счёт» в базе нет: файл привязан к рейсу. Поэтому в
+     * карточку счёта сваливалось всё, что лежит в рейсах документа, — свои
+     * накладные, фотографии водителя и где-то среди них тот единственный
+     * файл, который контрагент прислал к счёту. Бухгалтер открывал счёт на
+     * одну накладную и видел три-четыре документа.
+     *
+     * Разделение идёт по признаку, который в данных есть и означает ровно то,
+     * что нужно: прислал ли файл ТОТ контрагент, чей это счёт.
+     */
+    describe('бумаги к счёту', () => {
+        const ФАЙЛ = {
+            fileSize: 1024,
+            createdAt: new Date('2026-09-10T10:00:00.000Z'),
+            uploadedBy: null as any,
+            uploadedByCounterparty: null as any,
+        };
+
+        function сБумагами(файлы: any[], документ: any = {}) {
+            const { service, prisma } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue({
+                counterpartyId: COUNTERPARTY,
+                orders: [{ orderId: 'o-1', order: { orderNumber: 'ЗК-1' } }],
+                ...документ,
+            });
+            prisma.document = { findMany: jest.fn().mockResolvedValue(файлы) };
+            return { service, prisma };
+        }
+
+        it('пакет контрагента отделён от папки рейса', async () => {
+            const { service } = сБумагами([
+                {
+                    ...ФАЙЛ, id: 'f-1', type: 'INVOICE', fileName: 'Счёт перевозчика.pdf',
+                    fileUrl: 'u/1', orderId: 'o-1', order: { orderNumber: 'ЗК-1' },
+                    uploadedByCounterpartyId: COUNTERPARTY,
+                    uploadedByCounterparty: { name: 'ИП Сериков' },
+                },
+                {
+                    ...ФАЙЛ, id: 'f-2', type: 'TTN', fileName: 'Накладная.pdf',
+                    fileUrl: 'u/2', orderId: 'o-1', order: { orderNumber: 'ЗК-1' },
+                    uploadedByCounterpartyId: null,
+                    uploadedBy: { firstName: 'Евгений', lastName: 'Админ' },
+                },
+            ]);
+
+            const бумаги = await service.listAttachments(COMPANY, 'doc-1');
+
+            expect(бумаги.fromCounterparty.map((f) => f.fileName)).toEqual(['Счёт перевозчика.pdf']);
+            expect(бумаги.orderDocuments.map((f) => f.fileName)).toEqual(['Накладная.pdf']);
+            expect(бумаги.fromCounterparty[0].uploadedBy).toEqual({
+                name: 'ИП Сериков', fromCounterparty: true,
+            });
+        });
+
+        it('бумаги другого контрагента за пакет к счёту не выдаются', async () => {
+            // Заказчик приложил доверенность к тому же рейсу, а счёт — от
+            // перевозчика. К этому счёту она не относится.
+            const { service } = сБумагами([
+                {
+                    ...ФАЙЛ, id: 'f-3', type: 'POWER_OF_ATTORNEY', fileName: 'Доверенность.pdf',
+                    fileUrl: 'u/3', orderId: 'o-1', order: { orderNumber: 'ЗК-1' },
+                    uploadedByCounterpartyId: 'company-чужая',
+                    uploadedByCounterparty: { name: 'ТОО Заказчик' },
+                },
+            ]);
+
+            const бумаги = await service.listAttachments(COMPANY, 'doc-1');
+
+            expect(бумаги.fromCounterparty).toEqual([]);
+            expect(бумаги.orderDocuments.map((f) => f.fileName)).toEqual(['Доверенность.pdf']);
+        });
+
+        it('один файл на несколько сделок — одна строка со списком сделок', async () => {
+            // В базе он лежит записью на каждую сделку. Раньше карточка
+            // показывала его столько же раз, и счёт на три рейса выглядел
+            // как три разные накладные.
+            const общий = {
+                ...ФАЙЛ, type: 'ACT', fileName: 'Акт за сентябрь.pdf', fileUrl: 'u/один',
+                uploadedByCounterpartyId: COUNTERPARTY,
+                uploadedByCounterparty: { name: 'ИП Сериков' },
+            };
+            const { service } = сБумагами([
+                { ...общий, id: 'f-4', orderId: 'o-1', order: { orderNumber: 'ЗК-1' } },
+                { ...общий, id: 'f-5', orderId: 'o-2', order: { orderNumber: 'ЗК-2' } },
+                { ...общий, id: 'f-6', orderId: 'o-3', order: { orderNumber: 'ЗК-3' } },
+            ]);
+
+            const бумаги = await service.listAttachments(COMPANY, 'doc-1');
+
+            expect(бумаги.fromCounterparty).toHaveLength(1);
+            expect(бумаги.fromCounterparty[0].orderNumbers).toEqual(['ЗК-1', 'ЗК-2', 'ЗК-3']);
+        });
+
+        it('разные файлы с одинаковым именем не склеиваются', async () => {
+            // Две загрузки одной и той же накладной — это две бумаги, и
+            // склеить их по имени значило бы спрятать одну из них.
+            const { service } = сБумагами([
+                {
+                    ...ФАЙЛ, id: 'f-7', type: 'TTN', fileName: 'Накладная.pdf',
+                    fileUrl: 'u/7', orderId: 'o-1', order: { orderNumber: 'ЗК-1' },
+                    uploadedByCounterpartyId: null,
+                },
+                {
+                    ...ФАЙЛ, id: 'f-8', type: 'TTN', fileName: 'Накладная.pdf',
+                    fileUrl: 'u/8', orderId: 'o-1', order: { orderNumber: 'ЗК-1' },
+                    uploadedByCounterpartyId: null,
+                },
+            ]);
+
+            const бумаги = await service.listAttachments(COMPANY, 'doc-1');
+
+            expect(бумаги.orderDocuments).toHaveLength(2);
+        });
+
+        it('чужой счёт бумаг не отдаёт', async () => {
+            const { service, prisma } = makeService();
+            prisma.accountingDocument.findFirst.mockResolvedValue(null);
+            prisma.document = { findMany: jest.fn() };
+
+            await expect(service.listAttachments(COMPANY, 'doc-чужой'))
+                .resolves.toEqual({ fromCounterparty: [], orderDocuments: [] });
+            expect(prisma.document.findMany).not.toHaveBeenCalled();
+        });
+
+        it('счёт без рейсов бумаг не ищет', async () => {
+            const { service, prisma } = сБумагами([], { orders: [] });
+
+            await expect(service.listAttachments(COMPANY, 'doc-1'))
+                .resolves.toEqual({ fromCounterparty: [], orderDocuments: [] });
+            expect(prisma.document.findMany).not.toHaveBeenCalled();
+        });
+    });
 });
