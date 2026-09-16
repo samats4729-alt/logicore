@@ -68,8 +68,8 @@ export class AccountingService {
 
     // ==================== FINANCIAL REGISTRY ====================
 
-    async getFinancialRegistry(companyId: string, query?: JournalQueryDto) {
-        return this.reportsService.getFinancialRegistry(companyId, query);
+    async getFinancialRegistry(companyId: string, query?: JournalQueryDto, viewer?: JournalViewer) {
+        return this.reportsService.getFinancialRegistry(companyId, query, viewer);
     }
 
     async getPlannedPayments(companyId: string, query?: JournalQueryDto, viewer?: JournalViewer) {
@@ -197,12 +197,16 @@ export class AccountingService {
         return this.reportsService.getSharedReport(token);
     }
 
-    async getPayments(companyId: string, query: { startDate?: string; endDate?: string; direction?: PaymentDirection }) {
-        return this.paymentsService.getPayments(companyId, query);
+    async getPayments(
+        companyId: string,
+        query: { startDate?: string; endDate?: string; direction?: PaymentDirection },
+        viewer?: JournalViewer,
+    ) {
+        return this.paymentsService.getPayments(companyId, query, viewer);
     }
 
-    async getPaymentsByOrder(companyId: string, orderId: string) {
-        return this.paymentsService.getPaymentsByOrder(companyId, orderId);
+    async getPaymentsByOrder(companyId: string, orderId: string, viewer?: JournalViewer) {
+        return this.paymentsService.getPaymentsByOrder(companyId, orderId, viewer);
     }
 
     /** Неоплаченные заявки контрагента — для подбора в окне платежа. */
@@ -282,8 +286,8 @@ export class AccountingService {
 
     // ==================== EXPORTS ====================
 
-    async exportFinancialRegistry(companyId: string) {
-        return this.reportsService.exportFinancialRegistry(companyId);
+    async exportFinancialRegistry(companyId: string, viewer?: JournalViewer) {
+        return this.reportsService.exportFinancialRegistry(companyId, viewer);
     }
 
     async exportCounterpartyReport(companyId: string, viewer?: JournalViewer) {

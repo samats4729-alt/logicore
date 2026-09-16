@@ -15,6 +15,8 @@ import { PayrollService } from '../../payroll/payroll.service';
 import { CurrencyService } from '../../currency/currency.service';
 import { paymentInBase } from './exchange-difference';
 import { counterpartyIsExecutor, counterpartyIsPayer } from '../../common/utils/settlement';
+import { managerOrdersFilter } from '../../common/manager-orders';
+import type { JournalViewer } from '../../common/journal-company';
 
 /** Учётная валюта: в ней ведутся отчёты и итоги по компании. */
 const BASE_CURRENCY = 'KZT';
@@ -264,7 +266,29 @@ export class PaymentsService {
 
     // ==================== PAYMENTS CRUD ====================
 
-    async getPayments(companyId: string, query: { startDate?: string; endDate?: string; direction?: PaymentDirection }) {
+    /**
+     * Журнал операций: приход, расход и вся история денег.
+     *
+     * Менеджеру, который ведёт только свои заявки, показываются оплаты по ним
+     * же. Иначе выходило наполовину: рейс соседа спрятан в «Заявках», счёт по
+     * нему спрятан в журнале счетов — а оплата по этому же счёту, с суммой и
+     * контрагентом, лежала в «Деньгах» открыто.
+     *
+     * Платежи без заявки — аренда, зарплата, банковская комиссия — менеджеру
+     * не показываются: они не относятся ни к одной его сделке, и понять по
+     * ним, свои они или чужие, невозможно.
+     */
+    async getPayments(
+        companyId: string,
+        query: { startDate?: string; endDate?: string; direction?: PaymentDirection },
+        viewer?: JournalViewer,
+    ) {
+        const свои = viewer
+            ? await managerOrdersFilter(this.prisma, {
+                companyId, role: viewer.role, userId: viewer.userId,
+            })
+            : null;
+
         return this.prisma.payment.findMany({
             where: {
                 companyId,
@@ -276,6 +300,7 @@ export class PaymentsService {
                         lte: new Date(query.endDate),
                     }
                 }),
+                ...(свои ? { order: свои } : {}),
             },
             include: {
                 order: { select: { orderNumber: true } },
@@ -290,12 +315,24 @@ export class PaymentsService {
         });
     }
 
-    async getPaymentsByOrder(companyId: string, orderId: string) {
+    /**
+     * Оплаты по одной заявке. Чужая заявка менеджеру ничего не отдаёт: номер
+     * рейса приходит из браузера, и без проверки это был бы обход отбора в
+     * журнале — спрятанный рейс выдал бы свои деньги по прямому запросу.
+     */
+    async getPaymentsByOrder(companyId: string, orderId: string, viewer?: JournalViewer) {
+        const свои = viewer
+            ? await managerOrdersFilter(this.prisma, {
+                companyId, role: viewer.role, userId: viewer.userId,
+            })
+            : null;
+
         return this.prisma.payment.findMany({
             where: {
                 companyId,
                 orderId,
                 isDeleted: false,
+                ...(свои ? { order: свои } : {}),
             },
             include: {
                 counterparty: { select: { name: true } },

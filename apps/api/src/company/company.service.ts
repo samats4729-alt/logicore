@@ -1853,8 +1853,24 @@ export class CompanyService {
         };
     }
 
-    /** Получить последние события (смены статусов) по заявкам компании — для живого тикера */
-    async getOrderEvents(companyId: string, limit = 20) {
+    /**
+     * Последние события (смены статусов) по заявкам компании — для живого
+     * тикера в шапке и блока «Последние события» на дашборде.
+     *
+     * Менеджеру, который ведёт только свои заявки, показываем его рейсы.
+     * Денег здесь нет — только номер и статус, — но лента висит на каждом
+     * экране, и по ней было видно, что в компании есть сделки, которых ему
+     * в «Заявках» не показывают. Приватность, которую видно насквозь, — не
+     * приватность.
+     */
+    async getOrderEvents(
+        companyId: string,
+        limit = 20,
+        viewer?: { role?: string | null; userId?: string | null },
+    ) {
+        const свои = await managerOrdersFilter(this.prisma, {
+            companyId, role: viewer?.role, userId: viewer?.userId,
+        });
         // Живая лента = только активные заявки, каждая один раз (без дублей).
         // Исключаем черновики, завершённые и отменённые.
         const orders = await this.prisma.order.findMany({
@@ -1869,6 +1885,7 @@ export class CompanyService {
                         ],
                     },
                     { status: { notIn: ['DRAFT', 'COMPLETED', 'CANCELLED'] } },
+                    ...(свои ? [свои] : []),
                 ],
             },
             orderBy: { updatedAt: 'desc' },

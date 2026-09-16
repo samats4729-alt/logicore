@@ -412,8 +412,16 @@ export class FinancialReportsService {
 
     // ==================== FINANCIAL REGISTRY ====================
 
-    async getFinancialRegistry(companyId: string, query?: JournalQueryDto) {
+    async getFinancialRegistry(companyId: string, query?: JournalQueryDto, viewer?: JournalViewer) {
         const scope = this.journalScope(query);
+        // Реестр — деньги по каждой заявке построчно. Менеджеру он показывает
+        // его собственные рейсы: иначе отчёт выдал бы разом то, что от него
+        // спрятано и в «Заявках», и в журнале счетов, — со ставками и маржой.
+        const свои = viewer
+            ? await managerOrdersFilter(this.prisma, {
+                companyId, role: viewer.role, userId: viewer.userId,
+            })
+            : null;
         const registryWhere: Prisma.OrderWhereInput = {
             AND: [
                 {
@@ -430,7 +438,8 @@ export class FinancialReportsService {
                         { isConfirmed: true },
                         { status: { not: 'PENDING' } }
                     ]
-                }
+                },
+                ...(свои ? [свои] : []),
             ],
             status: { notIn: ['DRAFT', 'CANCELLED'] },
             createdAt: scope.createdAt,
@@ -2784,10 +2793,12 @@ export class FinancialReportsService {
 
     // ==================== EXPORTS ====================
 
-    async exportFinancialRegistry(companyId: string): Promise<Buffer> {
+    async exportFinancialRegistry(companyId: string, viewer?: JournalViewer): Promise<Buffer> {
         // Выгрузка идёт по всему реестру, без страниц: без query метод
         // отдаёт массив, но тип общий на оба режима — разворачиваем явно.
-        const registryResult = await this.getFinancialRegistry(companyId);
+        // Отбор тот же, что на экране: иначе менеджер забрал бы в Excel то,
+        // чего в реестре ему не показывают.
+        const registryResult = await this.getFinancialRegistry(companyId, undefined, viewer);
         const registry = Array.isArray(registryResult) ? registryResult : registryResult.data;
 
         const STATUS_RU: Record<string, string> = {

@@ -85,7 +85,9 @@ export class AccountingController {
     @Roles(...FINANCE_VIEW_ROLES)
     @RequirePermissions(REPORTS_PERMISSION)
     async getFinancialRegistry(@Request() req: any, @Query() query: JournalQueryDto) {
-        return this.accountingService.getFinancialRegistry(req.user.companyId, query);
+        return this.accountingService.getFinancialRegistry(req.user.companyId, query, {
+            userId: req.user.id, role: req.user.role,
+        });
     }
 
     @Get('planned-payments')
@@ -358,7 +360,12 @@ export class AccountingController {
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string; direction?: any },
     ) {
-        return this.accountingService.getPayments(req.user.companyId, query);
+        // Менеджеру, который ведёт только свои заявки, журнал операций
+        // показывает оплаты по ним же — иначе рейс соседа спрятан, а деньги
+        // по нему открыты.
+        return this.accountingService.getPayments(req.user.companyId, query, {
+            userId: req.user.id, role: req.user.role,
+        });
     }
 
     @Get('payments/open-orders')
@@ -386,7 +393,9 @@ export class AccountingController {
     @Roles(...FINANCE_VIEW_ROLES)
     @RequirePermissions('accounting', 'orders')
     async getPaymentsByOrder(@Request() req: any, @Param('orderId') orderId: string) {
-        return this.accountingService.getPaymentsByOrder(req.user.companyId, orderId);
+        return this.accountingService.getPaymentsByOrder(req.user.companyId, orderId, {
+            userId: req.user.id, role: req.user.role,
+        });
     }
 
     @Post('payments')
@@ -496,7 +505,9 @@ export class AccountingController {
     @Roles(...FINANCE_VIEW_ROLES)
     @RequirePermissions(REPORTS_PERMISSION)
     async exportFinancialRegistry(@Request() req: any, @Res() res: Response) {
-        const buffer = await this.accountingService.exportFinancialRegistry(req.user.companyId);
+        const buffer = await this.accountingService.exportFinancialRegistry(req.user.companyId, {
+            userId: req.user.id, role: req.user.role,
+        });
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition': 'attachment; filename="financial-registry.xlsx"',

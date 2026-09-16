@@ -653,7 +653,9 @@ export class CompanyController {
     async getOrderEvents(@Request() req: any, @Query('limit') limit?: string) {
         const parsed = parseInt(limit ?? '', 10);
         const safeLimit = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 50) : 20;
-        return this.companyService.getOrderEvents(req.user.companyId, safeLimit);
+        return this.companyService.getOrderEvents(req.user.companyId, safeLimit, {
+            role: req.user.role, userId: req.user.id,
+        });
     }
 
     // ==================== Подтверждения завершения ====================
