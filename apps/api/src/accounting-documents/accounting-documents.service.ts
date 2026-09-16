@@ -25,7 +25,8 @@ import type { FinancialReportsService } from '../accounting/services/financial-r
 import { AccountingDocumentCalculatorService } from './accounting-document-calculator.service';
 import { OrderSettlementsService } from '../orders/order-settlements.service';
 import { toNum } from '../common/utils/money';
-import { resolveJournalCompany } from '../common/journal-company';
+import { JournalCompany, JournalViewer, resolveJournalCompany } from '../common/journal-company';
+import { documentsOfOwnOrders, managerOrdersFilter } from '../common/manager-orders';
 import { invoiceDueDate, OrderPaymentTerms } from './invoice-due-date';
 import {
     AccountingDocumentListQueryDto,
@@ -456,13 +457,31 @@ export class AccountingDocumentsService {
         activeCompanyId: string | null | undefined,
         requestedCompanyId: string | undefined,
         allowedRoles: UserRole[],
-    ): Promise<string> {
+    ): Promise<JournalCompany> {
         // Само правило живёт одним местом: тем же отбором пользуются итоги
         // над журналом, и разъедься они — список показывал бы одну
         // организацию, а суммы над ним другую.
         return resolveJournalCompany(this.prisma, {
             userId, activeCompanyId, requestedCompanyId, allowedRoles,
         });
+    }
+
+    /**
+     * Чем сузить журнал этому человеку.
+     *
+     * Менеджеру, который видит только свои заявки, журнал счетов показывает
+     * только счета по ним. Прежде он видел деньги всей компании: рейс чужого
+     * менеджера был спрятан в «Заявках», а счёт по этому рейсу — со ставкой
+     * и контрагентом — лежал в журнале открыто.
+     */
+    private async journalNarrowing(
+        companyId: string,
+        viewer: JournalViewer,
+    ): Promise<Prisma.AccountingDocumentWhereInput | null> {
+        const свои = await managerOrdersFilter(this.prisma, {
+            companyId, role: viewer.role, userId: viewer.userId,
+        });
+        return свои ? documentsOfOwnOrders(свои) : null;
     }
 
     /**
@@ -491,10 +510,15 @@ export class AccountingDocumentsService {
         };
     }
 
-    async list(companyId: string, query: AccountingDocumentListQueryDto) {
+    async list(companyId: string, query: AccountingDocumentListQueryDto, viewer: JournalViewer) {
         const page = query.page ?? 1;
         const limit = query.limit ?? 30;
-        const where = this.listWhere(companyId, query);
+        const свои = await this.journalNarrowing(companyId, viewer);
+        const базовый = this.listWhere(companyId, query);
+        // Сужение идёт и в список, и в счётчик, и в итоги — это один и тот же
+        // `where`. Забудь его в итогах, и менеджер видел бы пять своих строк
+        // под суммой всей компании.
+        const where = свои ? { AND: [базовый, свои] } : базовый;
         const [data, total, sums] = await this.prisma.$transaction([
             this.prisma.accountingDocument.findMany({
                 where,
@@ -545,12 +569,17 @@ export class AccountingDocumentsService {
      * чтение — все правки (`updateDraft`, `post`, `cancel`, удаление) как
      * были, так и остались завязаны на `companyId` владельца.
      */
-    async getById(companyId: string, id: string) {
+    async getById(companyId: string, id: string, viewer?: JournalViewer) {
+        // Сужение по своим рейсам ложится только на свои документы. Прятать
+        // за ним доставленный документ нельзя: он пришёл от другой компании и
+        // с нашими рейсами не связан вовсе — под таким условием не нашёлся бы
+        // ни один, и приём документов встал бы.
+        const свои = viewer ? await this.journalNarrowing(companyId, viewer) : null;
         const document = await this.prisma.accountingDocument.findFirst({
             where: {
                 id,
                 OR: [
-                    { companyId },
+                    свои ? { AND: [{ companyId }, свои] } : { companyId },
                     // Доставленный документ — не черновик и не «сам себе»:
                     // отправка возможна только у проведённого.
                     { recipientCompanyId: companyId, sentAt: { not: null } },
@@ -563,17 +592,25 @@ export class AccountingDocumentsService {
     }
 
     /**
-     * Бумаги к счёту: накладные, акт, свой счёт контрагента.
+     * Бумаги к счёту — двумя разными стопками, а не одной кучей.
      *
-     * Прикладывать их умеют давно — контрагент шлёт пакет по ссылке на
-     * взаиморасчёты, из блока «Документы к счёту», и файлы ложатся в
-     * документы отмеченных рейсов. Но на карточке счёта их не было видно:
-     * бухгалтер открывал счёт, не находил бумаг и шёл искать их по рейсам,
-     * хотя присланы они были именно к этому счёту.
+     * Своего поля «файл относится к счёту» у документа нет: он привязан к
+     * рейсу. Поэтому сюда собиралось всё, что лежит в рейсах счёта, — и
+     * бухгалтер, открыв входящий счёт на одну накладную, видел три-четыре
+     * документа: свои накладные с рейса, фотографии водителя и где-то среди
+     * них тот единственный файл, который контрагент прислал к счёту.
      *
-     * Собираем по рейсам документа: своего поля у файла нет, а связь
-     * «счёт → рейсы → документы» есть и без него. Поэтому здесь нет
-     * миграции: файл и так лежит там, где его ищет бухгалтерия рейса.
+     * Разделяем по тому признаку, который в данных есть и означает ровно то,
+     * что нужно: прислал ли файл ТОТ контрагент, чей это счёт.
+     *
+     *   * `fromCounterparty` — его пакет к этому счёту: свой счёт, накладные,
+     *     акт. Это и есть «документы к счёту».
+     *   * `orderDocuments` — папка рейса: то, что грузили мы сами и водитель.
+     *     Нужное рядом, но отдельно и вторым планом.
+     *
+     * Бумаги ДРУГОГО контрагента по тем же рейсам (заказчик приложил
+     * доверенность, а счёт — от перевозчика) идут во вторую стопку: к этому
+     * счёту они не относятся, и выдавать их за его пакет нельзя.
      */
     async listAttachments(companyId: string, id: string) {
         // Только своему счёту: получателю доставленного документа бумаги по
@@ -582,17 +619,16 @@ export class AccountingDocumentsService {
         const document = await this.prisma.accountingDocument.findFirst({
             where: { id, companyId },
             select: {
+                counterpartyId: true,
                 orders: { select: { orderId: true, order: { select: { orderNumber: true } } } },
             },
         });
-        if (!document) return [];
+        if (!document) return { fromCounterparty: [], orderDocuments: [] };
 
         const orderIds = document.orders.map((link) => link.orderId);
-        if (!orderIds.length) return [];
+        if (!orderIds.length) return { fromCounterparty: [], orderDocuments: [] };
 
-        // По компании файлы не отбираем: у приложенного из кабинета
-        // `companyId` пустой, и такой отбор прятал бы ровно те бумаги, что
-        // положил свой же сотрудник. Право на файлы даёт сам счёт — он
+        // По компании файлы не отбираем: право на файлы даёт сам счёт — он
         // проверен выше, а рейсы принадлежат этой сделке.
         const files = await this.prisma.document.findMany({
             where: { orderId: { in: orderIds } },
@@ -603,30 +639,86 @@ export class AccountingDocumentsService {
                 type: true,
                 fileName: true,
                 fileSize: true,
+                fileUrl: true,
                 createdAt: true,
                 orderId: true,
                 order: { select: { orderNumber: true } },
                 uploadedBy: { select: { firstName: true, lastName: true } },
+                uploadedByCounterpartyId: true,
                 uploadedByCounterparty: { select: { name: true } },
             },
         });
 
-        return files.map((file) => ({
-            id: file.id,
-            type: file.type,
-            fileName: file.fileName,
-            fileSize: file.fileSize,
-            createdAt: file.createdAt,
-            orderId: file.orderId,
-            orderNumber: file.order?.orderNumber ?? null,
-            // Кто приложил: наш сотрудник или контрагент по ссылке. Для
-            // спора об оплате это половина смысла файла.
-            uploadedBy: file.uploadedByCounterparty
-                ? { name: file.uploadedByCounterparty.name, fromCounterparty: true }
-                : file.uploadedBy
-                    ? { name: `${file.uploadedBy.lastName} ${file.uploadedBy.firstName}`.trim(), fromCounterparty: false }
-                    : null,
-        }));
+        const егоПакет = (file: { uploadedByCounterpartyId: string | null }) =>
+            !!document.counterpartyId && file.uploadedByCounterpartyId === document.counterpartyId;
+
+        return {
+            fromCounterparty: this.mergeAttachments(files.filter(егоПакет)),
+            orderDocuments: this.mergeAttachments(files.filter((file) => !егоПакет(file))),
+        };
+    }
+
+    /**
+     * Один файл — одна строка.
+     *
+     * Приложенный к нескольким сделкам файл лежит в базе отдельной записью на
+     * каждую: счёт на пять рейсов относится ко всем пяти. В карточке счёта,
+     * где эти рейсы стоят рядом, он от этого показывался пять раз — и выглядел
+     * как пять разных бумаг. Склеиваем по самому файлу и перечисляем сделки.
+     */
+    private mergeAttachments(files: {
+        id: string;
+        type: any;
+        fileName: string;
+        fileSize: number | null;
+        fileUrl: string;
+        createdAt: Date;
+        orderId: string | null;
+        order: { orderNumber: string } | null;
+        uploadedBy: { firstName: string; lastName: string } | null;
+        uploadedByCounterparty: { name: string } | null;
+    }[]) {
+        const merged = new Map<string, {
+            id: string;
+            type: any;
+            fileName: string;
+            fileSize: number | null;
+            createdAt: Date;
+            orderId: string | null;
+            orderNumber: string | null;
+            orderNumbers: string[];
+            uploadedBy: { name: string; fromCounterparty: boolean } | null;
+        }>();
+
+        for (const file of files) {
+            const номер = file.order?.orderNumber ?? null;
+            const свой = merged.get(file.fileUrl);
+            if (свой) {
+                if (номер && !свой.orderNumbers.includes(номер)) свой.orderNumbers.push(номер);
+                continue;
+            }
+            merged.set(file.fileUrl, {
+                id: file.id,
+                type: file.type,
+                fileName: file.fileName,
+                fileSize: file.fileSize,
+                createdAt: file.createdAt,
+                orderId: file.orderId,
+                // Оставлено для совместимости: карточка показывает список
+                // `orderNumbers`, а старые вызовы ждали одну сделку.
+                orderNumber: номер,
+                orderNumbers: номер ? [номер] : [],
+                // Кто приложил: наш сотрудник или контрагент по ссылке. Для
+                // спора об оплате это половина смысла файла.
+                uploadedBy: file.uploadedByCounterparty
+                    ? { name: file.uploadedByCounterparty.name, fromCounterparty: true }
+                    : file.uploadedBy
+                        ? { name: `${file.uploadedBy.lastName} ${file.uploadedBy.firstName}`.trim(), fromCounterparty: false }
+                        : null,
+            });
+        }
+
+        return [...merged.values()];
     }
 
     /**
@@ -638,11 +730,23 @@ export class AccountingDocumentsService {
      * пересечение с фильтрами, иначе в реестр «за июнь» попал бы отмеченный
      * ранее июльский документ.
      */
-    async listForRegistry(companyId: string, query: AccountingDocumentRegistryQueryDto) {
-        const where: Prisma.AccountingDocumentWhereInput = {
+    async listForRegistry(
+        companyId: string,
+        query: AccountingDocumentRegistryQueryDto,
+        viewer: JournalViewer,
+    ) {
+        // Бумага сужается так же, как экран: иначе менеджер распечатал бы
+        // реестр по всей компании из журнала, где ему видны только свои
+        // сделки, — и отмеченные галочками строки тут не помогут, `ids`
+        // приходят из браузера.
+        const свои = await this.journalNarrowing(companyId, viewer);
+        const базовый: Prisma.AccountingDocumentWhereInput = {
             ...this.listWhere(companyId, query),
             ...(query.ids?.length ? { id: { in: query.ids } } : {}),
         };
+        const where: Prisma.AccountingDocumentWhereInput = свои
+            ? { AND: [базовый, свои] }
+            : базовый;
 
         const [documents, counterparty, company, sums] = await Promise.all([
             this.prisma.accountingDocument.findMany({

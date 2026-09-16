@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Input, Collapse, Popconfirm, Tooltip, Select } from 'antd';
 import { ArrowLeft, Loader2, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -86,11 +86,29 @@ export default function EditContractContentPage() {
      */
     const [заготовка, setЗаготовка] = useState<СтрокаРеквизитов[]>([]);
 
-    // Своя сторона договора: в холдинге организаций несколько.
-    const [мояОрганизация, setМояОрганизация] = useState<string>('');
+    /**
+     * Обе стороны договора. Своя из них — та, что есть в списке моих
+     * организаций: в договоре мы бываем и экспедитором, и заказчиком.
+     * Брать всегда экспедитора нельзя — в договоре, где заказчик мы, в
+     * шапке оказывался контрагент.
+     */
+    const [стороны, setСтороны] = useState<{ customerCompanyId: string; forwarderCompanyId: string }>({
+        customerCompanyId: '', forwarderCompanyId: '',
+    });
     const [выбраннаяОрганизация, setВыбраннаяОрганизация] = useState<string>('');
     const [организации, setОрганизации] = useState<МояОрганизация[]>([]);
     const [сменаОрганизации, setСменаОрганизации] = useState(false);
+
+    const мояОрганизация = useMemo(() => {
+        const свои = new Set(организации.map(о => о.id));
+        if (свои.has(стороны.forwarderCompanyId)) return стороны.forwarderCompanyId;
+        if (свои.has(стороны.customerCompanyId)) return стороны.customerCompanyId;
+        return '';
+    }, [организации, стороны]);
+
+    // Список организаций приходит отдельным запросом, и своя сторона
+    // определяется только после него.
+    useEffect(() => { setВыбраннаяОрганизация(мояОрганизация); }, [мояОрганизация]);
 
     const fetchContent = useCallback(async () => {
         try {
@@ -104,8 +122,10 @@ export default function EditContractContentPage() {
             try {
                 const contractRes = await api.get(`/contracts/${contractId}`);
                 setContractNumber(contractRes.data.contractNumber);
-                setМояОрганизация(contractRes.data.forwarderCompanyId || '');
-                setВыбраннаяОрганизация(contractRes.data.forwarderCompanyId || '');
+                setСтороны({
+                    customerCompanyId: contractRes.data.customerCompanyId || '',
+                    forwarderCompanyId: contractRes.data.forwarderCompanyId || '',
+                });
             } catch {
                 // Contract number is not critical, continue without it
             }

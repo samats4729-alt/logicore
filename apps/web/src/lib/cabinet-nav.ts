@@ -35,7 +35,13 @@ const FINANCE_ROUTES = [
     '/company/payroll', '/company/my-salary',
 ];
 
-const REPORTS_ROUTES = [
+/**
+ * Экспортируется, потому что этим же списком закрывается доступ
+ * (`section-access.ts`): «Отчёты» — это ровно те страницы, что живут под
+ * хабом. Две копии списка неминуемо разошлись бы, и новая страница отчёта
+ * осталась бы открытой всем, хотя пункт меню спрятан.
+ */
+export const REPORTS_ROUTES = [
     '/company/reports', '/company/accounting/pnl', '/company/accounting/carrier-profit',
     '/company/accounting/registry', '/company/accounting/cashflow',
     '/company/accounting/expenses-by-category',

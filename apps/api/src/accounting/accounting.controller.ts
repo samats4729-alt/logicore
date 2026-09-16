@@ -26,6 +26,37 @@ import {
 const FINANCE_VIEW_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN, UserRole.FORWARDER];
 const FINANCE_CHANGE_ROLES = [UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.ACCOUNTANT];
 
+/**
+ * Кто может выдать контрагенту ссылку на взаиморасчёты.
+ *
+ * Шире, чем изменение денег, и это сознательно: ссылку шлют, чтобы перевозчик
+ * выставил счёт и приложил бумаги, а переписывается с ним менеджер — он и
+ * ведёт сделку. Пока ссылку выдавала только бухгалтерия, менеджер просил
+ * коллегу нажать кнопку за него; при этом список уже выданных ссылок ему был
+ * виден, то есть запрет держался на одной кнопке.
+ *
+ * Видно по такой ссылке ровно то, что видит отправитель: у менеджера со своими
+ * заявками — только его сделки с этим контрагентом.
+ */
+const SHARE_LINK_ROLES = [...FINANCE_CHANGE_ROLES, UserRole.LOGISTICIAN, UserRole.FORWARDER];
+
+/**
+ * Отчёты закрыты отдельным правом — «Отчёты», а не «Бухгалтерией».
+ *
+ * Разница простая: по «Бухгалтерии» человек ведёт деньги — заводит счета,
+ * проводит оплаты, сверяется с контрагентами. Отчёты отвечают на другой
+ * вопрос: сколько компания заработала, какая маржа по заявке, сколько принёс
+ * каждый перевозчик. В финансовом отделе это часто разные люди, и одной
+ * галочкой их не разделить.
+ *
+ * Право на методе перебивает право контроллера (`getAllAndOverride` берёт
+ * метаданные обработчика), поэтому «Бухгалтерия» сюда уже не пускает.
+ * Взаиморасчёты (`counterparty-report`) намеренно остались на «Бухгалтерии»:
+ * это не отчёт о прибыли, а ежедневная работа — по ним выставляют счета и
+ * шлют ссылку контрагенту.
+ */
+const REPORTS_PERMISSION = 'reports';
+
 @Controller('accounting')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @RequirePermissions('accounting')
@@ -52,6 +83,7 @@ export class AccountingController {
 
     @Get('financial-registry')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getFinancialRegistry(@Request() req: any, @Query() query: JournalQueryDto) {
         return this.accountingService.getFinancialRegistry(req.user.companyId, query);
     }
@@ -62,13 +94,18 @@ export class AccountingController {
         // Журнал счетов ведётся по выбранной организации холдинга, и итоги
         // над ним обязаны считаться по ней же: иначе список показывает одну
         // организацию, а суммы над списком — другую.
-        const companyId = await resolveJournalCompany(this.prisma, {
+        const { companyId, role } = await resolveJournalCompany(this.prisma, {
             userId: req.user.id,
             activeCompanyId: req.user.companyId,
             requestedCompanyId: query.companyId,
             allowedRoles: FINANCE_VIEW_ROLES,
         });
-        return this.accountingService.getPlannedPayments(companyId, query);
+        // Та же причина и для приватности: журнал у менеджера сужен до своих
+        // сделок, и плитки над ним обязаны считаться по тем же строкам.
+        return this.accountingService.getPlannedPayments(companyId, query, {
+            userId: req.user.id,
+            role: role ?? req.user.role,
+        });
     }
 
     // ==================== PAYMENT JOURNAL ====================
@@ -217,8 +254,12 @@ export class AccountingController {
         @Request() req: any,
         @Query('includeOrders') includeOrders?: string,
     ) {
+        // Взаиморасчёты — те же сделки, что в журнале счетов, только другим
+        // разрезом. Сузить один экран и оставить открытым второй значило бы
+        // спрятать счёт, но показать ставку по тому же рейсу.
         return this.accountingService.getCounterpartyReport(req.user.companyId, {
             includeOrders: includeOrders !== 'false',
+            viewer: { userId: req.user.id, role: req.user.role },
         });
     }
 
@@ -243,7 +284,9 @@ export class AccountingController {
     }
 
     @Post('share-report/links/:id/revoke')
-    @Roles(...FINANCE_CHANGE_ROLES)
+    // Отзыв там же, где выдача: выдавший должен уметь и отозвать — иначе
+    // ошибочную ссылку он остановить не может и идёт просить бухгалтерию.
+    @Roles(...SHARE_LINK_ROLES)
     @ApiOperation({ summary: 'Отозвать ссылку досрочно' })
     async revokeShareLink(@Request() req: any, @Param('id') id: string) {
         return this.shareLinks.revoke(req.user.companyId, id);
@@ -251,7 +294,7 @@ export class AccountingController {
 
 
     @Post('share-report')
-    @Roles(...FINANCE_CHANGE_ROLES)
+    @Roles(...SHARE_LINK_ROLES)
     @ApiOperation({
         summary: 'Ссылка контрагенту на взаиморасчёты',
         description: 'Без ourRole роль подбирается по отчёту — из журнала счетов она неизвестна.',
@@ -285,7 +328,7 @@ export class AccountingController {
     }
 
     @Post('send-report-email')
-    @Roles(...FINANCE_CHANGE_ROLES)
+    @Roles(...SHARE_LINK_ROLES)
     async sendReportEmail(
         @Request() req: any,
         @Body() body: { shareUrl: string; email: string },
@@ -307,6 +350,10 @@ export class AccountingController {
 
     @Get('payments')
     @Roles(...FINANCE_VIEW_ROLES)
+    // Достаточно любого из двух прав. Сводка на «Отчётах» считается из этих
+    // же платежей: требуй здесь только «Бухгалтерию» — и человек с одними
+    // отчётами открыл бы страницу с нулями вместо цифр.
+    @RequirePermissions('accounting', REPORTS_PERMISSION)
     async getPayments(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string; direction?: any },
@@ -447,6 +494,7 @@ export class AccountingController {
 
     @Get('financial-registry/export')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async exportFinancialRegistry(@Request() req: any, @Res() res: Response) {
         const buffer = await this.accountingService.exportFinancialRegistry(req.user.companyId);
         res.set({
@@ -460,7 +508,9 @@ export class AccountingController {
     @Get('counterparty-report/export')
     @Roles(...FINANCE_VIEW_ROLES)
     async exportCounterpartyReport(@Request() req: any, @Res() res: Response) {
-        const buffer = await this.accountingService.exportCounterpartyReport(req.user.companyId);
+        const buffer = await this.accountingService.exportCounterpartyReport(req.user.companyId, {
+            userId: req.user.id, role: req.user.role,
+        });
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition': 'attachment; filename="counterparty-report.xlsx"',
@@ -703,6 +753,7 @@ export class AccountingController {
 
     @Get('cashflow')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getCashflowReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -712,6 +763,7 @@ export class AccountingController {
 
     @Get('cashflow/export')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async exportCashflowReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -728,6 +780,7 @@ export class AccountingController {
 
     @Get('pnl')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getPnLReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -737,6 +790,7 @@ export class AccountingController {
 
     @Get('carrier-profit')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getCarrierProfitReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -746,6 +800,7 @@ export class AccountingController {
 
     @Get('expenses-by-category')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async getExpensesByCategoryReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
@@ -755,6 +810,7 @@ export class AccountingController {
 
     @Get('pnl/export')
     @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
     async exportPnLReport(
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },

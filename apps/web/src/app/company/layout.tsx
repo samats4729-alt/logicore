@@ -268,18 +268,28 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         // Прежние «Финансы» держали на одном экране 38 ссылок: ежедневное
         // вперемешку с отчётами и справочниками, которые заводят один раз.
         // Адрес остался прежним — старые ссылки и закладки работают.
-        items.push({
-            key: '/company/finance',
-            icon: <DollarOutlined />,
-            label: 'Деньги',
-        });
+        //
+        // Оба пункта раньше показывались всем подряд: право у них не
+        // спрашивалось вовсе. Руководитель снимал галочку «Бухгалтерия», а
+        // «Деньги» в меню оставались.
+        if (hasPerm('accounting')) {
+            items.push({
+                key: '/company/finance',
+                icon: <DollarOutlined />,
+                label: 'Деньги',
+            });
+        }
 
         // --- ОТЧЁТЫ (то, что смотрят раз в месяц) ---
-        items.push({
-            key: '/company/reports',
-            icon: <BarChartOutlined />,
-            label: 'Отчёты',
-        });
+        // Своё право, отдельно от «Бухгалтерии»: в финансовом отделе один
+        // человек проводит оплаты, а другой смотрит заработок компании.
+        if (hasPerm('reports')) {
+            items.push({
+                key: '/company/reports',
+                icon: <BarChartOutlined />,
+                label: 'Отчёты',
+            });
+        }
 
         // --- КАБИНЕТ (справочники, организация, сотрудники) ---
         items.push({

@@ -7,6 +7,7 @@ import { FinancialReportsService } from './services/financial-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountKind, PaymentDirection, PaymentMethod, CostType, DictionaryKind } from '@prisma/client';
 import { JournalQueryDto } from './dto/accounting.dto';
+import type { JournalViewer } from '../common/journal-company';
 
 @Injectable()
 export class AccountingService {
@@ -71,8 +72,8 @@ export class AccountingService {
         return this.reportsService.getFinancialRegistry(companyId, query);
     }
 
-    async getPlannedPayments(companyId: string, query?: JournalQueryDto) {
-        return this.reportsService.getPlannedPayments(companyId, query);
+    async getPlannedPayments(companyId: string, query?: JournalQueryDto, viewer?: JournalViewer) {
+        return this.reportsService.getPlannedPayments(companyId, query, viewer);
     }
 
     // ==================== PAYMENT JOURNAL ====================
@@ -169,8 +170,11 @@ export class AccountingService {
 
     // ==================== COUNTERPARTY REPORT ====================
 
-    async getCounterpartyReport(companyId: string, options?: { includeOrders?: boolean }) {
-        return this.reportsService.getCounterpartyReport(companyId, options);
+    async getCounterpartyReport(
+        companyId: string,
+        options?: { includeOrders?: boolean; viewer?: JournalViewer },
+    ) {
+        return this.reportsService.getCounterpartyReportFor(companyId, options);
     }
 
     async getReconciliationAct(companyId: string, counterpartyId: string, query: { startDate?: string; endDate?: string }) {
@@ -282,8 +286,8 @@ export class AccountingService {
         return this.reportsService.exportFinancialRegistry(companyId);
     }
 
-    async exportCounterpartyReport(companyId: string) {
-        return this.reportsService.exportCounterpartyReport(companyId);
+    async exportCounterpartyReport(companyId: string, viewer?: JournalViewer) {
+        return this.reportsService.exportCounterpartyReport(companyId, viewer);
     }
 
     async exportCashflowReport(companyId: string, query: { startDate?: string; endDate?: string }) {

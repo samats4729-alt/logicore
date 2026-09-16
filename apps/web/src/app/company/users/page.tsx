@@ -30,10 +30,19 @@ const ROLE_OPTIONS = [
     { label: 'Администратор', value: 'COMPANY_ADMIN' },
 ];
 
+/**
+ * Галочки доступа. Те же строки проверяет сервер — список продублирован в
+ * `apps/api/src/auth/module-permissions.ts`. Меняется здесь — меняется и там.
+ *
+ * «Отчёты» отделены от «Бухгалтерии» намеренно: по «Бухгалтерии» человек ведёт
+ * счета, оплаты и сверки, а отчёты отвечают на другой вопрос — сколько
+ * компания заработала. В одном финансовом отделе это часто разные люди.
+ */
 const MODULE_PERMISSIONS = [
     { label: 'Заявки', value: 'orders' },
     { label: 'Документы', value: 'documents' },
     { label: 'Бухгалтерия', value: 'accounting' },
+    { label: 'Отчёты', value: 'reports' },
     { label: 'Контрагенты', value: 'partners' },
     { label: 'Карта / Трекинг', value: 'tracking' },
     { label: 'Водители', value: 'drivers' },

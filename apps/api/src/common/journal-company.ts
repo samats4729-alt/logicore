@@ -13,6 +13,33 @@ import { UserRole } from '@prisma/client';
  * бы одну организацию, а итоги над ним другую, и заметить это было бы
  * нельзя: обе цифры выглядят правдоподобно.
  */
+/**
+ * Кто смотрит журнал.
+ *
+ * Роль здесь — та, что действует в открытой организации, а не общая из
+ * карточки пользователя: в другой организации холдинга она может быть иной.
+ * Нужна затем же, зачем и `companyId`, — чтобы список, итоги над ним и
+ * печатная форма отбирались одинаково.
+ */
+export interface JournalViewer {
+    userId: string;
+    role: UserRole | string | null | undefined;
+}
+
+export interface JournalCompany {
+    companyId: string;
+    /**
+     * Роль в ЭТОЙ организации, если её пришлось смотреть отдельно.
+     *
+     * `null` означает «организация та же, что в сессии» — тогда роль уже
+     * лежит в `req.user.role`, её кладёт туда `findUserById` по связи с
+     * активной компанией. Лишний запрос ради того же ответа не нужен, а
+     * подставлять общую роль из карточки пользователя нельзя: в другой
+     * организации холдинга она другая.
+     */
+    role: UserRole | null;
+}
+
 export async function resolveJournalCompany(
     prisma: {
         userCompanyRelation: {
@@ -25,14 +52,14 @@ export async function resolveJournalCompany(
         requestedCompanyId?: string;
         allowedRoles: UserRole[];
     },
-): Promise<string> {
+): Promise<JournalCompany> {
     const { userId, activeCompanyId, requestedCompanyId, allowedRoles } = params;
 
     if (!requestedCompanyId || requestedCompanyId === activeCompanyId) {
         if (!activeCompanyId) {
             throw new ForbiddenException('Организация не выбрана');
         }
-        return activeCompanyId;
+        return { companyId: activeCompanyId, role: null };
     }
 
     const relation = await prisma.userCompanyRelation.findUnique({
@@ -47,5 +74,5 @@ export async function resolveJournalCompany(
     if (!allowedRoles.includes(relation.role)) {
         throw new ForbiddenException('В этой организации у вас нет доступа к бухгалтерии');
     }
-    return requestedCompanyId;
+    return { companyId: requestedCompanyId, role: relation.role };
 }
