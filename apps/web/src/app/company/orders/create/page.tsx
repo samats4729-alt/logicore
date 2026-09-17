@@ -1473,37 +1473,6 @@ export default function CreateOrderPage() {
                                 </Col>
                             </Row>
 
-                            <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Транспортное средство</Divider>
-                            <Row gutter={12}>
-                                <Col span={12}>
-                                    <Form.Item name="vehicleType" label="Тип транспорта">
-                                        <Select
-                                            placeholder="Выберите тип кузова"
-                                           
-                                            options={VEHICLE_TYPES.map(t => ({ label: t, value: t }))}
-                                            showSearch
-                                        />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="vehicleModel" label="Модель автомобиля">
-                                        <Input placeholder="Volvo FH12" />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                            <Row gutter={12}>
-                                <Col span={12}>
-                                    <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите госномер' }]}>
-                                        <Input placeholder="123 ABC 01" />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="trailerNumber" label="Госномер прицепа">
-                                        <Input placeholder="1234 XX 01" />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-
                             <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Документы</Divider>
                             <Row gutter={12}>
                                 <Col span={12}>
@@ -1537,6 +1506,37 @@ export default function CreateOrderPage() {
                                     </Form.Item>
                                 </Col>
                             </Row>
+                            <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Транспортное средство</Divider>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="vehicleType" label="Тип транспорта">
+                                        <Select
+                                            placeholder="Выберите тип кузова"
+                                           
+                                            options={VEHICLE_TYPES.map(t => ({ label: t, value: t }))}
+                                            showSearch
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="vehicleModel" label="Модель автомобиля">
+                                        <Input placeholder="Volvo FH12" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите госномер' }]}>
+                                        <Input placeholder="123 ABC 01" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="trailerNumber" label="Госномер прицепа">
+                                        <Input placeholder="1234 XX 01" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+
                         </div>
                     )}
                 </>
