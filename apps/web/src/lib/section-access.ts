@@ -46,6 +46,9 @@ const SECTIONS: { prefix: string; permission?: string; roles?: string[]; title: 
     { prefix: '/company/drivers', permission: 'drivers', title: 'Водители' },
     { prefix: '/company/contracts', permission: 'partners', roles: ['LOGISTICIAN'], title: 'Договоры' },
     { prefix: '/company/vehicles', roles: ['LOGISTICIAN'], title: 'Автопарк' },
+    // Подписку продлевает тот, кто платит. Права раздела тут ни при чём:
+    // деньги за кабинет — дело руководителя, а не бухгалтерии.
+    { prefix: '/company/billing', roles: [], title: 'Подписка' },
     { prefix: '/company/users', roles: [], title: 'Сотрудники' },
     { prefix: '/company/settings', roles: [], title: 'Настройки компании' },
     { prefix: '/company/audit', roles: [], title: 'Журнал действий' },

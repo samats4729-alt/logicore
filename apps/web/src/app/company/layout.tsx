@@ -29,6 +29,7 @@ import {
     BarChartOutlined,
     NotificationOutlined,
     CustomerServiceOutlined,
+    CreditCardOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
@@ -346,6 +347,17 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 label: 'Профиль',
                 onClick: () => router.push('/company/profile'),
             },
+            // «Подписка» — там, где её ищут. Про тариф было написано только
+            // плиткой на главной, среди рабочих цифр: кто продлевает, заходит
+            // на главную не каждый день, и вопрос «где у вас продлевать»
+            // звучал снова и снова. Показываем тем, кто платит, — остальным
+            // это страница, на которой нечего нажать.
+            ...(checkSectionAccess('/company/billing', user).allowed ? [{
+                key: '/company/billing',
+                icon: <CreditCardOutlined />,
+                label: 'Подписка',
+                onClick: () => router.push('/company/billing'),
+            }] : []),
             // «Настройки» — реквизиты, печать и организации компании: их
             // меняет руководитель. Пункт показывали всем, и бухгалтер с
             // завскладом попадали на экран, где каждая кнопка отвечает
