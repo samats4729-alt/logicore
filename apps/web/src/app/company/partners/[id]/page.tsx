@@ -771,36 +771,6 @@ export default function PartnerDetailPage() {
                         </Col>
                     </Row>
 
-                    <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Транспортное средство</Divider>
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item name="vehicleType" label="Тип транспорта">
-                                <Select
-                                    placeholder="Выберите тип кузова"
-                                    options={VEHICLE_TYPES.map(t => ({ label: t, value: t }))}
-                                    showSearch
-                                />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="vehicleModel" label="Модель автомобиля">
-                                <Input placeholder="Volvo FH12" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: true, message: 'Введите госномер' }]}>
-                                <Input placeholder="123 ABC 01" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="trailerNumber" label="Госномер прицепа">
-                                <Input placeholder="1234 XX 01" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
                     <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Документы</Divider>
                     <Row gutter={16}>
                         <Col span={12}>
@@ -834,6 +804,36 @@ export default function PartnerDetailPage() {
                             </Form.Item>
                         </Col>
                     </Row>
+                    <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Транспортное средство</Divider>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="vehicleType" label="Тип транспорта">
+                                <Select
+                                    placeholder="Выберите тип кузова"
+                                    options={VEHICLE_TYPES.map(t => ({ label: t, value: t }))}
+                                    showSearch
+                                />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="vehicleModel" label="Модель автомобиля">
+                                <Input placeholder="Volvo FH12" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: true, message: 'Введите госномер' }]}>
+                                <Input placeholder="123 ABC 01" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="trailerNumber" label="Госномер прицепа">
+                                <Input placeholder="1234 XX 01" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
                 </Form>
             </Modal>
 

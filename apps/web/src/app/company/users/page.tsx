@@ -2211,48 +2211,6 @@ export default function CompanyUsersPage() {
                                     <Input.Password placeholder="Минимум 8 символов" autoComplete="new-password" />
                                 </Form.Item>
 
-                                <Divider><CarOutlined style={{ marginRight: 6 }} />Транспорт</Divider>
-                                <Row gutter={12}>
-                                    <Col span={12}>
-                                        <Form.Item name="vehicleType" label="Тип транспорта">
-                                            <Select
-                                                placeholder="Тент, Реф..."
-                                                allowClear
-                                                showSearch
-                                                optionFilterProp="children"
-                                            >
-                                                {VEHICLE_TYPES.map(t => (
-                                                    <Select.Option key={t} value={t}>{t}</Select.Option>
-                                                ))}
-                                            </Select>
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item name="vehicleModel" label="Модель автомобиля">
-                                            <Input placeholder="Volvo FH16" />
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                                <Row gutter={12}>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            name="vehiclePlate"
-                                            label="Гос. номер авто"
-                                            rules={[{ required: true, message: 'Введите гос. номер' }]}
-                                        >
-                                            <Input placeholder="A123BC01" />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            name="trailerNumber"
-                                            label="Номер прицепа"
-                                        >
-                                            <Input placeholder="AB1234" />
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-
                                 <Divider><IdcardOutlined style={{ marginRight: 6 }} />Документ, удостоверяющий личность</Divider>
                                 <Row gutter={12}>
                                     <Col span={12}>
@@ -2301,6 +2259,48 @@ export default function CompanyUsersPage() {
                                 >
                                     <Input placeholder="МВД РК / РОВД г. Алматы" />
                                 </Form.Item>
+                                <Divider><CarOutlined style={{ marginRight: 6 }} />Транспорт</Divider>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item name="vehicleType" label="Тип транспорта">
+                                            <Select
+                                                placeholder="Тент, Реф..."
+                                                allowClear
+                                                showSearch
+                                                optionFilterProp="children"
+                                            >
+                                                {VEHICLE_TYPES.map(t => (
+                                                    <Select.Option key={t} value={t}>{t}</Select.Option>
+                                                ))}
+                                            </Select>
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="vehicleModel" label="Модель автомобиля">
+                                            <Input placeholder="Volvo FH16" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="vehiclePlate"
+                                            label="Гос. номер авто"
+                                            rules={[{ required: true, message: 'Введите гос. номер' }]}
+                                        >
+                                            <Input placeholder="A123BC01" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="trailerNumber"
+                                            label="Номер прицепа"
+                                        >
+                                            <Input placeholder="AB1234" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+
                             </>
                         ) : (
                             <>
