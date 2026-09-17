@@ -7,7 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import { dayMonth } from '@/lib/ru-date';
 import { moneyShort } from '@/lib/money-format';
 import SubscriptionBuyModal, { monthsWord, сотрудниковСловом } from '@/components/billing/SubscriptionBuyModal';
-import type { BillingStatus } from '@/components/dashboard/SubscriptionCard';
+import type { BillingStatus } from '@/lib/subscription-state';
 import nova from '@/components/nova/nova.module.css';
 import styles from './paywall.module.css';
 

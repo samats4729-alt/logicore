@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import dayjs from 'dayjs';
 import { api } from '@/lib/api';
-import { dayMonth } from '@/lib/ru-date';
-import { moneyShort } from '@/lib/money-format';
-import SubscriptionBuyModal, { daysWord, monthsWord } from '@/components/billing/SubscriptionBuyModal';
+import SubscriptionBuyModal from '@/components/billing/SubscriptionBuyModal';
+import { BillingStatus, subscriptionView } from '@/lib/subscription-state';
 import nova from '@/components/nova/nova.module.css';
 import styles from './subscription-card.module.css';
 
@@ -17,23 +15,6 @@ import styles from './subscription-card.module.css';
  * узнавал о ней в тот день, когда переставал попадать внутрь.
  */
 
-export interface BillingStatus {
-    enabled: boolean;
-    blocked: boolean;
-    status?: string | null;
-    until?: string | null;
-    daysLeft?: number | null;
-    /** Цена за одного сотрудника в месяц. */
-    pricePerUser?: number;
-    /** Сколько сотрудников оплачивается — водители не в счёт. */
-    users?: number;
-    /** Сумма в месяц при нынешнем числе сотрудников: считает сервер. */
-    monthlyTotal?: number;
-    /** Настроена ли оплата картой. Решает сервер: ключи магазина живут у него. */
-    cardPayment?: boolean;
-    request?: { id: string; months: number; amount: number; createdAt: string } | null;
-}
-
 export default function SubscriptionCard() {
     const [status, setStatus] = useState<BillingStatus | null>(null);
     const [buyOpen, setBuyOpen] = useState(false);
@@ -44,63 +25,9 @@ export default function SubscriptionCard() {
 
     if (!status) return null;
 
-    const perUser = status.pricePerUser ?? 0;
-    const users = status.users ?? 1;
-    // Сумму берём с сервера, а не перемножаем здесь: правило «кто считается
-    // сотрудником» живёт в одном месте, и экран его не повторяет.
-    const price = status.monthlyTotal ?? perUser * users;
-    const until = status.until ? dayjs(status.until) : null;
-    const left = status.daysLeft ?? null;
-
-    // Слова разные не ради разнообразия: «пробный период» у новой компании и
-    // «дни на оплату» у той, что работает год, — это разные новости, и путать
-    // их нельзя.
-    /**
-     * Из чего сложилась сумма: «5 000 ₸ × 3 = 15 000 ₸».
-     *
-     * Без разбора цифра выглядит взятой с потолка, и первый же вопрос
-     * бухгалтера — «почему столько». Когда сотрудник один, разбирать нечего.
-     */
-    const вМесяц = users > 1
-        ? `${moneyShort(perUser)} × ${users} = ${moneyShort(price)} в месяц`
-        : `${moneyShort(price)} в месяц`;
-
-    let value: string;
-    let sub: string;
-    let action: string | null = null;
-    let urgent = false;
-
-    if (!status.enabled) {
-        // Те же слова, что на лендинге: человек читает про тариф в двух
-        // местах, и в обоих ему должны сказать одно и то же.
-        value = 'Бесплатно';
-        sub = 'на время тестирования · доступ открыт';
-    } else if (status.request) {
-        value = 'Запрос отправлен';
-        sub = `${monthsWord(status.request.months)} · ${moneyShort(status.request.amount)} · ждём счёт`;
-    } else if (status.status === 'ACTIVE' && until) {
-        value = `Оплачено до ${dayMonth(until)}`;
-        sub = `${вМесяц}${left != null ? ` · осталось ${daysWord(left)}` : ''}`;
-        action = 'Продлить';
-    } else if (status.status === 'ACTIVE') {
-        value = 'Подписка активна';
-        sub = 'бессрочно';
-    } else if (status.status === 'GRACE' && until) {
-        value = `Осталось ${daysWord(left ?? 0)}`;
-        sub = `${вМесяц} · после ${dayMonth(until)} доступ закроется`;
-        action = 'Купить подписку';
-        urgent = true;
-    } else if (status.status === 'TRIAL' && until) {
-        value = `Пробный период до ${dayMonth(until)}`;
-        sub = `${left != null ? `осталось ${daysWord(left)} · ` : ''}дальше ${вМесяц}`;
-        action = 'Оформить';
-        urgent = (left ?? 99) <= 3;
-    } else {
-        value = 'Подписка не активна';
-        sub = until ? `срок закончился ${dayMonth(until)}` : вМесяц;
-        action = 'Оформить';
-        urgent = true;
-    }
+    // Слова про подписку — из общего места: ту же строку читает страница
+    // «Подписка», и разъехаться им нельзя.
+    const { value, sub, action, urgent, pricePerUser: perUser, users } = subscriptionView(status);
 
     return (
         <>
