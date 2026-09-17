@@ -20,6 +20,52 @@ export class EmailService {
         }
     }
 
+    /**
+     * Приписка в конце каждого письма.
+     *
+     * Письма уходят с адреса `noreply`, и ящик этот никто не читает. Люди
+     * отвечали на них как на обычную переписку — с вопросами, документами,
+     * возражениями по счёту — и ждали ответа, которого не будет. Со стороны
+     * получателя это выглядит так, будто им не ответили.
+     *
+     * Поэтому приписка делается один раз здесь, а не в шаблонах: писем шесть,
+     * и в седьмом про неё бы забыли.
+     */
+    private readonly АВТО_ПРИПИСКА = `
+        <div style="max-width: 480px; margin: 0 auto 32px; padding: 0 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #8c8c8c; font-size: 12px; line-height: 1.5; text-align: center;">
+            Сообщение создано и отправлено автоматически.<br>
+            Ответ на это письмо никто не получит.
+        </div>`;
+
+    /** Дописать приписку перед закрытием страницы письма. */
+    private сПриписки(html: string): string {
+        // Шаблоны написаны по-разному: у одних есть `</body>`, у других нет.
+        // Вставлять вслепую в конец нельзя — приписка окажется за пределами
+        // страницы, и часть почтовых программ её не покажет.
+        const конец = html.lastIndexOf('</body>');
+        if (конец === -1) return html + this.АВТО_ПРИПИСКА;
+        return html.slice(0, конец) + this.АВТО_ПРИПИСКА + html.slice(конец);
+    }
+
+    /**
+     * Единственная точка отправки. Всё, что должно быть в каждом письме, —
+     * здесь, а не в шаблоне очередного письма.
+     */
+    private async отправить(письмо: {
+        to: string;
+        subject: string;
+        html: string;
+        attachments?: { filename: string; content: Buffer }[];
+    }) {
+        return this.resend!.emails.send({
+            from: this.fromEmail,
+            to: письмо.to,
+            subject: письмо.subject,
+            html: this.сПриписки(письмо.html),
+            ...(письмо.attachments ? { attachments: письмо.attachments } : {}),
+        });
+    }
+
     async sendPasswordResetEmail(to: string, resetToken: string, userName: string): Promise<void> {
         const frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
         const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
@@ -82,12 +128,7 @@ export class EmailService {
         }
 
         try {
-            const result = await this.resend.emails.send({
-                from: this.fromEmail,
-                to,
-                subject,
-                html,
-            });
+            const result = await this.отправить({ to, subject, html });
             this.logger.log(`📧 Password reset email sent to ${to}, id: ${(result as any)?.data?.id}`);
         } catch (error: any) {
             this.logger.error(`Failed to send password reset email to ${to}: ${error.message}`);
@@ -134,12 +175,7 @@ export class EmailService {
         }
 
         try {
-            const result = await this.resend.emails.send({
-                from: this.fromEmail,
-                to,
-                subject,
-                html,
-            });
+            const result = await this.отправить({ to, subject, html });
             this.logger.log(`📧 Invitation email sent to ${to}, id: ${(result as any)?.data?.id}`);
             return true;
         } catch (error: any) {
@@ -246,17 +282,11 @@ export class EmailService {
         }
 
         try {
-            const result = await this.resend.emails.send({
-                from: this.fromEmail,
+            const result = await this.отправить({
                 to,
                 subject,
                 html,
-                attachments: [
-                    {
-                        filename: `doverennost_order_${orderNumber}.pdf`,
-                        content: pdfBuffer,
-                    }
-                ]
+                attachments: [{ filename: `doverennost_order_${orderNumber}.pdf`, content: pdfBuffer }],
             });
             this.logger.log(`📧 Power of Attorney email sent to ${to}, id: ${(result as any)?.data?.id}`);
         } catch (error: any) {
@@ -329,12 +359,7 @@ export class EmailService {
         }
 
         try {
-            const result = await this.resend.emails.send({
-                from: this.fromEmail,
-                to,
-                subject,
-                html,
-            });
+            const result = await this.отправить({ to, subject, html });
             this.logger.log(`📧 Counterparty report email sent to ${to}, id: ${(result as any)?.data?.id}`);
         } catch (error: any) {
             this.logger.error(`Failed to send counterparty report email to ${to}: ${error.message}`);
@@ -396,8 +421,7 @@ export class EmailService {
         }
 
         try {
-            const result = await this.resend.emails.send({
-                from: this.fromEmail,
+            const result = await this.отправить({
                 to,
                 subject,
                 html,
@@ -473,12 +497,7 @@ export class EmailService {
         }
 
         try {
-            const result = await this.resend.emails.send({
-                from: this.fromEmail,
-                to,
-                subject,
-                html,
-            });
+            const result = await this.отправить({ to, subject, html });
             this.logger.log(`📧 Invoice email sent to ${to}, id: ${(result as any)?.data?.id}`);
         } catch (error: any) {
             this.logger.error(`Failed to send invoice email to ${to}: ${error.message}`);
