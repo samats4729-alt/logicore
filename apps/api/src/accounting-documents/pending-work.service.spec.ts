@@ -1,4 +1,5 @@
 import { PendingWorkService } from './pending-work.service';
+import { ownOrdersWhere } from '../common/manager-orders';
 
 const COMPANY = 'company-1';
 const CUSTOMER = 'company-2';
@@ -37,8 +38,10 @@ function hasLiveDoc(docs: string[], type: string) {
     return docs.some((entry) => entry === type);
 }
 
-function makePrisma() {
+function makePrisma(ordersScope: string | null = null) {
     return {
+        user: { findUnique: jest.fn(async () => ({ ordersScope })) },
+        company: { findUnique: jest.fn(async () => ({ managersSeeOwnOrdersOnly: true })) },
         order: {
             findMany: jest.fn(async ({ where }: any) => {
                 const wantsAct = where.accountingDocuments?.some;
@@ -177,6 +180,63 @@ describe('PendingWorkService — висяки для дашборда', () => {
 
         // Рейс обновлён 01.07.2026 — с тех пор прошло больше суток.
         expect(ordersWithoutAct.items[0].daysWaiting).toBeGreaterThan(0);
+    });
+
+    /**
+     * Виджет раньше был только у тех, кто и так видит компанию целиком.
+     * Теперь его можно открыть менеджеру — и через список «рейс завершён,
+     * акта нет» видно чужие сделки с ценами, если не сузить.
+     */
+    describe('менеджеру — только его рейсы', () => {
+        const МЕНЕДЖЕР = { userId: 'user-1', role: 'LOGISTICIAN' };
+        const своиРейсы = ownOrdersWhere(COMPANY, МЕНЕДЖЕР.userId);
+
+        it('к отбору рейсов добавлено «и только свои»', async () => {
+            const prisma = makePrisma('OWN');
+            await new PendingWorkService(prisma).getPendingWork(COMPANY, МЕНЕДЖЕР);
+
+            for (const [{ where }] of prisma.order.findMany.mock.calls) {
+                expect(where.AND).toEqual(expect.arrayContaining([своиРейсы]));
+            }
+        });
+
+        it('свой отбор виджета при этом не потерян', async () => {
+            // «Акт есть, счёта нет» держит второе условие в том же `AND`.
+            // Затри его сужением — и висяк превратился бы в «все рейсы с
+            // актом», включая уже выставленные.
+            const prisma = makePrisma('OWN');
+            await new PendingWorkService(prisma).getPendingWork(COMPANY, МЕНЕДЖЕР);
+
+            const вызовы = prisma.order.findMany.mock.calls.map(([{ where }]: any) => where);
+            const сАктом = вызовы.find((where: any) => where.accountingDocuments?.some);
+            expect(сАктом.AND[0].accountingDocuments.none.document.type).toBe('PAYMENT_INVOICE');
+        });
+
+        it('просроченные счета — по своим рейсам', async () => {
+            const prisma = makePrisma('OWN');
+            await new PendingWorkService(prisma).getPendingWork(COMPANY, МЕНЕДЖЕР);
+
+            const { where } = prisma.accountingDocument.findMany.mock.calls[0][0];
+            expect(where.orders).toEqual({ some: { order: своиРейсы } });
+        });
+
+        it('кому открыты все заявки — ничего не сужаем', async () => {
+            const prisma = makePrisma('ALL');
+            await new PendingWorkService(prisma).getPendingWork(COMPANY, МЕНЕДЖЕР);
+
+            const { where } = prisma.accountingDocument.findMany.mock.calls[0][0];
+            expect(where.orders).toBeUndefined();
+        });
+
+        it('бухгалтеру и администратору — вся компания', async () => {
+            const prisma = makePrisma('OWN');
+            await new PendingWorkService(prisma).getPendingWork(COMPANY, {
+                userId: 'user-2', role: 'ACCOUNTANT',
+            });
+
+            const { where } = prisma.accountingDocument.findMany.mock.calls[0][0];
+            expect(where.orders).toBeUndefined();
+        });
     });
 });
 

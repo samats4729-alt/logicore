@@ -187,6 +187,12 @@ export class AuthService {
                 email: true,
                 isActive: true,
                 permissions: true,
+                // Видимость заявок и набор блоков дашборда решают доступ так
+                // же, как права разделов, — значит читаются на каждом запросе
+                // из базы, а не из токена: снятая галочка действует сразу.
+                ordersScope: true,
+                dashboardBlocks: true,
+                dashboardCustom: true,
                 role: true,
                 companyId: true,
             },

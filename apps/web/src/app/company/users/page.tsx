@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import PillTabs from '@/components/ui/PillTabs';
 import { DateField } from '@/components/ui/DateField';
+import { БЛОКИ_ДАШБОРДА, НАЗВАНИЯ_БЛОКОВ, блокиПоРоли } from '@/lib/dashboard-blocks';
 
 const ROLE_OPTIONS = [
     { label: 'Менеджер', value: 'LOGISTICIAN' },
@@ -76,6 +77,11 @@ interface CompanyUser {
     docExpiresAt?: string;
     docIssuedBy?: string;
     position?: string | null;
+
+    // Видимость: чьи заявки человек видит и какие блоки дашборда ему открыты.
+    ordersScope?: string | null;
+    dashboardBlocks?: string[] | null;
+    dashboardCustom?: boolean | null;
 }
 
 interface Invitation {
@@ -647,6 +653,10 @@ export default function CompanyUsersPage() {
             if (!editingUser) return;
             await api.put(`/company/users/${editingUser.id}/permissions`, {
                 permissions: values.permissions || [],
+                // Пусто в переключателе означает «как решено для компании».
+                ordersScope: values.ordersScope || null,
+                dashboardCustom: !!values.dashboardCustom,
+                dashboardBlocks: values.dashboardBlocks || [],
             });
             toast.success('Права доступа обновлены');
             setEditModalOpen(false);
@@ -773,7 +783,14 @@ export default function CompanyUsersPage() {
                                     title="Настроить права"
                                     onClick={() => {
                                         setEditingUser(u);
-                                        editForm.setFieldsValue({ permissions: u.permissions || [] });
+                                        editForm.setFieldsValue({
+                                            permissions: u.permissions || [],
+                                            ordersScope: u.ordersScope || '',
+                                            dashboardCustom: !!u.dashboardCustom,
+                                            dashboardBlocks: u.dashboardCustom
+                                                ? u.dashboardBlocks || []
+                                                : блокиПоРоли(u.role, u.permissions || []),
+                                        });
                                         setEditModalOpen(true);
                                     }}
                                 />
@@ -1086,7 +1103,14 @@ export default function CompanyUsersPage() {
                             icon={<SettingOutlined />}
                             onClick={() => {
                                 setEditingUser(record);
-                                editForm.setFieldsValue({ permissions: record.permissions || [] });
+                                editForm.setFieldsValue({
+                                    permissions: record.permissions || [],
+                                    ordersScope: record.ordersScope || '',
+                                    dashboardCustom: !!record.dashboardCustom,
+                                    dashboardBlocks: record.dashboardCustom
+                                        ? record.dashboardBlocks || []
+                                        : блокиПоРоли(record.role, record.permissions || []),
+                                });
                                 setEditModalOpen(true);
                             }}
                         />
@@ -2397,6 +2421,46 @@ export default function CompanyUsersPage() {
                 <Form form={editForm} layout="vertical" onFinish={handleEditPermissions}>
                     <Form.Item name="permissions" label="Доступ к разделам">
                         <Checkbox.Group options={MODULE_PERMISSIONS} />
+                    </Form.Item>
+
+                    {/* Видимость заявок. За ней идут не только «Заявки»:
+                        журнал счетов, взаиморасчёты, деньги, реестр и отчёты
+                        отбираются тем же правилом — об этом сказано прямо,
+                        иначе руководитель не догадается. */}
+                    <Form.Item
+                        name="ordersScope"
+                        label="Какие заявки видит"
+                        extra="За этим же правилом идут журнал счетов, деньги, взаиморасчёты и отчёты."
+                    >
+                        <Select
+                            options={[
+                                { value: '', label: 'Как решено для компании' },
+                                { value: 'ALL', label: 'Все заявки компании' },
+                                { value: 'OWN', label: 'Только свои заявки' },
+                            ]}
+                        />
+                    </Form.Item>
+
+                    <Form.Item name="dashboardCustom" valuePropName="checked" style={{ marginBottom: 8 }}>
+                        <Checkbox>Задать, что видно на дашборде</Checkbox>
+                    </Form.Item>
+                    {/* Пока не отмечено — набор блоков определяется ролью, как
+                        было всегда. Показывать галочки в этом случае значило бы
+                        врать: снимешь их, а ничего не поменяется. */}
+                    <Form.Item noStyle shouldUpdate={(до, после) => до.dashboardCustom !== после.dashboardCustom}>
+                        {({ getFieldValue }) => getFieldValue('dashboardCustom') ? (
+                            <Form.Item name="dashboardBlocks" label="Блоки дашборда">
+                                <Checkbox.Group
+                                    options={БЛОКИ_ДАШБОРДА.map((ключ) => ({
+                                        value: ключ, label: НАЗВАНИЯ_БЛОКОВ[ключ],
+                                    }))}
+                                />
+                            </Form.Item>
+                        ) : (
+                            <div style={{ fontSize: 12.5, color: 'var(--lc-text-ter)', marginBottom: 12 }}>
+                                Сейчас набор блоков определяется ролью сотрудника.
+                            </div>
+                        )}
                     </Form.Item>
                 </Form>
             </Modal>

@@ -42,7 +42,14 @@ interface DashboardSummary {
     marginPercentage: number;
     debtorSum: number;
     creditorSum: number;
-    cashBalance: number;
+    /**
+     * `null` — касса компании этому человеку не принадлежит.
+     *
+     * Так отвечает сервер тем, кому открыты только свои сделки: остаток на
+     * счетах к рейсам не привязан, и частичная сумма вместо него читалась бы
+     * как остаток компании. Плитка тогда не показывается вовсе.
+     */
+    cashBalance: number | null;
     unpaidOrdersCount: number;
 }
 
@@ -314,12 +321,14 @@ export default function FinanceHubPage() {
                             : undefined}
                         chipTone={(summary.margin || 0) < 0 ? 'neg' : undefined}
                     />
-                    <Kpi
-                        label="Баланс"
-                        value={formatAmount(summary.cashBalance || 0, compact)}
-                        title={exactAmount(summary.cashBalance || 0)}
-                        sub="касса и счета"
-                    />
+                    {summary.cashBalance != null && (
+                        <Kpi
+                            label="Баланс"
+                            value={formatAmount(summary.cashBalance, compact)}
+                            title={exactAmount(summary.cashBalance)}
+                            sub="касса и счета"
+                        />
+                    )}
                     <Kpi
                         label="Дебиторка"
                         value={formatAmount(summary.debtorSum || 0, compact)}

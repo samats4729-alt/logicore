@@ -17,6 +17,7 @@ import styles from '@/components/nova/nova.module.css';
 import dash from './dashboard.module.css';
 import Loader from '@/components/ui/Loader';
 import { monthLabel } from '@/lib/ru-date';
+import { видимыеБлоки } from '@/lib/dashboard-blocks';
 
 // ==================== Типы ====================
 
@@ -109,19 +110,15 @@ export default function CompanyDashboard() {
     // Полный дашборд (активность, задолженность) — только администратору компании
     const isOwner = ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '');
     /**
-     * Бухгалтерская работа на дашборде: очередь чеков, платёжный календарь и
-     * незакрытые хвосты между рейсами и бухгалтерией.
+     * Что этому человеку открыто на дашборде.
      *
-     * Всё это — работа бухгалтера, и сервер ему эти данные отдаёт. Но карточки
-     * висели только у владельца, и тот, чья это работа, их не видел: чтобы
-     * попасть в журнал счетов, бухгалтер шёл через «Деньги», хотя у
-     * администратора ссылка на журнал лежала прямо на дашборде.
-     *
-     * Право раздела спрашиваем и здесь: без «Бухгалтерии» сервер ответит
-     * отказом, и карточка показала бы пустоту вместо работы.
+     * Набор задаёт руководитель в «Сотрудниках»; пока он его не трогал,
+     * работает прежнее правило по роли. Раньше блоки были прибиты к роли
+     * намертво, и под каждый случай — «финансовому отделу нужна активность»,
+     * «старшему менеджеру сводка по всем заявкам» — пришлось бы заводить
+     * новую роль.
      */
-    const seesAccountingWork = isOwner
-        || (user?.role === 'ACCOUNTANT' && (user?.permissions ?? []).includes('accounting'));
+    const открыто = useMemo(() => new Set<string>(видимыеБлоки(user ?? {})), [user]);
 
     const [activity, setActivity] = useState<DashboardActivity | null>(null);
     const [activityLoading, setActivityLoading] = useState(true);
@@ -145,6 +142,14 @@ export default function CompanyDashboard() {
         });
     };
     const show = (key: string) => !hiddenBlocks.includes(key);
+    /**
+     * Блок на экране: и открыт руководителем, и не свёрнут самим человеком.
+     *
+     * Два разных решения, и путать их нельзя: одно про доступ, второе про
+     * личное удобство. Свернул себе блок — это его дело; не открыли блок —
+     * его не вернёт никакая кнопка «Настроить».
+     */
+    const блок = (ключ: string) => открыто.has(ключ) && show(ключ);
 
     // Личные показатели сотрудника (не-администратора)
     const [myStats, setMyStats] = useState<{ total: number; pending: number; inWork: number; completed: number } | null>(null);
@@ -163,7 +168,9 @@ export default function CompanyDashboard() {
             .then(res => setPayrollSummary(res.data))
             .catch(() => { });
 
-        if (isOwner) {
+        // Сводку по компании грузим тем, кому открыт блок «Активность», а не
+        // по роли: иначе выданная галочка показывала бы пустую таблицу.
+        if (открыто.has('activity')) {
             api.get('/company/dashboard-activity')
                 .then(res => setActivity(res.data))
                 .catch(() => { })
@@ -186,7 +193,7 @@ export default function CompanyDashboard() {
 
             setActivityLoading(false);
         }
-    }, [user, isOwner, isManager]);
+    }, [user, isOwner, isManager, открыто]);
 
     const cur = activity?.current;
     const prev = activity?.previous;
@@ -347,8 +354,8 @@ export default function CompanyDashboard() {
                 принимает тоже от него. */}
             {isOwner && <SubscriptionCard />}
 
-            {/* ===== АКТИВНОСТЬ (только администратор компании) ===== */}
-            {isOwner && show('activity') && (
+            {/* ===== АКТИВНОСТЬ ===== */}
+            {блок('activity') && (
                 <section className={styles.card}>
                     <div className={styles.cardHead}>
                         <Activity size={14} />
@@ -394,28 +401,28 @@ export default function CompanyDashboard() {
             <div className={dash.cards}>
                 {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ =====
                     Рейсы без акта, акты без счёта, просроченные счета — и
-                    ссылка в журнал счетов. Это работа бухгалтера, а видел её
-                    только администратор. */}
-                {seesAccountingWork && show('pendingWork') && <PendingWorkCard />}
-                {seesAccountingWork && <PaymentProofsCard />}
+                    ссылка в журнал счетов. Список сужается так же, как заявки:
+                    менеджеру «только свои» — его хвосты, не чужие. */}
+                {блок('pendingWork') && <PendingWorkCard />}
+                {блок('paymentProofs') && <PaymentProofsCard />}
 
                 {/* ===== ПЛАТЁЖНЫЙ КАЛЕНДАРЬ =====
-                    Кому видны деньги, тот и видит календарь: те же роли, что
-                    и у задолженности с очередью чеков. Менеджеру суммы по
-                    контрагентам не показываются нигде, и здесь тоже не место. */}
-                {seesAccountingWork && show('paymentCalendar') && <PaymentCalendarCard />}
+                    Кому открыт блок, тот и видит календарь. Суммы в нём
+                    считаются по тем же рейсам, что человеку и так видны: у
+                    менеджера «только свои» — по его сделкам. */}
+                {блок('paymentCalendar') && <PaymentCalendarCard />}
 
-                {/* ===== ЗАРАБОТОК СОТРУДНИКОВ (администратор компании) =====
+                {/* ===== ЗАРАБОТОК СОТРУДНИКОВ =====
 
                     Здесь была задолженность. Она осталась целой страницей во
                     «Взаиморасчётах» и плиткой в платёжном календаре, а на
                     дашборде повторялась третий раз. Сколько компания должна
                     своим — оклад, процент и премии — не было видно нигде,
                     кроме страницы зарплат, куда заходят раз в месяц. */}
-                {isOwner && show('earnings') && <EmployeeEarningsCard />}
+                {блок('earnings') && <EmployeeEarningsCard />}
 
-                {/* ===== УВЕДОМЛЕНИЯ (видят все сотрудники) ===== */}
-                {(isOwner ? show('events') : true) && (
+                {/* ===== УВЕДОМЛЕНИЯ ===== */}
+                {блок('events') && (
                     <section className={styles.card}>
                         <div className={styles.cardHead}>
                             <Bell size={14} />

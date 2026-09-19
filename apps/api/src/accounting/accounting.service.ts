@@ -280,8 +280,12 @@ export class AccountingService {
 
     // ==================== DASHBOARD SUMMARY ====================
 
-    async getDashboardSummary(companyId: string, query: { startDate?: string; endDate?: string }) {
-        return this.reportsService.getDashboardSummary(companyId, query);
+    async getDashboardSummary(
+        companyId: string,
+        query: { startDate?: string; endDate?: string },
+        viewer?: JournalViewer,
+    ) {
+        return this.reportsService.getDashboardSummary(companyId, query, viewer);
     }
 
     // ==================== EXPORTS ====================

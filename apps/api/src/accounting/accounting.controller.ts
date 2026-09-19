@@ -459,7 +459,10 @@ export class AccountingController {
         @Request() req: any,
         @Query() query: { startDate?: string; endDate?: string },
     ) {
-        return this.accountingService.getDashboardSummary(req.user.companyId, query);
+        return this.accountingService.getDashboardSummary(req.user.companyId, query, {
+            userId: req.user.id,
+            role: req.user.role,
+        });
     }
 
     // ==================== PERIOD CLOSING ENDPOINTS ====================

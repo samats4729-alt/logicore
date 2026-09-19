@@ -1,5 +1,10 @@
 import { UserRole } from '@prisma/client';
-import { documentsOfOwnOrders, managerOrdersFilter, ownOrdersWhere } from './manager-orders';
+import {
+    documentsOfOwnOrders,
+    managerOrdersFilter,
+    ownOrdersWhere,
+    ВИДИМОСТЬ_ЗАЯВОК,
+} from './manager-orders';
 
 /**
  * Приватность заявок менеджера — там, где показываются деньги.
@@ -17,12 +22,15 @@ import { documentsOfOwnOrders, managerOrdersFilter, ownOrdersWhere } from './man
 const КОМПАНИЯ = 'org-1';
 const Я = 'user-1';
 
-function prisma(managersSeeOwnOrdersOnly: boolean | null) {
+function prisma(managersSeeOwnOrdersOnly: boolean | null, ordersScope: string | null = null) {
     return {
         company: {
             findUnique: jest.fn(async () => (
                 managersSeeOwnOrdersOnly === null ? null : { managersSeeOwnOrdersOnly }
             )),
+        },
+        user: {
+            findUnique: jest.fn(async () => ({ ordersScope })),
         },
     };
 }
@@ -80,6 +88,43 @@ describe('Свои заявки менеджера', () => {
                 companyId: КОМПАНИЯ, role: UserRole.ACCOUNTANT, userId: Я,
             });
             expect(db.company.findUnique).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('настройка сотрудника сильнее общей', () => {
+        it('открыты все заявки — не сужаем, даже когда компания сужает', async () => {
+            // Ради этого настройка и заводилась: старшему менеджеру открывают
+            // компанию целиком, не открывая её остальным.
+            const итог = await managerOrdersFilter(prisma(true, ВИДИМОСТЬ_ЗАЯВОК.ВСЕ), {
+                companyId: КОМПАНИЯ, role: UserRole.LOGISTICIAN, userId: Я,
+            });
+            expect(итог).toBeNull();
+        });
+
+        it('только свои — сужаем, даже когда компания открыта всем', async () => {
+            const итог = await managerOrdersFilter(prisma(false, ВИДИМОСТЬ_ЗАЯВОК.СВОИ), {
+                companyId: КОМПАНИЯ, role: UserRole.LOGISTICIAN, userId: Я,
+            });
+            expect(итог).toEqual(ownOrdersWhere(КОМПАНИЯ, Я));
+        });
+
+        it('заданное сотруднику решает само — компанию не спрашиваем', async () => {
+            // Иначе «выдал доступ конкретному человеку» зависело бы ещё и от
+            // общей галочки, и руководитель не понимал бы, что победит.
+            const db = prisma(true, ВИДИМОСТЬ_ЗАЯВОК.ВСЕ);
+            await managerOrdersFilter(db, {
+                companyId: КОМПАНИЯ, role: UserRole.LOGISTICIAN, userId: Я,
+            });
+            expect(db.company.findUnique).not.toHaveBeenCalled();
+        });
+
+        it('ничего не задано — работает общая настройка', async () => {
+            const db = prisma(false, null);
+            const итог = await managerOrdersFilter(db, {
+                companyId: КОМПАНИЯ, role: UserRole.LOGISTICIAN, userId: Я,
+            });
+            expect(итог).toBeNull();
+            expect(db.company.findUnique).toHaveBeenCalled();
         });
     });
 

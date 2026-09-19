@@ -70,6 +70,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             role: user.role,
             companyId: user.companyId,
             permissions: user.permissions ?? [],
+            // Видимость заявок и блоки дашборда — такие же права, как разделы:
+            // читаются из базы на каждом запросе, поэтому снятая галочка
+            // действует сразу, не дожидаясь перевхода.
+            ordersScope: user.ordersScope ?? null,
+            dashboardBlocks: user.dashboardBlocks ?? [],
+            dashboardCustom: user.dashboardCustom ?? false,
         };
     }
 }
