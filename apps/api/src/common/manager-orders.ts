@@ -26,7 +26,8 @@ import { Prisma, UserRole } from '@prisma/client';
  *   — журнал операций: приход, расход, все операции;
  *   — оплаты по конкретной заявке;
  *   — реестр заявок и его выгрузка;
- *   — лента событий и тикер рейсов в шапке.
+ *   — лента событий и тикер рейсов в шапке;
+ *   — виджет «Требует оформления» на дашборде.
  *
  * Появился экран, где видно сделки, — ему сюда же.
  */
@@ -53,26 +54,53 @@ export function ownOrdersWhere(companyId: string, userId: string): Prisma.OrderW
 /** Роли, к которым приватность заявок вообще применяется. */
 const УЧАСТВУЮТ: UserRole[] = [UserRole.LOGISTICIAN];
 
-type CompanyReader = {
+/** Что стоит у сотрудника в графе «Заявки». */
+export const ВИДИМОСТЬ_ЗАЯВОК = {
+    /** Все заявки компании — как у старшего менеджера. */
+    ВСЕ: 'ALL',
+    /** Только свои — и деньги с отчётами по ним же. */
+    СВОИ: 'OWN',
+} as const;
+
+type VisibilityReader = {
     company: {
         findUnique: (args: any) => Promise<{ managersSeeOwnOrdersOnly: boolean } | null>;
+    };
+    user: {
+        findUnique: (args: any) => Promise<{ ordersScope: string | null } | null>;
     };
 };
 
 /**
  * Чем сузить выборку этому человеку — или `null`, если сужать не надо.
  *
- * `null` возвращается двумя разными путями, и оба нормальны: человек не
- * менеджер (админ, бухгалтер, экспедитор видят компанию целиком) либо
- * настройка в компании выключена. Возвращать вместо этого «пустое условие»
- * нельзя: вызывающий должен видеть разницу между «не сужаем» и «сузили».
+ * Правил два, и личное сильнее общего:
+ *
+ *   1. То, что руководитель задал сотруднику в «Сотрудниках»: все заявки или
+ *      только свои. Настройка компании при этом не спрашивается вовсе —
+ *      иначе «выдал доступ конкретному человеку» ничего бы не значило.
+ *   2. Если сотруднику ничего не задано — общая настройка компании, как и
+ *      было раньше.
+ *
+ * `null` возвращается несколькими путями, и все нормальны: человек не
+ * менеджер (админ, бухгалтер, экспедитор видят компанию целиком), сотруднику
+ * открыты все заявки, либо настройка в компании выключена. Возвращать вместо
+ * этого «пустое условие» нельзя: вызывающий должен видеть разницу между «не
+ * сужаем» и «сузили».
  */
 export async function managerOrdersFilter(
-    prisma: CompanyReader,
+    prisma: VisibilityReader,
     params: { companyId: string; role: UserRole | string | null | undefined; userId: string | null | undefined },
 ): Promise<Prisma.OrderWhereInput | null> {
     const { companyId, role, userId } = params;
     if (!userId || !role || !УЧАСТВУЮТ.includes(role as UserRole)) return null;
+
+    const сотрудник = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { ordersScope: true },
+    });
+    if (сотрудник?.ordersScope === ВИДИМОСТЬ_ЗАЯВОК.ВСЕ) return null;
+    if (сотрудник?.ordersScope === ВИДИМОСТЬ_ЗАЯВОК.СВОИ) return ownOrdersWhere(companyId, userId);
 
     const owner = await prisma.company.findUnique({
         where: { id: companyId },

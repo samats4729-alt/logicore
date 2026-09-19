@@ -11,7 +11,8 @@ import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
-import { managerOrdersFilter } from '../common/manager-orders';
+import { managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
+import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
 import { D, ZERO, toNum } from '../common/utils/money';
 import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
@@ -94,6 +95,11 @@ export class CompanyService {
                     position: true,
                     avatarPath: true,
                     permissions: true,
+                    // Видимость заявок и набор блоков дашборда: окно прав
+                    // показывает нынешнее состояние, а не пустые галочки.
+                    ordersScope: true,
+                    dashboardBlocks: true,
+                    dashboardCustom: true,
                     createdAt: true,
                     companyId: true,
                     departmentId: true,
@@ -324,16 +330,56 @@ export class CompanyService {
     /**
      * Изменить права доступа пользователя
      */
-    async updateUserPermissions(companyId: string, userId: string, permissions: string[]) {
+    /**
+     * Права сотрудника: разделы, видимость заявок и набор блоков дашборда.
+     *
+     * Три вещи в одном запросе не ради экономии: их задают в одном окне, и
+     * сохраниться они должны вместе. Разнеси по трём запросам — половина
+     * настроек уедет, вторая упрётся в ошибку, и человек останется с правами
+     * наполовину, не понимая, какими именно.
+     */
+    async updateUserPermissions(
+        companyId: string,
+        userId: string,
+        данные: {
+            permissions: string[];
+            /** `ALL` | `OWN` | null — null означает «как решено для компании». */
+            ordersScope?: string | null;
+            dashboardBlocks?: string[];
+            dashboardCustom?: boolean;
+        },
+    ) {
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user || user.companyId !== companyId) {
             throw new NotFoundException('Пользователь не найден');
         }
 
+        const scope = данные.ordersScope;
+        if (scope && scope !== ORDERS_SCOPE.ВСЕ && scope !== ORDERS_SCOPE.СВОИ) {
+            throw new BadRequestException('Непонятная видимость заявок');
+        }
+        // Набор блоков приходит из браузера: оставляем только те, что есть на
+        // дашборде. Иначе в поле осядут выдуманные названия, и следующий, кто
+        // откроет окно, увидит галочки, за которыми ничего нет.
+        const blocks = (данные.dashboardBlocks ?? [])
+            .filter((блок) => (БЛОКИ_ДАШБОРДА as readonly string[]).includes(блок));
+
         return this.prisma.user.update({
             where: { id: userId },
-            data: { permissions },
-            select: { id: true, permissions: true }
+            data: {
+                permissions: данные.permissions,
+                ...(данные.ordersScope !== undefined ? { ordersScope: scope || null } : {}),
+                ...(данные.dashboardCustom !== undefined
+                    ? { dashboardCustom: данные.dashboardCustom, dashboardBlocks: blocks }
+                    : {}),
+            },
+            select: {
+                id: true,
+                permissions: true,
+                ordersScope: true,
+                dashboardBlocks: true,
+                dashboardCustom: true,
+            },
         });
     }
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Res, UseGuards, UseInterceptors, UploadedFile, Request, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Res, UseGuards, UseInterceptors, UploadedFile, Request, Query, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -6,6 +6,7 @@ import { CompanyService } from './company.service';
 import { OrdersService } from '../orders/orders.service';
 import { CompanyDriversService } from './services/company-drivers.service';
 import { S3Service } from '../s3/s3.service';
+import { видимыеБлоки } from '../common/dashboard-blocks';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
@@ -82,13 +83,25 @@ export class CompanyController {
     async updateUserPermissions(
         @Request() req: any,
         @Param('id') userId: string,
-        @Body() dto: { permissions: string[] },
+        @Body() dto: {
+            permissions: string[];
+            /** `ALL` | `OWN` | null — null означает «как решено для компании». */
+            ordersScope?: string | null;
+            dashboardBlocks?: string[];
+            dashboardCustom?: boolean;
+        },
     ) {
-        const result = await this.companyService.updateUserPermissions(req.user.companyId, userId, dto.permissions);
+        const result = await this.companyService.updateUserPermissions(req.user.companyId, userId, dto);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'permissions',
             entityId: userId, entityLabel: 'Изменены права сотрудника',
-            details: { permissions: dto.permissions },
+            // В журнал пишем всё, что меняли: «кому открыли чужие заявки» —
+            // вопрос, который потом задают, и ответ на него должен остаться.
+            details: {
+                permissions: dto.permissions,
+                ordersScope: dto.ordersScope ?? null,
+                dashboardBlocks: dto.dashboardCustom ? dto.dashboardBlocks ?? [] : null,
+            },
         });
         return result;
     }
@@ -179,9 +192,18 @@ export class CompanyController {
     }
 
     @Get('dashboard-activity')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
-    @ApiOperation({ summary: 'Активность компании для дашборда (только администратор компании)' })
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN)
+    @ApiOperation({
+        summary: 'Активность компании для дашборда',
+        description: 'Доступна тем, кому руководитель открыл блок «Активность» в «Сотрудниках».',
+    })
     async getDashboardActivity(@Request() req: any) {
+        // Решает не роль, а выданный набор блоков: иначе руководитель ставит
+        // галочку «Активность» бухгалтеру, а тот видит пустую таблицу —
+        // сервер молча отвечает отказом, и понять это по экрану нельзя.
+        if (!видимыеБлоки(req.user).includes('activity')) {
+            throw new ForbiddenException('Блок «Активность» вам не открыт');
+        }
         return this.companyService.getDashboardActivity(req.user.companyId);
     }
 

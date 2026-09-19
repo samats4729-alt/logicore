@@ -2169,8 +2169,22 @@ export class FinancialReportsService {
         };
     }
 
-    async getDashboardSummary(companyId: string, query: { startDate?: string; endDate?: string }) {
+    async getDashboardSummary(
+        companyId: string,
+        query: { startDate?: string; endDate?: string },
+        viewer?: { userId?: string | null; role?: string | null },
+    ) {
         const { startDate, endDate } = query;
+
+        // Плитки над «Деньгами» считаются по тем же рейсам, что показаны в
+        // списках. Иначе менеджер, которому открыты пять своих сделок, читал
+        // бы над ними выручку и долги всей компании — и «рейсов с долгом» у
+        // него оказалось бы больше, чем рейсов вообще.
+        const свои = await managerOrdersFilter(this.prisma, {
+            companyId,
+            role: viewer?.role,
+            userId: viewer?.userId,
+        });
 
         const dateFilter = startDate && endDate ? {
             createdAt: {
@@ -2198,6 +2212,7 @@ export class FinancialReportsService {
                         ]
                     },
                     dateFilter,
+                    ...(свои ? [свои] : []),
                 ],
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
             },
@@ -2233,6 +2248,27 @@ export class FinancialReportsService {
             if (hasUnpaid) {
                 unpaidOrdersCount++;
             }
+        }
+
+        // Касса компании к рейсам не привязана: там и аренда офиса, и налоги,
+        // и начальные остатки счетов. Человеку, которому открыты только свои
+        // сделки, этот остаток не принадлежит — поэтому он не считается и не
+        // отдаётся вовсе. Показать вместо него частичную сумму хуже, чем не
+        // показать: частичную приняли бы за остаток компании.
+        if (свои) {
+            const revenueOwn = roundMoney(totalRevenue);
+            const marginOwn = roundMoney(totalMargin);
+            return {
+                revenue: toNum(revenueOwn),
+                margin: toNum(marginOwn),
+                marginPercentage: revenueOwn.gt(0)
+                    ? toNum(marginOwn.div(revenueOwn).times(100))
+                    : 0,
+                debtorSum: toNum(roundMoney(debtorSum)),
+                creditorSum: toNum(roundMoney(creditorSum)),
+                cashBalance: null,
+                unpaidOrdersCount,
+            };
         }
 
         const payments = await this.prisma.payment.findMany({

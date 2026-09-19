@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { D, ZERO, toNum } from '../common/utils/money';
 import { kzDaysSince, kzToday } from '../common/utils/business-date';
+import { documentsOfOwnOrders, managerOrdersFilter } from '../common/manager-orders';
 
 /** Сколько строк показывать в виджете; счётчик считается по всей выборке. */
 const PREVIEW_LIMIT = 5;
@@ -52,19 +53,31 @@ export interface PendingWorkGroup {
 export class PendingWorkService {
     constructor(private readonly prisma: PrismaService) {}
 
-    async getPendingWork(companyId: string): Promise<{
+    async getPendingWork(
+        companyId: string,
+        viewer?: { userId?: string | null; role?: string | null },
+    ): Promise<{
         ordersWithoutAct: PendingWorkGroup;
         actsWithoutInvoice: PendingWorkGroup;
         overdueInvoices: PendingWorkGroup;
         unconfirmedSettlements: PendingWorkGroup;
         generatedAt: Date;
     }> {
+        // Виджет раньше был только у тех, кто и так видит компанию целиком.
+        // Теперь его можно открыть менеджеру — и тогда он обязан показывать
+        // висяки по его рейсам, иначе через список «рейс завершён, акта нет»
+        // видно чужие сделки со ставками.
+        const свои = await managerOrdersFilter(this.prisma, {
+            companyId,
+            role: viewer?.role,
+            userId: viewer?.userId,
+        });
         const [ordersWithoutAct, actsWithoutInvoice, overdueInvoices, unconfirmedSettlements] =
             await Promise.all([
-                this.ordersWithoutAct(companyId),
-                this.actsWithoutInvoice(companyId),
-                this.overdueInvoices(companyId),
-                this.unconfirmedSettlements(companyId),
+                this.ordersWithoutAct(companyId, свои),
+                this.actsWithoutInvoice(companyId, свои),
+                this.overdueInvoices(companyId, свои),
+                this.unconfirmedSettlements(companyId, свои),
             ]);
         return {
             ordersWithoutAct,
@@ -83,8 +96,11 @@ export class PendingWorkService {
      * выставить счёт — и без этого списка бухгалтер узнавал бы о таких рейсах
      * от менеджера, у которого не работает кнопка.
      */
-    private async unconfirmedSettlements(companyId: string): Promise<PendingWorkGroup> {
-        return this.collectOrders({
+    private async unconfirmedSettlements(
+        companyId: string,
+        свои: Prisma.OrderWhereInput | null,
+    ): Promise<PendingWorkGroup> {
+        return this.collectOrders(this.только(свои, {
             settlementsConfirmedAt: null,
             status: { notIn: [OrderStatus.CANCELLED, OrderStatus.COMPLETED] },
             OR: [
@@ -92,7 +108,24 @@ export class PendingWorkService {
                 { partnerId: companyId },
                 { responsibleManager: { companyId } },
             ],
-        });
+        }));
+    }
+
+    /**
+     * Добавить к отбору «и только свои рейсы».
+     *
+     * Отдельным `AND`, а не слиянием ключей: у отбора уже есть свой `OR`
+     * (кем мы приходимся рейсу), и у «своих» тоже свой. Слей их в один
+     * объект — второй затрёт первый, и вместо сужения выйдет расширение.
+     */
+    private только(
+        свои: Prisma.OrderWhereInput | null,
+        where: Prisma.OrderWhereInput,
+    ): Prisma.OrderWhereInput {
+        if (!свои) return where;
+        const было = where.AND;
+        const прежние = Array.isArray(было) ? было : было ? [было] : [];
+        return { ...where, AND: [...прежние, свои] };
     }
 
     /**
@@ -130,7 +163,10 @@ export class PendingWorkService {
     }
 
     /** Рейс завершён, а акта выполненных работ по нему нет. */
-    private async ordersWithoutAct(companyId: string): Promise<PendingWorkGroup> {
+    private async ordersWithoutAct(
+        companyId: string,
+        свои: Prisma.OrderWhereInput | null,
+    ): Promise<PendingWorkGroup> {
         const where: Prisma.OrderWhereInput = {
             ...this.sellerOrdersWhere(companyId),
             status: OrderStatus.COMPLETED,
@@ -138,11 +174,14 @@ export class PendingWorkService {
                 none: this.hasOutgoing(companyId, AccountingDocumentType.SERVICE_ACT),
             },
         };
-        return this.collectOrders(where);
+        return this.collectOrders(this.только(свои, where));
     }
 
     /** Акт выписан, а счёта на оплату по этому рейсу нет — денег не ждём. */
-    private async actsWithoutInvoice(companyId: string): Promise<PendingWorkGroup> {
+    private async actsWithoutInvoice(
+        companyId: string,
+        свои: Prisma.OrderWhereInput | null,
+    ): Promise<PendingWorkGroup> {
         const where: Prisma.OrderWhereInput = {
             ...this.sellerOrdersWhere(companyId),
             accountingDocuments: {
@@ -156,7 +195,7 @@ export class PendingWorkService {
                 },
             }],
         };
-        return this.collectOrders(where);
+        return this.collectOrders(this.только(свои, where));
     }
 
     private async collectOrders(where: Prisma.OrderWhereInput): Promise<PendingWorkGroup> {
@@ -190,7 +229,10 @@ export class PendingWorkService {
     }
 
     /** Счёт проведён, срок оплаты прошёл, а долг остался. */
-    private async overdueInvoices(companyId: string): Promise<PendingWorkGroup> {
+    private async overdueInvoices(
+        companyId: string,
+        свои: Prisma.OrderWhereInput | null,
+    ): Promise<PendingWorkGroup> {
         const documents = await this.prisma.accountingDocument.findMany({
             where: {
                 companyId,
@@ -200,6 +242,7 @@ export class PendingWorkService {
                 status: AccountingDocumentStatus.POSTED,
                 dueDate: { lt: this.today() },
                 balanceDue: { gt: 0 },
+                ...(свои ? documentsOfOwnOrders(свои) : {}),
             },
             select: {
                 id: true,

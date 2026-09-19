@@ -152,7 +152,10 @@ export class AccountingDocumentsController {
         description: 'Данные для виджета «Требует оформления» на дашборде.',
     })
     getPendingWork(@Request() req: any) {
-        return this.pendingWork.getPendingWork(req.user.companyId);
+        return this.pendingWork.getPendingWork(req.user.companyId, {
+            userId: req.user.id,
+            role: req.user.role,
+        });
     }
 
     // Объявлено до `:id`, иначе путь съедается параметром.
