@@ -101,7 +101,7 @@ function makeService() {
     // форму и версии, а не про проведение и отправку.
     const settlements: any = { stateOf: jest.fn(async () => ({ confirmed: true, missing: [] })) };
     const email: any = { sendOrderDocumentEmail: jest.fn() };
-    const documents = new OrderDocumentsService(prisma, contracts, poa, settlements, email);
+    const documents = new OrderDocumentsService(prisma, contracts, poa, settlements, email, { delByPattern: jest.fn() } as any);
     return { poa, documents, prisma, stamps, saved };
 }
 

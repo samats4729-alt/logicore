@@ -5,11 +5,32 @@ import { OrderContractService } from './order-contract.service';
 import { OrderSettlementsService } from './order-settlements.service';
 import { PowerOfAttorneyService, PowerOfAttorneySnapshot } from './power-of-attorney.service';
 import { EmailService } from '../email/email.service';
+import { RedisService } from '../redis/redis.service';
 
 const TITLE: Record<string, string> = {
     CONTRACT: 'Договор-заявка',
     POWER_OF_ATTORNEY: 'Доверенность',
 };
+
+const ПОХОЖЕ_НА_ПОЧТУ = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+
+/**
+ * Строка «a@b.kz, c@d.kz» или список — в чистый список без повторов.
+ *
+ * Принимаем и то и другое: в базе почты лежат строкой через запятую, а из
+ * браузера приходит список. Регистр при сравнении не считаем: «Sklad@» и
+ * «sklad@» — один и тот же ящик, и дважды письмо туда не нужно.
+ */
+export function разобратьПочты(raw?: string | string[] | null): string[] {
+    const куски = Array.isArray(raw) ? raw : (raw ?? '').split(/[,;]/);
+    const итог: string[] = [];
+    for (const кусок of куски) {
+        const адрес = String(кусок).trim();
+        if (!адрес) continue;
+        if (!итог.some((е) => е.toLowerCase() === адрес.toLowerCase())) итог.push(адрес);
+    }
+    return итог;
+}
 
 /**
  * Что в документе относится к машине и водителю.
@@ -57,6 +78,7 @@ export class OrderDocumentsService {
         private readonly poa: PowerOfAttorneyService,
         private readonly settlements: OrderSettlementsService,
         private readonly email: EmailService,
+        private readonly redis: RedisService,
     ) {}
 
     /** Сформировать очередную версию: снять данные заявки и сохранить. */
@@ -175,7 +197,7 @@ export class OrderDocumentsService {
         const document = await this.prisma.orderDocument.findFirst({
             where: { id: documentId, companyId },
             select: {
-                id: true, kind: true, version: true, status: true,
+                id: true, kind: true, version: true, status: true, orderId: true,
                 recipientCounterpartyId: true, recipientCompanyId: true,
                 sentAt: true, sentToEmail: true, receiptStatus: true, receiptReason: true,
                 receiptAt: true,
@@ -186,6 +208,14 @@ export class OrderDocumentsService {
         const { counterparty, onPlatform } = await this.resolveRecipient(
             document.recipientCounterpartyId, companyId,
         );
+
+        // Почты складов погрузки. Доверенность предъявляют там, и уходит она
+        // из раза в раз одним и тем же людям — а поле в окне отправки было
+        // пустым всегда, потому что постоянного получателя у неё нет.
+        // Менеджер набирал адреса заново каждый рейс.
+        const склады = counterparty
+            ? []
+            : await this.почтыПогрузки(document.orderId, companyId);
 
         // Получателя может и не быть: доверенность выписывается на водителя, а
         // предъявляют её на погрузке — постоянного адресата у неё нет.
@@ -206,6 +236,8 @@ export class OrderDocumentsService {
                 onPlatform: !!onPlatform,
                 platformCompanyId: onPlatform?.id ?? null,
             },
+            /** Кому отправляли доверенность по этим складам в прошлый раз. */
+            suggestedEmails: склады,
             sent: document.sentAt
                 ? {
                     at: document.sentAt,
@@ -227,7 +259,12 @@ export class OrderDocumentsService {
      * Черновик не уходит никуда — иначе у контрагента окажется бумага, за
      * которую компания ещё не отвечает.
      */
-    async send(documentId: string, companyId: string, userId: string, email?: string) {
+    async send(
+        documentId: string,
+        companyId: string,
+        userId: string,
+        email?: string | string[],
+    ) {
         const delivery = await this.deliveryTarget(documentId, companyId);
         if (!delivery.available) {
             throw new BadRequestException(delivery.reason || 'Документ отправить нельзя');
@@ -244,7 +281,13 @@ export class OrderDocumentsService {
         if (!document) throw new NotFoundException('Документ не найден');
 
         const recipient = delivery.recipient;
-        const address = (email || recipient?.email || '').trim();
+        // Адресов может быть много: у склада их бывает и пятнадцать, и
+        // пятьдесят. Раньше поле было одно, и всех, кроме первого, вписывали
+        // «через запятую» наугад — уйдёт письмо или нет, никто не проверял.
+        const адреса = разобратьПочты(email).length
+            ? разобратьПочты(email)
+            : разобратьПочты(recipient?.email);
+        const address = адреса.join(', ');
 
         // Кабинет получателя — главный путь: документ остаётся один, у
         // контрагента появляется он же, а не набранная на слух копия.
@@ -264,21 +307,40 @@ export class OrderDocumentsService {
                         : 'Укажите почту получателя — документ уйдёт письмом с вложением.',
                 );
             }
+            // Опечатку ловим до отправки: письмо на «sklad@company» просто
+            // не уйдёт, а человек будет считать, что доверенность на складе.
+            const кривой = адреса.find((а) => !ПОХОЖЕ_НА_ПОЧТУ.test(а));
+            if (кривой) {
+                throw new BadRequestException(`«${кривой}» не похоже на адрес почты`);
+            }
             const company = await this.prisma.company.findUnique({
                 where: { id: companyId },
                 select: { name: true },
             });
             const pdf = await this.printSaved(documentId, companyId, { withStamp: true });
-            await this.email.sendOrderDocumentEmail(address, {
+            const письмо = {
                 title: TITLE[document.kind],
                 orderNumber: document.order?.orderNumber || '',
                 senderCompanyName: company?.name || 'LogiCore',
                 pdfBuffer: pdf,
                 fileName: `${document.kind === 'CONTRACT' ? 'dogovor' : 'doverennost'}`
                     + `_${document.order?.orderNumber || document.orderId}_v${document.version}.pdf`,
-            });
+            };
+            // Каждому своё письмо, а не одно на всех: получатели с разных
+            // складов не должны видеть почты друг друга, а упавший адрес не
+            // должен уносить с собой остальные.
+            for (const адрес of адреса) {
+                await this.email.sendOrderDocumentEmail(адрес, письмо);
+            }
             sentToEmail = address;
             deliveredTo = address;
+
+            // Запоминаем только там, где адрес спрашивают у человека. У
+            // договора-заявки получатель постоянный — его почта живёт в
+            // карточке контрагента, и складу она никакого отношения не имеет.
+            if (!recipient) {
+                await this.запомнитьПочтыСкладов(document.orderId, companyId, адреса);
+            }
         }
 
         await this.prisma.orderDocument.update({
@@ -300,6 +362,83 @@ export class OrderDocumentsService {
             inCabinet: !!recipientCompanyId,
             replacedVersion: document.replacesId ? document.version - 1 : null,
         };
+    }
+
+    /**
+     * Точки погрузки рейса — те, за которыми и держатся почты.
+     *
+     * Догруз считается погрузкой: там тоже предъявляют доверенность.
+     */
+    private async точкиПогрузки(orderId: string) {
+        return this.prisma.orderRoutePoint.findMany({
+            where: { orderId, pointType: { in: ['PICKUP', 'ADDITIONAL_PICKUP'] } },
+            orderBy: { sequence: 'asc' },
+            select: { locationId: true },
+        });
+    }
+
+    /**
+     * Почты, заведённые компанией за складами погрузки этого рейса.
+     *
+     * Список компании (`LocationEmailList`) сильнее общего поля в карточке
+     * адреса: справочник адресов общий, и контакты у каждой компании свои.
+     * Порядок сохраняем — первым идёт первый склад маршрута.
+     */
+    private async почтыПогрузки(orderId: string, companyId: string): Promise<string[]> {
+        const точки = await this.точкиПогрузки(orderId);
+        if (!точки.length) return [];
+
+        const ids = точки.map((т) => т.locationId);
+        const [свои, общие] = await Promise.all([
+            this.prisma.locationEmailList.findMany({
+                where: { companyId, locationId: { in: ids } },
+                select: { locationId: true, emails: true },
+            }),
+            this.prisma.location.findMany({
+                where: { id: { in: ids } },
+                select: { id: true, emails: true },
+            }),
+        ]);
+        const свойСписок = new Map(свои.map((с) => [с.locationId, с.emails]));
+        const общийСписок = new Map(общие.map((о) => [о.id, о.emails]));
+
+        const собрано: string[] = [];
+        for (const id of ids) {
+            const строка = свойСписок.has(id) ? свойСписок.get(id) : общийСписок.get(id);
+            for (const адрес of разобратьПочты(строка)) {
+                if (!собрано.some((е) => е.toLowerCase() === адрес.toLowerCase())) {
+                    собрано.push(адрес);
+                }
+            }
+        }
+        return собрано;
+    }
+
+    /**
+     * Запомнить, кому ушла доверенность, — за складами погрузки.
+     *
+     * Ровно то, что отправили, и становится списком склада: в следующий раз
+     * подставится оно же. Список из окна отправки и список в карточке точки —
+     * одно и то же место, а не два расходящихся.
+     *
+     * Когда складов в маршруте несколько, пишем всем одинаково. Разложить
+     * «этот адрес относится ко второй погрузке» неоткуда: человек отправлял
+     * одним списком, и делить его за него — гадание.
+     */
+    private async запомнитьПочтыСкладов(orderId: string, companyId: string, адреса: string[]) {
+        const точки = await this.точкиПогрузки(orderId);
+        if (!точки.length) return;
+
+        const value = адреса.join(',');
+        for (const точка of точки) {
+            await this.prisma.locationEmailList.upsert({
+                where: { locationId_companyId: { locationId: точка.locationId, companyId } },
+                create: { locationId: точка.locationId, companyId, emails: value },
+                update: { emails: value },
+            });
+        }
+        // Списки адресов лежат в кэше — иначе подстановка вернёт прежнее.
+        await this.redis.delByPattern('locations:*');
     }
 
     /**

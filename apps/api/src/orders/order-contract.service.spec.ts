@@ -129,7 +129,7 @@ function makeService(stampAllowed = false) {
     // форму и версии, а не про проведение и отправку.
     const settlements: any = { stateOf: jest.fn(async () => ({ confirmed: true, missing: [] })) };
     const email: any = { sendOrderDocumentEmail: jest.fn() };
-    const documents = new OrderDocumentsService(prisma, service, poa, settlements, email);
+    const documents = new OrderDocumentsService(prisma, service, poa, settlements, email, { delByPattern: jest.fn() } as any);
     return { service, documents, poa, prisma, stamps, stampBuffer, saved };
 }
 

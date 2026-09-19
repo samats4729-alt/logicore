@@ -34,6 +34,7 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { canAccounting } from '@/lib/permissions';
 import FilePreviewModal from '@/components/ui/FilePreviewModal';
+import { EmailListField } from '@/components/ui/EmailListField';
 import styles from './order-documents.module.css';
 
 /**
@@ -77,6 +78,13 @@ interface DeliveryTarget {
     available: boolean;
     reason: string | null;
     recipient: { id: string; name: string; email: string | null; onPlatform: boolean } | null;
+    /**
+     * Кому отправляли доверенность по складам погрузки этого рейса.
+     *
+     * У доверенности постоянного получателя нет — её предъявляют на складе.
+     * Поэтому подставляем то, что за складом уже записано, а не пустое поле.
+     */
+    suggestedEmails?: string[];
     sent: { at: string; toEmail: string | null; inCabinet: boolean } | null;
 }
 
@@ -187,7 +195,7 @@ export default function OrderDocuments({
     const [busy, setBusy] = useState<string | null>(null);
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [sending, setSending] = useState<
-        { row: FormedDocument; target: DeliveryTarget; email: string } | null
+        { row: FormedDocument; target: DeliveryTarget; emails: string[] } | null
     >(null);
     const [accountingEmail, setAccountingEmail] = useState<
         { row: AccountingDocumentListItem; email: string } | null
@@ -366,7 +374,15 @@ export default function OrderDocuments({
                 toast.warning(target.reason || 'Документ отправить нельзя');
                 return;
             }
-            setSending({ row, target, email: target.recipient?.email || '' });
+            // Подставляем то, куда отправляли в прошлый раз: почту контрагента
+            // из его карточки, а для доверенности — список складов погрузки.
+            setSending({
+                row,
+                target,
+                emails: target.recipient?.email
+                    ? [target.recipient.email]
+                    : (target.suggestedEmails ?? []),
+            });
         } catch (e: any) {
             toast.error(e.response?.data?.message || 'Не удалось узнать получателя');
         } finally {
@@ -376,11 +392,11 @@ export default function OrderDocuments({
 
     const confirmSend = async () => {
         if (!sending) return;
-        const { row, target, email } = sending;
+        const { row, target, emails } = sending;
         try {
             setBusy(row.id);
             const res = await api.post(`/orders/documents/${row.id}/send`, {
-                email: target.recipient?.onPlatform ? undefined : email,
+                emails: target.recipient?.onPlatform ? undefined : emails,
             });
             toast.success(`Отправлено: ${res.data.sentTo}`);
             setSending(null);
@@ -858,11 +874,17 @@ export default function OrderDocuments({
                                         документом во вложении.
                                     </div>
                                 )}
-                                <Input
-                                    value={sending.email}
-                                    onChange={(e) => setSending({ ...sending, email: e.target.value })}
-                                    placeholder="почта получателя"
+                                <EmailListField
+                                    value={sending.emails}
+                                    onChange={(emails) => setSending({ ...sending, emails })}
+                                    placeholder={sending.emails.length ? 'ещё адрес' : 'почта получателя'}
                                 />
+                                {!sending.target.recipient && (
+                                    <div style={{ fontSize: 12, color: 'var(--nova-fg-2)' }}>
+                                        Список сохранится за складом погрузки — в следующий раз
+                                        подставится сам.
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>
