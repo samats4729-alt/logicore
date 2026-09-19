@@ -153,6 +153,8 @@ export default function CompanyDashboard() {
 
     // Личные показатели сотрудника (не-администратора)
     const [myStats, setMyStats] = useState<{ total: number; pending: number; inWork: number; completed: number } | null>(null);
+    /** Сервер отказал в заявках: раздел человеку не открыт, плитки не его. */
+    const [statsDenied, setStatsDenied] = useState(false);
 
     useEffect(() => {
         if (!user) return;
@@ -176,7 +178,18 @@ export default function CompanyDashboard() {
                 .catch(() => { })
                 .finally(() => setActivityLoading(false));
         } else {
-            // Сотрудник: только его заявки и его заработок
+            setActivityLoading(false);
+        }
+
+        // Личные плитки — своя, отдельная загрузка.
+        //
+        // Раньше она стояла в «иначе» от сводки компании, и это было верно,
+        // пока сводку видел один владелец. Как только блок «Активность» стало
+        // можно выдать менеджеру, его собственные заявки перестали грузиться
+        // вовсе: вместо чисел в плитках встали прочерки. Два разных вопроса —
+        // «открыта ли сводка компании» и «чьи плитки на экране» — и решаются
+        // они порознь.
+        if (!isOwner) {
             const mine = isManager ? '&mine=true' : '';
             api.get(`/company/orders?limit=100${mine}`)
                 .then(res => {
@@ -189,9 +202,11 @@ export default function CompanyDashboard() {
                         completed: list.filter(o => o.status === 'COMPLETED').length,
                     });
                 })
-                .catch(() => { });
-
-            setActivityLoading(false);
+                // Отказ — это не сбой загрузки, а «раздел вам не открыт»: у
+                // бухгалтера без права «Заявки» сервер отвечает отказом
+                // всегда, и три прочерка над дашбордом означали бы поломку
+                // там, где её нет. Плитки в этом случае не показываем.
+                .catch((e: any) => { if (e?.response?.status === 403) setStatsDenied(true); });
         }
     }, [user, isOwner, isManager, открыто]);
 
@@ -329,14 +344,18 @@ export default function CompanyDashboard() {
                     </>
                 ) : (
                     <>
-                        <Tile label={isManager ? 'Мои заявки' : 'Заявки'} value={myStats?.total ?? '—'} sub="за всё время" />
-                        <Tile label="В работе" value={myStats?.inWork ?? '—'} sub="активные перевозки" />
-                        <Tile
-                            label="Ожидают"
-                            value={myStats?.pending ?? '—'}
-                            sub={(myStats?.pending || 0) > 0 ? 'требуют внимания' : 'всё назначено'}
-                            tone={(myStats?.pending || 0) > 0 ? 'warn' : undefined}
-                        />
+                        {!statsDenied && (
+                            <>
+                                <Tile label={isManager ? 'Мои заявки' : 'Заявки'} value={myStats?.total ?? '—'} sub="за всё время" />
+                                <Tile label="В работе" value={myStats?.inWork ?? '—'} sub="активные перевозки" />
+                                <Tile
+                                    label="Ожидают"
+                                    value={myStats?.pending ?? '—'}
+                                    sub={(myStats?.pending || 0) > 0 ? 'требуют внимания' : 'всё назначено'}
+                                    tone={(myStats?.pending || 0) > 0 ? 'warn' : undefined}
+                                />
+                            </>
+                        )}
                         {payrollSummary?.hasScheme && (
                             <Tile
                                 label="Заработано за месяц"
