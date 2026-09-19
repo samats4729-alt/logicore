@@ -304,10 +304,12 @@ export class OrdersController {
     async sendOrderDocument(
         @Param('documentId') documentId: string,
         @Request() req: any,
-        @Body() body: { email?: string },
+        // Адресов может быть несколько: доверенность уходит на все почты
+        // склада. Строку принимаем по-прежнему — так шлют прежние клиенты.
+        @Body() body: { email?: string; emails?: string[] },
     ) {
         const result = await this.orderDocuments.send(
-            documentId, req.user.companyId, req.user.sub, body?.email,
+            documentId, req.user.companyId, req.user.sub, body?.emails ?? body?.email,
         );
         await this.auditService.log({
             companyId: req.user.companyId,

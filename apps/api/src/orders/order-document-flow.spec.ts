@@ -39,9 +39,13 @@ function build(options: {
     missing?: string[];
     counterparty?: any;
     onPlatform?: any;
+    pickups?: any[];
+    savedEmails?: any[];
+    locations?: any[];
 } = {}) {
     const created: any[] = [];
     const updates: any[] = [];
+    const saved: any[] = [];
 
     const tx = {
         orderDocument: {
@@ -77,6 +81,13 @@ function build(options: {
             ),
             findFirst: jest.fn().mockResolvedValue(options.onPlatform ?? null),
         },
+        // Склады погрузки: за ними держатся почты, куда уходит доверенность.
+        orderRoutePoint: { findMany: jest.fn().mockResolvedValue(options.pickups ?? []) },
+        locationEmailList: {
+            findMany: jest.fn().mockResolvedValue(options.savedEmails ?? []),
+            upsert: jest.fn(async (args: any) => { saved.push(args); return args.create; }),
+        },
+        location: { findMany: jest.fn().mockResolvedValue(options.locations ?? []) },
     };
 
     const contracts: any = {
@@ -97,8 +108,10 @@ function build(options: {
     };
     const email: any = { sendOrderDocumentEmail: jest.fn().mockResolvedValue(undefined) };
 
-    const service = new OrderDocumentsService(prisma, contracts, poa, settlements, email);
-    return { service, prisma, created, updates, email, settlements };
+    const redis: any = { delByPattern: jest.fn().mockResolvedValue(undefined) };
+
+    const service = new OrderDocumentsService(prisma, contracts, poa, settlements, email, redis);
+    return { service, prisma, created, updates, saved, email, settlements };
 }
 
 describe('Жизнь документа по рейсу', () => {
