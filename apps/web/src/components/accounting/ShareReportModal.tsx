@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Empty, Input, Modal, Select, Typography, theme } from 'antd';
+import { Alert, Button, Empty, Input, Modal, Segmented, Select, Typography, theme } from 'antd';
 import { CopyOutlined, LinkOutlined, SendOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -52,6 +52,15 @@ export default function ShareReportModal({
     const [email, setEmail] = useState('');
     const [sending, setSending] = useState(false);
     const [выбранный, setВыбранный] = useState<string | undefined>();
+    /**
+     * Кому ссылка: перевозчику на сверку или заказчику на счета.
+     *
+     * Две разные ссылки, и это видно сразу, а не после того, как контрагент
+     * открыл не ту страницу. Перевозчику — под конкретную сверку, на неделю;
+     * заказчику — постоянная, со всеми нашими счетами к нему.
+     */
+    const [вид, setВид] = useState<'CARRIER' | 'CLIENT'>('CARRIER');
+    const [отказ, setОтказ] = useState('');
 
     /** Кому выдаём: либо пришло снаружи, либо выбрали здесь. */
     const кому = counterpartyId || выбранный;
@@ -60,7 +69,7 @@ export default function ShareReportModal({
         : counterparties?.find((c) => c.id === выбранный)?.name;
 
     useEffect(() => {
-        if (!open) setВыбранный(undefined);
+        if (!open) { setВыбранный(undefined); setВид('CARRIER'); }
     }, [open]);
 
     useEffect(() => {
@@ -68,13 +77,24 @@ export default function ShareReportModal({
         let актуально = true;
         setShareUrl('');
         setEmail('');
+        setОтказ('');
         setLoading(true);
-        api.post('/accounting/share-report', { counterpartyId: кому, ourRole })
+        const запрос = вид === 'CLIENT'
+            ? api.post('/accounting/client-link', { counterpartyId: кому })
+            : api.post('/accounting/share-report', { counterpartyId: кому, ourRole });
+        запрос
             .then((res) => { if (актуально) setShareUrl(res.data.shareUrl); })
-            .catch(() => { if (актуально) toast.error('Не удалось создать ссылку'); })
+            .catch((e: any) => {
+                if (!актуально) return;
+                // Отказ по правам объясняем на месте: «не удалось создать»
+                // не говорит человеку, что делать дальше.
+                const текст = e.response?.data?.message;
+                if (e.response?.status === 403 && текст) setОтказ(текст);
+                else toast.error('Не удалось создать ссылку');
+            })
             .finally(() => { if (актуально) setLoading(false); });
         return () => { актуально = false; };
-    }, [open, кому, ourRole]);
+    }, [open, кому, ourRole, вид]);
 
     const copy = () => {
         navigator.clipboard.writeText(shareUrl);
@@ -128,15 +148,38 @@ export default function ShareReportModal({
                 </div>
             )}
 
-            {!кому ? null : loading ? (
+            {/* Кому ссылка. Переключатель стоит до самой ссылки: выбрать
+                надо раньше, чем копировать. */}
+            <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 6 }}>
+                    Вид ссылки
+                </div>
+                <Segmented
+                    block
+                    value={вид}
+                    onChange={(v) => setВид(v as 'CARRIER' | 'CLIENT')}
+                    options={[
+                        { value: 'CARRIER', label: 'Перевозчику — сверка' },
+                        { value: 'CLIENT', label: 'Заказчику — счета' },
+                    ]}
+                />
+            </div>
+
+            {!кому ? null : отказ ? (
+                <Alert type="warning" showIcon message={отказ} />
+            ) : loading ? (
                 <div style={{ textAlign: 'center', padding: 32 }}><Loader /></div>
             ) : shareUrl ? (
                 <div>
                     {/* Что контрагент за ссылкой увидит — сказано прямо: её
                         шлют, чтобы он приложил бумаги, а не просто посмотрел. */}
                     <div style={{ fontSize: 12.5, color: token.colorTextSecondary, marginBottom: 14 }}>
-                        По ссылке контрагент видит взаиморасчёты, может выставить счёт
-                        и приложить к нему накладные и акт. Действует 7 дней.
+                        {вид === 'CLIENT'
+                            ? 'По ссылке заказчик видит все наши счета ему — что оплачено, что ждёт '
+                              + 'оплаты, что в каждом счёте, — и может приложить платёжку. Ссылка '
+                              + 'постоянная: она не устаревает, и высылать новую не нужно.'
+                            : 'По ссылке контрагент видит взаиморасчёты, может выставить счёт '
+                              + 'и приложить к нему накладные и акт. Действует 7 дней.'}
                     </div>
 
                     <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>

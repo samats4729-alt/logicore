@@ -26,6 +26,7 @@ const HTTP_METHODS = new Set(['Get', 'Post', 'Put', 'Patch', 'Delete', 'Options'
 /** Открыты всем без входа: ссылки контрагенту, вход, регистрация, служебное. */
 const PUBLIC_ROUTES: Record<string, string> = {
     'PublicAccountingController.getSharedReport': 'акт сверки по ссылке — контрагент не заводит логин',
+    'PublicAccountingController.getClientPortal': 'счета заказчику по постоянной ссылке — он не заводит логин',
     'PublicAccountingDocumentController.createFromSharedReport': 'счёт из присланной сверки',
     'PublicAccountingDocumentController.getByToken': 'счёт по ссылке',
     'PublicAccountingDocumentController.getPdfByToken': 'печать счёта по ссылке',

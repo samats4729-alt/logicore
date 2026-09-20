@@ -28,3 +28,12 @@ export function hasPermission(user: Actor, permission: string): boolean {
  * маршрут, груз и сроки, а налоги — не его работа и не его ответственность.
  */
 export const canAccounting = (user: Actor): boolean => hasPermission(user, 'accounting');
+
+/**
+ * Право «Согласование счетов» — решение финотдела по входящему счёту.
+ *
+ * Смысл согласования в том, что решение принимает не тот, кто платит,
+ * поэтому право отдельное от «Бухгалтерии». Руководителю и экспедитору оно
+ * открыто вместе со всем остальным: компания их.
+ */
+export const canApproveInvoices = (user: Actor): boolean => hasPermission(user, 'invoice_approval');

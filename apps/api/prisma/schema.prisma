@@ -116,6 +116,7 @@ model User {
   createdCurrencyRevaluations CurrencyRevaluation[] @relation("CreatedCurrencyRevaluations")
   sentAccountingDocuments     AccountingDocument[]  @relation("SentAccountingDocuments")
   reviewedAccountingDocuments AccountingDocument[]  @relation("ReviewedAccountingDocuments")
+  approvedAccountingDocuments AccountingDocument[]  @relation("ApprovedAccountingDocuments")
   createdSharedReports  SharedReportLink[]    @relation("CreatedSharedReports")
   reviewedPaymentProofs OrderPaymentProof[]   @relation("ReviewedPaymentProofs")
   reviewedCompletions   Order[]               @relation("ReviewedCompletions")
@@ -1766,8 +1767,25 @@ model SharedReportLink {
   /// Наша роль в этих сделках: заказчик мы или исполнитель.
   ourRole String
 
-  token     String    @unique @default(uuid())
-  expiresAt DateTime
+  /// Кому выдана ссылка: `CARRIER` — перевозчику, `CLIENT` — заказчику.
+  ///
+  /// Это две разные ссылки, и ведут они себя по-разному. Перевозчику ссылку
+  /// выдают под конкретную сверку: она живёт неделю, показывает рейсы того,
+  /// кто её выдал, и по ней выставляют нам счёт. Заказчику нужна ровно
+  /// обратная: одна и навсегда, со всеми счетами компании к нему, — он
+  /// открывает её, когда собирается платить, а не когда мы вспомнили о
+  /// сверке.
+  kind String @default("CARRIER")
+
+  token String @unique @default(uuid())
+
+  /// Когда ссылка перестаёт работать. Пусто — бессрочная.
+  ///
+  /// У ссылки заказчика срока нет: сегодня оплатил один счёт, через месяц
+  /// придёт за следующим, и высылать новый адрес каждый раз — та же работа
+  /// руками, от которой уходим. Отзыв при этом остаётся: если ссылка ушла
+  /// не туда, её гасят.
+  expiresAt DateTime?
   /// Отозвана вручную — ссылка перестаёт работать раньше срока.
   revokedAt DateTime?
 
@@ -1787,6 +1805,7 @@ model SharedReportLink {
 
   @@index([companyId, createdAt])
   @@index([companyId, counterpartyId])
+  @@index([companyId, counterpartyId, kind])
 }
 
 model CounterpartyOpeningBalance {
@@ -2105,6 +2124,23 @@ model AccountingDocument {
   sentAt             DateTime?
   sentById           String?
   sentBy             User?    @relation("SentAccountingDocuments", fields: [sentById], references: [id], onDelete: SetNull)
+
+  /// Решение финотдела по входящему счёту: APPROVED или REJECTED.
+  ///
+  /// Пусто означает «ещё не смотрели», и платить такой счёт нельзя. Раньше
+  /// бухгалтер оплачивал входящий счёт сам, как только тот приходил, —
+  /// сверять его с договором и бюджетом было негде и некогда, а деньги уже
+  /// ушли. Теперь между «пришёл счёт» и «оплатили» стоит чужое решение, и
+  /// запрет держится на сервере: обойти его кнопкой нельзя.
+  ///
+  /// Приёмка документа (`receiptStatus`) — про другое: там получатель
+  /// говорит, что бумага верна. Здесь — что её можно оплатить.
+  approvalStatus String?
+  /// Почему не согласовано. У отказа причина обязательна.
+  approvalNote   String?
+  approvedAt     DateTime?
+  approvedById   String?
+  approvedBy     User?     @relation("ApprovedAccountingDocuments", fields: [approvedById], references: [id], onDelete: SetNull)
 
   /// Что получатель сделал с документом: ACCEPTED или REJECTED с причиной.
   /// Пусто — ещё не смотрел. Править чужой документ он не может, только

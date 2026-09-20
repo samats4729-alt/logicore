@@ -345,6 +345,57 @@ export class AccountingDocumentsController {
         return reviewed;
     }
 
+    /**
+     * Решение финотдела по входящему счёту.
+     *
+     * Право отдельное от «Бухгалтерии» по сути дела: согласовывает не тот,
+     * кто платит. Одной галочкой бухгалтер согласовал бы сам себе — то есть
+     * проверки не было бы вовсе.
+     */
+    @Post(':id/approval')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.ACCOUNTANT, UserRole.LOGISTICIAN)
+    @RequirePermissions('invoice_approval')
+    @ApiOperation({ summary: 'Согласовать входящий счёт к оплате или отказать' })
+    async approval(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { decision: 'APPROVED' | 'REJECTED'; note?: string },
+    ) {
+        const решение = await this.documents.decideApproval(
+            req.user.companyId, req.user.id, id, body.decision, body.note,
+        );
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'accounting_document', entityId: id,
+            entityLabel: body.decision === 'APPROVED'
+                ? `Счёт ${решение.number} согласован к оплате`
+                : `Счёт ${решение.number} не согласован: ${body.note ?? ''}`,
+        });
+        return решение;
+    }
+
+    // До `:id`, иначе путь съедается параметром.
+    @Get('incoming-invoices')
+    @Roles(...VIEW_ROLES)
+    // Согласующему эта очередь нужна по определению: он решает по ней. Право
+    // «Бухгалтерия» ему при этом выдавать незачем — смысл согласования в том,
+    // что решает не тот, кто ведёт деньги.
+    @RequirePermissions('accounting', 'invoice_approval')
+    @ApiOperation({
+        summary: 'Входящие счета, которые ждут решения или оплаты',
+        description: 'Данные для блока «Входящие счета» на дашборде.',
+    })
+    incomingInvoices(
+        @Request() req: any,
+        @Query('awaitingApproval') awaitingApproval?: string,
+        @Query('limit') limit?: string,
+    ) {
+        return this.documents.listIncomingInvoices(req.user.companyId, {
+            onlyAwaitingApproval: awaitingApproval === 'true',
+            limit: limit ? Math.min(Number(limit) || 20, 50) : undefined,
+        });
+    }
+
     // Оба до `:id`, иначе путь съедается параметром.
     @Get('numbering')
     @Roles(...VIEW_ROLES)

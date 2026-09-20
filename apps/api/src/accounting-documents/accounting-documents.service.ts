@@ -106,6 +106,9 @@ const DOCUMENT_INCLUDE = {
  */
 const CARD_DOCUMENT_INCLUDE = {
     ...DOCUMENT_INCLUDE,
+    // Кто согласовал счёт к оплате. Одной отметки «согласовано» мало: через
+    // месяц спрашивают, кто именно разрешил платить.
+    approvedBy: { select: { firstName: true, lastName: true } },
     // Чем закрыт счёт. В карточке это единственное место, где видно курсовую
     // разницу: счёт выставили по одному курсу, деньги пришли по другому, и
     // расхождение в тенге должно быть названо, а не спрятано.
@@ -1791,6 +1794,119 @@ export class AccountingDocumentsService {
                 receiptById: userId,
             },
         });
+    }
+
+    /**
+     * Входящий счёт этой компании — заведённый своим бухгалтером или
+     * присланный контрагентом с платформы.
+     *
+     * Для человека это один и тот же счёт: пришла бумага, её надо оплатить.
+     * В базе это два разных случая — в первом документ наш, во втором чужой,
+     * а мы получатель, — и согласовывать нужно оба, иначе половина счетов
+     * обходила бы проверку по чистой случайности: контрагент работает в
+     * LogiCore или нет.
+     */
+    private входящийСчёт(companyId: string, id: string) {
+        return {
+            id,
+            OR: [
+                { companyId, direction: AccountingDocumentDirection.INCOMING },
+                { recipientCompanyId: companyId },
+            ],
+        };
+    }
+
+    /**
+     * Решение финотдела: счёт можно оплачивать или нет.
+     *
+     * Раньше входящий счёт оплачивал бухгалтер сразу, как только тот приходил.
+     * Сверить его с договором и бюджетом было негде: деньги уходили, а
+     * разговор «мы этого не заказывали» случался потом.
+     *
+     * Отказ обязан нести причину. «Не согласовано» без объяснения — это
+     * телефонный звонок, от которого и уходим: бухгалтер должен понимать,
+     * ждать ему исправленный счёт или вернуть его контрагенту.
+     */
+    async decideApproval(
+        companyId: string,
+        userId: string,
+        id: string,
+        decision: 'APPROVED' | 'REJECTED',
+        note?: string,
+    ) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: this.входящийСчёт(companyId, id),
+            select: { id: true, direction: true, status: true, approvalStatus: true },
+        });
+        if (!document) throw new NotFoundException('Входящий счёт не найден');
+        if (document.status === AccountingDocumentStatus.CANCELLED) {
+            throw new BadRequestException('Счёт отменён — согласовывать нечего');
+        }
+        if (decision === 'REJECTED' && !note?.trim()) {
+            throw new BadRequestException(
+                'Напишите, почему не согласовано: бухгалтеру решать, ждать исправленный счёт или вернуть его',
+            );
+        }
+
+        return this.prisma.accountingDocument.update({
+            where: { id },
+            data: {
+                approvalStatus: decision,
+                approvalNote: note?.trim() || null,
+                approvedAt: new Date(),
+                approvedById: userId,
+            },
+            select: {
+                id: true, number: true, approvalStatus: true, approvalNote: true, approvedAt: true,
+                approvedBy: { select: { firstName: true, lastName: true } },
+            },
+        });
+    }
+
+    /**
+     * Входящие счета, которые ждут решения или оплаты.
+     *
+     * Нужны дашборду: до этого свежий счёт нигде не всплывал, пока человек
+     * сам не открывал «Счета → Входящие», и висел там неделями.
+     */
+    async listIncomingInvoices(
+        companyId: string,
+        query: { onlyAwaitingApproval?: boolean; limit?: number } = {},
+    ) {
+        const документы = await this.prisma.accountingDocument.findMany({
+            where: {
+                OR: [
+                    { companyId, direction: AccountingDocumentDirection.INCOMING },
+                    { recipientCompanyId: companyId, sentAt: { not: null } },
+                ],
+                type: AccountingDocumentType.PAYMENT_INVOICE,
+                status: { not: AccountingDocumentStatus.CANCELLED },
+                // Оплаченное из очереди уходит: это уже не работа, а история.
+                balanceDue: { gt: 0 },
+                ...(query.onlyAwaitingApproval ? { approvalStatus: null } : {}),
+            },
+            orderBy: [{ documentDate: 'desc' }],
+            take: query.limit ?? 20,
+            select: {
+                id: true, number: true, documentDate: true, dueDate: true,
+                currency: true, total: true, balanceDue: true,
+                approvalStatus: true, approvalNote: true, approvedAt: true,
+                receiptStatus: true,
+                counterparty: { select: { id: true, name: true } },
+                company: { select: { id: true, name: true } },
+                recipientCompanyId: true,
+                approvedBy: { select: { firstName: true, lastName: true } },
+            },
+        });
+
+        return документы.map((документ) => ({
+            ...документ,
+            total: toNum(документ.total),
+            balanceDue: toNum(документ.balanceDue),
+            // Кто выставил счёт: свой документ выписан на контрагента,
+            // присланный принадлежит ему самому.
+            supplier: документ.recipientCompanyId ? документ.company : документ.counterparty,
+        }));
     }
 
     /** Документы, доставленные нам контрагентами с платформы. */

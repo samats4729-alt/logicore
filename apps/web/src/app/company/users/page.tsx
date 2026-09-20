@@ -44,6 +44,7 @@ const MODULE_PERMISSIONS = [
     { label: 'Документы', value: 'documents' },
     { label: 'Бухгалтерия', value: 'accounting' },
     { label: 'Отчёты', value: 'reports' },
+    { label: 'Согласование счетов', value: 'invoice_approval' },
     { label: 'Контрагенты', value: 'partners' },
     { label: 'Карта / Трекинг', value: 'tracking' },
     { label: 'Водители', value: 'drivers' },

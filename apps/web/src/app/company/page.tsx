@@ -10,6 +10,7 @@ import { STATUS_LABELS } from '@/components/ui/StatusPill';
 import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
 import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
 import PaymentCalendarCard from '@/components/dashboard/PaymentCalendarCard';
+import IncomingInvoicesCard from '@/components/dashboard/IncomingInvoicesCard';
 import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
 import EmployeeEarningsCard from '@/components/dashboard/EmployeeEarningsCard';
 import dayjs from 'dayjs';
@@ -98,6 +99,7 @@ const ALL_BLOCKS = [
     { key: 'earnings', label: 'Заработок сотрудников' },
     { key: 'paymentCalendar', label: 'Платёжный календарь' },
     { key: 'pendingWork', label: 'Требует оформления' },
+    { key: 'incomingInvoices', label: 'Входящие счета' },
     { key: 'events', label: 'Уведомления' },
 ];
 
@@ -424,6 +426,12 @@ export default function CompanyDashboard() {
                     менеджеру «только свои» — его хвосты, не чужие. */}
                 {блок('pendingWork') && <PendingWorkCard />}
                 {блок('paymentProofs') && <PaymentProofsCard />}
+
+                {/* ===== ВХОДЯЩИЕ СЧЕТА =====
+                    Пока счёт лежал только в «Счета → Входящие», о нём узнавали
+                    случайно — и находили бумагу недельной давности с истёкшим
+                    сроком оплаты. */}
+                {блок('incomingInvoices') && <IncomingInvoicesCard />}
 
                 {/* ===== ПЛАТЁЖНЫЙ КАЛЕНДАРЬ =====
                     Кому открыт блок, тот и видит календарь. Суммы в нём

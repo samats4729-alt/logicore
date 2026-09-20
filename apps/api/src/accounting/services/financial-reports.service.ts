@@ -20,7 +20,7 @@ import { EXCLUDED_INCOME_CATEGORIES, EXCLUDED_EXPENSE_CATEGORIES } from '../cons
 import { JournalQueryDto } from '../dto/accounting.dto';
 import { getPaginationParams } from '../../common/dto/pagination.dto';
 import * as XLSX from 'xlsx';
-import { SharedReportLinkService } from './shared-report-link.service';
+import { SharedReportLinkService, ВИД_ССЫЛКИ } from './shared-report-link.service';
 import { CurrencyRevaluationService } from './currency-revaluation.service';
 import { kzToday } from '../../common/utils/business-date';
 import { documentsOfOwnOrders, managerOrdersFilter } from '../../common/manager-orders';
@@ -1936,7 +1936,7 @@ export class FinancialReportsService {
         ourRole: string | undefined,
         userId: string,
         sentToEmail?: string,
-    ): Promise<{ token: string; shareUrl: string; expiresAt: Date }> {
+    ): Promise<{ token: string; shareUrl: string; expiresAt: Date | null }> {
         // Роль подбирается по тем же сделкам, что попадут в отчёт. У менеджера
         // это только его собственные: возьми мы роль по всей компании, ссылка
         // ушла бы с ключом, под которым его строк нет, — и контрагент открыл
@@ -2044,31 +2044,14 @@ export class FinancialReportsService {
             proofsByOrder.set(proof.orderId, list);
         }
 
+        // Ставка заказчика и наша закупка наружу не уезжают: между ними
+        // лежит заработок экспедитора. Правило одно на обе публичные ссылки
+        // и живёт в `безСебестоимости`.
         const counterparty = rawCounterparty
             ? {
                 ...rawCounterparty,
                 orders: rawCounterparty.orders.map((o: any) => ({
-                    ...o,
-                    driverCost: null,
-                    subForwarderPrice: null,
-                    subForwarderId: null,
-                    /**
-                     * Ставка заказчика не уезжает никому.
-                     *
-                     * Экспедитор стоит посередине: заказчик не должен знать,
-                     * что рейс передан перевозчику, а перевозчик — за сколько
-                     * рейс продан. Себестоимость скрывалась и раньше, а вот
-                     * `customerPrice` уходил в ответ всегда: на экране его не
-                     * рисуют, но он лежал в данных страницы, и перевозчик,
-                     * заглянув в них, видел и нашу продажу, и свою цену —
-                     * то есть нашу маржу.
-                     *
-                     * Своя сумма у каждой стороны приходит отдельно, в
-                     * `amount`, поэтому убрать это поле ничего не ломает.
-                     */
-                    customerPrice: null,
-                    isCustomerPaid: null,
-                    customerPaidAt: null,
+                    ...this.безСебестоимости(o),
                     paymentProofs: proofsByOrder.get(o.id) ?? [],
                 })),
             }
@@ -2166,6 +2149,161 @@ export class FinancialReportsService {
                 totalOrders: counterparty.totalOrders,
             },
             documents: documentsView,
+        };
+    }
+
+    /**
+     * Что видит заказчик по своей постоянной ссылке.
+     *
+     * Отдельно от сверки с перевозчиком, потому что вопрос другой. Перевозчик
+     * приходит сверить рейсы и выставить нам счёт; заказчик приходит платить:
+     * ему нужны наши счета к нему — какой оплачен, какой выставлен сейчас,
+     * какой просрочен, — и что в каждом из них.
+     *
+     * Сужения по сотруднику здесь нет намеренно. Ссылка одна на контрагента,
+     * и заказчик обязан видеть все свои сделки с нами, кто бы из наших
+     * менеджеров их ни вёл. Приватность держится на другом конце: выдать
+     * такую ссылку может только тот, кому и так видна вся компания.
+     */
+    async getClientPortal(token: string) {
+        const link = await this.shareLinks.resolve(token);
+        if (link.kind !== ВИД_ССЫЛКИ.ЗАКАЗЧИКУ) {
+            // Ссылка перевозчика открывается своей страницей. Показать её
+            // здесь значило бы отдать заказчику чужую сверку.
+            throw new NotFoundException('Ссылка недействительна');
+        }
+        await this.shareLinks.trackView(link.id);
+        const { companyId, counterpartyId } = link;
+
+        const [полный, счета, чеки] = await Promise.all([
+            this.getCounterpartyReport(companyId, { includeOrders: true }),
+            this.prisma.accountingDocument.findMany({
+                where: {
+                    companyId,
+                    counterpartyId,
+                    direction: AccountingDocumentDirection.OUTGOING,
+                    type: AccountingDocumentType.PAYMENT_INVOICE,
+                    // Черновик — это ещё не выставленный счёт: заказчику его
+                    // видеть незачем, он может и не дойти до отправки.
+                    status: AccountingDocumentStatus.POSTED,
+                },
+                orderBy: { documentDate: 'desc' },
+                take: 300,
+                select: {
+                    id: true, number: true, documentDate: true, dueDate: true,
+                    currency: true, total: true, amountPaid: true, balanceDue: true,
+                    shareToken: true, shareRevokedAt: true,
+                    lines: {
+                        orderBy: { lineNumber: 'asc' },
+                        select: {
+                            id: true, name: true, description: true, unit: true,
+                            quantity: true, unitPrice: true, total: true,
+                            serviceDate: true,
+                            order: { select: { id: true, orderNumber: true } },
+                        },
+                    },
+                    orders: { select: { order: { select: { id: true, orderNumber: true } } } },
+                },
+            }),
+            this.prisma.orderPaymentProof.findMany({
+                where: { companyId, counterpartyId },
+                orderBy: { createdAt: 'desc' },
+                select: {
+                    id: true, orderId: true, status: true, kind: true, fileName: true,
+                    claimedAmount: true, claimedDate: true, rejectionReason: true, createdAt: true,
+                },
+            }),
+        ]);
+
+        const поСделке = new Map<string, any[]>();
+        for (const чек of чеки) {
+            const список = поСделке.get(чек.orderId) ?? [];
+            список.push({ ...чек, claimedAmount: toNumOrNull(чек.claimedAmount) });
+            поСделке.set(чек.orderId, список);
+        }
+
+        // Заказчик у нас один и тот же контрагент в любой роли, но отчёт
+        // разложен по парам «контрагент + наша роль». Берём все его строки.
+        const строки = полный.counterparties.filter(
+            (c: any) => c.counterparty.id === counterpartyId,
+        );
+        const сделки = строки
+            .flatMap((c: any) => c.orders ?? [])
+            .map((o: any) => ({
+                ...this.безСебестоимости(o),
+                paymentProofs: поСделке.get(o.id) ?? [],
+            }));
+
+        const сегодня = kzToday();
+        const счетаView = счета.map((счёт) => {
+            const остаток = toNum(счёт.balanceDue);
+            const просрочен = остаток > 0 && !!счёт.dueDate && счёт.dueDate < сегодня;
+            return {
+                id: счёт.id,
+                number: счёт.number,
+                documentDate: счёт.documentDate,
+                dueDate: счёт.dueDate,
+                currency: счёт.currency,
+                total: toNum(счёт.total),
+                amountPaid: toNum(счёт.amountPaid),
+                balanceDue: остаток,
+                /** Одним словом: оплачен, частично, ждёт оплаты, просрочен. */
+                paymentState: остаток <= 0
+                    ? 'PAID'
+                    : просрочен
+                        ? 'OVERDUE'
+                        : toNum(счёт.amountPaid) > 0 ? 'PARTIAL' : 'AWAITING',
+                lines: счёт.lines.map((строка) => ({
+                    id: строка.id,
+                    name: строка.name,
+                    description: строка.description,
+                    unit: строка.unit,
+                    serviceDate: строка.serviceDate,
+                    orderNumber: строка.order?.orderNumber ?? null,
+                    quantity: toNum(строка.quantity),
+                    unitPrice: toNum(строка.unitPrice),
+                    total: toNum(строка.total),
+                })),
+                orders: счёт.orders.map((связь) => связь.order),
+                // Отозванная ссылка на документ не должна оставаться кликабельной.
+                shareToken: счёт.shareRevokedAt ? null : счёт.shareToken,
+            };
+        });
+
+        const сумма = (годится: (с: typeof счетаView[number]) => boolean) =>
+            счетаView.filter(годится).reduce((итог, с) => итог + с.balanceDue, 0);
+
+        return {
+            senderCompany: link.companyName,
+            counterpartyName: link.counterpartyName,
+            invoices: счетаView,
+            orders: сделки,
+            totals: {
+                invoiced: счетаView.reduce((итог, с) => итог + с.total, 0),
+                paid: счетаView.reduce((итог, с) => итог + с.amountPaid, 0),
+                awaiting: сумма((с) => с.paymentState !== 'PAID'),
+                overdue: сумма((с) => с.paymentState === 'OVERDUE'),
+            },
+        };
+    }
+
+    /**
+     * Строка рейса наружу: без нашей закупки и без нашей продажи.
+     *
+     * Между этими двумя числами лежит заработок экспедитора. На экране их не
+     * рисуют, но в данных страницы они лежали целиком — и контрагент, заглянув
+     * туда, читал нашу маржу. Одно правило на обе публичные ссылки: разъедься
+     * они, дыра вернулась бы в ту, которую правили позже.
+     */
+    private безСебестоимости(o: any) {
+        return {
+            ...o,
+            driverCost: null,
+            subForwarderPrice: null,
+            subForwarderId: null,
+            customerPrice: null,
+            isCustomerPaid: null,
+            customerPaidAt: null,
         };
     }
 

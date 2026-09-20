@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Query, Res, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Request, UseGuards, Query, Res, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import { AccountingService } from './accounting.service';
 import { SharedReportLinkService } from './services/shared-report-link.service';
@@ -11,6 +11,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveJournalCompany } from '../common/journal-company';
+import { managerOrdersFilter } from '../common/manager-orders';
 import { Response } from 'express';
 import {
     CreateFinanceAccountDto,
@@ -294,6 +295,35 @@ export class AccountingController {
         return this.shareLinks.revoke(req.user.companyId, id);
     }
 
+
+    /**
+     * Постоянная ссылка заказчику на его счета.
+     *
+     * Выдать её может только тот, кому видна вся компания. Ссылка одна на
+     * контрагента и показывает все сделки с ним — иначе заказчик не увидел
+     * бы половину своих счетов. Но менеджер с доступом «только свои заявки»,
+     * открыв её, прочитал бы чужие сделки со ставками: приватность, которую
+     * мы навели в журнале, обходилась бы одной кнопкой.
+     */
+    @Post('client-link')
+    @Roles(...SHARE_LINK_ROLES)
+    @ApiOperation({ summary: 'Постоянная ссылка заказчику на его счета' })
+    async clientLink(@Request() req: any, @Body() body: { counterpartyId: string }) {
+        const сужен = await managerOrdersFilter(this.prisma, {
+            companyId: req.user.companyId,
+            role: req.user.role,
+            userId: req.user.id,
+        });
+        if (сужен) {
+            throw new ForbiddenException(
+                'Ссылка заказчику показывает все сделки компании. Выдать её может тот, '
+                + 'кому открыты все заявки, — попросите бухгалтерию или руководителя.',
+            );
+        }
+        return this.shareLinks.ensureClientLink(
+            req.user.companyId, req.user.sub, body.counterpartyId,
+        );
+    }
 
     @Post('share-report')
     @Roles(...SHARE_LINK_ROLES)
