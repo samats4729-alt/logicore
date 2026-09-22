@@ -586,7 +586,13 @@ export class OrdersController {
     }
 
     @Put(':id')
-    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    // Бухгалтер здесь же: править ставку он вправе, а запрос на это идёт
+    // общей правкой рейса. Без него выходило наоборот — поля на экране ему
+    // открыты, а сохранение отвечало отказом без объяснения.
+    @Roles(
+        UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN,
+        UserRole.FORWARDER, UserRole.ACCOUNTANT,
+    )
     @ApiOperation({ summary: 'Обновить заявку' })
     async update(@Param('id') id: string, @Body() dto: Partial<CreateOrderDto>, @Request() req: any) {
         // Бухгалтерские поля этим путём не проходят.

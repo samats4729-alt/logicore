@@ -140,8 +140,16 @@ export default function OrderDetailPage() {
     const [orderShares, setOrderShares] = useState<Record<string, number>>({});
 
 
-    // Unified payment states & role checks
-    const canEditFinance = user?.role === 'COMPANY_ADMIN' || user?.role === 'ACCOUNTANT';
+    /**
+     * Кто правит деньги рейса — ставку заказчика и ставку перевозчику.
+     *
+     * Решает право «Бухгалтерия», а не роль. По роли выходило вот что:
+     * менеджеру, которому руководитель это право выдал, поля всё равно
+     * горели серым, а экспедитору — главной роли в экспедиторской компании —
+     * тоже, хотя сервер правку от обоих принимал. Человек видел ошибку в
+     * ставке, которую сам же и вписал, и починить её не мог.
+     */
+    const canEditFinance = mayAccount;
     const [accounts, setAccounts] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
