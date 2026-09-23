@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Dropdown, Checkbox } from 'antd';
-import { Activity, ArrowDown, ArrowRight, ArrowUp, Bell, Plus, Settings } from 'lucide-react';
+import { Activity, ArrowDown, ArrowUp, Bell, Plus, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { STATUS_LABELS } from '@/components/ui/StatusPill';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import DashboardCard from '@/components/dashboard/DashboardCard';
 import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
 import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
 import PaymentCalendarCard from '@/components/dashboard/PaymentCalendarCard';
@@ -18,7 +20,7 @@ import styles from '@/components/nova/nova.module.css';
 import dash from './dashboard.module.css';
 import Loader from '@/components/ui/Loader';
 import { monthLabel } from '@/lib/ru-date';
-import { видимыеБлоки } from '@/lib/dashboard-blocks';
+import { НАЗВАНИЯ_БЛОКОВ, видимыеБлоки } from '@/lib/dashboard-blocks';
 
 // ==================== Типы ====================
 
@@ -94,14 +96,13 @@ function Delta({ cur, prevVal, money, neutral }: {
 }
 
 const BLOCKS_LS_KEY = 'lc_dashboard_hidden_blocks';
-const ALL_BLOCKS = [
-    { key: 'activity', label: 'Активность' },
-    { key: 'earnings', label: 'Заработок сотрудников' },
-    { key: 'paymentCalendar', label: 'Платёжный календарь' },
-    { key: 'pendingWork', label: 'Требует оформления' },
-    { key: 'incomingInvoices', label: 'Входящие счета' },
-    { key: 'events', label: 'Уведомления' },
-];
+/**
+ * Что можно свернуть кнопкой «Настроить». Подписи — из общего словаря
+ * блоков: раньше здесь был свой список, и лента событий называлась в нём
+ * «Уведомлениями», а на самом дашборде — «Последними событиями».
+ */
+const ALL_BLOCKS = (['activity', 'earnings', 'paymentCalendar', 'pendingWork', 'incomingInvoices', 'events'] as const)
+    .map(key => ({ key, label: НАЗВАНИЯ_БЛОКОВ[key] }));
 
 // ==================== Страница ====================
 
@@ -253,17 +254,6 @@ export default function CompanyDashboard() {
         }));
     }, [cur, prev, tdy]);
 
-    const settingsMenu = (
-        <div className={styles.card} style={{ padding: '10px 14px', margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span className={styles.tileLabel}>Блоки дашборда</span>
-            {ALL_BLOCKS.map(b => (
-                <Checkbox key={b.key} checked={show(b.key)} onChange={() => toggleBlock(b.key)}>
-                    {b.label}
-                </Checkbox>
-            ))}
-        </div>
-    );
-
     /** Плитка показателя: одинаковая для владельца и сотрудника. */
     const Tile = ({ label, value, sub, tone, onClick }: {
         label: string;
@@ -305,11 +295,28 @@ export default function CompanyDashboard() {
                         </button>
                     )}
                     {isOwner && (
-                        <Dropdown dropdownRender={() => settingsMenu} trigger={['click']}>
-                            <button type="button" className={styles.action}>
-                                <Settings size={14} /> Настроить
-                            </button>
-                        </Dropdown>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button type="button" className={styles.action}>
+                                    <Settings size={14} /> Настроить
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className={dash.settings}>
+                                <div className={dash.settingsTitle}>Блоки дашборда</div>
+                                {ALL_BLOCKS.map(b => (
+                                    <label key={b.key} className={dash.settingsItem}>
+                                        {/* Квадрат, а не круг: круглая галочка читается
+                                            как «выбрать одно из», а здесь можно снять любые. */}
+                                        <Checkbox
+                                            className="rounded-[4px]"
+                                            checked={show(b.key)}
+                                            onCheckedChange={() => toggleBlock(b.key)}
+                                        />
+                                        {b.label}
+                                    </label>
+                                ))}
+                            </PopoverContent>
+                        </Popover>
                     )}
                 </div>
             </div>
@@ -317,8 +324,12 @@ export default function CompanyDashboard() {
             {/* ===== ПОКАЗАТЕЛИ =====
                 При неудачной загрузке в плитках прочерк, а не ноль: ноль
                 читается как факт о работе компании, хотя это отсутствие
-                ответа. */}
-            <div className={styles.tiles}>
+                ответа.
+
+                Тариф — последней плиткой этого же ряда. Раньше он стоял
+                отдельной полосой во всю ширину с одной строкой текста и
+                делил дашборд на лишний этаж. */}
+            <div className={dash.tiles}>
                 {isOwner ? (
                     <>
                         <Tile label="Сейчас в работе" value={activity?.inWorkNow ?? '—'} sub="активные перевозки" />
@@ -343,6 +354,9 @@ export default function CompanyDashboard() {
                                 onClick={() => router.push('/company/my-salary')}
                             />
                         )}
+                        {/* Только руководителю: платит он, и запрос на счёт
+                            сервер принимает тоже от него. */}
+                        <SubscriptionCard />
                     </>
                 ) : (
                     <>
@@ -370,74 +384,61 @@ export default function CompanyDashboard() {
                 )}
             </div>
 
-            {/* ===== ТАРИФ =====
-                Только руководителю: платит он, и запрос на счёт сервер
-                принимает тоже от него. */}
-            {isOwner && <SubscriptionCard />}
+            {/* ===== БЛОКИ =====
+                Порядок здесь — это и есть раскладка: сетка кладёт блоки по
+                третям слева направо (см. `.board`; на планшете часть блоков
+                переставлена там же).
 
-            {/* ===== АКТИВНОСТЬ ===== */}
-            {блок('activity') && (
-                <section className={styles.card}>
-                    <div className={styles.cardHead}>
-                        <Activity size={14} />
-                        <h2 className={styles.cardTitle}>Активность</h2>
-                        <button type="button" className={dash.headLink} onClick={() => router.push('/company/orders')}>
-                            Все заявки <ArrowRight size={12} />
-                        </button>
-                    </div>
-
-                    {activityLoading ? (
-                        <div className={styles.empty}><Loader /></div>
-                    ) : activityRows.length === 0 ? (
-                        <div className={styles.empty}>Пока нет данных за месяц</div>
-                    ) : (
-                        <div className={dash.tableWrap}>
-                            <table className={dash.table}>
-                                <thead>
-                                    <tr>
-                                        <th>Показатель</th>
-                                        <th className={dash.right}>Сегодня</th>
-                                        <th className={dash.right}>{прошлыйМесяц}</th>
-                                        <th className={dash.right}>{этотМесяц}</th>
-                                        <th className={dash.right}>Динамика</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {activityRows.map(r => (
-                                        <tr key={r.key}>
-                                            <td>{r.label}</td>
-                                            <td className={dash.right}>{r.money ? fmt(r.today) : r.today}</td>
-                                            <td className={`${dash.right} ${dash.muted}`}>{r.money ? fmt(r.previous) : r.previous}</td>
-                                            <td className={`${dash.right} ${dash.strong}`}>{r.money ? fmt(r.current) : r.current}</td>
-                                            <td className={dash.right}><Delta cur={r.current} prevVal={r.previous} money={r.money} neutral={(r as { neutral?: boolean }).neutral} /></td>
+                Первый ряд — итоги месяца: «Активность» на две трети и рядом
+                заработок сотрудников, по высоте они почти равны. Второй —
+                работа с деньгами: хвосты оформления, входящие счета, чеки и
+                календарь. События — в конце: лента выглядит уместно любой
+                ширины, и если последний ряд окажется неполным, растянется
+                именно она. */}
+            <div className={dash.board}>
+                {блок('activity') && (
+                    <DashboardCard
+                        className={dash.wide}
+                        icon={<Activity size={14} />}
+                        title="Активность"
+                        link={{ label: 'Все заявки', onClick: () => router.push('/company/orders') }}
+                        flush
+                    >
+                        {activityLoading ? (
+                            <DashboardCard.Center><Loader /></DashboardCard.Center>
+                        ) : activityRows.length === 0 ? (
+                            <DashboardCard.Center>Пока нет данных за месяц</DashboardCard.Center>
+                        ) : (
+                            <div className={dash.activityWrap}>
+                                <table className={dash.table}>
+                                    <thead>
+                                        <tr>
+                                            <th>Показатель</th>
+                                            <th className={dash.right}>Сегодня</th>
+                                            <th className={dash.right}>{прошлыйМесяц}</th>
+                                            <th className={dash.right}>{этотМесяц}</th>
+                                            <th className={dash.right}>Динамика</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </section>
-            )}
-
-            <div className={dash.cards}>
-                {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ =====
-                    Рейсы без акта, акты без счёта, просроченные счета — и
-                    ссылка в журнал счетов. Список сужается так же, как заявки:
-                    менеджеру «только свои» — его хвосты, не чужие. */}
-                {блок('pendingWork') && <PendingWorkCard />}
-                {блок('paymentProofs') && <PaymentProofsCard />}
-
-                {/* ===== ВХОДЯЩИЕ СЧЕТА =====
-                    Пока счёт лежал только в «Счета → Входящие», о нём узнавали
-                    случайно — и находили бумагу недельной давности с истёкшим
-                    сроком оплаты. */}
-                {блок('incomingInvoices') && <IncomingInvoicesCard />}
-
-                {/* ===== ПЛАТЁЖНЫЙ КАЛЕНДАРЬ =====
-                    Кому открыт блок, тот и видит календарь. Суммы в нём
-                    считаются по тем же рейсам, что человеку и так видны: у
-                    менеджера «только свои» — по его сделкам. */}
-                {блок('paymentCalendar') && <PaymentCalendarCard />}
+                                    </thead>
+                                    <tbody>
+                                        {activityRows.map(r => (
+                                            <tr key={r.key}>
+                                                <td>{r.label}</td>
+                                                {/* `data-label` — подпись столбца для узкой
+                                                    карточки: там шапки таблицы нет, и число
+                                                    подписывается само. */}
+                                                <td className={dash.right} data-label="Сегодня">{r.money ? fmt(r.today) : r.today}</td>
+                                                <td className={`${dash.right} ${dash.muted}`} data-label={прошлыйМесяц}>{r.money ? fmt(r.previous) : r.previous}</td>
+                                                <td className={`${dash.right} ${dash.strong}`}>{r.money ? fmt(r.current) : r.current}</td>
+                                                <td className={dash.right}><Delta cur={r.current} prevVal={r.previous} money={r.money} neutral={(r as { neutral?: boolean }).neutral} /></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </DashboardCard>
+                )}
 
                 {/* ===== ЗАРАБОТОК СОТРУДНИКОВ =====
 
@@ -446,22 +447,36 @@ export default function CompanyDashboard() {
                     дашборде повторялась третий раз. Сколько компания должна
                     своим — оклад, процент и премии — не было видно нигде,
                     кроме страницы зарплат, куда заходят раз в месяц. */}
-                {блок('earnings') && <EmployeeEarningsCard />}
+                {блок('earnings') && <EmployeeEarningsCard className={dash.earnings} />}
+
+                {/* ===== ТРЕБУЕТ ОФОРМЛЕНИЯ =====
+                    Рейсы без акта, акты без счёта, просроченные счета — и
+                    ссылка в журнал счетов. Список сужается так же, как заявки:
+                    менеджеру «только свои» — его хвосты, не чужие. */}
+                {блок('pendingWork') && <PendingWorkCard />}
+
+                {/* ===== ВХОДЯЩИЕ СЧЕТА =====
+                    Пока счёт лежал только в «Счета → Входящие», о нём узнавали
+                    случайно — и находили бумагу недельной давности с истёкшим
+                    сроком оплаты. */}
+                {блок('incomingInvoices') && <IncomingInvoicesCard />}
+                {блок('paymentProofs') && <PaymentProofsCard />}
+
+                {/* ===== ПЛАТЁЖНЫЙ КАЛЕНДАРЬ =====
+                    Кому открыт блок, тот и видит календарь. Суммы в нём
+                    считаются по тем же рейсам, что человеку и так видны: у
+                    менеджера «только свои» — по его сделкам. */}
+                {блок('paymentCalendar') && <PaymentCalendarCard className={dash.calendar} />}
 
                 {/* ===== УВЕДОМЛЕНИЯ ===== */}
                 {блок('events') && (
-                    <section className={styles.card}>
-                        <div className={styles.cardHead}>
-                            <Bell size={14} />
-                            <h2 className={styles.cardTitle}>Последние события</h2>
-                        </div>
-
+                    <DashboardCard className={dash.eventsCard} icon={<Bell size={14} />} title="Последние события">
                         {eventsLoading ? (
-                            <div className={styles.empty}><Loader /></div>
+                            <DashboardCard.Center><Loader /></DashboardCard.Center>
                         ) : events.length === 0 ? (
-                            <div className={styles.empty}>Пока тихо — событий нет</div>
+                            <DashboardCard.Center>Пока тихо — событий нет</DashboardCard.Center>
                         ) : (
-                            <div className={styles.cardBody}>
+                            <div className={dash.events}>
                                 {events.map((e, i) => (
                                     <button
                                         type="button"
@@ -478,7 +493,7 @@ export default function CompanyDashboard() {
                                 ))}
                             </div>
                         )}
-                    </section>
+                    </DashboardCard>
                 )}
             </div>
         </div>

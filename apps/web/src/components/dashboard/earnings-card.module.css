@@ -5,8 +5,19 @@
    в сводке о деньгах взгляд идёт по столбцу, а не по строкам. */
 
 .rows {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 28px;
+    align-content: start;
+    margin-bottom: 10px;
+}
+
+/* Карточке достался весь ряд — люди в две колонки: строка «имя … сумма»
+   шириной в экран разносит имя и сумму по разным краям монитора. */
+@container (min-width: 720px) {
+    .rows {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 .row {
@@ -74,7 +85,9 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 10px;
+    /* Итог — у нижнего края: карточка тянется на высоту ряда, и строка
+       итога, повисшая посередине, читалась бы как ещё один сотрудник. */
+    margin-top: auto;
     padding-top: 9px;
     border-top: 1px solid var(--nova-border);
     font-size: 11.5px;

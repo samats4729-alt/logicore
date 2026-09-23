@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs, { Dayjs } from 'dayjs';
-import { AlertCircle, ArrowRight, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
     DayBucket,
     fetchPlannedPayments,
@@ -22,7 +22,7 @@ import {
 } from '@/lib/planned-payments';
 import { MONTHS_GEN } from '@/lib/ru-date';
 import Loader from '@/components/ui/Loader';
-import styles from '@/components/nova/nova.module.css';
+import DashboardCard from './DashboardCard';
 import card from './payment-calendar-card.module.css';
 
 /**
@@ -40,7 +40,7 @@ import card from './payment-calendar-card.module.css';
  * Данные и правила общие со страницей календаря (`lib/planned-payments`):
  * иначе один и тот же день показывал бы здесь и там разное.
  */
-export default function PaymentCalendarCard() {
+export default function PaymentCalendarCard({ className }: { className?: string } = {}) {
     const router = useRouter();
     const [rows, setRows] = useState<PlannedRow[]>([]);
     /** Долг по сделкам, где счёта ещё нет: в сетку ему встать не на что. */
@@ -93,24 +93,22 @@ export default function PaymentCalendarCard() {
     const selectedDay = byDay.get(selected.format('YYYY-MM-DD'));
 
     return (
-        <section className={styles.card}>
-            <div className={styles.cardHead}>
-                <CalendarDays size={14} />
-                <h2 className={styles.cardTitle}>Платёжный календарь</h2>
-                <button
-                    type="button"
-                    className={card.openLink}
-                    onClick={() => router.push('/company/accounting/calendar')}
-                >
-                    Открыть <ArrowRight size={12} />
-                </button>
-            </div>
-
-            <div className={styles.cardBody}>
-                {loading ? (
-                    <div className={card.empty}><Loader /></div>
-                ) : (
-                    <>
+        <DashboardCard
+            className={className}
+            icon={<CalendarDays size={14} />}
+            title="Платёжный календарь"
+            link={{ label: 'Открыть', onClick: () => router.push('/company/accounting/calendar') }}
+        >
+            {loading ? (
+                <DashboardCard.Center><Loader /></DashboardCard.Center>
+            ) : (
+                // Две части: месяц и то, что под ним, — платежи дня и
+                // полосы о счетах вне календаря. В узкой карточке они
+                // идут друг под другом, в широкой встают рядом (см.
+                // `@container` в стилях): иначе месяц растягивался бы
+                // на всю ширину, а платежи дня уезжали под сгиб.
+                <div className={card.layout}>
+                    <div className={card.monthBox}>
                         <div className={card.head}>
                             <span className={card.month}>
                                 {MONTHS[month.month()]} <span className={card.monthYear}>{month.year()}</span>
@@ -219,7 +217,9 @@ export default function PaymentCalendarCard() {
                                 );
                             })}
                         </div>
+                    </div>
 
+                    <div className={card.side}>
                         <DayPanel day={selectedDay} date={selected} router={router} />
 
                         {noDate.length > 0 && (
@@ -259,10 +259,10 @@ export default function PaymentCalendarCard() {
                                 </span>
                             </button>
                         )}
-                    </>
-                )}
-            </div>
-        </section>
+                    </div>
+                </div>
+            )}
+        </DashboardCard>
     );
 }
 

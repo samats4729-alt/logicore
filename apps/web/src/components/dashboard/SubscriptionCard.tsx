@@ -13,6 +13,11 @@ import styles from './subscription-card.module.css';
  * Один блок отвечает на два вопроса: сколько стоит месяц и до какого числа
  * оплачено. Раньше про подписку в кабинете не было написано нигде — человек
  * узнавал о ней в тот день, когда переставал попадать внутрь.
+ *
+ * Стоит последней плиткой в ряду показателей. Раньше это была отдельная
+ * полоса во всю ширину — ради длинной подписи, которую в общем ряду
+ * обрезало многоточием. Теперь подпись у этой плитки переносится на вторую
+ * строку, а не обрезается, и отдельный этаж под одну строку не нужен.
  */
 
 export default function SubscriptionCard() {
@@ -31,23 +36,23 @@ export default function SubscriptionCard() {
 
     return (
         <>
-            <div className={`${styles.card}${urgent ? ` ${styles.urgent}` : ''}`}>
-                <div className={styles.body}>
+            <div className={`${nova.tile}${urgent ? ` ${styles.urgent}` : ''}`}>
+                <div className={nova.tileHead}>
                     <span className={nova.tileLabel}>Тариф</span>
-                    {/* Срочность несёт рамка, а не цвет текста: «Осталось 3 дня»
-                        читается как факт, и красить сам факт незачем. */}
-                    <div className={styles.value}>{value}</div>
-                    <div className={styles.sub}>{sub}</div>
+                    {action && (
+                        <button
+                            type="button"
+                            className={styles.action}
+                            onClick={() => setBuyOpen(true)}
+                        >
+                            {action}
+                        </button>
+                    )}
                 </div>
-                {action && (
-                    <button
-                        type="button"
-                        className={`${nova.action} ${nova.actionPrimary}`}
-                        onClick={() => setBuyOpen(true)}
-                    >
-                        {action}
-                    </button>
-                )}
+                {/* Срочность несёт рамка, а не цвет текста: «Осталось 3 дня»
+                    читается как факт, и красить сам факт незачем. */}
+                <div className={`${nova.tileValue} ${styles.value}`}>{value}</div>
+                <div className={styles.sub}>{sub}</div>
             </div>
 
             <SubscriptionBuyModal

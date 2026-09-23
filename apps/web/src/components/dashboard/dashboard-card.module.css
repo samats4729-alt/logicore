@@ -1,0 +1,125 @@
+/* Карточка дашборда — одна на все блоки.
+
+   Раньше у каждого блока была своя шапка: у одних серая полоса с мелким
+   заголовком, у других крупный жирный заголовок прямо на белом, у третьих
+   значок в цветном квадрате. Рядом они читались как куски разных программ,
+   и сетка выглядела неровной даже там, где края совпадали.
+
+   Вид шапки и самой карточки берётся из `nova.module.css`; здесь только то,
+   что нужно сетке: карточка тянется на высоту ряда, а длинный список
+   прокручивается внутри, а не растягивает соседей. */
+
+/* `section.card`, а не `.card`: у общей карточки внизу отступ, и победить
+   его надо весом селектора, а не порядком подключения файлов. */
+section.card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    margin: 0;
+    /* Ширина карточки известна сетке, а не содержимому: по ней карточка
+       и перестраивает себя изнутри — см. `@container` в блоках. */
+    container-type: inline-size;
+}
+
+.head {
+    flex-shrink: 0;
+    min-height: 43px;
+}
+
+/* Заголовок не растягивается: число рядом с ним должно стоять вплотную,
+   а не уезжать к правому краю. */
+.head .title {
+    flex: 0 1 auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Всё, что после заголовка, прижато вправо. */
+.spacer {
+    flex: 1;
+}
+
+.link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 550;
+    color: var(--nova-accent);
+    white-space: nowrap;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.link:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.head .link svg {
+    color: var(--nova-accent);
+}
+
+/* Пояснение под шапкой — одной строкой одного вида во всех блоках. */
+.hint {
+    flex-shrink: 0;
+    padding: 10px 14px 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--nova-fg-3);
+}
+
+.body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Без полей — для таблицы, которая встаёт к краям карточки. */
+.flush {
+    padding: 0;
+}
+
+/* Пустота и загрузка — посередине карточки: карточка тянется на высоту
+   ряда, и надпись, прилипшая к верху, оставляла бы под собой дыру. */
+.center {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    padding: 24px 8px;
+    text-align: center;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--nova-fg-3);
+}
+
+/* ===== Высота в ряду =====
+
+   На широком экране карточки стоят в ряд, и ряд берёт высоту самой
+   высокой. Десять входящих счетов вытянули бы весь ряд вдвое, и соседи
+   стояли бы с пустыми половинами. Поэтому у каждой карточки есть потолок,
+   а то, что под него не влезло, прокручивается внутри.
+
+   Потолок один на всех — только так нижние края ряда совпадают: ряд не
+   бывает выше потолка, и любая карточка дотягивается до его низа.
+
+   На телефоне карточки идут одна под другой, соседей нет — там всё
+   показываем целиком: прокрутка внутри прокрутки на телефоне неудобна. */
+@media (min-width: 760px) {
+    section.card {
+        max-height: 600px;
+    }
+
+    section.card .body {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+    }
+}

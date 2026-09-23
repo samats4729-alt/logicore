@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Empty, Input, Modal, Skeleton, Tag } from 'antd';
-import { FileTextOutlined } from '@ant-design/icons';
+import { Input, Modal } from 'antd';
+import { Check, FileInput, Loader2, X } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { canApproveInvoices } from '@/lib/permissions';
+import { Button } from '@/components/ui/button';
+import Loader from '@/components/ui/Loader';
 import nova from '@/components/nova/nova.module.css';
+import DashboardCard from './DashboardCard';
+import styles from './queue-card.module.css';
 import { toast } from 'sonner';
 
 interface IncomingInvoice {
@@ -105,64 +109,51 @@ export default function IncomingInvoicesCard() {
     if (!loading && invoices.length === 0) return null;
 
     return (
-        <div className={nova.card} style={{ padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <FileTextOutlined style={{ color: '#d97706' }} />
-                <span style={{ fontSize: 16, fontWeight: 700 }}>Входящие счета</span>
-                {ждут > 0 && (
-                    <Tag color="gold" style={{ borderRadius: 999, margin: 0 }}>
-                        {ждут} ждут согласования
-                    </Tag>
-                )}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--nova-fg-2)', marginBottom: 16 }}>
-                {ждут === 0
-                    ? 'Что пришло и что ещё не оплачено.'
-                    : согласует
-                        ? 'Пока вы не согласовали, оплатить счёт бухгалтерия не может.'
-                        : 'Оплачивать можно только согласованные финотделом.'}
-            </div>
-
+        <DashboardCard
+            icon={<FileInput size={14} />}
+            title="Входящие счета"
+            badge={ждут > 0 && (
+                <span className={`${nova.chip} ${nova.chipWarn}`}>{ждут} {ждутСловом(ждут)} согласования</span>
+            )}
+            hint={ждут === 0
+                ? 'Что пришло и что ещё не оплачено.'
+                : согласует
+                    ? 'Пока вы не согласовали, оплатить счёт бухгалтерия не может.'
+                    : 'Оплачивать можно только согласованные финотделом.'}
+        >
             {loading ? (
-                <Skeleton active paragraph={{ rows: 3 }} />
+                <DashboardCard.Center><Loader /></DashboardCard.Center>
             ) : список.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Новых счетов нет" />
+                <DashboardCard.Center>Новых счетов нет</DashboardCard.Center>
             ) : (
-                список.map((счёт) => {
-                    const просрочен = счёт.dueDate && dayjs(счёт.dueDate).isBefore(dayjs(), 'day');
-                    return (
-                        <div
-                            key={счёт.id}
-                            style={{
-                                display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
-                                padding: '12px 0', borderTop: '1px solid var(--nova-border)',
-                            }}
-                        >
-                            <div style={{ flex: 1, minWidth: 220 }}>
-                                <div style={{ fontWeight: 600 }}>
-                                    <a
+                <div className={styles.list}>
+                    {список.map((счёт) => {
+                        const просрочен = счёт.dueDate && dayjs(счёт.dueDate).isBefore(dayjs(), 'day');
+                        const ждётРешения = счёт.approvalRequired && !счёт.approvalStatus;
+                        return (
+                            <div key={счёт.id} className={styles.item}>
+                                <div className={styles.top}>
+                                    <button
+                                        type="button"
+                                        className={styles.title}
                                         onClick={() => router.push(`/company/accounting/invoices/${счёт.id}`)}
-                                        style={{ cursor: 'pointer' }}
                                     >
                                         Счёт № {счёт.number}
-                                    </a>
-                                    {' · '}
-                                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                        {money(счёт.balanceDue, счёт.currency)}
-                                    </span>
+                                    </button>
+                                    <span className={styles.amount}>{money(счёт.balanceDue, счёт.currency)}</span>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--nova-fg-3)' }}>
+                                <div className={styles.meta}>
                                     {счёт.supplier?.name ?? 'контрагент не указан'}
                                     {` · от ${dayjs(счёт.documentDate).format('DD.MM.YYYY')}`}
                                     {счёт.dueDate && (
-                                        <span style={{ color: просрочен ? 'var(--nova-neg)' : undefined }}>
+                                        <span className={просрочен ? styles.late : undefined}>
                                             {` · оплатить до ${dayjs(счёт.dueDate).format('DD.MM.YYYY')}`}
                                             {просрочен ? ' — просрочен' : ''}
                                         </span>
                                     )}
                                 </div>
                                 {счёт.approvalStatus === 'APPROVED' && (
-                                    <div style={{ fontSize: 12, color: 'var(--nova-pos)', marginTop: 2 }}>
+                                    <div className={styles.statusPos}>
                                         Согласовано
                                         {счёт.approvedBy
                                             ? ` — ${счёт.approvedBy.firstName} ${счёт.approvedBy.lastName}`
@@ -170,41 +161,43 @@ export default function IncomingInvoicesCard() {
                                     </div>
                                 )}
                                 {счёт.approvalStatus === 'REJECTED' && (
-                                    <div style={{ fontSize: 12, color: 'var(--nova-neg)', marginTop: 2 }}>
+                                    <div className={styles.statusNeg}>
                                         Не согласовано{счёт.approvalNote ? `: ${счёт.approvalNote}` : ''}
                                     </div>
                                 )}
-                            </div>
 
-                            {счёт.approvalRequired && согласует && !счёт.approvalStatus && (
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                    <Button
-                                        size="small"
-                                        type="primary"
-                                        loading={busy === счёт.id}
-                                        style={{ borderRadius: 8 }}
-                                        onClick={() => решить(счёт, 'APPROVED')}
-                                    >
-                                        Согласовано
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        danger
-                                        style={{ borderRadius: 8 }}
-                                        onClick={() => { setОтказ(счёт); setПричина(''); }}
-                                    >
-                                        Не согласовано
-                                    </Button>
-                                </div>
-                            )}
-                            {счёт.approvalRequired && !счёт.approvalStatus && !согласует && (
-                                <Tag color="default" style={{ borderRadius: 999, margin: 0 }}>
-                                    ждёт финотдел
-                                </Tag>
-                            )}
-                        </div>
-                    );
-                })
+                                {ждётРешения && согласует && (
+                                    <div className={styles.actions}>
+                                        <Button
+                                            size="sm"
+                                            disabled={busy === счёт.id}
+                                            onClick={() => решить(счёт, 'APPROVED')}
+                                        >
+                                            {busy === счёт.id
+                                                ? <Loader2 className={`h-3.5 w-3.5 ${styles.spin}`} />
+                                                : <Check className="h-3.5 w-3.5" />}
+                                            Согласовано
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-destructive"
+                                            onClick={() => { setОтказ(счёт); setПричина(''); }}
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                            Не согласовано
+                                        </Button>
+                                    </div>
+                                )}
+                                {ждётРешения && !согласует && (
+                                    <div className={styles.actions}>
+                                        <span className={`${nova.chip} ${nova.chipWarn}`}>ждёт финотдел</span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             )}
 
             <Modal
@@ -230,6 +223,11 @@ export default function IncomingInvoicesCard() {
                     placeholder="Сумма выше договорной; услуги не заказывали; нет акта"
                 />
             </Modal>
-        </div>
+        </DashboardCard>
     );
+}
+
+/** «1 ждёт», «21 ждёт», но «2 ждут», «11 ждут». */
+function ждутСловом(n: number): string {
+    return n % 10 === 1 && n % 100 !== 11 ? 'ждёт' : 'ждут';
 }

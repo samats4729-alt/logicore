@@ -2,11 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Empty, Modal, Input, Skeleton, Tag } from 'antd';
-import { PaperClipOutlined } from '@ant-design/icons';
+import { Modal, Input } from 'antd';
+import { Check, FileText, Loader2, Paperclip, X } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import Loader from '@/components/ui/Loader';
 import nova from '@/components/nova/nova.module.css';
+import DashboardCard from './DashboardCard';
+import styles from './queue-card.module.css';
 import { toast } from 'sonner';
 
 interface PaymentProof {
@@ -93,77 +97,64 @@ export default function PaymentProofsCard() {
     if (!loading && proofs.length === 0) return null;
 
     return (
-        <div className={nova.card} style={{ padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <PaperClipOutlined style={{ color: '#d97706' }} />
-                <span style={{ fontSize: 16, fontWeight: 700 }}>Чеки от контрагентов</span>
-                {proofs.length > 0 && (
-                    <Tag color="gold" style={{ borderRadius: 999, margin: 0 }}>{proofs.length}</Tag>
-                )}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--nova-fg-2)', marginBottom: 16 }}>
-                Подтверждение не проводит платёж — сверьте с банковской выпиской.
-            </div>
-
+        <DashboardCard
+            icon={<Paperclip size={14} />}
+            title="Чеки от контрагентов"
+            badge={proofs.length > 0 && <span className={`${nova.chip} ${nova.chipWarn}`}>{proofs.length}</span>}
+            hint="Подтверждение не проводит платёж — сверьте с банковской выпиской."
+        >
             {loading ? (
-                <Skeleton active paragraph={{ rows: 3 }} />
+                <DashboardCard.Center><Loader /></DashboardCard.Center>
             ) : proofs.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Новых чеков нет" />
+                <DashboardCard.Center>Новых чеков нет</DashboardCard.Center>
             ) : (
-                proofs.map((proof) => (
-                    <div
-                        key={proof.id}
-                        style={{
-                            display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
-                            padding: '12px 0', borderTop: '1px solid var(--nova-border)',
-                        }}
-                    >
-                        <div style={{ flex: 1, minWidth: 200 }}>
-                            <div style={{ fontWeight: 600 }}>
-                                <a
+                <div className={styles.list}>
+                    {proofs.map((proof) => (
+                        <div key={proof.id} className={styles.item}>
+                            <div className={styles.top}>
+                                <button
+                                    type="button"
+                                    className={styles.title}
                                     onClick={() => router.push(`/company/orders/${proof.order.id}`)}
-                                    style={{ cursor: 'pointer' }}
                                 >
                                     Заявка №{proof.order.orderNumber}
-                                </a>
-                                {' · '}
-                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(proof.claimedAmount)}</span>
+                                </button>
+                                <span className={styles.amount}>{money(proof.claimedAmount)}</span>
                             </div>
-                            <div style={{ fontSize: 12, color: 'var(--nova-fg-3)' }}>
+                            <div className={styles.meta}>
                                 {proof.counterparty.name}
                                 {proof.claimedDate && ` · платёж от ${dayjs(proof.claimedDate).format('DD.MM.YYYY')}`}
                                 {` · прислан ${dayjs(proof.createdAt).format('DD.MM.YYYY')}`}
                             </div>
-                            {proof.note && (
-                                <div style={{ fontSize: 12, color: 'var(--nova-fg-2)', marginTop: 2 }}>
-                                    {proof.note}
-                                </div>
-                            )}
+                            {proof.note && <div className={styles.note}>{proof.note}</div>}
+                            <div className={styles.actions}>
+                                <Button size="sm" variant="outline" onClick={() => openFile(proof)}>
+                                    <FileText className="h-3.5 w-3.5" />
+                                    Открыть чек
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    disabled={busy === proof.id}
+                                    onClick={() => accept(proof)}
+                                >
+                                    {busy === proof.id
+                                        ? <Loader2 className={`h-3.5 w-3.5 ${styles.spin}`} />
+                                        : <Check className="h-3.5 w-3.5" />}
+                                    Подтвердить
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-destructive"
+                                    onClick={() => { setRejecting(proof); setReason(''); }}
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                    Отклонить
+                                </Button>
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <Button size="small" style={{ borderRadius: 8 }} onClick={() => openFile(proof)}>
-                                Открыть чек
-                            </Button>
-                            <Button
-                                size="small"
-                                type="primary"
-                                loading={busy === proof.id}
-                                style={{ borderRadius: 8 }}
-                                onClick={() => accept(proof)}
-                            >
-                                Подтвердить
-                            </Button>
-                            <Button
-                                size="small"
-                                danger
-                                style={{ borderRadius: 8 }}
-                                onClick={() => { setRejecting(proof); setReason(''); }}
-                            >
-                                Отклонить
-                            </Button>
-                        </div>
-                    </div>
-                ))
+                    ))}
+                </div>
             )}
 
             <Modal
@@ -189,6 +180,6 @@ export default function PaymentProofsCard() {
                     placeholder="Например: сумма не совпадает с выпиской"
                 />
             </Modal>
-        </div>
+        </DashboardCard>
     );
 }
