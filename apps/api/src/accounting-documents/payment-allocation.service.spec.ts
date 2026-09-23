@@ -203,6 +203,50 @@ describe('PaymentAllocationService', () => {
             ])).rejects.toThrow('другому контрагенту');
         });
 
+        /**
+         * Смысл согласования в том, что оплачивает не тот, кто разрешает.
+         * Держать запрет на кнопке было бы бесполезно: разнести платёж можно
+         * и из журнала оплат, и подсказкой по FIFO, и прямым запросом.
+         */
+        describe('входящий счёт без согласования не оплачивается', () => {
+            const списание = { direction: PaymentDirection.OUT };
+            const входящий = (approvalStatus: string | null) =>
+                invoice('a', '50000', '0', { direction: 'INCOMING', approvalStatus });
+
+            it('решения ещё нет — отказ', async () => {
+                const { service } = makeService([входящий(null)], списание);
+
+                await expect(service.apply(COMPANY, USER, 'payment-1', [
+                    { documentId: 'a', amount: '50000' },
+                ])).rejects.toThrow('ещё не согласован');
+            });
+
+            it('финотдел отказал — отказ, и причина названа', async () => {
+                const { service } = makeService([входящий('REJECTED')], списание);
+
+                await expect(service.apply(COMPANY, USER, 'payment-1', [
+                    { documentId: 'a', amount: '50000' },
+                ])).rejects.toThrow('не согласован финотделом');
+            });
+
+            it('согласован — оплата проходит', async () => {
+                const { service, updates } = makeService([входящий('APPROVED')], списание);
+
+                await service.apply(COMPANY, USER, 'payment-1', [{ documentId: 'a', amount: '50000' }]);
+
+                expect(updates['a'].amountPaid.toFixed(2)).toBe('50000.00');
+            });
+
+            it('исходящий счёт согласования не требует', async () => {
+                // Решение по нему принимает плательщик, а не наш финотдел.
+                const { service, updates } = makeService([invoice('a', '50000')]);
+
+                await service.apply(COMPANY, USER, 'payment-1', [{ documentId: 'a', amount: '50000' }]);
+
+                expect(updates['a'].amountPaid.toFixed(2)).toBe('50000.00');
+            });
+        });
+
         it('переплата не уводит остаток в минус', async () => {
             const document = invoice('a', '50000');
             const { service, updates } = makeService([document]);

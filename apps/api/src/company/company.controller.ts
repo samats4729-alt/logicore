@@ -570,6 +570,32 @@ export class CompanyController {
         return this.companyService.updateDepartment(req.user.companyId, id, dto.name, dto.icon);
     }
 
+    /**
+     * Права всему отделу разом.
+     *
+     * Руководителю не нужно обходить сотрудников поимённо — и, что важнее,
+     * не нужно помнить о новом человеке: попал в отдел, получил права отдела.
+     */
+    @Put('departments/:id/permissions')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Выдать права всему отделу' })
+    async updateDepartmentPermissions(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() dto: { permissions: string[] },
+    ) {
+        const отдел = await this.companyService.updateDepartmentPermissions(
+            req.user.companyId, id, dto.permissions ?? [],
+        );
+        await this.auditService.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'department', entityId: id,
+            entityLabel: `Права отдела «${отдел.name}»`,
+            details: { permissions: отдел.permissions },
+        });
+        return отдел;
+    }
+
     @Delete('departments/:id')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Удалить отдел' })

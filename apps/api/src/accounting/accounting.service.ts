@@ -197,6 +197,12 @@ export class AccountingService {
         return this.reportsService.getSharedReport(token);
     }
 
+    /** Что видит заказчик по своей постоянной ссылке: счета и сделки. */
+    async getClientPortal(token: string) {
+        return this.reportsService.getClientPortal(token);
+    }
+
+
     async getPayments(
         companyId: string,
         query: { startDate?: string; endDate?: string; direction?: PaymentDirection },

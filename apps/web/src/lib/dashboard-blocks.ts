@@ -23,6 +23,7 @@ export const БЛОКИ_ДАШБОРДА = [
     'pendingWork',
     'paymentCalendar',
     'paymentProofs',
+    'incomingInvoices',
     'earnings',
     'events',
 ] as const;
@@ -35,6 +36,7 @@ export const НАЗВАНИЯ_БЛОКОВ: Record<DashboardBlock, string> = {
     pendingWork: 'Требует оформления',
     paymentCalendar: 'Платёжный календарь',
     paymentProofs: 'Чеки от контрагентов',
+    incomingInvoices: 'Входящие счета',
     earnings: 'Заработок сотрудников',
     events: 'Последние события',
 };
@@ -57,7 +59,14 @@ export function блокиПоРоли(
         return [...БЛОКИ_ДАШБОРДА];
     }
     if (role === 'ACCOUNTANT' && permissions.includes('accounting')) {
-        return ['pendingWork', 'paymentCalendar', 'paymentProofs', 'events'];
+        return ['pendingWork', 'paymentCalendar', 'paymentProofs', 'incomingInvoices', 'events'];
+    }
+    // Согласующий видит входящие счета с первого дня, какой бы ни была его
+    // роль. Право выдают и менеджеру направления, и руководителю отдела;
+    // держать их блок закрытым до отдельной настройки значит, что счёт
+    // по-прежнему ждёт, пока человек сам догадается открыть «Входящие».
+    if (permissions.includes('invoice_approval')) {
+        return ['incomingInvoices', 'events'];
     }
     return ['events'];
 }

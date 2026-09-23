@@ -20,6 +20,7 @@ import {
 import dayjs, { Dayjs } from 'dayjs';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { canApproveInvoices } from '@/lib/permissions';
 import {
     ACCOUNTING_DOCUMENT_STATUS_LABELS,
     AccountingDocumentDetails,
@@ -297,6 +298,11 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const [externalDate, setExternalDate] = useState<Dayjs | null>(null);
     const [lines, setLines] = useState<EditableLine[]>([]);
     const [dirty, setDirty] = useState(false);
+    // Решение финотдела по входящему счёту: согласовать к оплате или нет.
+    const согласует = canApproveInvoices(user);
+    const [решаю, setРешаю] = useState(false);
+    const [отказ, setОтказ] = useState(false);
+    const [причинаОтказа, setПричинаОтказа] = useState('');
     // Подбор рейсов в уже открытый документ. Раньше рейсы выбирались только
     // при создании: если счёт уже завели, а заказчик попросил добавить в него
     // ещё перевозки, оставалось набивать строки руками.
@@ -380,6 +386,29 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
             setLoading(false);
         }
     }, [id, applyDocument]);
+
+    /**
+     * Решение финотдела: счёт можно оплачивать или нет.
+     *
+     * Отказ обязан нести причину — бухгалтеру решать, ждать исправленный счёт
+     * или вернуть его контрагенту.
+     */
+    const решить = async (decision: 'APPROVED' | 'REJECTED', note?: string) => {
+        try {
+            setРешаю(true);
+            await api.post(`/accounting-documents/${id}/approval`, { decision, note });
+            toast.success(decision === 'APPROVED'
+                ? 'Счёт согласован — бухгалтерия может оплачивать'
+                : 'Счёт не согласован');
+            setОтказ(false);
+            setПричинаОтказа('');
+            await load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось записать решение');
+        } finally {
+            setРешаю(false);
+        }
+    };
 
     /** Скачать приложенную бумагу. Файл отдаётся вложением, не открывается. */
     const downloadAttachment = async (file: Вложение) => {
@@ -947,11 +976,46 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         <span className={`${nova.chip}${statusChip ? ` ${statusChip}` : ''}`}>
                             {ACCOUNTING_DOCUMENT_STATUS_LABELS[document.status]}
                         </span>
+                        {/* Согласование — только у входящих: по исходящему
+                            решение принимает не наш финотдел, а плательщик. */}
+                        {!outgoing && (
+                            <span className={`${nova.chip}${document.approvalStatus === 'APPROVED'
+                                ? ` ${nova.chipPos}`
+                                : document.approvalStatus === 'REJECTED' ? ` ${nova.chipNeg}` : ` ${nova.chipWarn}`}`}
+                            >
+                                {document.approvalStatus === 'APPROVED'
+                                    ? 'Согласован к оплате'
+                                    : document.approvalStatus === 'REJECTED'
+                                        ? 'Не согласован'
+                                        : 'Ждёт согласования'}
+                            </span>
+                        )}
                     </h1>
+                    {!outgoing && document.approvalStatus && (
+                        <div style={{ fontSize: 12, color: 'var(--nova-fg-3)', marginTop: 4 }}>
+                            {document.approvedBy
+                                ? `${document.approvedBy.firstName} ${document.approvedBy.lastName}`
+                                : 'Решение'}
+                            {document.approvedAt ? `, ${dayjs(document.approvedAt).format('DD.MM.YYYY HH:mm')}` : ''}
+                            {document.approvalNote ? ` — ${document.approvalNote}` : ''}
+                        </div>
+                    )}
                 </div>
 
                 {/* Порядок кнопок как в 1С: сначала завершающее действие. */}
                 <Space size={8} wrap style={{ flexShrink: 0, paddingTop: 4 }}>
+                    {/* Решение финотдела по входящему счёту. Пока его нет,
+                        разнести на этот счёт платёж сервер не даст. */}
+                    {!outgoing && согласует && !document.approvalStatus && (
+                        <>
+                            <Button type="primary" loading={решаю} onClick={() => решить('APPROVED')}>
+                                Согласовано
+                            </Button>
+                            <Button danger onClick={() => setОтказ(true)}>
+                                Не согласовано
+                            </Button>
+                        </>
+                    )}
                     {editable && (
                         <>
                             {/* Якоря для ИИ-гида: проведение и отправка — те
@@ -1609,6 +1673,30 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         />
                     </div>
                 </div>
+            </Modal>
+
+            <Modal
+                title={`Не согласовать счёт № ${document.number}`}
+                open={отказ}
+                onCancel={() => setОтказ(false)}
+                onOk={() => решить('REJECTED', причинаОтказа.trim())}
+                confirmLoading={решаю}
+                okText="Не согласовано"
+                cancelText="Отмена"
+                okButtonProps={{ danger: true, disabled: !причинаОтказа.trim() }}
+            >
+                <div style={{ fontSize: 13, color: token.colorTextSecondary, marginBottom: 10 }}>
+                    Бухгалтеру решать, ждать исправленный счёт или вернуть его контрагенту, —
+                    напишите, что не так.
+                </div>
+                <Input.TextArea
+                    autoFocus
+                    rows={3}
+                    maxLength={300}
+                    value={причинаОтказа}
+                    onChange={(e) => setПричинаОтказа(e.target.value)}
+                    placeholder="Сумма выше договорной; услуги не заказывали; нет акта"
+                />
             </Modal>
         </div>
     );

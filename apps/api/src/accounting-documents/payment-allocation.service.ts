@@ -149,7 +149,7 @@ export class PaymentAllocationService {
                 },
                 select: {
                     id: true, total: true, amountPaid: true, counterpartyId: true, direction: true,
-                    currency: true, exchangeRate: true,
+                    currency: true, exchangeRate: true, number: true, approvalStatus: true,
                 },
             })
             : [];
@@ -170,6 +170,20 @@ export class PaymentAllocationService {
             }
             if (payment.counterpartyId && document.counterpartyId !== payment.counterpartyId) {
                 throw new BadRequestException('Счёт относится к другому контрагенту');
+            }
+            // Оплата входящего счёта без согласования финотдела не проходит.
+            //
+            // Запрет стоит здесь, а не на кнопке: разнести платёж можно и из
+            // журнала оплат, и подсказкой по FIFO, и прямым запросом. Спрячь
+            // кнопку — останутся три других пути, и проверка, ради которой
+            // всё затевалось, работала бы через раз.
+            if (document.direction === AccountingDocumentDirection.INCOMING
+                && document.approvalStatus !== 'APPROVED') {
+                throw new BadRequestException(
+                    document.approvalStatus === 'REJECTED'
+                        ? `Счёт ${document.number} не согласован финотделом — оплачивать его нельзя`
+                        : `Счёт ${document.number} ещё не согласован финотделом`,
+                );
             }
         }
 

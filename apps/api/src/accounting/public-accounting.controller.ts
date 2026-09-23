@@ -16,4 +16,15 @@ export class PublicAccountingController {
         return this.accountingService.getSharedReport(token);
     }
 
+    /**
+     * Постоянная ссылка заказчика: его счета и сделки.
+     *
+     * Отдельный путь от сверки с перевозчиком. Ссылка живёт годами, поэтому
+     * ограничение частоты здесь тем более обязательно.
+     */
+    @Throttle({ default: { limit: 20, ttl: 60000 } })
+    @Get('client/:token')
+    async getClientPortal(@Param('token') token: string) {
+        return this.accountingService.getClientPortal(token);
+    }
 }

@@ -146,6 +146,16 @@ export interface AccountingDocumentDetails extends AccountingDocumentListItem {
     cancelledBy?: { id: string; firstName: string | null; lastName: string | null } | null;
     /** Чем закрыт счёт: платежи и курсовая разница по каждому из них. */
     paymentAllocations?: DocumentPaymentAllocation[];
+    /**
+     * Решение финотдела по входящему счёту: `APPROVED`, `REJECTED` или пусто.
+     *
+     * Пока решения нет, разнести на этот счёт платёж сервер не даст: смысл
+     * согласования в том, что оплачивает не тот, кто разрешает.
+     */
+    approvalStatus?: string | null;
+    approvalNote?: string | null;
+    approvedAt?: string | null;
+    approvedBy?: { firstName: string | null; lastName: string | null } | null;
 }
 
 /**

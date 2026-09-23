@@ -305,6 +305,13 @@
     border-color: transparent;
 }
 
+/* Плашка «всё в порядке»: согласован, принят, оплачен. */
+.chipPos {
+    background: var(--nova-pos-soft, rgba(22, 163, 74, 0.10));
+    color: var(--nova-pos);
+    border-color: transparent;
+}
+
 /* ===== Карточка ===== */
 
 .card {
