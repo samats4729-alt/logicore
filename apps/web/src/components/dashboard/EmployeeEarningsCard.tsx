@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Wallet } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 import { api } from '@/lib/api';
 import { ROLE_LABELS } from '@/lib/vocabulary';
 import Loader from '@/components/ui/Loader';
-import nova from '@/components/nova/nova.module.css';
-import dash from '@/app/company/dashboard.module.css';
+import DashboardCard from './DashboardCard';
 import styles from './earnings-card.module.css';
 
 /**
@@ -47,7 +46,7 @@ const ПОКАЗЫВАЕМ = 5;
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
-export default function EmployeeEarningsCard() {
+export default function EmployeeEarningsCard({ className }: { className?: string } = {}) {
     const router = useRouter();
     const [data, setData] = useState<EarningsReport | null>(null);
     const [loading, setLoading] = useState(true);
@@ -72,30 +71,23 @@ export default function EmployeeEarningsCard() {
     const скрыто = строки.length - видимые.length;
 
     return (
-        <section className={nova.card}>
-            <div className={nova.cardHead}>
-                <Wallet size={14} />
-                <h2 className={nova.cardTitle}>Заработок за месяц</h2>
-                <button
-                    type="button"
-                    className={dash.headLink}
-                    onClick={() => router.push('/company/payroll')}
-                >
-                    Зарплата <ArrowRight size={12} />
-                </button>
-            </div>
-
+        <DashboardCard
+            className={className}
+            icon={<Wallet size={14} />}
+            title="Заработок за месяц"
+            link={{ label: 'Зарплата', onClick: () => router.push('/company/payroll') }}
+        >
             {loading ? (
-                <div className={nova.empty}><Loader /></div>
+                <DashboardCard.Center><Loader /></DashboardCard.Center>
             ) : !строки.length ? (
                 // Пустота объясняет себя: чаще всего дело не в том, что никто
                 // не работал, а в том, что схема начисления ещё не заведена.
-                <div className={nova.empty}>
+                <DashboardCard.Center>
                     Начислений за этот месяц нет. Оклад и процент задаются
                     в разделе «Зарплата».
-                </div>
+                </DashboardCard.Center>
             ) : (
-                <div className={nova.cardBody}>
+                <>
                     <div className={styles.rows}>
                         {видимые.map((строка) => (
                             <div key={строка.userId} className={styles.row}>
@@ -125,9 +117,9 @@ export default function EmployeeEarningsCard() {
                         </span>
                         <b className={styles.grand}>{fmt(data?.totals.total ?? 0)} ₸</b>
                     </div>
-                </div>
+                </>
             )}
-        </section>
+        </DashboardCard>
     );
 }
 

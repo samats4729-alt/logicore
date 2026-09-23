@@ -2,16 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Empty, Skeleton, Tag } from 'antd';
-import {
-    ArrowRightOutlined,
-    ClockCircleOutlined,
-    FileDoneOutlined,
-    FileExclamationOutlined,
-    SafetyCertificateOutlined,
-} from '@ant-design/icons';
+import { ClipboardList, Clock, FileCheck2, FileWarning, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
+import Loader from '@/components/ui/Loader';
 import nova from '@/components/nova/nova.module.css';
+import DashboardCard from './DashboardCard';
+import styles from './pending-work-card.module.css';
 
 interface PendingWorkItem {
     id: string;
@@ -57,8 +53,8 @@ const GROUPS: {
     title: string;
     hint: string;
     icon: React.ReactNode;
-    color: string;
-    background: string;
+    /** Красным — только там, где деньги уже опаздывают. */
+    negative?: boolean;
 }[] = [
     {
         // Первым: пока расчёты не проверены, по рейсу нельзя ни заверить
@@ -66,33 +62,26 @@ const GROUPS: {
         key: 'unconfirmedSettlements',
         title: 'Расчёты ждут проверки',
         hint: 'в карточке контрагента не заполнены НДС или срок оплаты',
-        icon: <SafetyCertificateOutlined />,
-        color: '#0f766e',
-        background: '#ecfeff',
+        icon: <ShieldCheck size={14} />,
     },
     {
         key: 'ordersWithoutAct',
         title: 'Рейс завершён, акта нет',
         hint: 'услуга оказана, но документально не закрыта',
-        icon: <FileExclamationOutlined />,
-        color: '#b45309',
-        background: '#fffbeb',
+        icon: <FileWarning size={14} />,
     },
     {
         key: 'actsWithoutInvoice',
         title: 'Акт есть, счёта нет',
         hint: 'оплату по этим рейсам никто не запрашивал',
-        icon: <FileDoneOutlined />,
-        color: '#4f46e5',
-        background: '#eef2ff',
+        icon: <FileCheck2 size={14} />,
     },
     {
         key: 'overdueInvoices',
         title: 'Счёт просрочен',
         hint: 'срок оплаты прошёл, деньги не пришли',
-        icon: <ClockCircleOutlined />,
-        color: '#dc2626',
-        background: '#fef2f2',
+        icon: <Clock size={14} />,
+        negative: true,
     },
 ];
 
@@ -132,105 +121,55 @@ export default function PendingWorkCard() {
         : 0;
 
     return (
-        <div className={nova.card} style={{ padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
-                <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--nova-fg)', letterSpacing: '-0.01em' }}>
-                        Требует оформления
-                    </div>
-                    <div style={{ color: 'var(--nova-fg-3)', fontSize: 12, marginTop: 2 }}>
-                        незакрытые хвосты между рейсами и бухгалтерией
-                    </div>
-                </div>
-                <span className="lc-link" onClick={() => router.push('/company/accounting/invoices')}>
-                    Журнал счетов <ArrowRightOutlined style={{ fontSize: 11 }} />
-                </span>
-            </div>
-
+        <DashboardCard
+            icon={<ClipboardList size={14} />}
+            title="Требует оформления"
+            link={{ label: 'Журнал счетов', onClick: () => router.push('/company/accounting/invoices') }}
+            hint="Незакрытые хвосты между рейсами и бухгалтерией."
+        >
             {loading ? (
-                <Skeleton active paragraph={{ rows: 4 }} />
+                <DashboardCard.Center><Loader /></DashboardCard.Center>
             ) : totalCount === 0 ? (
-                <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="Всё оформлено — хвостов нет"
-                />
+                <DashboardCard.Center>Всё оформлено — хвостов нет</DashboardCard.Center>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className={styles.groups}>
                     {GROUPS.map((group) => {
                         const value = data?.[group.key];
                         if (!value || value.count === 0) return null;
                         return (
                             <div key={group.key}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                                    <div
-                                        className="lc2-mic"
-                                        style={{ background: group.background, color: group.color, flexShrink: 0 }}
-                                    >
+                                <div className={styles.groupHead}>
+                                    <span className={`${styles.icon} ${group.negative ? styles.iconNeg : ''}`}>
                                         {group.icon}
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--nova-fg)' }}>
+                                    </span>
+                                    <div className={styles.groupText}>
+                                        <div className={styles.groupTitle}>
                                             {group.title}
-                                            <Tag color={group.color} style={{ marginLeft: 8 }}>
+                                            <span className={`${nova.chip} ${group.negative ? nova.chipNeg : ''}`}>
                                                 {value.truncated ? `${value.count}+` : value.count}
-                                            </Tag>
+                                            </span>
                                         </div>
-                                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{group.hint}</div>
+                                        <div className={styles.groupHint}>{group.hint}</div>
                                     </div>
-                                    <div style={{
-                                        fontSize: 14,
-                                        fontWeight: 800,
-                                        color: 'var(--nova-fg)',
-                                        fontVariantNumeric: 'tabular-nums',
-                                        whiteSpace: 'nowrap',
-                                    }}>
-                                        {money(value.total)}
-                                    </div>
+                                    <div className={styles.groupTotal}>{money(value.total)}</div>
                                 </div>
 
-                                <div style={{ paddingLeft: 42 }}>
+                                <div className={styles.items}>
                                     {value.items.map((item) => (
-                                        <div
+                                        <button
+                                            type="button"
                                             key={item.id}
+                                            className={styles.item}
                                             onClick={() => openItem(group.key, item)}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 8,
-                                                padding: '5px 0',
-                                                cursor: 'pointer',
-                                                fontSize: 12,
-                                                borderBottom: '1px solid var(--nova-border-2)',
-                                            }}
                                         >
-                                            <span style={{ fontWeight: 600, color: 'var(--nova-fg)', whiteSpace: 'nowrap' }}>
-                                                {item.label}
-                                            </span>
-                                            <span style={{
-                                                flex: 1,
-                                                minWidth: 0,
-                                                color: 'var(--nova-fg-2)',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                            }}>
-                                                {item.counterparty || '—'}
-                                            </span>
-                                            <span style={{ color: 'var(--nova-fg-3)', whiteSpace: 'nowrap' }}>
-                                                {daysLabel(item.daysWaiting)}
-                                            </span>
-                                            <span style={{
-                                                fontWeight: 600,
-                                                color: 'var(--nova-fg)',
-                                                fontVariantNumeric: 'tabular-nums',
-                                                whiteSpace: 'nowrap',
-                                            }}>
-                                                {money(item.amount)}
-                                            </span>
-                                        </div>
+                                            <span className={styles.itemLabel}>{item.label}</span>
+                                            <span className={styles.itemParty}>{item.counterparty || '—'}</span>
+                                            <span className={styles.itemDays}>{daysLabel(item.daysWaiting)}</span>
+                                            <span className={styles.itemSum}>{money(item.amount)}</span>
+                                        </button>
                                     ))}
                                     {value.count > value.items.length && (
-                                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)', paddingTop: 5 }}>
+                                        <div className={styles.more}>
                                             и ещё {value.count - value.items.length}
                                         </div>
                                     )}
@@ -240,6 +179,6 @@ export default function PendingWorkCard() {
                     })}
                 </div>
             )}
-        </div>
+        </DashboardCard>
     );
 }

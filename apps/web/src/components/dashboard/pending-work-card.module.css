@@ -1,0 +1,124 @@
+/* «Требует оформления»: группы хвостов и строки рейсов под ними.
+
+   Цвет у групп убран: четыре разноцветных значка и цветные счётчики
+   спорили с числами и не совпадали с остальным дашбордом, где цвет значит
+   только «плохо» или «хорошо». Красным остаётся одна группа — просроченные
+   счета: там деньги уже опаздывают. */
+
+.groups {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.groupHead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.icon {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: var(--nova-surface-2);
+    color: var(--nova-fg-2);
+}
+
+.iconNeg {
+    background: var(--nova-neg-soft);
+    color: var(--nova-neg);
+}
+
+.groupText {
+    flex: 1;
+    min-width: 0;
+}
+
+.groupTitle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.8px;
+    font-weight: 600;
+    color: var(--nova-fg);
+}
+
+.groupHint {
+    font-size: 11px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.groupTotal {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+    white-space: nowrap;
+}
+
+/* Строки рейсов — под текстом группы, а не под значком. */
+.items {
+    padding-left: 36px;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 0;
+    border: 0;
+    border-bottom: 1px solid var(--nova-border-2);
+    background: none;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.item:hover .itemLabel {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.itemLabel {
+    font-weight: 600;
+    color: var(--nova-fg);
+    white-space: nowrap;
+}
+
+.itemParty {
+    flex: 1;
+    min-width: 0;
+    color: var(--nova-fg-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.itemDays {
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+}
+
+.itemSum {
+    font-weight: 600;
+    color: var(--nova-fg);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.more {
+    padding-top: 5px;
+    font-size: 11px;
+    color: var(--nova-fg-3);
+}

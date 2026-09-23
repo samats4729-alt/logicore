@@ -1,49 +1,175 @@
-/* Своё для сводки: таблица активности, списки долгов и событий.
-   Общие блоки — шапка, плитки, карточки — приходят из `nova.module.css`. */
+/* Своё для сводки: сетка блоков, плитки, таблица активности, события.
+   Общие блоки — шапка, плитка — приходят из `nova.module.css`, рамка
+   карточки блока — из `components/dashboard/DashboardCard`. */
 
-.headLink {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    border: 0;
-    background: none;
-    padding: 0;
-    font-size: 11.5px;
-    font-weight: 550;
-    color: var(--nova-accent);
-    cursor: pointer;
-    white-space: nowrap;
+/* ===== Плитки показателей =====
+
+   Все в один ряд, сколько бы их ни было: у руководителя их пять или шесть
+   (с тарифом и своим заработком), у менеджера три-четыре. Раньше ряд был
+   рассчитан на четыре, и пятая плитка уезжала одна на новую строку, а
+   тариф стоял отдельной полосой во всю ширину. */
+.tiles {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
 }
 
-.headLink:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
+.tiles:empty {
+    display: none;
 }
 
-/* Таблица активности. Прокручивается вбок внутри карточки: пяти столбцов с
-   числами на узком экране не уместить, а перенос строки в таблице чисел
-   читается хуже прокрутки. */
-.tableWrap {
+@media (min-width: 720px) {
+    /* Одна плитка на весь ряд читалась бы полосой — даём ей треть. */
+    .tiles:has(> :only-child) {
+        grid-auto-flow: row;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Планшет: пять-шесть плиток в ряд уже тесно — по три в ряд, а хвост
+   делит свою строку поровну, без пустого места справа. Сетка на шесть
+   дорожек нужна ради хвоста из двух: они встают пополам. */
+@media (min-width: 720px) and (max-width: 1179px) {
+    .tiles:has(> :nth-child(5)) {
+        grid-auto-flow: row;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .tiles:has(> :nth-child(5)) > * {
+        grid-column: span 2;
+    }
+
+    .tiles:has(> :nth-child(5)) > :nth-last-child(2):nth-child(3n + 1),
+    .tiles:has(> :nth-child(5)) > :last-child:nth-child(3n + 2) {
+        grid-column: span 3;
+    }
+
+    .tiles:has(> :nth-child(5)) > :last-child:nth-child(3n + 1) {
+        grid-column: span 6;
+    }
+}
+
+/* Телефон: по две, нечётная последняя — во всю ширину. */
+@media (max-width: 719px) {
+    .tiles {
+        grid-auto-flow: row;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .tiles > :last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+    }
+}
+
+/* ===== Сетка блоков =====
+
+   Ряд делится на трети, и края карточек в соседних рядах совпадают.
+   «Активность» занимает две трети — рядом с ней встаёт ещё один блок, и
+   таблица больше не тянется через весь экран, разнося подпись и число
+   по разным краям монитора.
+
+   Карточки одного ряда — одной высоты (потолок и прокрутка внутри — в
+   `dashboard-card.module.css`). Раньше каждая стояла своей высоты, и под
+   короткими зияли дыры до следующего ряда.
+
+   Сколько блоков окажется на экране, заранее неизвестно: набор задаёт
+   руководитель, а пустые очереди (чеки, входящие счета) не показываются
+   вовсе. Поэтому ряды не расписаны по местам — последний неполный ряд
+   сам делится поровну между теми, кто в него попал. */
+.board {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 14px;
+}
+
+/* Треть ряда. Полпикселя в запас: три трети и два зазора дают ровно
+   ширину ряда, и ошибка округления сбросила бы третью карточку вниз. */
+.board > * {
+    flex: 1 1 calc((100% - 28px) / 3 - 0.5px);
+}
+
+.board > .wide {
+    flex: 2 1 calc((100% - 28px) / 3 * 2 + 14px - 0.5px);
+}
+
+@media (max-width: 1179px) {
+    .board > * {
+        flex-basis: calc((100% - 14px) / 2 - 0.5px);
+    }
+
+    .board > .wide {
+        flex-basis: 100%;
+    }
+}
+
+/* Планшет: по два в ряд, и «Активность» занимает ряд целиком. Соседа,
+   который на мониторе стоял рядом с ней, — заработок — здесь уводим к
+   событиям: они одного роста. Иначе он вставал бы рядом с длинным
+   списком хвостов и стоял бы наполовину пустым. Календарь — последним:
+   один в ряду он раскладывается шире (месяц слева, платежи дня справа). */
+@media (min-width: 760px) and (max-width: 1179px) {
+    .board > .earnings {
+        order: 1;
+    }
+
+    .board > .eventsCard {
+        order: 2;
+    }
+
+    .board > .calendar {
+        order: 3;
+    }
+}
+
+@media (max-width: 759px) {
+    .board > *,
+    .board > .wide {
+        flex-basis: 100%;
+    }
+}
+
+/* ===== Активность ===== */
+
+/* Таблица встаёт к краям карточки, как и раньше: шапка столбцов — на всю
+   ширину, без внутренних полей (карточка открыта без отступов — `flush`).
+   Прокрутка вбок — запас для браузера, который не умеет перестраивать
+   таблицу по ширине карточки (см. ниже): там она ведёт себя как прежде. */
+.activityWrap {
+    flex: 1 1 auto;
     overflow-x: auto;
 }
 
+/* Высота — на всю карточку: если сосед по ряду выше (календарь), строки
+   раздвигаются поровну, а не оставляют пустоту под таблицей. */
 .table {
     width: 100%;
+    height: 100%;
     border-collapse: collapse;
-    min-width: 560px;
+    /* Столбцы делят ширину по заданным долям, а не по длине чисел: иначе
+       в месяц с миллионами колонка «Динамика» съедала бы подписи. */
+    table-layout: fixed;
+    min-width: 520px;
 }
 
 .table th {
     text-align: left;
-    padding: 9px 14px;
+    padding: 10px 14px 8px;
     font-size: 10.5px;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--nova-fg-3);
-    background: var(--nova-surface-2);
     border-bottom: 1px solid var(--nova-border-2);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.table th:first-child {
+    width: 34%;
 }
 
 .table td {
@@ -53,6 +179,8 @@
     border-bottom: 1px solid var(--nova-border-2);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .table tr:last-child td {
@@ -67,6 +195,10 @@
     text-align: right;
 }
 
+.table .right {
+    text-align: right;
+}
+
 .strong {
     font-weight: 650;
 }
@@ -75,56 +207,162 @@
     color: var(--nova-fg-3);
 }
 
-/* Карточки нижнего ряда. */
-.cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 14px;
-    align-items: start;
-}
-
-/* Задолженность: три числа в ряд. */
-.debtRow {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 14px;
-}
-
-.debtBox {
-    border: 1px solid var(--nova-border);
-    border-radius: 11px;
-    padding: 9px 11px;
-    min-width: 0;
-}
-
-.debtBox b {
-    display: block;
-    margin-top: 3px;
-    font-size: 16px;
+/* Динамика: стрелка и число одной строкой. */
+.delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12.5px;
     font-weight: 650;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
-.listLabel {
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--nova-fg-3);
-    margin-bottom: 6px;
+/* Узкая карточка — телефон или планшет стоя. Пять столбцов с числами
+   туда не лезут: раньше таблица уезжала вбок, и за краем оставались как
+   раз этот месяц и динамика — то, ради чего в неё смотрят. Здесь каждая
+   строка становится парой строк: подпись и число этого месяца сверху,
+   сегодня, прошлый месяц и динамика — под ними. */
+@container (max-width: 559px) {
+    .activityWrap {
+        padding: 2px 14px 6px;
+        overflow: visible;
+    }
+
+    .table,
+    .table tbody {
+        display: block;
+        height: auto;
+        min-width: 0;
+    }
+
+    .table thead {
+        display: none;
+    }
+
+    /* Строка — две строки текста: «подпись … число месяца» и под ней
+       «сегодня · прошлый месяц … динамика». Флекс, а не сетка: в сетке
+       ширина колонок у каждой строки своя, и «август» стоял бы в каждой
+       строке на новом месте, подстраиваясь под длину подписи. */
+    .table tr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 10px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--nova-border-2);
+    }
+
+    /* Перенос между двумя строками: пустой элемент во всю ширину. */
+    .table tr::before {
+        content: '';
+        order: 3;
+        flex-basis: 100%;
+        height: 3px;
+    }
+
+    .table tr:last-child {
+        border-bottom: 0;
+    }
+
+    .table td {
+        padding: 0;
+        border: 0;
+        overflow: visible;
+    }
+
+    .table tbody tr:hover td {
+        background: none;
+    }
+
+    .table td:nth-child(1) {
+        order: 1;
+        flex: 1 1 0;
+        min-width: 0;
+        font-weight: 550;
+        white-space: normal;
+    }
+
+    .table td:nth-child(4) {
+        order: 2;
+        font-size: 13.5px;
+    }
+
+    .table td:nth-child(2) {
+        order: 4;
+    }
+
+    .table td:nth-child(3) {
+        order: 5;
+    }
+
+    .table td:nth-child(5) {
+        order: 6;
+        flex: 1 1 auto;
+    }
+
+    .table td:nth-child(2),
+    .table td:nth-child(3) {
+        text-align: left;
+        font-size: 11.5px;
+        color: var(--nova-fg-3);
+    }
+
+    /* Нижняя строка — по центру, а не по базовой линии: у динамики
+       впереди стрелка, и по базовой линии она вставала выше соседей. */
+    .table td:nth-child(2),
+    .table td:nth-child(3),
+    .table td:nth-child(5) {
+        align-self: center;
+    }
+
+    /* Подпись столбца переезжает к самому числу: «сегодня 0». */
+    .table td[data-label]::before {
+        content: attr(data-label) ' ';
+        text-transform: lowercase;
+    }
+
+    .delta {
+        font-size: 11.5px;
+    }
 }
 
-/* Строка списка — долг или событие. */
+/* ===== Последние события ===== */
+
+.events {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 28px;
+    align-content: start;
+}
+
+/* Широкая карточка — когда событиям достался весь ряд: список в
+   несколько колонок, иначе дата уезжает на другой край экрана от номера
+   рейса. */
+@container (min-width: 720px) {
+    .events {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@container (min-width: 1080px) {
+    .events {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@container (min-width: 1440px) {
+    .events {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+/* Строка списка — событие. */
 .row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    width: 100%;
+    width: calc(100% + 18px);
     padding: 8px 9px;
     margin: 0 -9px;
     border: 0;
@@ -132,6 +370,7 @@
     border-radius: 9px;
     cursor: pointer;
     text-align: left;
+    font: inherit;
 }
 
 .row:hover {
@@ -151,8 +390,8 @@
 }
 
 .rowValue {
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
 }
@@ -163,18 +402,36 @@
     color: var(--nova-fg);
 }
 
-@media (max-width: 720px) {
-    .debtRow {
-        grid-template-columns: minmax(0, 1fr);
-    }
+/* ===== Настройка блоков ===== */
+
+/* Фон и рамку даёт сам `PopoverContent` — здесь только размеры. */
+.settings {
+    width: auto;
+    min-width: 232px;
+    padding: 4px;
 }
 
-/* Динамика: стрелка и число одной строкой. */
-.delta {
-    display: inline-flex;
+.settingsTitle {
+    padding: 6px 8px 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--nova-border-2);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--nova-fg);
+}
+
+.settingsItem {
+    display: flex;
     align-items: center;
-    gap: 3px;
-    font-size: 12.5px;
-    font-weight: 650;
-    font-variant-numeric: tabular-nums;
+    gap: 9px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--nova-fg);
+    cursor: pointer;
+    user-select: none;
+}
+
+.settingsItem:hover {
+    background: var(--nova-hover);
 }
