@@ -11,6 +11,8 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 import { DateField } from '@/components/ui/DateField';
+import DriverPoolSelect, { NEW_DRIVER } from '@/components/orders/DriverPoolSelect';
+import { DRIVER_CARD_FIELDS, alreadyExistsMessage, fetchDriverPool, tripVehicle, type PoolDriver } from '@/lib/driver-pool';
 
 interface AssignDriverModalProps {
     open: boolean;
@@ -44,7 +46,7 @@ export default function AssignDriverModal({
 
     // Data lists
     const [carriers, setCarriers] = useState<any[]>([]);
-    const [drivers, setDrivers] = useState<any[]>([]);
+    const [drivers, setDrivers] = useState<PoolDriver[]>([]);
     const [vehicles, setVehicles] = useState<any[]>([]);
 
     // Loading states
@@ -90,17 +92,13 @@ export default function AssignDriverModal({
         }
     }, [open, initialValues]);
 
-    // Fetch drivers when company selection changes
+    // Водители — общей базой компании: свои и всех своих перевозчиков. Тот,
+    // кто вчера ехал от другого ИП, сегодня может ехать от этого, и список
+    // выбранного перевозчика его не показал бы. Порядок — у `DriverPoolSelect`.
     useEffect(() => {
-        if (open) {
-            const targetCompanyId = transportType === 'own' ? user?.companyId : selectedCarrierId;
-            if (targetCompanyId) {
-                fetchDrivers(targetCompanyId);
-            } else {
-                setDrivers([]);
-            }
-        }
-    }, [transportType, selectedCarrierId, open]);
+        if (open) fetchDrivers();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     const fetchCarriers = async () => {
         setCarriersLoading(true);
@@ -131,16 +129,29 @@ export default function AssignDriverModal({
         }
     };
 
-    const fetchDrivers = async (companyId: string) => {
+    /**
+     * Машина из заявки — если окно открыли на уже назначенном водителе.
+     *
+     * Машина рейса живёт в заявке: водитель мог с тех пор пересесть на другую,
+     * и в окне должна стоять та, на которой едут в этом рейсе, а не последняя
+     * из его карточки.
+     */
+    const машинаРейса = (driverId: string) =>
+        initialValues?.driverId === driverId && initialValues.assignedDriverPlate
+            ? { plate: initialValues.assignedDriverPlate, trailer: initialValues.assignedDriverTrailer ?? '' }
+            : null;
+
+    const fetchDrivers = async () => {
         setDriversLoading(true);
         try {
-            const response = await api.get('/company/drivers', { params: { companyId } });
-            setDrivers(response.data);
+            const pool = await fetchDriverPool();
+            setDrivers(pool);
 
             // If we have initial values and are in initial load, pre-populate driver details
-            if (initialValues?.driverId && drivers.length === 0) {
-                const found = response.data.find((d: any) => d.id === initialValues.driverId);
+            if (initialValues?.driverId) {
+                const found = pool.find((d) => d.id === initialValues.driverId);
                 if (found) {
+                    const рейс = машинаРейса(found.id);
                     setSelectedDriverId(found.id);
                     form.setFieldsValue({
                         driverId: found.id,
@@ -151,8 +162,8 @@ export default function AssignDriverModal({
                         iin: found.iin,
                         vehicleType: found.vehicleType,
                         vehicleModel: found.vehicleModel,
-                        vehiclePlate: found.vehiclePlate,
-                        trailerNumber: found.trailerNumber,
+                        vehiclePlate: рейс ? рейс.plate : found.vehiclePlate,
+                        trailerNumber: рейс ? рейс.trailer : found.trailerNumber,
                         docType: found.docType,
                         docNumber: found.docNumber,
                         docIssuedAt: found.docIssuedAt ? dayjs(found.docIssuedAt) : undefined,
@@ -162,9 +173,9 @@ export default function AssignDriverModal({
                 }
             } else if (initialValues && !initialValues.driverId && initialValues.assignedDriverName) {
                 // Manual data pre-population
-                setSelectedDriverId('__NEW_DRIVER__');
+                setSelectedDriverId(NEW_DRIVER);
                 form.setFieldsValue({
-                    driverId: '__NEW_DRIVER__',
+                    driverId: NEW_DRIVER,
                     lastName: initialValues.assignedDriverName.split(' ')[0] || '',
                     firstName: initialValues.assignedDriverName.split(' ')[1] || '',
                     middleName: initialValues.assignedDriverName.split(' ').slice(2).join(' ') || '',
@@ -182,7 +193,7 @@ export default function AssignDriverModal({
 
     const handleDriverSelect = (value: string) => {
         setSelectedDriverId(value);
-        if (value === '__NEW_DRIVER__') {
+        if (value === NEW_DRIVER) {
             form.setFieldsValue({
                 firstName: '', lastName: '', middleName: '', phone: '', iin: '',
                 vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
@@ -191,6 +202,7 @@ export default function AssignDriverModal({
         } else {
             const d = drivers.find(drv => drv.id === value);
             if (d) {
+                const рейс = машинаРейса(d.id);
                 form.setFieldsValue({
                     firstName: d.firstName,
                     lastName: d.lastName,
@@ -199,8 +211,8 @@ export default function AssignDriverModal({
                     iin: d.iin || '',
                     vehicleType: d.vehicleType || undefined,
                     vehicleModel: d.vehicleModel || '',
-                    vehiclePlate: d.vehiclePlate || '',
-                    trailerNumber: d.trailerNumber || '',
+                    vehiclePlate: (рейс ? рейс.plate : d.vehiclePlate) || '',
+                    trailerNumber: (рейс ? рейс.trailer : d.trailerNumber) || '',
                     docType: d.docType || undefined,
                     docNumber: d.docNumber || '',
                     docIssuedAt: d.docIssuedAt ? dayjs(d.docIssuedAt) : null,
@@ -302,18 +314,22 @@ export default function AssignDriverModal({
                     docIssuedBy: values.docIssuedBy,
                 };
 
-                if (selectedDriverId === '__NEW_DRIVER__' || !selectedDriverId) {
+                if (selectedDriverId === NEW_DRIVER || !selectedDriverId) {
                     const res = await api.post('/company/drivers', {
                         ...driverData,
                         companyId: targetCompanyId,
                     });
                     finalDriverId = res.data.id;
                     if (res.data.alreadyExists) {
-                        toast.info('Использован существующий водитель');
+                        toast.info(alreadyExistsMessage(res.data));
                     }
                 } else {
-                    // Update details for our own drivers, ignore/skip for carrier drivers if forbidden
-                    if (transportType === 'own') {
+                    // Правку данных водителя сохраняем в его карточку — у любого
+                    // водителя базы, а не только у штатного: раньше у водителя
+                    // перевозчика исправленный номер молча терялся. И только
+                    // если поля правили: открыть окно и нажать «Назначить» —
+                    // не повод переписывать карточку.
+                    if (drivers.some((d) => d.id === selectedDriverId) && form.isFieldsTouched([...DRIVER_CARD_FIELDS])) {
                         try {
                             await api.put(`/company/drivers/${selectedDriverId}`, driverData);
                         } catch (err: any) {
@@ -331,13 +347,17 @@ export default function AssignDriverModal({
                 }
             }
 
+            const свойВодитель = transportType === 'own' || isCarrierExternal;
             const payload = {
-                driverId: (transportType === 'own' || isCarrierExternal) ? finalDriverId : null,
+                // Машина этого рейса — в заявку: у каждого ИП своя, и
+                // доверенность должна показать ту, на которой едут сейчас.
+                ...(свойВодитель && finalDriverId ? tripVehicle(values) : {}),
+                driverId: свойВодитель ? finalDriverId : null,
                 partnerId: transportType === 'own' ? null : selectedCarrierId,
-                assignedDriverName: (transportType === 'own' || isCarrierExternal) ? undefined : null,
-                assignedDriverPhone: (transportType === 'own' || isCarrierExternal) ? undefined : null,
-                assignedDriverPlate: (transportType === 'own' || isCarrierExternal) ? undefined : null,
-                assignedDriverTrailer: (transportType === 'own' || isCarrierExternal) ? undefined : null,
+                assignedDriverName: свойВодитель ? undefined : null,
+                assignedDriverPhone: свойВодитель ? undefined : null,
+                assignedDriverPlate: свойВодитель ? undefined : null,
+                assignedDriverTrailer: свойВодитель ? undefined : null,
             };
 
             await api.put(`/company/orders/${orderId}/assign-driver`, payload);
@@ -434,23 +454,15 @@ export default function AssignDriverModal({
                             </Form.Item>
                         )}
 
+                        {/* Вся база водителей, а не только водители этого ИП:
+                            сверху — кто уже ездил за него, ниже — остальные. */}
                         <Form.Item name="driverId" label="Водитель" rules={[{ required: true, message: 'Выберите водителя' }]}>
-                            <Select
-                                placeholder="Выберите водителя из списка"
-                                size="large"
+                            <DriverPoolSelect
+                                drivers={drivers}
+                                carrierId={transportType === 'own' ? (user?.companyId ?? null) : selectedCarrierId}
+                                ownTransport={transportType === 'own'}
                                 loading={driversLoading}
                                 onChange={handleDriverSelect}
-                                showSearch
-                                filterOption={(input, option) =>
-                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                                }
-                                options={[
-                                    ...drivers.map(d => ({
-                                        value: d.id,
-                                        label: `${d.lastName} ${d.firstName} ${d.middleName || ''} (${d.phone})`.trim()
-                                    })),
-                                    { value: '__NEW_DRIVER__', label: '+ Добавить нового водителя' }
-                                ]}
                             />
                         </Form.Item>
 

@@ -194,6 +194,22 @@ export class CreateOrderDto {
     @IsOptional()
     driverId?: string;
 
+    @ApiProperty({
+        required: false,
+        description: 'Госномер тягача в этом рейсе. Не передан — берётся из карточки водителя',
+    })
+    @IsString()
+    @IsOptional()
+    tripPlate?: string;
+
+    @ApiProperty({
+        required: false,
+        description: 'Госномер прицепа в этом рейсе. Пустая строка — прицепа нет; не передан — из карточки водителя',
+    })
+    @IsString()
+    @IsOptional()
+    tripTrailer?: string;
+
     @ApiProperty({ required: false, description: 'ID экспедитора (компании-перевозчика)' })
     @IsString()
     @IsOptional()
@@ -344,6 +360,23 @@ export class AssignDriverDto {
     @IsString()
     @IsOptional()
     assignedDriverTrailer?: string;
+
+    /**
+     * Машина рейса у водителя из базы.
+     *
+     * Отдельно от «вручную»: там водителя нет в базе, и вводят всё, а здесь
+     * водитель выбран, но едет не на той машине, что в его карточке, — у
+     * другого ИП и машина другая.
+     */
+    @ApiProperty({ required: false, description: 'Госномер тягача в этом рейсе (к водителю из базы)' })
+    @IsString()
+    @IsOptional()
+    tripPlate?: string;
+
+    @ApiProperty({ required: false, description: 'Госномер прицепа в этом рейсе. Пустая строка — прицепа нет' })
+    @IsString()
+    @IsOptional()
+    tripTrailer?: string;
 }
 
 /**

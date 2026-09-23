@@ -110,8 +110,19 @@ export class PowerOfAttorneyService {
             ? `${driver.lastName} ${driver.firstName} ${driver.middleName || ''}`.trim()
             : (order.assignedDriverName || '—');
         const driverDoc = driver?.docNumber || driver?.iin || '—';
-        const driverPlate = driver?.vehiclePlate || order.assignedDriverPlate || '—';
-        const driverTrailer = driver?.trailerNumber || order.assignedDriverTrailer || '—';
+        // Машина — та, на которой едут в этом рейсе: её снимок лежит в заявке с
+        // момента назначения, оттуда же её берут договор-заявка и карточка
+        // рейса. Раньше доверенность брала машину из карточки водителя, а там
+        // только последняя: водитель, который сегодня едет от одного ИП, а
+        // завтра от другого, получал во вчерашней доверенности завтрашнюю
+        // машину.
+        //
+        // Карточка — запасной путь для старых рейсов, где снимка нет. Есть
+        // снимок — прицеп тоже из него, даже пустой: «в этом рейсе без
+        // прицепа» не должно превращаться в прицеп из карточки.
+        const естьСнимок = !!order.assignedDriverPlate;
+        const driverPlate = (естьСнимок ? order.assignedDriverPlate : driver?.vehiclePlate) || '—';
+        const driverTrailer = (естьСнимок ? order.assignedDriverTrailer : driver?.trailerNumber) || '—';
 
         const driverShort = `${driverLastName} ${driverFirstName ? driverFirstName[0] + '.' : ''} ${driverMiddleName ? driverMiddleName[0] + '.' : ''}`.trim();
         const docTypeStr = driver?.docType === 'PASSPORT' ? 'Иностранный паспорт' : 'Удостоверение личности';

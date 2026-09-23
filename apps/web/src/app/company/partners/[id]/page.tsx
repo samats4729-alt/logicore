@@ -9,6 +9,7 @@ import {
     FileTextOutlined, IdcardOutlined, EnvironmentOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { alreadyExistsMessage } from '@/lib/driver-pool';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import LocationForm from '@/components/ui/LocationForm';
 import { QuoteRequestsPanel } from '@/components/quotes/QuoteRequestsPanel';
@@ -269,7 +270,10 @@ export default function PartnerDetailPage() {
                     companyId: partnerId,
                 });
                 if (res.data?.alreadyExists) {
-                    toast.info('Использован существующий водитель');
+                    // Если он прописан у другого перевозчика, в списке этого
+                    // он не появится — зато назначать его на рейсы этого
+                    // перевозчика можно: база водителей общая.
+                    toast.info(alreadyExistsMessage(res.data, { вЗаявке: false }));
                 } else {
                     toast.success('Водитель добавлен');
                 }

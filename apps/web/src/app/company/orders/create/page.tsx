@@ -48,6 +48,8 @@ import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
 import PartnerFormFields, { partnerFormToBody, подставитьПоБин, ОКНО_КОНТРАГЕНТА } from '@/components/partners/PartnerFormFields';
 import CurrencySelect from '@/components/orders/CurrencySelect';
 import { DateField } from '@/components/ui/DateField';
+import DriverPoolSelect, { NEW_DRIVER } from '@/components/orders/DriverPoolSelect';
+import { DRIVER_CARD_FIELDS, alreadyExistsMessage, fetchDriverPool, tripVehicle, type PoolDriver } from '@/lib/driver-pool';
 
 interface LocationState {
     city: string;
@@ -111,9 +113,18 @@ export default function CreateOrderPage() {
     const [selectedMyCompanyId, setSelectedMyCompanyId] = useState<string>('');
 
     // Driver & vehicle selection
-    const [drivers, setDrivers] = useState<any[]>([]);
+    const [drivers, setDrivers] = useState<PoolDriver[]>([]);
     const [driversLoading, setDriversLoading] = useState(false);
     const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+    /**
+     * Водитель и машина правимой заявки, как они записаны в ней самой.
+     *
+     * Машина рейса живёт в заявке: водитель мог с тех пор пересесть на
+     * другую, и в форме правки должна стоять та, на которой едут в этом
+     * рейсе, а не последняя из его карточки.
+     */
+    const [рейсПравки, setРейсПравки] = useState<{ driverId: string; plate: string | null; trailer: string | null } | null>(null);
+    const формаВодителяЗаполнена = useRef(false);
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [vehiclesLoading, setVehiclesLoading] = useState(false);
 
@@ -132,23 +143,21 @@ export default function CreateOrderPage() {
 
     const isCarrierOnPlatform = selectedCarrier && selectedCarrier !== MY_COMPANY_VALUE && selectedCarrier !== MARKETPLACE_VALUE && !partners.find(p => p.id === selectedCarrier)?.isExternal;
 
+    // Водители — общей базой компании, а не списком выбранного перевозчика:
+    // тот, кто вчера ехал от другого ИП, сегодня может ехать от этого. База
+    // одна на всю форму, поэтому грузим её один раз, а не на каждый выбор
+    // перевозчика.
     useEffect(() => {
-        const targetCompanyId = selectedCarrier === MY_COMPANY_VALUE 
-            ? selectedMyCompanyId 
-            : partners.find(p => p.id === selectedCarrier)?.isExternal 
-                ? selectedCarrier 
-                : null;
+        if (!user || !isOwnOrExternalCarrier || drivers.length || driversLoading) return;
+        setDriversLoading(true);
+        fetchDriverPool()
+            .then(setDrivers)
+            .catch(() => toast.error('Ошибка загрузки водителей'))
+            .finally(() => setDriversLoading(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, isOwnOrExternalCarrier]);
 
-        if (targetCompanyId) {
-            setDriversLoading(true);
-            api.get('/company/drivers', { params: { companyId: targetCompanyId } })
-                .then(res => setDrivers(res.data))
-                .catch(() => toast.error('Ошибка загрузки водителей'))
-                .finally(() => setDriversLoading(false));
-        } else {
-            setDrivers([]);
-        }
-
+    useEffect(() => {
         if (selectedCarrier === MY_COMPANY_VALUE) {
             setVehiclesLoading(true);
             api.get('/company/vehicles', { params: { companyId: selectedMyCompanyId } })
@@ -162,7 +171,7 @@ export default function CreateOrderPage() {
 
     const handleDriverSelect = (value: string) => {
         setSelectedDriverId(value);
-        if (value === '__NEW_DRIVER__') {
+        if (value === NEW_DRIVER) {
             form.setFieldsValue({
                 firstName: '', lastName: '', middleName: '', phone: '', iin: '',
                 vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
@@ -171,6 +180,9 @@ export default function CreateOrderPage() {
         } else {
             const d = drivers.find(drv => drv.id === value);
             if (d) {
+                // Правим рейс с тем же водителем — машина из заявки: она
+                // этого рейса. Из карточки — только его последняя.
+                const машинаРейса = рейсПравки?.driverId === d.id && рейсПравки.plate ? рейсПравки : null;
                 form.setFieldsValue({
                     firstName: d.firstName,
                     lastName: d.lastName,
@@ -179,8 +191,8 @@ export default function CreateOrderPage() {
                     iin: d.iin || '',
                     vehicleType: d.vehicleType || undefined,
                     vehicleModel: d.vehicleModel || '',
-                    vehiclePlate: d.vehiclePlate || '',
-                    trailerNumber: d.trailerNumber || '',
+                    vehiclePlate: (машинаРейса ? машинаРейса.plate : d.vehiclePlate) || '',
+                    trailerNumber: (машинаРейса ? машинаРейса.trailer : d.trailerNumber) || '',
                     docType: d.docType || undefined,
                     docNumber: d.docNumber || '',
                     docIssuedAt: d.docIssuedAt ? dayjs(d.docIssuedAt) : null,
@@ -190,6 +202,18 @@ export default function CreateOrderPage() {
             }
         }
     };
+
+    // Правка заявки: водитель выбран ещё при заведении — показываем его
+    // данные, как только пришла база. Раньше в форме правки стояли пустые
+    // поля, и было не понять, кто и на какой машине едет.
+    useEffect(() => {
+        if (формаВодителяЗаполнена.current || !рейсПравки || !drivers.length) return;
+        if (!drivers.some((d) => d.id === рейсПравки.driverId)) return;
+        формаВодителяЗаполнена.current = true;
+        form.setFieldsValue({ driverId: рейсПравки.driverId });
+        handleDriverSelect(рейсПравки.driverId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [drivers, рейсПравки]);
 
     const handleVehicleSelect = (value: string) => {
         const v = vehicles.find(veh => veh.id === value);
@@ -405,7 +429,14 @@ export default function CreateOrderPage() {
                     if (pickup?.expectedDate) {
                         form.setFieldsValue({ pickupDate: dayjs(pickup.expectedDate) });
                     }
-                    if (o.driverId) setSelectedDriverId(o.driverId);
+                    if (o.driverId) {
+                        setSelectedDriverId(o.driverId);
+                        setРейсПравки({
+                            driverId: o.driverId,
+                            plate: o.assignedDriverPlate || null,
+                            trailer: o.assignedDriverTrailer || null,
+                        });
+                    }
                 } else {
                     toast.success(`Скопированы данные заявки ${o.orderNumber}. Проверьте и укажите дату погрузки.`);
                 }
@@ -615,7 +646,7 @@ export default function CreateOrderPage() {
                 toast.error('Укажите перевозчика');
                 return false;
             }
-            if (isOwnOrExternalCarrier && selectedDriverId === '__NEW_DRIVER__') {
+            if (isOwnOrExternalCarrier && selectedDriverId === NEW_DRIVER) {
                 try {
                     await form.validateFields(['lastName', 'firstName', 'phone', 'vehiclePlate']);
                     return true;
@@ -673,7 +704,7 @@ export default function CreateOrderPage() {
                     ? selectedMyCompanyId 
                     : selectedCarrier;
 
-                if (selectedDriverId === '__NEW_DRIVER__') {
+                if (selectedDriverId === NEW_DRIVER) {
                     const driverData = {
                         firstName: values.firstName,
                         lastName: values.lastName,
@@ -697,11 +728,15 @@ export default function CreateOrderPage() {
                     });
                     finalDriverId = res.data.id;
                     if (res.data.alreadyExists) {
-                        toast.info('Использован существующий водитель');
+                        toast.info(alreadyExistsMessage(res.data));
                     }
                 } else if (selectedDriverId) {
-                    // Update details for our own drivers
-                    if (selectedCarrier === MY_COMPANY_VALUE) {
+                    // Правку данных водителя сохраняем в его карточку — у
+                    // любого водителя базы, а не только у штатного: раньше у
+                    // водителя перевозчика исправленный номер молча терялся.
+                    // И только если поля правили: иначе правка старой заявки
+                    // переписывала бы карточку тем, что было в ней тогда.
+                    if (drivers.some((d) => d.id === selectedDriverId) && form.isFieldsTouched([...DRIVER_CARD_FIELDS])) {
                         const driverData = {
                             firstName: values.firstName,
                             lastName: values.lastName,
@@ -720,8 +755,12 @@ export default function CreateOrderPage() {
                         };
                         try {
                             await api.put(`/company/drivers/${selectedDriverId}`, driverData);
-                        } catch (err) {
-                            // Non-critical update failure
+                        } catch (err: any) {
+                            // Заявка сохранится и без этого, но молчать нельзя:
+                            // человек поправил данные водителя и уйдёт уверенным,
+                            // что они записаны.
+                            toast.warning(err?.response?.data?.message
+                                || 'Данные водителя в его карточке сохранить не удалось');
                         }
                     }
                 } else {
@@ -811,6 +850,9 @@ export default function CreateOrderPage() {
                 // значило бы спрашивать у того, кто ведёт рейс, ответ, за
                 // который он не отвечает.
                 driverId: isOwnOrExternalCarrier ? finalDriverId : undefined,
+                // Машина этого рейса — в заявку: у каждого ИП своя, и
+                // доверенность должна показать ту, на которой едут сейчас.
+                ...(isOwnOrExternalCarrier && finalDriverId ? tripVehicle(values) : {}),
             };
 
             if (isMeCustomer) {
@@ -1420,23 +1462,15 @@ export default function CreateOrderPage() {
                         </Form.Item>
                     )}
 
+                    {/* Вся база водителей, а не только водители этого ИП:
+                        сверху — кто уже ездил за него, ниже — остальные. */}
                     <Form.Item name="driverId" label="Водитель (не обязательно)">
-                        <Select
-                            placeholder="Выберите водителя из списка"
-                           
+                        <DriverPoolSelect
+                            drivers={drivers}
+                            carrierId={selectedCarrier === MY_COMPANY_VALUE ? (user?.companyId ?? null) : selectedCarrier}
+                            ownTransport={selectedCarrier === MY_COMPANY_VALUE}
                             loading={driversLoading}
                             onChange={handleDriverSelect}
-                            showSearch
-                            filterOption={(input, option) =>
-                                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                            }
-                            options={[
-                                ...drivers.map(d => ({
-                                    value: d.id,
-                                    label: `${d.lastName} ${d.firstName} ${d.middleName || ''} (${d.phone})`.trim()
-                                })),
-                                { value: '__NEW_DRIVER__', label: '+ Добавить нового водителя' }
-                            ]}
                         />
                     </Form.Item>
 
@@ -1445,12 +1479,12 @@ export default function CreateOrderPage() {
                             <Divider orientation="left" style={{ fontSize: 13, color: token.colorPrimary }}>Данные водителя</Divider>
                             <Row gutter={12}>
                                 <Col span={8}>
-                                    <Form.Item name="lastName" label="Фамилия" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите фамилию' }]}>
+                                    <Form.Item name="lastName" label="Фамилия" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите фамилию' }]}>
                                         <Input placeholder="Иванов" />
                                     </Form.Item>
                                 </Col>
                                 <Col span={8}>
-                                    <Form.Item name="firstName" label="Имя" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите имя' }]}>
+                                    <Form.Item name="firstName" label="Имя" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите имя' }]}>
                                         <Input placeholder="Иван" />
                                     </Form.Item>
                                 </Col>
@@ -1462,7 +1496,7 @@ export default function CreateOrderPage() {
                             </Row>
                             <Row gutter={12}>
                                 <Col span={12}>
-                                    <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите телефон' }]}>
+                                    <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите телефон' }]}>
                                         <Input placeholder="+77001234567" />
                                     </Form.Item>
                                 </Col>
@@ -1526,7 +1560,7 @@ export default function CreateOrderPage() {
                             </Row>
                             <Row gutter={12}>
                                 <Col span={12}>
-                                    <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: selectedDriverId === '__NEW_DRIVER__', message: 'Введите госномер' }]}>
+                                    <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите госномер' }]}>
                                         <Input placeholder="123 ABC 01" />
                                     </Form.Item>
                                 </Col>

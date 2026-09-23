@@ -119,7 +119,7 @@ export class AuthService {
     ): Promise<{ accessToken: string; user: any }> {
         const normalizedPhone = (phone || '').replace(/[\s\-()]/g, '');
 
-        const user = await this.prisma.user.findFirst({
+        const кандидаты = await this.prisma.user.findMany({
             where: {
                 phone: normalizedPhone,
                 role: 'DRIVER',
@@ -128,12 +128,12 @@ export class AuthService {
             include: { company: true },
         });
 
-        if (!user || !user.passwordHash) {
+        if (!кандидаты.some((к) => !!к.passwordHash)) {
             throw new UnauthorizedException('Неверный телефон или пароль. Пароль выдаёт ваша компания.');
         }
 
-        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-        if (!isPasswordValid) {
+        const user = await this.водительДляВхода(кандидаты, password);
+        if (!user) {
             throw new UnauthorizedException('Неверный телефон или пароль');
         }
 
@@ -168,6 +168,39 @@ export class AuthService {
 
         const { passwordHash: _driverPwdHash, ...userWithoutPassword } = user;
         return { accessToken, user: userWithoutPassword };
+    }
+
+    /**
+     * Какую запись водителя открыть по этому телефону.
+     *
+     * Обычно запись одна. Двойники остались с тех времён, когда водителя
+     * заводили заново под каждым ИП, и раньше вход брал из них любую — водитель
+     * мог не увидеть рейс, назначенный на соседнюю запись. Теперь в общем
+     * списке водителей двойники показаны одной строкой — записью, на которую
+     * назначали последний рейс (см. `CompanyDriversService.getDriverPool`), —
+     * и новые рейсы идут на неё. Вход выбирает её же: первую по свежести
+     * рейсов, к которой подходит пароль.
+     */
+    private async водительДляВхода<T extends { id: string; passwordHash: string | null; updatedAt: Date }>(
+        кандидаты: T[],
+        password: string,
+    ): Promise<T | null> {
+        let порядок = кандидаты;
+        if (кандидаты.length > 1) {
+            const рейсы = await this.prisma.order.groupBy({
+                by: ['driverId'],
+                where: { driverId: { in: кандидаты.map((к) => к.id) } },
+                _max: { createdAt: true },
+            });
+            const последний = new Map(рейсы.map((р) => [р.driverId, р._max.createdAt?.getTime() ?? 0]));
+            порядок = [...кандидаты].sort((а, б) =>
+                ((последний.get(б.id) ?? 0) - (последний.get(а.id) ?? 0))
+                || (б.updatedAt.getTime() - а.updatedAt.getTime()));
+        }
+        for (const к of порядок) {
+            if (к.passwordHash && await bcrypt.compare(password, к.passwordHash)) return к;
+        }
+        return null;
     }
 
     /**
