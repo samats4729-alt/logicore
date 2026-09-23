@@ -6,6 +6,7 @@ import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { IdentityService } from '../identity/identity.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { сВключениемОтдела } from './effective-permissions';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
@@ -195,9 +196,13 @@ export class AuthService {
                 dashboardCustom: true,
                 role: true,
                 companyId: true,
+                // Права отдела складываются с личными: выдали финотделу —
+                // есть у каждого, кто в нём, включая вчера принятого.
+                department: { select: { permissions: true } },
             },
         });
         if (!user) return { reason: 'NO_USER' as const };
+        const permissions = сВключениемОтдела(user.permissions, user.department);
 
         // companyId in JWT selects the active organisation, but access and role are
         // resolved from the database on every request. Removing a relation or changing
@@ -218,13 +223,14 @@ export class AuthService {
             return {
                 user: {
                     ...user,
+                    permissions,
                     companyId: activeCompanyId,
                     role: relation.role,
                 },
             };
         }
 
-        return { user };
+        return { user: { ...user, permissions } };
     }
 
     /**
@@ -233,7 +239,7 @@ export class AuthService {
     async validateUser(userId: string, activeCompanyId?: string, activeRole?: string): Promise<any> {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
-            include: { company: true },
+            include: { company: true, department: { select: { permissions: true } } },
         });
 
         if (!user || !user.isActive) {
@@ -261,6 +267,10 @@ export class AuthService {
         const { passwordHash, ...userWithoutPassword } = user;
         return {
             ...userWithoutPassword,
+            // Экран рисует кнопки по этому списку, а сервер отвечает по
+            // такому же из `findUserById`. Права отдела обязаны быть в обоих,
+            // иначе кнопка есть, а ответ «нет доступа».
+            permissions: сВключениемОтдела(user.permissions, user.department),
             companyId,
             role,
             company

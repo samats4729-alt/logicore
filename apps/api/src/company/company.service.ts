@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
 import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
+import { MODULE_PERMISSIONS } from '../auth/module-permissions';
 import { D, ZERO, toNum } from '../common/utils/money';
 import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
@@ -107,6 +108,11 @@ export class CompanyService {
                         select: {
                             id: true,
                             name: true,
+                            // Права отдела: в окне прав сотрудника они стоят
+                            // отмеченными и подписаны «от отдела». Иначе
+                            // руководитель снимал бы галочку и не понимал,
+                            // почему право осталось.
+                            permissions: true,
                         }
                     },
                     iin: true,
@@ -1181,6 +1187,32 @@ export class CompanyService {
                 parentDepartmentId: parentDepartmentId || null,
                 icon: icon || 'FolderOpenOutlined',
             },
+        });
+    }
+
+    /**
+     * Права отдела — те же галочки, что и у сотрудника, но на весь отдел.
+     *
+     * Выдали финотделу «Согласование счетов» — оно есть у каждого, кто в нём,
+     * и у того, кого переведут туда завтра. Личные права при этом остаются:
+     * они складываются, а не заменяют друг друга.
+     */
+    async updateDepartmentPermissions(companyId: string, id: string, permissions: string[]) {
+        const отдел = await this.prisma.department.findFirst({
+            where: { id, companyId },
+            select: { id: true, name: true },
+        });
+        if (!отдел) throw new NotFoundException('Отдел не найден');
+
+        // Выдуманное название права молча осело бы в базе, и следующий, кто
+        // откроет окно, увидел бы галочку, за которой ничего нет.
+        const чистые = (permissions ?? [])
+            .filter((право) => (MODULE_PERMISSIONS as readonly string[]).includes(право));
+
+        return this.prisma.department.update({
+            where: { id },
+            data: { permissions: чистые },
+            select: { id: true, name: true, permissions: true },
         });
     }
 

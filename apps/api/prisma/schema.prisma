@@ -1921,6 +1921,17 @@ model Department {
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  /// Права, которые есть у каждого в этом отделе.
+  ///
+  /// Раньше права были только личные, и «открыть финотделу согласование
+  /// счетов» означало обойти галочками всех поимённо — а нового человека
+  /// вспомнить через неделю, когда он скажет, что кнопки нет.
+  ///
+  /// Складываются с личными: отдел даёт, человеку можно добавить сверху.
+  /// Отнять личной галочкой то, что дал отдел, нельзя — иначе на вопрос
+  /// «есть ли у него право» было бы два ответа, и оба верные.
+  permissions String[] @default([])
+
   parentDepartmentId String?
   parentDepartment   Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id], onDelete: SetNull)
   subDepartments     Department[] @relation("DepartmentHierarchy")

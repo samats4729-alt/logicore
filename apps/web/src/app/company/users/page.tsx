@@ -64,7 +64,7 @@ interface CompanyUser {
     permissions: string[];
     createdAt: string;
     departmentId?: string | null;
-    department?: { id: string; name: string } | null;
+    department?: { id: string; name: string; permissions?: string[] } | null;
     
     // Driver fields
     iin?: string;
@@ -197,6 +197,10 @@ export default function CompanyUsersPage() {
     const [users, setUsers] = useState<CompanyUser[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [departments, setDepartments] = useState<any[]>([]);
+    /** Отдел, которому сейчас раздают права, и его набор галочек. */
+    const [праваОтдела, setПраваОтдела] = useState<{ id: string; name: string } | null>(null);
+    const [галочкиОтдела, setГалочкиОтдела] = useState<string[]>([]);
+    const [сохраняюОтдел, setСохраняюОтдел] = useState(false);
     const [companyName, setCompanyName] = useState<string>('Наша Компания');
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');
@@ -496,6 +500,29 @@ export default function CompanyUsersPage() {
         setRenamingDept(dept);
         renameForm.setFieldsValue({ name: dept.name, icon: dept.icon || 'FolderOpenOutlined' });
         setRenameModalOpen(true);
+    };
+
+    /** Открыть права отдела — те же галочки, что у сотрудника. */
+    const открытьПраваОтдела = (dept: any) => {
+        setПраваОтдела({ id: dept.id, name: dept.name });
+        setГалочкиОтдела(dept.permissions || []);
+    };
+
+    const сохранитьПраваОтдела = async () => {
+        if (!праваОтдела) return;
+        try {
+            setСохраняюОтдел(true);
+            await api.put(`/company/departments/${праваОтдела.id}/permissions`, {
+                permissions: галочкиОтдела,
+            });
+            toast.success(`Права отдела «${праваОтдела.name}» сохранены`);
+            setПраваОтдела(null);
+            fetchData();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Не удалось сохранить права отдела');
+        } finally {
+            setСохраняюОтдел(false);
+        }
     };
 
     const handleAssignUserClick = (deptId: string) => {
@@ -895,6 +922,16 @@ export default function CompanyUsersPage() {
                                 icon={<EditOutlined style={{ fontSize: 12 }} />}
                                 title="Редактировать отдел"
                                 onClick={() => handleRenameDeptClick(dept)}
+                            />
+                            {/* Права всему отделу разом: выдал финотделу
+                                согласование счетов — оно есть у каждого, кто
+                                в нём, и у того, кого переведут завтра. */}
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<SettingOutlined style={{ fontSize: 12 }} />}
+                                title="Права отдела"
+                                onClick={() => открытьПраваОтдела(dept)}
                             />
                             <Popconfirm
                                 title="Удалить отдел? Сотрудники перейдут в нераспределенные."
@@ -2410,6 +2447,27 @@ export default function CompanyUsersPage() {
                 )}
             </Modal>
 
+            {/* ===== Права отдела ===== */}
+            <Modal
+                title={праваОтдела ? `Права отдела «${праваОтдела.name}»` : ''}
+                open={!!праваОтдела}
+                onCancel={() => setПраваОтдела(null)}
+                onOk={сохранитьПраваОтдела}
+                confirmLoading={сохраняюОтдел}
+                okText="Сохранить"
+                cancelText="Отмена"
+            >
+                <div style={{ fontSize: 12.5, color: 'var(--lc-text-ter)', marginBottom: 12 }}>
+                    Эти права получает каждый в отделе — и тот, кого переведут сюда завтра.
+                    Личные права сотрудника остаются: они складываются с этими.
+                </div>
+                <Checkbox.Group
+                    options={MODULE_PERMISSIONS}
+                    value={галочкиОтдела}
+                    onChange={(v) => setГалочкиОтдела(v as string[])}
+                />
+            </Modal>
+
             {/* Modal: Edit Permissions (Original) */}
             <Modal
                 title={`Права доступа: ${editingUser?.firstName} ${editingUser?.lastName}`}
@@ -2423,6 +2481,24 @@ export default function CompanyUsersPage() {
                     <Form.Item name="permissions" label="Доступ к разделам">
                         <Checkbox.Group options={MODULE_PERMISSIONS} />
                     </Form.Item>
+                    {/* Права отдела названы отдельно и не галочками: снять их
+                        здесь нельзя, а показать молча отмеченными значило бы
+                        обещать то, чего это окно не делает. Забирают их у
+                        отдела или переводом человека. */}
+                    {(() => {
+                        const отОтдела: string[] = editingUser?.department?.permissions ?? [];
+                        if (!отОтдела.length) return null;
+                        const названия = MODULE_PERMISSIONS
+                            .filter((право) => отОтдела.includes(право.value))
+                            .map((право) => право.label)
+                            .join(', ');
+                        return (
+                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)', marginTop: -8, marginBottom: 14 }}>
+                                От отдела «{editingUser?.department?.name}»: {названия}. Это открыто
+                                всем в отделе — снимается в правах отдела.
+                            </div>
+                        );
+                    })()}
 
                     {/* Видимость заявок. За ней идут не только «Заявки»:
                         журнал счетов, взаиморасчёты, деньги, реестр и отчёты
