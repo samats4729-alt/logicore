@@ -21,10 +21,17 @@ const invoice = (id: string, total: string, paid = '0', overrides: Record<string
     // Заявки счёта: подсказка показывает их номера, чтобы по платежу было
     // видно, за какие рейсы пришли деньги.
     orders: [],
+    // Заведён после включения согласования — правило на него действует.
+    createdAt: new Date('2026-07-01'),
     ...overrides,
 });
 
-function makeService(documents: any[] = [], paymentOverrides: Record<string, unknown> = {}) {
+function makeService(
+    documents: any[] = [],
+    paymentOverrides: Record<string, unknown> = {},
+    // Согласование включено по умолчанию: правила ниже проверяют именно его.
+    company: Record<string, unknown> = { invoiceApprovalRequired: true, invoiceApprovalSince: new Date('2020-01-01') },
+) {
     // Разнесения храним в памяти, чтобы пересчёт документов работал как в базе.
     const allocations: { documentId: string; paymentId: string; amount: Prisma.Decimal }[] = [];
     const updates: Record<string, { amountPaid: Prisma.Decimal; balanceDue: Prisma.Decimal }> = {};
@@ -76,6 +83,7 @@ function makeService(documents: any[] = [], paymentOverrides: Record<string, unk
         accountingDocument: {
             findMany: jest.fn().mockResolvedValue(documents),
         },
+        company: { findUnique: jest.fn().mockResolvedValue(company) },
         $transaction: jest.fn(async (fn: any) => fn(tx)),
     };
 
@@ -231,6 +239,30 @@ describe('PaymentAllocationService', () => {
 
             it('согласован — оплата проходит', async () => {
                 const { service, updates } = makeService([входящий('APPROVED')], списание);
+
+                await service.apply(COMPANY, USER, 'payment-1', [{ documentId: 'a', amount: '50000' }]);
+
+                expect(updates['a'].amountPaid.toFixed(2)).toBe('50000.00');
+            });
+
+            it('компания согласование не включала — оплата проходит', async () => {
+                // Порядок «сначала добро» есть не у всех: у тех, кто его не
+                // включал, оплата обязана идти как шла.
+                const { service, updates } = makeService([входящий(null)], списание,
+                    { invoiceApprovalRequired: false, invoiceApprovalSince: null });
+
+                await service.apply(COMPANY, USER, 'payment-1', [{ documentId: 'a', amount: '50000' }]);
+
+                expect(updates['a'].amountPaid.toFixed(2)).toBe('50000.00');
+            });
+
+            it('счёт заведён до включения — оплата проходит', async () => {
+                // То, что уже было в работе, включение не останавливает.
+                const старый = invoice('a', '50000', '0', {
+                    direction: 'INCOMING', approvalStatus: null, createdAt: new Date('2026-06-01'),
+                });
+                const { service, updates } = makeService([старый], списание,
+                    { invoiceApprovalRequired: true, invoiceApprovalSince: new Date('2026-06-15') });
 
                 await service.apply(COMPANY, USER, 'payment-1', [{ documentId: 'a', amount: '50000' }]);
 

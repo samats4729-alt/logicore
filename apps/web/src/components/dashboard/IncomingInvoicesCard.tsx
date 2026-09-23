@@ -19,6 +19,7 @@ interface IncomingInvoice {
     currency: string;
     total: number;
     balanceDue: number;
+    approvalRequired: boolean;
     approvalStatus: string | null;
     approvalNote: string | null;
     approvedBy: { firstName: string; lastName: string } | null;
@@ -75,12 +76,13 @@ export default function IncomingInvoicesCard() {
     const список = useMemo(() => {
         if (!согласует) return invoices;
         return [...invoices].sort((а, б) => {
-            const ждёт = (счёт: IncomingInvoice) => (счёт.approvalStatus ? 1 : 0);
+            const ждёт = (счёт: IncomingInvoice) => (счёт.approvalRequired && !счёт.approvalStatus ? 0 : 1);
             return ждёт(а) - ждёт(б);
         });
     }, [invoices, согласует]);
 
-    const ждут = invoices.filter((счёт) => !счёт.approvalStatus).length;
+    // Ждут решения только те, на кого правило распространяется.
+    const ждут = invoices.filter((счёт) => счёт.approvalRequired && !счёт.approvalStatus).length;
 
     const решить = async (счёт: IncomingInvoice, decision: 'APPROVED' | 'REJECTED', note?: string) => {
         try {
@@ -114,9 +116,11 @@ export default function IncomingInvoicesCard() {
                 )}
             </div>
             <div style={{ fontSize: 13, color: 'var(--nova-fg-2)', marginBottom: 16 }}>
-                {согласует
-                    ? 'Пока вы не согласовали, оплатить счёт бухгалтерия не может.'
-                    : 'Оплачивать можно только согласованные финотделом.'}
+                {ждут === 0
+                    ? 'Что пришло и что ещё не оплачено.'
+                    : согласует
+                        ? 'Пока вы не согласовали, оплатить счёт бухгалтерия не может.'
+                        : 'Оплачивать можно только согласованные финотделом.'}
             </div>
 
             {loading ? (
@@ -172,7 +176,7 @@ export default function IncomingInvoicesCard() {
                                 )}
                             </div>
 
-                            {согласует && !счёт.approvalStatus && (
+                            {счёт.approvalRequired && согласует && !счёт.approvalStatus && (
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                     <Button
                                         size="small"
@@ -193,7 +197,7 @@ export default function IncomingInvoicesCard() {
                                     </Button>
                                 </div>
                             )}
-                            {!счёт.approvalStatus && !согласует && (
+                            {счёт.approvalRequired && !счёт.approvalStatus && !согласует && (
                                 <Tag color="default" style={{ borderRadius: 999, margin: 0 }}>
                                     ждёт финотдел
                                 </Tag>

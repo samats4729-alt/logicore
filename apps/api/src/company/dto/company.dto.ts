@@ -185,6 +185,11 @@ export class UpdateCompanyProfileDto {
     @IsBoolean()
     @IsOptional()
     managersSeeOwnPartnersOnly?: boolean;
+
+    @ApiProperty({ description: 'Входящие счета оплачиваются после согласования', required: false })
+    @IsBoolean()
+    @IsOptional()
+    invoiceApprovalRequired?: boolean;
 }
 
 export class CreateDriverDto {

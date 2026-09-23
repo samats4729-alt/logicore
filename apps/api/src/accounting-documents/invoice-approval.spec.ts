@@ -21,6 +21,14 @@ const D = (v: string | number) => new Prisma.Decimal(v);
 function makeService(документ: any = { id: 'd-1', direction: 'INCOMING', status: 'POSTED', approvalStatus: null }) {
     const обновления: any[] = [];
     const prisma: any = {
+        // Настройка компании: согласование включено, момент включения давний —
+        // значит правило действует на все счета этих проверок.
+        company: {
+            findUnique: jest.fn(async () => ({
+                invoiceApprovalRequired: true,
+                invoiceApprovalSince: new Date('2020-01-01'),
+            })),
+        },
         accountingDocument: {
             findFirst: jest.fn(async () => документ),
             findMany: jest.fn(async () => []),

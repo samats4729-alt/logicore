@@ -14,6 +14,7 @@ import {
     settleAllocation,
 } from '../accounting/services/exchange-difference';
 import { D, ZERO, roundMoney } from '../common/utils/money';
+import { согласованиеТребуется } from './invoice-approval-rule';
 
 /**
  * Состояние оплаты документа. Выводится из сумм, а не хранится отдельным
@@ -150,12 +151,23 @@ export class PaymentAllocationService {
                 select: {
                     id: true, total: true, amountPaid: true, counterpartyId: true, direction: true,
                     currency: true, exchangeRate: true, number: true, approvalStatus: true,
+                    // Дата нужна правилу: счета, заведённые до включения
+                    // согласования, под него не попадают.
+                    createdAt: true,
                 },
             })
             : [];
         if (documents.length !== uniqueIds.size) {
             throw new BadRequestException('Разносить можно только на проведённые счета своей организации');
         }
+
+        // Настройка компании: спрашиваем один раз на весь платёж.
+        const настройки = documents.some((d) => d.direction === AccountingDocumentDirection.INCOMING)
+            ? await this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: { invoiceApprovalRequired: true, invoiceApprovalSince: true },
+            })
+            : null;
 
         const expectedDirection = payment.direction === PaymentDirection.IN
             ? AccountingDocumentDirection.OUTGOING
@@ -171,13 +183,15 @@ export class PaymentAllocationService {
             if (payment.counterpartyId && document.counterpartyId !== payment.counterpartyId) {
                 throw new BadRequestException('Счёт относится к другому контрагенту');
             }
-            // Оплата входящего счёта без согласования финотдела не проходит.
+            // Оплата входящего счёта без согласования финотдела не проходит —
+            // если компания это включила и счёт заведён после включения.
             //
             // Запрет стоит здесь, а не на кнопке: разнести платёж можно и из
             // журнала оплат, и подсказкой по FIFO, и прямым запросом. Спрячь
             // кнопку — останутся три других пути, и проверка, ради которой
             // всё затевалось, работала бы через раз.
             if (document.direction === AccountingDocumentDirection.INCOMING
+                && согласованиеТребуется(настройки, document)
                 && document.approvalStatus !== 'APPROVED') {
                 throw new BadRequestException(
                     document.approvalStatus === 'REJECTED'

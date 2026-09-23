@@ -206,7 +206,15 @@ describe('Отправка документа контрагенту', () => {
         const buildSender = (document: any) => {
             const prisma: any = {
                 accountingDocument: { findFirst: jest.fn().mockResolvedValue(document) },
-                company: { findFirst: jest.fn().mockResolvedValue({ id: RECIPIENT, name: 'ТОО «Алтын Жол»', bin: '150641116666' }) },
+                company: {
+                    findFirst: jest.fn().mockResolvedValue({ id: RECIPIENT, name: 'ТОО «Алтын Жол»', bin: '150641116666' }),
+                    // Карточка спрашивает настройку согласования: по ней она
+                    // решает, говорить ли о нём вообще.
+                    findUnique: jest.fn().mockResolvedValue({
+                        invoiceApprovalRequired: false,
+                        invoiceApprovalSince: null,
+                    }),
+                },
             };
             const service = new AccountingDocumentsService(
                 prisma,
@@ -301,6 +309,13 @@ describe('Отправка документа контрагенту', () => {
                             }
                     )),
                     updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+                },
+                // Карточка документа спрашивает настройку согласования.
+                company: {
+                    findUnique: jest.fn().mockResolvedValue({
+                        invoiceApprovalRequired: false,
+                        invoiceApprovalSince: null,
+                    }),
                 },
             };
             const service = new AccountingDocumentsService(

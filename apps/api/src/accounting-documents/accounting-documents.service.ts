@@ -28,6 +28,7 @@ import { toNum } from '../common/utils/money';
 import { JournalCompany, JournalViewer, resolveJournalCompany } from '../common/journal-company';
 import { documentsOfOwnOrders, managerOrdersFilter } from '../common/manager-orders';
 import { invoiceDueDate, OrderPaymentTerms } from './invoice-due-date';
+import { согласованиеТребуется } from './invoice-approval-rule';
 import {
     AccountingDocumentListQueryDto,
     AccountingDocumentRegistryQueryDto,
@@ -591,7 +592,19 @@ export class AccountingDocumentsService {
             include: CARD_DOCUMENT_INCLUDE,
         });
         if (!document) throw new NotFoundException('Бухгалтерский документ не найден');
-        return document;
+
+        // Действует ли на этот счёт согласование. Экран по этому признаку
+        // решает, показывать ли плашку и кнопки: там, где компания правило не
+        // включала, слово «согласование» вообще не должно появляться.
+        const настройки = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { invoiceApprovalRequired: true, invoiceApprovalSince: true },
+        });
+        return {
+            ...document,
+            approvalRequired: document.direction === AccountingDocumentDirection.INCOMING
+                && согласованиеТребуется(настройки, document),
+        };
     }
 
     /**
@@ -1889,7 +1902,7 @@ export class AccountingDocumentsService {
             take: query.limit ?? 20,
             select: {
                 id: true, number: true, documentDate: true, dueDate: true,
-                currency: true, total: true, balanceDue: true,
+                currency: true, total: true, balanceDue: true, createdAt: true,
                 approvalStatus: true, approvalNote: true, approvedAt: true,
                 receiptStatus: true,
                 counterparty: { select: { id: true, name: true } },
@@ -1899,10 +1912,16 @@ export class AccountingDocumentsService {
             },
         });
 
+        const настройки = await this.prisma.company.findUnique({
+            where: { id: companyId },
+            select: { invoiceApprovalRequired: true, invoiceApprovalSince: true },
+        });
+
         return документы.map((документ) => ({
             ...документ,
             total: toNum(документ.total),
             balanceDue: toNum(документ.balanceDue),
+            approvalRequired: согласованиеТребуется(настройки, документ),
             // Кто выставил счёт: свой документ выписан на контрагента,
             // присланный принадлежит ему самому.
             supplier: документ.recipientCompanyId ? документ.company : документ.counterparty,

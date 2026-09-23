@@ -978,7 +978,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                         </span>
                         {/* Согласование — только у входящих: по исходящему
                             решение принимает не наш финотдел, а плательщик. */}
-                        {!outgoing && (
+                        {!outgoing && document.approvalRequired && (
                             <span className={`${nova.chip}${document.approvalStatus === 'APPROVED'
                                 ? ` ${nova.chipPos}`
                                 : document.approvalStatus === 'REJECTED' ? ` ${nova.chipNeg}` : ` ${nova.chipWarn}`}`}
@@ -991,7 +991,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                             </span>
                         )}
                     </h1>
-                    {!outgoing && document.approvalStatus && (
+                    {!outgoing && document.approvalRequired && document.approvalStatus && (
                         <div style={{ fontSize: 12, color: 'var(--nova-fg-3)', marginTop: 4 }}>
                             {document.approvedBy
                                 ? `${document.approvedBy.firstName} ${document.approvedBy.lastName}`
@@ -1006,7 +1006,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                 <Space size={8} wrap style={{ flexShrink: 0, paddingTop: 4 }}>
                     {/* Решение финотдела по входящему счёту. Пока его нет,
                         разнести на этот счёт платёж сервер не даст. */}
-                    {!outgoing && согласует && !document.approvalStatus && (
+                    {!outgoing && document.approvalRequired && согласует && !document.approvalStatus && (
                         <>
                             <Button type="primary" loading={решаю} onClick={() => решить('APPROVED')}>
                                 Согласовано

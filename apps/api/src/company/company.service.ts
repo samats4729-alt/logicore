@@ -920,6 +920,7 @@ export class CompanyService {
         vatScheme?: 'STANDARD' | 'FORWARDING';
         managersSeeOwnOrdersOnly?: boolean;
         managersSeeOwnPartnersOnly?: boolean;
+        invoiceApprovalRequired?: boolean;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },
@@ -929,10 +930,15 @@ export class CompanyService {
         }
 
         const { vatCertificateDate, ...rest } = data;
+        // Момент включения согласования запоминаем: счета, заведённые до
+        // него, под правило не попадают. Иначе в день включения десяток
+        // счетов на оплате разом стал бы «ждёт согласования».
+        const включают = data.invoiceApprovalRequired === true && !company.invoiceApprovalRequired;
         return this.prisma.company.update({
             where: { id: companyId },
             data: {
                 ...rest,
+                ...(включают ? { invoiceApprovalSince: new Date() } : {}),
                 // Дата приходит строкой из формы; пустая строка означает
                 // «очистить», а не «оставить как есть».
                 ...(vatCertificateDate !== undefined

@@ -289,17 +289,18 @@ export default function CompanyUsersPage() {
     const [rightsModalOpen, setRightsModalOpen] = useState(false);
     /** Какой список открыт: люди или приглашения. */
     const [peopleTab, setPeopleTab] = useState('people');
-    const [managerToggles, setManagerToggles] = useState({ orders: true, partners: false });
+    const [managerToggles, setManagerToggles] = useState({ orders: true, partners: false, approval: false });
     const [toggleSaving, setToggleSaving] = useState(false);
 
-    const saveManagerToggle = async (key: 'orders' | 'partners', value: boolean) => {
+    const saveManagerToggle = async (key: 'orders' | 'partners' | 'approval', value: boolean) => {
         const prev = managerToggles;
         setManagerToggles({ ...prev, [key]: value });
         setToggleSaving(true);
         try {
-            await api.put('/company/profile', key === 'orders'
-                ? { managersSeeOwnOrdersOnly: value }
-                : { managersSeeOwnPartnersOnly: value });
+            await api.put('/company/profile',
+                key === 'orders' ? { managersSeeOwnOrdersOnly: value }
+                    : key === 'partners' ? { managersSeeOwnPartnersOnly: value }
+                        : { invoiceApprovalRequired: value });
             toast.success('Настройка сохранена');
         } catch (e: any) {
             setManagerToggles(prev);
@@ -315,6 +316,7 @@ export default function CompanyUsersPage() {
             .then(res => setManagerToggles({
                 orders: res.data?.managersSeeOwnOrdersOnly !== false,
                 partners: res.data?.managersSeeOwnPartnersOnly === true,
+                approval: res.data?.invoiceApprovalRequired === true,
             }))
             .catch(() => { });
         if (typeof window !== 'undefined') {
@@ -2570,6 +2572,19 @@ export default function CompanyUsersPage() {
                             </div>
                         </div>
                         <Switch checked={managerToggles.partners} loading={toggleSaving} onChange={(v) => saveManagerToggle('partners', v)} />
+                    </div>
+                    {/* Порядок «сначала добро, потом оплата» есть не у всех,
+                        поэтому он включается, а не навязан. */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                        <div>
+                            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Входящие счета оплачиваются после согласования</div>
+                            <div style={{ fontSize: 12, color: 'var(--lc-text-ter)', marginTop: 2 }}>
+                                Решает тот, кому выдано право «Согласование счетов» — лично или через отдел.
+                                Пока он не согласовал, бухгалтерия оплатить не может.
+                                Правило действует на счета, заведённые после включения: то, что уже в работе, останется как есть
+                            </div>
+                        </div>
+                        <Switch checked={managerToggles.approval} loading={toggleSaving} onChange={(v) => saveManagerToggle('approval', v)} />
                     </div>
                 </div>
             </Modal>
