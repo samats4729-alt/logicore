@@ -12,6 +12,7 @@ import {
     AimOutlined, IdcardOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { alreadyExistsMessage } from '@/lib/driver-pool';
 import { useAuthStore } from '@/store/auth';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import UserAvatar from '@/components/UserAvatar';
@@ -593,7 +594,7 @@ export default function CompanyUsersPage() {
                     // об этом «Водитель добавлен» нельзя: в списке при этом
                     // становится не больше, а прежняя запись меняет фамилию.
                     toast.success(res.data?.alreadyExists
-                        ? 'Водитель с таким телефоном или ИИН уже был — его данные обновлены'
+                        ? alreadyExistsMessage(res.data)
                         : 'Водитель добавлен');
                 }
                 setUnifiedModalOpen(false);

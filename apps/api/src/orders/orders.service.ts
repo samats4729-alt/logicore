@@ -12,6 +12,18 @@ import { PayrollService } from '../payroll/payroll.service';
 import { kzStartOfToday, kzTodayString } from '../common/utils/business-date';
 import { maskForCustomer, maskForDriver } from './order-visibility';
 import { OrderSettlementsService } from './order-settlements.service';
+import { компанииБазы, водительПодходит } from '../common/driver-pool';
+
+/**
+ * Машина рейса, как её ввели при назначении водителя.
+ *
+ * Поле не передали — берётся из карточки водителя, как было всегда. Передали
+ * пустую строку — значит пусто и есть: «прицепа в этом рейсе нет».
+ */
+export interface МашинаРейса {
+    plate?: string | null;
+    trailer?: string | null;
+}
 
 const STATUS_CHAIN = [
     OrderStatus.ASSIGNED,
@@ -203,6 +215,9 @@ export class OrdersService {
         /** Валюта тарифа клиента и тарифа перевозчика — могут различаться. */
         currency?: string;
         driverCostCurrency?: string;
+        /** Машина рейса, как её ввели в форме (см. `МашинаРейса`). */
+        tripPlate?: string | null;
+        tripTrailer?: string | null;
     }) {
         // Генерация номера заявки (по настройке нумерации компании-создателя)
         const orderNumber = await this.generateOrderNumber(data.ownerCompanyId);
@@ -254,15 +269,21 @@ export class OrdersService {
         let driverTrailer = null;
 
         if (data.driverId) {
-            const driverUser = await this.prisma.user.findUnique({
-                where: { id: data.driverId },
-            });
-            if (driverUser) {
-                driverName = `${driverUser.lastName || ''} ${driverUser.firstName || ''} ${driverUser.middleName || ''}`.trim();
-                driverPhone = driverUser.phone;
-                driverPlate = driverUser.vehiclePlate;
-                driverTrailer = driverUser.trailerNumber;
-            }
+            // Заявку заводит компания — водитель должен быть из её базы или из
+            // компании, которая везёт рейс. Раньше при заведении не проверялось
+            // ничего, и в заявку можно было вписать любого водителя платформы.
+            // У администратора платформы своей базы нет — для него как было.
+            const { снимок } = await this.водительНаРейс(
+                data.driverId,
+                data.ownerCompanyId
+                    ? { requesterCompanyId: data.ownerCompanyId, исполнители: [data.subForwarderId, data.forwarderId] }
+                    : null,
+                { plate: data.tripPlate, trailer: data.tripTrailer },
+            );
+            driverName = снимок.assignedDriverName;
+            driverPhone = снимок.assignedDriverPhone;
+            driverPlate = снимок.assignedDriverPlate;
+            driverTrailer = снимок.assignedDriverTrailer;
         }
 
         // Дата погрузки — дата первой точки маршрута: по ней и берём курс.
@@ -612,9 +633,28 @@ export class OrdersService {
             assignedDriverPhone?: string;
             assignedDriverPlate?: string;
             assignedDriverTrailer?: string;
-        }
+        },
+        /**
+         * Кто назначает и на какой машине рейс. Нет — назначает
+         * администратор платформы: своей базы водителей у него нет.
+         */
+        context?: { requesterCompanyId?: string; trip?: МашинаРейса },
     ) {
         const order = await this.findById(orderId);
+
+        // Назначать водителя может сторона рейса. Раньше сюда пускали по
+        // одному id заявки: логист любой компании мог переписать водителя и
+        // перевозчика в чужом рейсе.
+        const requesterCompanyId = context?.requesterCompanyId;
+        if (requesterCompanyId) {
+            const стороны = [
+                order.customerCompanyId, order.forwarderId, order.partnerId,
+                order.subForwarderId, (order as any).responsibleManager?.companyId,
+            ];
+            if (!стороны.includes(requesterCompanyId)) {
+                throw new ForbiddenException('Это не ваша заявка');
+            }
+        }
 
         if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.ASSIGNED) {
             throw new BadRequestException('Нельзя назначить водителя на эту заявку');
@@ -637,29 +677,26 @@ export class OrdersService {
                 throw new BadRequestException('Нельзя одновременно передавать ID водителя и заполнять данные вручную');
             }
 
-            const driverUser = await this.prisma.user.findUnique({
-                where: { id: driverId },
-            });
-
-            if (!driverUser) {
-                throw new NotFoundException('Водитель не найден');
-            }
-
-            if (driverUser.role !== UserRole.DRIVER) {
-                throw new BadRequestException('Пользователь не является водителем');
-            }
-
-            if (driverUser.companyId) {
-                const targetCompanyId = partnerId || order.forwarderId;
-                if (targetCompanyId && driverUser.companyId !== targetCompanyId) {
-                    throw new BadRequestException('Назначаемый водитель должен принадлежать компании-исполнителю (экспедитору/партнеру)');
-                }
-            }
-
-            driverName = `${driverUser.lastName || ''} ${driverUser.firstName || ''} ${driverUser.middleName || ''}`.trim();
-            driverPhone = driverUser.phone;
-            driverPlate = driverUser.vehiclePlate;
-            driverTrailer = driverUser.trailerNumber;
+            // Исполнитель рейса — как и раньше: перевозчик, если его указали,
+            // иначе экспедитор заявки. И сама компания, которая назначает,
+            // если рейс передали ей (она в заявке субэкспедитор или партнёр):
+            // её водители и есть водители рейса. Без этого перевозчик на
+            // платформе не мог поставить на переданный ему рейс своего же
+            // водителя — проверка сверяла водителя с экспедитором.
+            const рейсПередалиНам = !!requesterCompanyId
+                && [order.subForwarderId, order.partnerId].includes(requesterCompanyId);
+            const { снимок } = await this.водительНаРейс(
+                driverId,
+                {
+                    requesterCompanyId,
+                    исполнители: [partnerId || order.forwarderId, рейсПередалиНам ? requesterCompanyId : null],
+                },
+                context?.trip,
+            );
+            driverName = снимок.assignedDriverName;
+            driverPhone = снимок.assignedDriverPhone;
+            driverPlate = снимок.assignedDriverPlate;
+            driverTrailer = снимок.assignedDriverTrailer;
         } else if (hasManual) {
             driverName = manualDriverData.assignedDriverName || null;
             driverPhone = manualDriverData.assignedDriverPhone || null;
@@ -693,6 +730,57 @@ export class OrdersService {
             },
             include: { driver: true },
         });
+    }
+
+    /**
+     * Водитель, которого ставят на рейс, и снимок его данных для заявки.
+     *
+     * Снимок — ФИО, телефон, тягач и прицеп на момент назначения. Договор-
+     * заявка и карточка заявки всегда брали машину отсюда, теперь и
+     * доверенность: один и тот же водитель сегодня едет от одного ИП на его
+     * машине, завтра от другого — на другой, а в карточке водителя хранится
+     * только последняя.
+     *
+     * `проверка` — кто назначает и кто везёт рейс (см. `водительПодходит`);
+     * `null` — не проверять: так было при заведении заявки всегда, и так
+     * остаётся для администратора платформы.
+     */
+    private async водительНаРейс(
+        driverId: string,
+        проверка: { requesterCompanyId?: string; исполнители: Array<string | null | undefined> } | null,
+        рейс?: МашинаРейса,
+    ) {
+        const driverUser = await this.prisma.user.findUnique({ where: { id: driverId } });
+        if (!driverUser) {
+            throw new NotFoundException('Водитель не найден');
+        }
+        if (driverUser.role !== UserRole.DRIVER) {
+            throw new BadRequestException('Пользователь не является водителем');
+        }
+
+        if (проверка) {
+            const база = проверка.requesterCompanyId
+                ? await компанииБазы(this.prisma, проверка.requesterCompanyId)
+                : null;
+            if (!водительПодходит({ водитель: driverUser.companyId, исполнители: проверка.исполнители, база })) {
+                throw new BadRequestException(
+                    'Этого водителя нельзя поставить на рейс: он не из вашей базы водителей и не из компании, которая везёт рейс',
+                );
+            }
+        }
+
+        const изФормы = (значение: string | null | undefined, изКарточки: string | null) =>
+            значение === undefined ? изКарточки : (значение?.trim() || null);
+
+        return {
+            driverUser,
+            снимок: {
+                assignedDriverName: `${driverUser.lastName || ''} ${driverUser.firstName || ''} ${driverUser.middleName || ''}`.trim(),
+                assignedDriverPhone: driverUser.phone,
+                assignedDriverPlate: изФормы(рейс?.plate, driverUser.vehiclePlate),
+                assignedDriverTrailer: изФормы(рейс?.trailer, driverUser.trailerNumber),
+            },
+        };
     }
 
     /**
@@ -1134,6 +1222,9 @@ export class OrdersService {
         customerPriceType?: string;
         currency?: string;
         driverCostCurrency?: string;
+        /** Машина рейса, как её ввели в форме (см. `МашинаРейса`). */
+        tripPlate?: string | null;
+        tripTrailer?: string | null;
     }, user?: { id: string; role: string; companyId?: string }) {
         const order = await this.findById(orderId);
 
@@ -1180,12 +1271,41 @@ export class OrdersService {
         }
 
         // Собираем данные для обновления
-        const { routePoints, ...updateFields } = data;
+        const { routePoints, tripPlate, tripTrailer, ...updateFields } = data;
         const updateData: any = { ...updateFields };
 
         // Если назначается водитель - меняем статус на ASSIGNED
         if (data.driverId && (order.status === 'PENDING' || order.status === 'DRAFT')) {
             updateData.status = OrderStatus.ASSIGNED;
+        }
+
+        // Сменили водителя — снимок его данных в заявке пишем заново.
+        //
+        // Раньше менялся только сам водитель, а ФИО, телефон и номер машины
+        // в заявке оставались от прежнего: договор-заявка и карточка рейса
+        // показывали чужую машину. Водитель проверяется так же, как при
+        // назначении: из своей базы или из компании, которая везёт рейс.
+        const рейс: МашинаРейса = { plate: tripPlate, trailer: tripTrailer };
+        if (data.driverId && data.driverId !== order.driverId) {
+            const { снимок } = await this.водительНаРейс(
+                data.driverId,
+                user?.companyId
+                    ? {
+                        requesterCompanyId: user.companyId,
+                        исполнители: [
+                            data.subForwarderId ?? order.subForwarderId,
+                            data.forwarderId ?? order.forwarderId,
+                            order.partnerId,
+                        ],
+                    }
+                    : null,
+                рейс,
+            );
+            Object.assign(updateData, снимок);
+        } else if (order.driverId && (tripPlate !== undefined || tripTrailer !== undefined)) {
+            // Водитель тот же, а машину рейса поправили в форме.
+            if (tripPlate !== undefined) updateData.assignedDriverPlate = tripPlate?.trim() || null;
+            if (tripTrailer !== undefined) updateData.assignedDriverTrailer = tripTrailer?.trim() || null;
         }
 
         // Обновляем точки маршрута, если переданы

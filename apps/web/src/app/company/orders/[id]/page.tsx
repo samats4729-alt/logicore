@@ -2190,6 +2190,8 @@ export default function OrderDetailPage() {
                     initialValues={{
                         driverId: data.order.driverId || undefined,
                         partnerId: data.order.partnerId || undefined,
+                        forwarderId: data.order.forwarderId || undefined,
+                        subForwarderId: data.order.subForwarderId || undefined,
                         assignedDriverName: data.order.assignedDriverName || undefined,
                         assignedDriverPhone: data.order.assignedDriverPhone || undefined,
                         assignedDriverPlate: data.order.assignedDriverPlate || undefined,

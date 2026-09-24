@@ -436,12 +436,18 @@ export class CompanyController {
     async assignDriver(
         @Param('id') id: string,
         @Body() dto: AssignDriverDto,
+        @Request() req: any,
     ) {
         return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
             assignedDriverName: dto.assignedDriverName,
             assignedDriverPhone: dto.assignedDriverPhone,
             assignedDriverPlate: dto.assignedDriverPlate,
             assignedDriverTrailer: dto.assignedDriverTrailer,
+        }, {
+            // Кто назначает: по его базе решается, каких водителей можно
+            // ставить на рейсы его перевозчиков.
+            requesterCompanyId: req.user.companyId,
+            trip: { plate: dto.tripPlate, trailer: dto.tripTrailer },
         });
     }
 
@@ -486,6 +492,16 @@ export class CompanyController {
     ) {
         const targetCompanyId = companyIdQuery || partnerIdQuery;
         return this.companyDriversService.getDriversFiltered(req.user.companyId, targetCompanyId);
+    }
+
+    @Get('drivers/pool')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.ACCOUNTANT)
+    @ApiOperation({
+        summary: 'Общий список водителей: свои и всех своих перевозчиков',
+        description: 'Одного человека, заведённого у нескольких перевозчиков, отдаёт одной строкой.',
+    })
+    async getDriverPool(@Request() req: any) {
+        return this.companyDriversService.getDriverPool(req.user.companyId);
     }
 
     @Post('drivers')

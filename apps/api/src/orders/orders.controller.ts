@@ -564,12 +564,14 @@ export class OrdersController {
     @Roles(UserRole.ADMIN)
     @ApiOperation({ summary: 'Назначить водителя на заявку' })
     async assignDriver(@Param('id') id: string, @Body() dto: AssignDriverDto) {
+        // Администратор платформы: своей базы водителей у него нет, поэтому
+        // того, кто назначает, не передаём — действует прежнее правило.
         return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
             assignedDriverName: dto.assignedDriverName,
             assignedDriverPhone: dto.assignedDriverPhone,
             assignedDriverPlate: dto.assignedDriverPlate,
             assignedDriverTrailer: dto.assignedDriverTrailer,
-        });
+        }, { trip: { plate: dto.tripPlate, trailer: dto.tripTrailer } });
     }
 
     @Get(':id/history')

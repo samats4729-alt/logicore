@@ -1794,6 +1794,8 @@ export default function CompanyOrdersPage() {
                     initialValues={{
                         driverId: selectedOrder.driverId || undefined,
                         partnerId: selectedOrder.partnerId || undefined,
+                        forwarderId: selectedOrder.forwarderId || undefined,
+                        subForwarderId: selectedOrder.subForwarderId || undefined,
                         assignedDriverName: selectedOrder.assignedDriverName || undefined,
                         assignedDriverPhone: selectedOrder.assignedDriverPhone || undefined,
                         assignedDriverPlate: selectedOrder.assignedDriverPlate || undefined,
