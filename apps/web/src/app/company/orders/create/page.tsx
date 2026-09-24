@@ -48,6 +48,7 @@ import { paymentTermsLabel, vatLabel } from '@/lib/settlement-terms';
 import PartnerFormFields, { partnerFormToBody, подставитьПоБин, ОКНО_КОНТРАГЕНТА } from '@/components/partners/PartnerFormFields';
 import CurrencySelect from '@/components/orders/CurrencySelect';
 import { DateField } from '@/components/ui/DateField';
+import { clearDraft, formValuesEmpty, readDraft, reviveFormValues, serializeFormValues, writeDraft } from '@/lib/form-draft';
 import DriverPoolSelect, { NEW_DRIVER } from '@/components/orders/DriverPoolSelect';
 import { DRIVER_CARD_FIELDS, alreadyExistsMessage, fetchDriverPool, tripVehicle, type PoolDriver } from '@/lib/driver-pool';
 
@@ -70,6 +71,37 @@ const POINT_TYPES = [
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
+
+/**
+ * Незаконченная новая заявка — всё, что набрано в мастере.
+ *
+ * Поля формы и то, что мастер держит отдельно от неё: стороны сделки,
+ * маршрут, состав груза, выбранного водителя, шаг. Без любой из этих частей
+ * восстановленная заявка оказалась бы наполовину пустой.
+ */
+interface ЧерновикЗаявки {
+    step: number;
+    myCompanyId: string;
+    customer: string;
+    carrier: string;
+    responsible: string;
+    driverId: string;
+    showDims: boolean;
+    cargo: CargoState;
+    routePoints: Array<LocationState & { pointType: string }>;
+    form: Record<string, unknown>;
+}
+
+/**
+ * Сколько черновик живёт. Неделя — с запасом на «начал в пятницу, закончил
+ * в понедельник»; черновик месячной давности скорее спутает, чем поможет.
+ */
+const СРОК_ЧЕРНОВИКА = 7 * 24 * 60 * 60 * 1000;
+
+const когдаСохранён = (iso: string) => {
+    const дата = dayjs(iso);
+    return дата.isSame(dayjs(), 'day') ? `сегодня в ${дата.format('HH:mm')}` : дата.format('DD.MM в HH:mm');
+};
 
 export default function CreateOrderPage() {
     const { token } = theme.useToken();
@@ -309,10 +341,13 @@ export default function CreateOrderPage() {
         api.get('/company/my-companies').then(res => {
             const list = res.data || [];
             setMyCompanies(list);
+            // Организацию из восстановленного черновика не перебиваем: список
+            // приходит позже, чем черновик подставлен.
             if (user?.companyId) {
-                setSelectedMyCompanyId(user.companyId);
+                const своя = user.companyId;
+                setSelectedMyCompanyId((prev) => prev || своя);
             } else if (list.length > 0) {
-                setSelectedMyCompanyId(list[0].id);
+                setSelectedMyCompanyId((prev) => prev || list[0].id);
             }
         }).catch(() => {});
         fetchLocations();
@@ -460,6 +495,128 @@ export default function CreateOrderPage() {
         if (carr) setSelectedCarrier(carr);
         setPendingParties(null);
     }, [pendingParties, partners]);
+
+    // =================== ЧЕРНОВИК НОВОЙ ЗАЯВКИ ===================
+    //
+    // Начал заводить заявку, отошёл в другой раздел — проверить контрагента,
+    // завести адрес, — вернулся, а набранного нет. Теперь мастер сам
+    // сохраняет незаконченную заявку в браузере и при возвращении подставляет
+    // её обратно. После создания заявки черновик стирается.
+    //
+    // Только у новой заявки. У правки источник — сама заявка на сервере, у
+    // дубля — заявка-образец: подставить поверх них старый черновик значило
+    // бы перепутать, что сейчас правят.
+
+    const черновикКлюч = user?.id && user?.companyId ? `lc:order-draft:v1:${user.id}:${user.companyId}` : null;
+    /** Когда был сохранён черновик, который подставили при открытии. */
+    const [черновикОт, setЧерновикОт] = useState<string | null>(null);
+    /** Когда черновик сохранился в последний раз — чтобы человек видел, что он есть. */
+    const [черновикСохранён, setЧерновикСохранён] = useState<string | null>(null);
+    /** Решение «подставлять или нет» принято: до него сохранять нельзя — затрём черновик пустой формой. */
+    const черновикГотов = useRef(false);
+    /** Заявка создана или начата заново: больше не сохраняем. */
+    const черновикЗакрыт = useRef(false);
+    /** Как форма выглядела при открытии — от этого считаем, введено ли что-нибудь. */
+    const начальныеПоля = useRef<Record<string, unknown>>({});
+    /** Человек что-то поменял в полях формы — повод сохранить. */
+    const [правкаФормы, setПравкаФормы] = useState(0);
+
+    useEffect(() => {
+        if (!черновикКлюч || черновикГотов.current) return;
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('edit') || params.get('from') || params.get('quoteRequestId')) return;
+
+        начальныеПоля.current = serializeFormValues(form.getFieldsValue(true));
+        const черновик = readDraft<ЧерновикЗаявки>(черновикКлюч, СРОК_ЧЕРНОВИКА);
+        if (черновик) {
+            const d = черновик.data;
+            form.setFieldsValue(reviveFormValues(d.form || {}));
+            if (Array.isArray(d.routePoints) && d.routePoints.length) setRoutePointsState(d.routePoints);
+            if (d.cargo) setCargo({ ...EMPTY_CARGO, ...d.cargo });
+            setShowDims(!!d.showDims);
+            if (d.responsible) setResponsibleChoice(d.responsible);
+            if (d.myCompanyId) setSelectedMyCompanyId(d.myCompanyId);
+            if (d.driverId) setSelectedDriverId(d.driverId);
+            // Стороны — тем же путём, что у дубля: после загрузки справочника,
+            // иначе в поле показался бы голый код.
+            if (d.customer || d.carrier) {
+                setPendingParties({ customer: d.customer || undefined, carrier: d.carrier || undefined });
+            }
+            setCurrentStep(Math.min(Math.max(Number(d.step) || 0, 0), 2));
+            setЧерновикОт(черновик.savedAt);
+            setЧерновикСохранён(черновик.savedAt);
+        }
+        черновикГотов.current = true;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [черновикКлюч]);
+
+    /**
+     * Записать черновик сейчас — по тому, что на экране в эту минуту.
+     *
+     * Функция обновляется на каждой отрисовке (ссылка держит последнюю): её
+     * зовут и отложенно, пока человек печатает, и в момент ухода со
+     * страницы — тогда отложенного сохранения уже не дождаться.
+     */
+    const сохранитьЧерновик = useRef<() => void>(() => { });
+    сохранитьЧерновик.current = () => {
+        if (!черновикКлюч || editingId || !черновикГотов.current || черновикЗакрыт.current) return;
+        const снимок: ЧерновикЗаявки = {
+            step: currentStep,
+            myCompanyId: selectedMyCompanyId,
+            // Пока стороны черновика ждут справочник, в состоянии их ещё
+            // нет — берём их оттуда, иначе сохранение затёрло бы их пустыми.
+            customer: pendingParties?.customer ?? selectedCustomer,
+            carrier: pendingParties?.carrier ?? selectedCarrier,
+            responsible: responsibleChoice,
+            driverId: selectedDriverId,
+            showDims,
+            cargo,
+            routePoints: routePointsState,
+            form: serializeFormValues(form.getFieldsValue(true)),
+        };
+        const естьТочки = снимок.routePoints.some((p) => p.id || p.city || p.address);
+        const естьГруз = cargo.pallets.length > 0 || cargo.loadingTypes.length > 0 || cargo.packagingTypes.length > 0
+            || [cargo.placesCount, cargo.stackable, cargo.tempMin, cargo.tempMax, cargo.adr, cargo.adrClass, cargo.cargoValue]
+                .some((v) => v !== undefined && v !== null && v !== '');
+        const пусто = !снимок.customer && !снимок.carrier && !снимок.driverId && !естьТочки && !естьГруз
+            && formValuesEmpty(снимок.form, начальныеПоля.current);
+        if (пусто) {
+            clearDraft(черновикКлюч);
+            setЧерновикСохранён(null);
+            return;
+        }
+        const когда = writeDraft(черновикКлюч, снимок);
+        if (когда) setЧерновикСохранён(когда);
+    };
+
+    // Пока печатают — с небольшой задержкой, чтобы не писать на каждую букву.
+    useEffect(() => {
+        if (!черновикКлюч || editingId || !черновикГотов.current || черновикЗакрыт.current) return;
+        const таймер = window.setTimeout(() => сохранитьЧерновик.current(), 400);
+        return () => window.clearTimeout(таймер);
+    }, [черновикКлюч, editingId, currentStep, selectedMyCompanyId, selectedCustomer, selectedCarrier, pendingParties,
+        responsibleChoice, selectedDriverId, showDims, cargo, routePointsState, правкаФормы]);
+
+    // Уходят со страницы — записываем сразу: вбил ставку и тут же нажал на
+    // другой раздел, а отложенное сохранение не успело. То же при закрытии
+    // вкладки и перезагрузке.
+    useEffect(() => {
+        const сразу = () => сохранитьЧерновик.current();
+        window.addEventListener('pagehide', сразу);
+        return () => {
+            window.removeEventListener('pagehide', сразу);
+            сразу();
+        };
+    }, []);
+
+    /** Забыть черновик и открыть пустую форму. */
+    const начатьЗаново = () => {
+        черновикЗакрыт.current = true;
+        if (черновикКлюч) clearDraft(черновикКлюч);
+        // Полная загрузка, а не сброс полей по одному: у мастера десяток
+        // кусков состояния, и забытый кусок дал бы наполовину пустую форму.
+        window.location.assign('/company/orders/create');
+    };
 
     const fetchLocations = async () => {
         try {
@@ -898,6 +1055,10 @@ export default function CreateOrderPage() {
                 router.push(`/company/orders/${editingId}`);
             } else {
                 await api.post('/orders', orderData);
+                // Заявка заведена — черновик своё отслужил. Иначе следующая
+                // новая заявка открылась бы с данными этой.
+                черновикЗакрыт.current = true;
+                if (черновикКлюч) clearDraft(черновикКлюч);
                 toast.success('Заявка создана!');
                 router.push('/company/orders');
             }
@@ -1613,12 +1774,37 @@ export default function CreateOrderPage() {
                     </h1>
                     <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, margin: '6px 0 14px' }}>
                         Шаг {currentStep + 1} из {steps.length} · {steps[currentStep].title}
+                        {/* Чтобы знали, что уйти можно: набранное не пропадёт. */}
+                        {!editingId && черновикСохранён && (
+                            <span data-testid="order-draft-saved"> · черновик сохранён</span>
+                        )}
                     </p>
                     <Button variant="outline" onClick={() => router.back()}>
                         <ArrowLeft className="h-4 w-4" /> Назад к заявкам
                     </Button>
                 </div>
             </div>
+
+            {!editingId && черновикОт && (
+                <div
+                    role="status"
+                    data-testid="order-draft-restored"
+                    style={{
+                        marginBottom: 16, padding: '10px 12px 10px 16px',
+                        background: 'var(--nova-surface-2)', border: '1px solid var(--nova-border)',
+                        borderRadius: 12, fontSize: 13, display: 'flex', alignItems: 'center', gap: 12,
+                        flexWrap: 'wrap', color: 'var(--nova-fg-2)',
+                    }}
+                >
+                    <span style={{ flex: 1, minWidth: 240 }}>
+                        <b style={{ color: 'var(--nova-fg)' }}>Продолжаем незаконченную заявку</b> — черновик
+                        сохранён {когдаСохранён(черновикОт)}. Всё, что вы успели ввести, на месте.
+                    </span>
+                    <Button variant="outline" size="sm" onClick={начатьЗаново}>
+                        Начать заново
+                    </Button>
+                </div>
+            )}
 
             {!profileComplete && (
                 <div style={{
@@ -1661,7 +1847,7 @@ export default function CreateOrderPage() {
             </div>
 
             {/* Form */}
-            <Form form={form} layout="vertical">
+            <Form form={form} layout="vertical" onValuesChange={() => setПравкаФормы((n) => n + 1)}>
                 {steps.map((step, idx) => (
                     <div key={idx} style={{ display: currentStep === idx ? 'block' : 'none' }}>
                         {step.content}
