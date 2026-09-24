@@ -184,6 +184,17 @@ model User {
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
 
+  /// Нештатный водитель без перевозчика: в чьей базе водителей он числится.
+  ///
+  /// Водитель всегда числился у компании: штатный — у своей, водитель
+  /// перевозчика — у ИП из справочника. А бывает и третий: человек со своей
+  /// фурой, без ИП, которого экспедитор нашёл на рейс. Прописать его не у кого
+  /// — `companyId` пуст, — а в базе водителей экспедитора он быть обязан:
+  /// иначе его не найти в заявке и не отличить от чужого. У штатных и
+  /// водителей перевозчиков поле пустое: их база видна по `companyId`.
+  baseCompanyId String?
+  baseCompany   Company? @relation("DriverBase", fields: [baseCompanyId], references: [id], onDelete: SetNull)
+
   // Фаза 1 (мультикомпанийная архитектура): ссылка на глобальную личность.
   // Пока НЕ используется существующей логикой — заполняется бэкфиллом, служит фундаментом.
   personId String?
@@ -213,6 +224,7 @@ model User {
   @@index([role])
   @@index([departmentId])
   @@index([personId])
+  @@index([baseCompanyId])
 }
 
 // ==================== ФАЗА 1: Личность (глобальная идентичность человека) ====================
@@ -411,6 +423,8 @@ model Company {
   responsibleManager   User?   @relation("ExternalCompanyManager", fields: [responsibleManagerId], references: [id])
 
   users                User[]
+  /// Нештатные водители без перевозчика в базе этой компании (см. `User.baseCompanyId`).
+  baseDrivers          User[]  @relation("DriverBase")
   ordersAsPartner      Order[] @relation("PartnerOrders")
   ordersAsCustomer     Order[] @relation("CustomerCompanyOrders")
   ordersAsForwarder    Order[] @relation("ForwarderOrders")

@@ -421,27 +421,8 @@ export class IdentityService {
         opts?: { isPrimary?: boolean; position?: string | null; departmentId?: string | null },
     ) {
         if (!userId || !companyId || !role) return;
-        const user = await this.prisma.user.findUnique({
-            where: { id: userId },
-            select: { id: true, personId: true, firstName: true, lastName: true, middleName: true, phone: true, iin: true },
-        });
-        if (!user) return;
-
-        // Гарантируем личность (без авто-слияния — 1:1, как бэкфилл)
-        let personId = user.personId;
-        if (!personId) {
-            const person = await this.prisma.person.create({
-                data: {
-                    firstName: user.firstName,
-                    lastName: user.lastName,
-                    middleName: user.middleName ?? null,
-                    phone: user.phone ?? null,
-                    iin: user.iin ?? null,
-                },
-            });
-            personId = person.id;
-            await this.prisma.user.update({ where: { id: userId }, data: { personId } });
-        }
+        const personId = await this.ensurePerson(userId);
+        if (!personId) return;
 
         await this.prisma.affiliation.upsert({
             where: { personId_companyId_role: { personId, companyId, role } },
@@ -462,6 +443,38 @@ export class IdentityService {
                 ...(opts?.isPrimary ? { isPrimary: true } : {}),
             },
         });
+    }
+
+    /**
+     * Гарантировать пользователю личность (Person) — без членства в компании.
+     *
+     * Без авто-слияния — 1:1, как бэкфилл. Отдельно от `syncMembership` ради
+     * нештатного водителя без перевозчика: он ни у кого не прописан, и
+     * членство ему писать нельзя — сверка слоёв (`reconcileReads`) приняла бы
+     * его за расхождение, — а личность нужна, как любому активному
+     * пользователю (`reconcile`).
+     *
+     * Возвращает id личности; `null` — пользователя нет.
+     */
+    async ensurePerson(userId: string): Promise<string | null> {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, personId: true, firstName: true, lastName: true, middleName: true, phone: true, iin: true },
+        });
+        if (!user) return null;
+        if (user.personId) return user.personId;
+
+        const person = await this.prisma.person.create({
+            data: {
+                firstName: user.firstName,
+                lastName: user.lastName,
+                middleName: user.middleName ?? null,
+                phone: user.phone ?? null,
+                iin: user.iin ?? null,
+            },
+        });
+        await this.prisma.user.update({ where: { id: userId }, data: { personId: person.id } });
+        return person.id;
     }
 
     /** Убрать членство в новом слое (при снятии доступа/удалении связи). */

@@ -41,12 +41,13 @@ export default function DriverPoolSelect({
     const options = useMemo(() => {
         const пункт = (в: PoolDriver) => {
             // Подсказка справа: штатный — так и пишем; иначе — за кого ездил
-            // последним, а если ещё не ездил — у кого прописан.
+            // последним, а если ещё не ездил — у кого прописан или что он
+            // нештатный без перевозчика.
             const подсказка = в.isStaff
                 ? 'штатный'
                 : в.lastTrip?.carrierName
                     ? `последний рейс: ${в.lastTrip.carrierName}`
-                    : в.companyName || '';
+                    : в.kind === 'INDEPENDENT' ? 'нештатный' : в.companyName || '';
             return {
                 value: в.id,
                 short: `${фио(в)} (${в.phone})`,

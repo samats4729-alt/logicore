@@ -1,0 +1,154 @@
+/* Страница «Водители»: панель отбора и таблица. Шапка, пилюли и карточка —
+   общие, из `components/nova/nova.module.css`. */
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.search {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+    max-width: 420px;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 15px;
+    height: 15px;
+    color: var(--nova-fg-3);
+    pointer-events: none;
+}
+
+.count {
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+    opacity: .7;
+}
+
+.tableWrap {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    min-width: 860px;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.table th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--nova-fg-3);
+    background: var(--nova-surface-2);
+    border-bottom: 1px solid var(--nova-border-2);
+    white-space: nowrap;
+}
+
+.table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--nova-border-2);
+    vertical-align: top;
+    color: var(--nova-fg);
+}
+
+.table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.row {
+    cursor: pointer;
+}
+
+.row:hover td {
+    background: var(--nova-hover);
+}
+
+.row:focus-visible {
+    outline: 2px solid var(--nova-fg-3);
+    outline-offset: -2px;
+}
+
+.name {
+    font-weight: 600;
+}
+
+.sub {
+    margin-top: 2px;
+    font-size: 11.5px;
+    color: var(--nova-fg-3);
+}
+
+.table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.plate {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}
+
+.muted {
+    color: var(--nova-fg-3);
+}
+
+.editCell {
+    width: 44px;
+    text-align: right;
+}
+
+.editButton {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--nova-fg-3);
+    cursor: pointer;
+}
+
+.editButton:hover {
+    background: var(--nova-hover);
+    color: var(--nova-fg);
+}
+
+.state {
+    padding: 44px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.stateTitle {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    margin-bottom: 4px;
+}
+
+.stateAction {
+    margin-top: 14px;
+    display: inline-flex;
+}
+
+.footnote {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--nova-fg-3);
+    max-width: 90ch;
+}

@@ -75,6 +75,10 @@ export default function CabinetPage() {
             icon: ClipboardList,
             links: [
                 { label: 'Контрагенты', desc: 'Заказчики и перевозчики', href: '/company/partners', icon: Building2, show: hasPerm('partners') },
+                // Все водители одним списком: штатные и нештатные. Раньше пункт
+                // вёл в «Сотрудников», где видны только штатные, — водители ИП и
+                // люди без ИП туда не попадали.
+                { label: 'Водители', desc: 'Штатные и нештатные — все, кто возит рейсы', href: '/company/drivers', icon: Contact, show: hasPerm('drivers') },
                 { label: 'Договоры', desc: 'Условия работы с контрагентами', href: '/company/contracts', icon: FileText, show: hasPerm('partners') },
                 { label: 'Адреса', desc: 'Точки погрузки и выгрузки', href: '/company/locations', icon: MapPin, show: true },
                 { label: 'Автопарк', desc: 'Машины и прицепы компании', href: '/company/vehicles', icon: Truck, show: isAdmin },
@@ -112,7 +116,6 @@ export default function CabinetPage() {
             links: [
                 { label: 'Список сотрудников', desc: 'Кто работает в компании', href: '/company/users', icon: Users, show: isAdmin },
                 { label: 'Права доступа', desc: 'Кому какие разделы видны', href: '/company/users?rights=1', icon: ShieldCheck, show: isAdmin },
-                { label: 'Водители', desc: 'Люди за рулём и их документы', href: '/company/users?segment=drivers', icon: Contact, show: isAdmin },
             ],
         },
         {
