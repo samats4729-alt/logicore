@@ -678,10 +678,19 @@ export class OrdersService {
             }
 
             // Исполнитель рейса — как и раньше: перевозчик, если его указали,
-            // иначе экспедитор заявки.
+            // иначе экспедитор заявки. И сама компания, которая назначает,
+            // если рейс передали ей (она в заявке субэкспедитор или партнёр):
+            // её водители и есть водители рейса. Без этого перевозчик на
+            // платформе не мог поставить на переданный ему рейс своего же
+            // водителя — проверка сверяла водителя с экспедитором.
+            const рейсПередалиНам = !!requesterCompanyId
+                && [order.subForwarderId, order.partnerId].includes(requesterCompanyId);
             const { снимок } = await this.водительНаРейс(
                 driverId,
-                { requesterCompanyId, исполнители: [partnerId || order.forwarderId] },
+                {
+                    requesterCompanyId,
+                    исполнители: [partnerId || order.forwarderId, рейсПередалиНам ? requesterCompanyId : null],
+                },
                 context?.trip,
             );
             driverName = снимок.assignedDriverName;

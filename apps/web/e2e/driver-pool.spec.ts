@@ -69,6 +69,35 @@ test.describe('Общая база водителей', () => {
         ).toBeVisible();
     });
 
+    test('в заявке окно назначения сразу на водителе — перевозчик взят из заявки', async ({ page }) => {
+        // Перевозчика выбирают при заведении заявки. Окно «Назначить
+        // водителя» всё равно начинало с вопроса «свой транспорт или
+        // перевозчик» — с ответом «свой» — и просило выбрать перевозчика
+        // заново: смотрело только на поле, которое заполняет само.
+        await login(page);
+        const внешние: any[] = await (await page.request.get(`${API}/external-companies`)).json();
+        const перевозчики = new Map(внешние.filter((к) => к.isCarrier).map((к) => [к.id, к.name]));
+        const заявки: any[] = (await (await page.request.get(
+            `${API}/company/orders?page=1&limit=100&type=active`,
+        )).json()).data ?? [];
+        // Рейс, который мы передали внешнему перевозчику и где водителя ещё
+        // можно назначить или сменить. Окно только открываем — ничего не
+        // сохраняем.
+        const рейс = заявки.find((з) =>
+            ['PENDING', 'ASSIGNED'].includes(з.status) && перевозчики.has(з.subForwarderId) && !з.partnerId);
+        test.skip(!рейс, 'на стенде нет рейса у внешнего перевозчика');
+
+        await page.goto(`/company/orders/${рейс.id}`);
+        await page.getByRole('button', { name: /Назначить водителя|Заменить водителя/ }).first().click();
+        const окно = page.locator('.ant-modal').filter({ hasText: 'Назначить перевозчика и водителя' });
+
+        await expect(окно.getByText('Кто везёт:')).toBeVisible();
+        await expect(окно.getByText(перевозчики.get(рейс.subForwarderId)!, { exact: true })).toBeVisible();
+        await expect(окно.locator('.ant-steps-item-process')).toContainText('Водитель');
+        await expect(окно.getByText('Кто выполняет перевозку?')).toHaveCount(0);
+        await expect(окно.locator('.ant-select-selector').filter({ hasText: /Выберите водителя из базы|\(\+?\d/ })).toBeVisible();
+    });
+
     test('по госномеру водитель тоже находится', async ({ page }) => {
         await login(page);
         const водители = await база(page);

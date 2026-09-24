@@ -42,6 +42,11 @@ const ВОДИТЕЛИ: Record<string, any> = {
         lastName: 'Сидоров', firstName: 'Сидор', middleName: null, phone: '+77009998877',
         vehiclePlate: '999 CCC 02', trailerNumber: null,
     },
+    'штатный': {
+        id: 'штатный', role: 'DRIVER', companyId: МЫ,
+        lastName: 'Ахметов', firstName: 'Ержан', middleName: null, phone: '+77004443322',
+        vehiclePlate: '100 LOG 02', trailerNumber: null,
+    },
 };
 
 const рейс = (сверху: any = {}) => ({
@@ -140,6 +145,52 @@ describe('Назначить водителя из общей базы', () => {
 
         await expect(service.assignDriver('рейс-1', 'водитель-а', ИП_Б, {}))
             .rejects.toBeInstanceOf(BadRequestException);
+    });
+});
+
+describe('Рейс, который нам передали на платформе', () => {
+    // Экспедитор на платформе выбрал нашу компанию перевозчиком: мы в заявке
+    // субэкспедитор, экспедитор — он. Раньше проверка сверяла водителя с
+    // экспедитором, и своего же водителя на такой рейс мы поставить не могли.
+    const переданный = (сверху: any = {}) => рейс({
+        customerCompanyId: 'заказчик', forwarderId: ЧУЖИЕ, subForwarderId: МЫ,
+        responsibleManager: { companyId: ЧУЖИЕ }, ...сверху,
+    });
+
+    it('ставим своего штатного водителя', async () => {
+        const { service, записано } = сервис(переданный());
+
+        await service.assignDriver('рейс-1', 'штатный', undefined, {}, { requesterCompanyId: МЫ });
+
+        expect(записано()).toMatchObject({ driverId: 'штатный', partnerId: null, forwarderId: ЧУЖИЕ });
+    });
+
+    it('ставим водителя из своей базы — прописанного у нашего ИП', async () => {
+        const { service, записано } = сервис(переданный());
+
+        await service.assignDriver('рейс-1', 'водитель-а', undefined, {}, { requesterCompanyId: МЫ });
+
+        expect(записано().driverId).toBe('водитель-а');
+    });
+
+    it('партнёром рейса — так же, и партнёром остаёмся', async () => {
+        const { service, записано } = сервис(переданный({ subForwarderId: null, partnerId: МЫ }));
+
+        await service.assignDriver('рейс-1', 'штатный', МЫ, {}, { requesterCompanyId: МЫ });
+
+        expect(записано()).toMatchObject({ driverId: 'штатный', partnerId: МЫ });
+    });
+
+    it('заказчик своего водителя на рейс экспедитора не ставит — как было', async () => {
+        // Рейс везёт экспедитор на платформе, мы в заявке только заказчик:
+        // водителя назначает он, а не мы.
+        const { service, prisma } = сервис(рейс({
+            customerCompanyId: МЫ, forwarderId: ЧУЖИЕ, responsibleManager: { companyId: ЧУЖИЕ },
+        }));
+
+        await expect(service.assignDriver('рейс-1', 'штатный', undefined, {}, { requesterCompanyId: МЫ }))
+            .rejects.toThrow('не из вашей базы');
+        expect(prisma.order.update).not.toHaveBeenCalled();
     });
 });
 
