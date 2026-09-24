@@ -47,6 +47,18 @@ const ВОДИТЕЛИ: Record<string, any> = {
         lastName: 'Ахметов', firstName: 'Ержан', middleName: null, phone: '+77004443322',
         vehiclePlate: '100 LOG 02', trailerNumber: null,
     },
+    // Нештатные без перевозчика: ни у кого не прописаны, числятся в базе
+    // той компании, что их завела.
+    'нештатный': {
+        id: 'нештатный', role: 'DRIVER', companyId: null, baseCompanyId: МЫ,
+        lastName: 'Садыков', firstName: 'Марат', middleName: null, phone: '+77051234567',
+        vehiclePlate: '888 FRE 02', trailerNumber: null,
+    },
+    'нештатный-чужой': {
+        id: 'нештатный-чужой', role: 'DRIVER', companyId: null, baseCompanyId: ЧУЖИЕ,
+        lastName: 'Оспанов', firstName: 'Ерлан', middleName: null, phone: '+77059876543',
+        vehiclePlate: '777 OTH 02', trailerNumber: null,
+    },
 };
 
 const рейс = (сверху: any = {}) => ({
@@ -145,6 +157,37 @@ describe('Назначить водителя из общей базы', () => {
 
         await expect(service.assignDriver('рейс-1', 'водитель-а', ИП_Б, {}))
             .rejects.toBeInstanceOf(BadRequestException);
+    });
+});
+
+describe('Нештатный водитель без перевозчика', () => {
+    it('свой — на рейс нашего перевозчика', async () => {
+        const { service, записано } = сервис(рейс());
+
+        await service.assignDriver('рейс-1', 'нештатный', ИП_Б, {}, { requesterCompanyId: МЫ });
+
+        expect(записано()).toMatchObject({ driverId: 'нештатный', partnerId: ИП_Б, assignedDriverPlate: '888 FRE 02' });
+    });
+
+    it('чужой компании — нельзя: он в её базе', async () => {
+        const { service, prisma } = сервис(рейс());
+
+        await expect(service.assignDriver('рейс-1', 'нештатный-чужой', ИП_Б, {}, { requesterCompanyId: МЫ }))
+            .rejects.toThrow('не из вашей базы');
+        expect(prisma.order.update).not.toHaveBeenCalled();
+    });
+
+    it('один водитель — на несколько рейсов сразу', async () => {
+        // Занятость не проверяется: водитель может везти и два рейса подряд,
+        // и догруз. Назначение на второй рейс первый не трогает.
+        const первый = сервис(рейс({ id: 'рейс-1' }));
+        const второй = сервис(рейс({ id: 'рейс-2', orderNumber: 'ЗК-2702' }));
+
+        await первый.service.assignDriver('рейс-1', 'нештатный', ИП_А, {}, { requesterCompanyId: МЫ });
+        await второй.service.assignDriver('рейс-2', 'нештатный', ИП_Б, {}, { requesterCompanyId: МЫ });
+
+        expect(первый.записано().driverId).toBe('нештатный');
+        expect(второй.записано().driverId).toBe('нештатный');
     });
 });
 

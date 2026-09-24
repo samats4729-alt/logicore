@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { CompanyDriversService } from './company-drivers.service';
 
 /**
@@ -63,7 +64,7 @@ function makeService(водители: any[], рейсы: any[] = []) {
         userCompanyRelation: { create: jest.fn() },
         $transaction: jest.fn(async (fn: any) => fn(prisma)),
     };
-    const identity: any = { syncMembership: jest.fn() };
+    const identity: any = { syncMembership: jest.fn(), ensurePerson: jest.fn() };
     return { service: new CompanyDriversService(prisma, identity), prisma, identity };
 }
 
@@ -79,7 +80,11 @@ describe('Общий список водителей', () => {
 
         expect(список).toHaveLength(3);
         const { where } = prisma.user.findMany.mock.calls[0][0];
-        expect(where.companyId).toEqual({ in: [МЫ, ИП_А, ИП_Б] });
+        // Своя компания, её перевозчики — и её нештатные без перевозчика.
+        expect(where.OR).toEqual([
+            { companyId: { in: [МЫ, ИП_А, ИП_Б] } },
+            { companyId: null, baseCompanyId: МЫ },
+        ]);
         expect(where.isActive).toBe(true);
     });
 
@@ -100,7 +105,7 @@ describe('Общий список водителей', () => {
             водитель({ id: 'у-ип-б', companyId: ИП_Б, phone: '87001112233', updatedAt: new Date('2026-09-10') }),
         ];
         const рейсы = [
-            { driverId: 'у-ип-а', partnerId: ИП_А, subForwarderId: null, forwarderId: МЫ, _max: { createdAt: new Date('2026-09-20') } },
+            { driverId: 'у-ип-а', partnerId: ИП_А, subForwarderId: null, forwarderId: МЫ, _max: { createdAt: new Date('2026-09-20') }, _count: { _all: 2 } },
         ];
 
         it('показан одной строкой', async () => {
@@ -134,7 +139,7 @@ describe('Общий список водителей', () => {
         // поднимут наверх как уже знакомого.
         const { service } = makeService(
             [водитель({ id: 'в-1', companyId: ИП_А })],
-            [{ driverId: 'в-1', partnerId: ИП_Б, subForwarderId: null, forwarderId: МЫ, _max: { createdAt: new Date('2026-09-21') } }],
+            [{ driverId: 'в-1', partnerId: ИП_Б, subForwarderId: null, forwarderId: МЫ, _max: { createdAt: new Date('2026-09-21') }, _count: { _all: 1 } }],
         );
 
         const [в] = await service.getDriverPool(МЫ);
@@ -243,12 +248,125 @@ describe('Добавление водителя, который уже есть 
         expect(итог.sharedFromName).toBe('ИП Сериков');
     });
 
-    it('двойника ищем только в своей базе', async () => {
+    it('двойника ищем только в своей базе — и среди её нештатных', async () => {
         const { service, prisma } = makeService([]);
 
         await service.createDriver(ИП_Б, новый, МЫ);
 
         const { where } = prisma.user.findMany.mock.calls[0][0];
-        expect(where.companyId).toEqual({ in: [МЫ, ИП_А, ИП_Б] });
+        expect(where.OR).toEqual([
+            { companyId: { in: [МЫ, ИП_А, ИП_Б] } },
+            { companyId: null, baseCompanyId: МЫ },
+        ]);
+    });
+});
+
+describe('Нештатный водитель без перевозчика', () => {
+    // Человек со своей фурой и без ИП: экспедитор нашёл его на рейс, данные и
+    // машину записал, а сделку ведёт через своего перевозчика. Прописать его
+    // не у кого — он числится в базе компании, но не в штате.
+    const нештатный = { firstName: 'Ержан', lastName: 'Садыков', phone: '+7 705 123 45 67', vehiclePlate: '888 FRE 02' };
+    const ЧУЖИЕ = 'чужая-компания';
+
+    it('заводится в базу компании, а не в штат', async () => {
+        const { service, prisma, identity } = makeService([]);
+
+        await service.createIndependentDriver(МЫ, нештатный);
+
+        const { data } = prisma.user.create.mock.calls[0][0];
+        expect(data).toMatchObject({ companyId: null, baseCompanyId: МЫ, role: 'DRIVER', isActive: true });
+        // Не сотрудник: ни отдела «Водители», ни связи с компанией, ни
+        // членства в новом слое — иначе он всплыл бы в «Сотрудниках».
+        expect(data.departmentId).toBeUndefined();
+        expect(prisma.department.create).not.toHaveBeenCalled();
+        expect(prisma.userCompanyRelation.create).not.toHaveBeenCalled();
+        expect(identity.syncMembership).not.toHaveBeenCalled();
+        // А личность — как у всякого пользователя.
+        expect(identity.ensurePerson).toHaveBeenCalled();
+    });
+
+    it('уже есть в базе у ИП — второго не заводим и прописку не меняем', async () => {
+        const { service, prisma } = makeService([
+            водитель({ id: 'у-ип-а', companyId: ИП_А, phone: '8 705 123 45 67' }),
+        ]);
+
+        const итог: any = await service.createIndependentDriver(МЫ, нештатный);
+
+        expect(prisma.user.create).not.toHaveBeenCalled();
+        expect(итог.alreadyExists).toBe(true);
+        const { data } = prisma.user.update.mock.calls[0][0];
+        expect(data.companyId).toBeUndefined();
+        expect(data.phone).toBeUndefined();
+        expect(data.vehiclePlate).toBe('888 FRE 02');
+    });
+
+    it('двойника ищем по всей базе и среди нештатных', async () => {
+        const { service, prisma } = makeService([]);
+
+        await service.createIndependentDriver(МЫ, нештатный);
+
+        const { where } = prisma.user.findMany.mock.calls[0][0];
+        expect(where.OR).toEqual([
+            { companyId: { in: [МЫ, ИП_А, ИП_Б] } },
+            { companyId: null, baseCompanyId: МЫ },
+        ]);
+    });
+
+    it('в общем списке — нештатным, без прописки', async () => {
+        const { service } = makeService([водитель({ id: 'свой', companyId: null, baseCompanyId: МЫ })]);
+
+        const [в] = await service.getDriverPool(МЫ);
+
+        expect(в).toMatchObject({ kind: 'INDEPENDENT', isStaff: false, companyName: null });
+    });
+
+    it('в списке видно, кто есть кто: штатный и водитель перевозчика', async () => {
+        const { service } = makeService([
+            водитель({ id: 'штат', companyId: МЫ, phone: '+7 701 000 00 01' }),
+            водитель({ id: 'ип', companyId: ИП_А, phone: '+7 701 000 00 02' }),
+        ]);
+
+        const список = await service.getDriverPool(МЫ);
+
+        expect(список.find((в) => в.id === 'штат')).toMatchObject({ kind: 'STAFF', isStaff: true });
+        expect(список.find((в) => в.id === 'ип')).toMatchObject({ kind: 'CARRIER', companyName: 'ИП Сериков' });
+    });
+
+    it('рейсов — сколько он отвёз за наших перевозчиков', async () => {
+        const { service } = makeService(
+            [водитель({ id: 'свой', companyId: null, baseCompanyId: МЫ })],
+            [
+                { driverId: 'свой', partnerId: ИП_А, subForwarderId: null, forwarderId: МЫ, _max: { createdAt: new Date('2026-09-20') }, _count: { _all: 2 } },
+                { driverId: 'свой', partnerId: null, subForwarderId: ИП_Б, forwarderId: МЫ, _max: { createdAt: new Date('2026-09-22') }, _count: { _all: 1 } },
+            ],
+        );
+
+        const [в] = await service.getDriverPool(МЫ);
+
+        expect(в.tripsCount).toBe(3);
+        expect(в.lastTrip).toMatchObject({ carrierId: ИП_Б });
+    });
+
+    it('править своего нештатного можно, чужого — нет', async () => {
+        const { service, prisma } = makeService([]);
+        prisma.user.findUnique = jest.fn().mockResolvedValue({ id: 'н', companyId: null, baseCompanyId: МЫ, phone: '+77051234567' });
+
+        await service.updateDriver('н', МЫ, { vehiclePlate: '999 NEW 02' });
+        expect(prisma.user.update).toHaveBeenCalled();
+
+        prisma.user.findUnique = jest.fn().mockResolvedValue({ id: 'н', companyId: null, baseCompanyId: ЧУЖИЕ, phone: '+77051234567' });
+        await expect(service.updateDriver('н', МЫ, { vehiclePlate: '999 NEW 02' }))
+            .rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('убрать из списка своего нештатного можно, чужого — нет', async () => {
+        const { service, prisma } = makeService([]);
+        prisma.user.findUnique = jest.fn().mockResolvedValue({ id: 'н', companyId: null, baseCompanyId: МЫ });
+
+        await service.deactivateDriver('н', МЫ);
+        expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { isActive: false } }));
+
+        prisma.user.findUnique = jest.fn().mockResolvedValue({ id: 'н', companyId: null, baseCompanyId: null });
+        await expect(service.deactivateDriver('н', МЫ)).rejects.toBeInstanceOf(ForbiddenException);
     });
 });

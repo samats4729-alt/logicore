@@ -509,14 +509,18 @@ export class CompanyController {
     @RequirePermissions('orders', 'drivers', 'partners')
     @ApiOperation({ summary: 'Создать водителя в своей компании' })
     async createDriver(@Request() req: any, @Body() dto: CreateDriverDto) {
-        const { companyId, ...restDto } = dto;
+        const { companyId, independent, ...restDto } = dto;
         const createData = {
             ...restDto,
             docIssuedAt: dto.docIssuedAt ? new Date(dto.docIssuedAt) : undefined,
             docExpiresAt: dto.docExpiresAt ? new Date(dto.docExpiresAt) : undefined,
         };
         const targetCompanyId = companyId || req.user.companyId;
-        const result = await this.companyDriversService.createDriver(targetCompanyId, createData, req.user.companyId);
+        // Нештатный без перевозчика ни у кого не прописан — он в базе того,
+        // кто его завёл (см. `createIndependentDriver`).
+        const result = independent
+            ? await this.companyDriversService.createIndependentDriver(req.user.companyId, createData)
+            : await this.companyDriversService.createDriver(targetCompanyId, createData, req.user.companyId);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'driver',
             entityId: (result as any)?.id, entityLabel: `Водитель ${dto.lastName} ${dto.firstName}`,

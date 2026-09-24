@@ -762,7 +762,12 @@ export class OrdersService {
             const база = проверка.requesterCompanyId
                 ? await компанииБазы(this.prisma, проверка.requesterCompanyId)
                 : null;
-            if (!водительПодходит({ водитель: driverUser.companyId, исполнители: проверка.исполнители, база })) {
+            if (!водительПодходит({
+                водитель: driverUser.companyId,
+                базаВодителя: driverUser.baseCompanyId,
+                исполнители: проверка.исполнители,
+                база,
+            })) {
                 throw new BadRequestException(
                     'Этого водителя нельзя поставить на рейс: он не из вашей базы водителей и не из компании, которая везёт рейс',
                 );

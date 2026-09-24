@@ -106,6 +106,10 @@ export class CompanyDriversService {
      * пойдут и новые рейсы, и вход в приложение водителя выбирает её же (см.
      * `AuthService.loginDriver`). Остальные записи не удаляются — к ним
      * привязаны прошлые рейсы.
+     *
+     * В базе и нештатные водители без перевозчика (`User.baseCompanyId`): ни
+     * у кого не прописаны, но заведены этой компанией. Кто есть кто — в `kind`:
+     * штатный, водитель перевозчика или нештатный без перевозчика.
      */
     async getDriverPool(companyId: string) {
         const база = await компанииБазы(this.prisma, companyId);
@@ -113,7 +117,10 @@ export class CompanyDriversService {
             where: {
                 role: UserRole.DRIVER,
                 isActive: true,
-                companyId: { in: Array.from(база.keys()) },
+                OR: [
+                    { companyId: { in: Array.from(база.keys()) } },
+                    { companyId: null, baseCompanyId: companyId },
+                ],
             },
             select: { ...this.driverSelect, companyId: true, updatedAt: true },
         });
@@ -123,19 +130,26 @@ export class CompanyDriversService {
             by: ['driverId', 'partnerId', 'subForwarderId', 'forwarderId'],
             where: { driverId: { in: водители.map((в) => в.id) } },
             _max: { createdAt: true },
+            _count: { _all: true },
         });
 
         // От кого ездил: перевозчик рейса из базы. Где он записан, зависит от
         // того, как заведена заявка, — перевозчиком, субподрядчиком или
         // экспедитором, — поэтому берём первого из базы по этому порядку.
-        const поездки = new Map<string, { перевозчики: Set<string>; последний: { at: Date; carrierId: string } | null }>();
+        // Рейсы считаем те же — наши, а не все, что есть на платформе.
+        const поездки = new Map<string, {
+            перевозчики: Set<string>;
+            последний: { at: Date; carrierId: string } | null;
+            всего: number;
+        }>();
         for (const р of рейсы) {
             if (!р.driverId) continue;
             const перевозчик = [р.partnerId, р.subForwarderId, р.forwarderId].find((id) => !!id && база.has(id));
             if (!перевозчик) continue;
             const когда = р._max.createdAt;
-            const запись = поездки.get(р.driverId) ?? { перевозчики: new Set<string>(), последний: null };
+            const запись = поездки.get(р.driverId) ?? { перевозчики: new Set<string>(), последний: null, всего: 0 };
             запись.перевозчики.add(перевозчик);
+            запись.всего += р._count._all;
             if (когда && (!запись.последний || когда > запись.последний.at)) {
                 запись.последний = { at: когда, carrierId: перевозчик };
             }
@@ -156,17 +170,24 @@ export class CompanyDriversService {
                 (свежесть(б) - свежесть(а)) || (б.updatedAt.getTime() - а.updatedAt.getTime()));
             const перевозчики = new Set<string>();
             let последний: { at: Date; carrierId: string } | null = null;
+            let всегоРейсов = 0;
             for (const з of записи) {
                 if (з.companyId) перевозчики.add(з.companyId);
                 const п = поездки.get(з.id);
                 п?.перевозчики.forEach((id) => перевозчики.add(id));
+                всегоРейсов += п?.всего ?? 0;
                 if (п?.последний && (!последний || п.последний.at > последний.at)) последний = п.последний;
             }
             const { updatedAt: _обновлён, ...водитель } = главная;
+            const kind: 'STAFF' | 'CARRIER' | 'INDEPENDENT' = !главная.companyId
+                ? 'INDEPENDENT'
+                : главная.companyId === companyId ? 'STAFF' : 'CARRIER';
             return {
                 ...водитель,
                 companyName: главная.companyId ? база.get(главная.companyId) ?? null : null,
-                isStaff: главная.companyId === companyId,
+                isStaff: kind === 'STAFF',
+                kind,
+                tripsCount: всегоРейсов,
                 carrierIds: Array.from(перевозчики),
                 lastTrip: последний
                     ? { at: последний.at, carrierId: последний.carrierId, carrierName: база.get(последний.carrierId) ?? null }
@@ -222,53 +243,7 @@ export class CompanyDriversService {
         const existing = await this.findTwin(companyId, data.phone, data.iin, requesterCompanyId);
 
         if (existing) {
-            // Тот же человек уже в базе: второго не заводим, а данные обновляем
-            // тем, что сейчас ввели, — это самое свежее, что о нём известно.
-            //
-            // Если он прописан у другого перевозчика или у самой компании,
-            // прописку не трогаем: у кого завели, у того и числится. Назначить
-            // его теперь можно на рейс любого перевозчика базы — тот же
-            // водитель сегодня едет от одного ИП, завтра от другого.
-            //
-            // Телефон не переписываем, если нашли именно по нему: это вход
-            // водителя в приложение, а приложение сравнивает номер строкой.
-            // Совпал он лишь с точностью до записи — «8 701…» вместо
-            // «+7 701…», — и переписать значило бы запереть водителя снаружи.
-            const { phone: _набранныйТелефон, ...безТелефона } = driverData;
-            const updated = await this.prisma.user.update({
-                where: { id: existing.id },
-                data: {
-                    ...(existing.поТелефону ? безТелефона : driverData),
-                    ...(passwordHash ? { passwordHash } : {}),
-                    isActive: true,
-                },
-                select: this.driverSelect,
-            });
-
-            // Двойная запись в новый слой — только для своей прописки. Связь с
-            // другим перевозчиком туда не пишем: сверка нового слоя со старым
-            // (`IdentityService.reconcileReads`) приняла бы её за расхождение.
-            if (existing.companyId === companyId) {
-                try {
-                    await this.identityService.syncMembership(existing.id, companyId, UserRole.DRIVER, { isPrimary: true });
-                } catch (e) {
-                    console.warn('syncMembership (driver update) failed:', e);
-                }
-            }
-
-            // У кого он прописан — чтобы экран сказал прямо: «уже есть в базе,
-            // у ИП Сериков». Иначе человек добавляет водителя в карточке
-            // перевозчика, видит «использован существующий» и не находит его
-            // в списке этого перевозчика.
-            const прописан = existing.companyId && existing.companyId !== companyId
-                ? await this.prisma.company.findUnique({ where: { id: existing.companyId }, select: { name: true } })
-                : null;
-
-            return {
-                ...updated,
-                alreadyExists: true,
-                sharedFromName: прописан?.name ?? null,
-            };
+            return this.обновитьДвойника(existing, companyId, driverData, passwordHash);
         }
 
         // Автоматически создаем отдел "Водители" при регистрации водителя, если его нет
@@ -322,6 +297,124 @@ export class CompanyDriversService {
     }
 
     /**
+     * Нештатный водитель без перевозчика: человек со своей машиной, у которого
+     * нет ИП.
+     *
+     * Экспедитор нашёл его на рейс, данные и машину записал, а сделку ведёт
+     * через своего перевозчика. Прописать такого водителя не у кого, поэтому он
+     * числится в базе компании (`baseCompanyId`), а не у неё в штате: ни в
+     * «Сотрудниках», ни в отделе «Водители», ни в зарплате его нет. В заявке он
+     * ставится на рейс любого перевозчика базы — как все водители базы.
+     *
+     * Двойника ищем по всей базе, как у водителей перевозчиков: если человек
+     * уже есть — хоть у ИП, хоть нештатным, — второго не заводим.
+     */
+    async createIndependentDriver(requesterCompanyId: string, data: {
+        firstName: string;
+        lastName: string;
+        middleName?: string;
+        phone: string;
+        password?: string;
+        iin?: string;
+        vehicleType?: string;
+        vehiclePlate?: string;
+        vehicleModel?: string;
+        trailerNumber?: string;
+        docType?: string;
+        docNumber?: string;
+        docIssuedAt?: Date;
+        docExpiresAt?: Date;
+        docIssuedBy?: string;
+    }) {
+        const { password, ...driverData } = data;
+        const passwordHash = password ? await bcrypt.hash(password, 12) : undefined;
+
+        const existing = await this.findTwin(null, data.phone, data.iin, requesterCompanyId);
+        if (existing) {
+            return this.обновитьДвойника(existing, null, driverData, passwordHash);
+        }
+
+        const created = await this.prisma.user.create({
+            data: {
+                ...driverData,
+                ...(passwordHash ? { passwordHash } : {}),
+                role: UserRole.DRIVER,
+                companyId: null,
+                baseCompanyId: requesterCompanyId,
+                isActive: true,
+            },
+            select: this.driverSelect,
+        });
+
+        // Личность в новом слое — без членства в компании: в старом слое его
+        // нет ни у кого (`companyId` пуст), и сверка слоёв должна сходиться.
+        try {
+            await this.identityService.ensurePerson(created.id);
+        } catch (e) {
+            console.warn('ensurePerson (independent driver) failed:', e);
+        }
+
+        return created;
+    }
+
+    /**
+     * Тот же человек уже в базе: второго не заводим, а данные обновляем тем,
+     * что сейчас ввели, — это самое свежее, что о нём известно.
+     *
+     * Если он прописан у другого перевозчика или у самой компании, прописку
+     * не трогаем: у кого завели, у того и числится. Назначить его можно на рейс
+     * любого перевозчика базы — тот же водитель сегодня едет от одного ИП,
+     * завтра от другого.
+     *
+     * Телефон не переписываем, если нашли именно по нему: это вход водителя в
+     * приложение, а приложение сравнивает номер строкой. Совпал он лишь с
+     * точностью до записи — «8 701…» вместо «+7 701…», — и переписать значило
+     * бы запереть водителя снаружи.
+     */
+    private async обновитьДвойника(
+        existing: { id: string; companyId: string | null; поТелефону: boolean },
+        companyId: string | null,
+        driverData: Record<string, any>,
+        passwordHash?: string,
+    ) {
+        const { phone: _набранныйТелефон, ...безТелефона } = driverData;
+        const updated = await this.prisma.user.update({
+            where: { id: existing.id },
+            data: {
+                ...(existing.поТелефону ? безТелефона : driverData),
+                ...(passwordHash ? { passwordHash } : {}),
+                isActive: true,
+            },
+            select: this.driverSelect,
+        });
+
+        // Двойная запись в новый слой — только для своей прописки. Связь с
+        // другим перевозчиком туда не пишем: сверка нового слоя со старым
+        // (`IdentityService.reconcileReads`) приняла бы её за расхождение.
+        if (companyId && existing.companyId === companyId) {
+            try {
+                await this.identityService.syncMembership(existing.id, companyId, UserRole.DRIVER, { isPrimary: true });
+            } catch (e) {
+                console.warn('syncMembership (driver update) failed:', e);
+            }
+        }
+
+        // У кого он прописан — чтобы экран сказал прямо: «уже есть в базе,
+        // у ИП Сериков». Иначе человек добавляет водителя в карточке
+        // перевозчика, видит «использован существующий» и не находит его
+        // в списке этого перевозчика.
+        const прописан = existing.companyId && existing.companyId !== companyId
+            ? await this.prisma.company.findUnique({ where: { id: existing.companyId }, select: { name: true } })
+            : null;
+
+        return {
+            ...updated,
+            alreadyExists: true,
+            sharedFromName: прописан?.name ?? null,
+        };
+    }
+
+    /**
      * Тот же человек, уже заведённый в базе: совпал телефон или ИИН.
      *
      * Раньше искали только у того перевозчика, под которым заводят, и точным
@@ -338,21 +431,33 @@ export class CompanyDriversService {
      * среди штатных. Штатный — это отдел, зарплата, список сотрудников; если
      * человек, ездивший от ИП, переходит в штат, ему нужна своя запись, а не
      * запись перевозчика, которой в списке сотрудников нет.
+     *
+     * `companyId` пуст — заводят нештатного водителя без перевозчика: ищем
+     * по всей базе, и среди её нештатных тоже.
      */
     private async findTwin(
-        companyId: string,
+        companyId: string | null,
         phone: string,
         iin: string | undefined,
         requesterCompanyId?: string,
     ) {
-        const вШтат = !requesterCompanyId || companyId === requesterCompanyId;
-        const компании = вШтат
-            ? [companyId]
+        const вШтат = !!companyId && (!requesterCompanyId || companyId === requesterCompanyId);
+        const компании = вШтат || !requesterCompanyId
+            ? []
             : Array.from((await компанииБазы(this.prisma, requesterCompanyId)).keys());
-        if (!компании.includes(companyId)) компании.push(companyId);
+        if (companyId && !компании.includes(companyId)) компании.push(companyId);
 
+        const где: any = вШтат || !requesterCompanyId
+            ? { role: UserRole.DRIVER, companyId: { in: компании } }
+            : {
+                role: UserRole.DRIVER,
+                OR: [
+                    { companyId: { in: компании } },
+                    { companyId: null, baseCompanyId: requesterCompanyId },
+                ],
+            };
         const кандидаты = await this.prisma.user.findMany({
-            where: { role: UserRole.DRIVER, companyId: { in: компании } },
+            where: где,
             select: { id: true, companyId: true, phone: true, iin: true, isActive: true, updatedAt: true },
         });
         const телефон = телефонДляСравнения(phone);
@@ -373,6 +478,24 @@ export class CompanyDriversService {
             || (Number(б.isActive) - Number(а.isActive))
             || ((последнийРейс.get(б.id) ?? 0) - (последнийРейс.get(а.id) ?? 0))
             || (б.updatedAt.getTime() - а.updatedAt.getTime()))[0];
+    }
+
+    /**
+     * Водитель из базы этой компании: её штатный, водитель её перевозчика или
+     * её нештатный без перевозчика. Править и убирать из списка можно только
+     * таких — чужих водителей платформы нельзя.
+     */
+    private async водительВБазе(
+        driver: { companyId: string | null; baseCompanyId?: string | null },
+        companyId: string,
+    ): Promise<boolean> {
+        if (driver.companyId === companyId) return true;
+        if (!driver.companyId) return !!driver.baseCompanyId && driver.baseCompanyId === companyId;
+        const driverCompany = await this.prisma.company.findUnique({
+            where: { id: driver.companyId },
+            select: { isExternal: true, createdByCompanyId: true },
+        });
+        return !!driverCompany?.isExternal && driverCompany.createdByCompanyId === companyId;
     }
 
     /**
@@ -408,18 +531,7 @@ export class CompanyDriversService {
             throw new NotFoundException('Водитель не найден');
         }
  
-        let hasAccess = driver.companyId === companyId;
-        if (!hasAccess && driver.companyId) {
-            const driverCompany = await this.prisma.company.findUnique({
-                where: { id: driver.companyId },
-                select: { isExternal: true, createdByCompanyId: true },
-            });
-            if (driverCompany?.isExternal && driverCompany.createdByCompanyId === companyId) {
-                hasAccess = true;
-            }
-        }
- 
-        if (!hasAccess) {
+        if (!(await this.водительВБазе(driver, companyId))) {
             throw new ForbiddenException('У вас нет доступа к этому водителю');
         }
 
@@ -461,18 +573,7 @@ export class CompanyDriversService {
             throw new NotFoundException('Водитель не найден');
         }
  
-        let hasAccess = driver.companyId === companyId;
-        if (!hasAccess && driver.companyId) {
-            const driverCompany = await this.prisma.company.findUnique({
-                where: { id: driver.companyId },
-                select: { isExternal: true, createdByCompanyId: true },
-            });
-            if (driverCompany?.isExternal && driverCompany.createdByCompanyId === companyId) {
-                hasAccess = true;
-            }
-        }
- 
-        if (!hasAccess) {
+        if (!(await this.водительВБазе(driver, companyId))) {
             throw new ForbiddenException('У вас нет доступа к этому водителю');
         }
  

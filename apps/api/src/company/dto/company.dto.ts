@@ -198,6 +198,16 @@ export class CreateDriverDto {
     @IsOptional()
     companyId?: string;
 
+    /**
+     * Нештатный водитель без перевозчика — человек со своей машиной, у
+     * которого нет ИП. Числится в базе водителей компании, но не сотрудником:
+     * ни в «Сотрудниках», ни в отделе его нет. `companyId` при этом не нужен.
+     */
+    @ApiProperty({ description: 'Нештатный водитель без перевозчика', required: false })
+    @IsBoolean()
+    @IsOptional()
+    independent?: boolean;
+
     @ApiProperty({ description: 'Имя', example: 'Иван' })
     @IsString()
     @IsNotEmpty()

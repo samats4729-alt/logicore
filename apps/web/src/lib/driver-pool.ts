@@ -30,9 +30,30 @@ export interface PoolDriver {
     companyName: string | null;
     /** Прописан у самой компании — штатный. */
     isStaff: boolean;
+    /**
+     * Кто это для компании: штатный, водитель перевозчика (прописан у ИП из
+     * справочника) или нештатный без перевозчика — человек со своей машиной,
+     * которого ни у кого не прописать.
+     */
+    kind: DriverKind;
+    /** Сколько рейсов отвёз за перевозчиков компании. */
+    tripsCount: number;
     /** За кого может ехать без вопросов: у кого прописан и за кого уже ездил. */
     carrierIds: string[];
     lastTrip: { at: string; carrierId: string; carrierName: string | null } | null;
+}
+
+export type DriverKind = 'STAFF' | 'CARRIER' | 'INDEPENDENT';
+
+/**
+ * Кто это, словами: «Штатный» или «Нештатный», и уточнение — у какого
+ * перевозчика числится. Одни слова на странице «Водители» и в выборе
+ * водителя в заявке.
+ */
+export function driverKindLabel(d: Pick<PoolDriver, 'kind' | 'companyName'>): { label: string; detail: string | null } {
+    if (d.kind === 'STAFF') return { label: 'Штатный', detail: null };
+    if (d.kind === 'CARRIER') return { label: 'Нештатный', detail: d.companyName };
+    return { label: 'Нештатный', detail: 'без перевозчика' };
 }
 
 export async function fetchDriverPool(): Promise<PoolDriver[]> {
@@ -73,8 +94,15 @@ export function tripVehicle(values: { vehiclePlate?: string | null; trailerNumbe
  */
 export function alreadyExistsMessage(
     data: { sharedFromName?: string | null },
-    опции: { вЗаявке?: boolean } = { вЗаявке: true },
+    опции: { вЗаявке?: boolean; вСписке?: boolean } = { вЗаявке: true },
 ) {
+    // На странице «Водители» он и так перед глазами: достаточно сказать, что
+    // второго не завели, а данные обновили.
+    if (опции.вСписке) {
+        return data.sharedFromName
+            ? `Этот водитель уже был в списке (числится у «${data.sharedFromName}») — второго не завели, данные обновили`
+            : 'Этот водитель уже был в списке — второго не завели, данные обновили';
+    }
     if (!data.sharedFromName) return 'Водитель уже есть в базе — используем его, данные обновили';
     return опции.вЗаявке
         ? `Водитель уже есть в базе (прописан у «${data.sharedFromName}») — используем его`
