@@ -1,9 +1,12 @@
 'use client';
 
-import { Alert, Button, Checkbox, Form, Input, Modal, Select, Tag, Typography } from 'antd';
+import { Alert, Button as AntButton, Checkbox, Form, Input, Modal, Select, Tag, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import { CopyOutlined, MailOutlined, PlusOutlined, SwapOutlined, WhatsAppOutlined } from '@ant-design/icons';
+import { Link2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import type { ЗаменаНаРейсе } from '@/lib/driver-pool';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -54,6 +57,9 @@ interface OrderOperationModalsProps {
     customEmailInput: string;
     setCustomEmailInput: (value: string) => void;
     handleAddCustomEmail: () => void;
+    /** Окно открылось само после замены водителя или машины — кого на кого. */
+    заменаДоверенности?: ЗаменаНаРейсе | null;
+    openDriverLink?: () => void;
 
     /** Ссылка для водителя */
     driverLinkModalOpen: boolean;
@@ -83,6 +89,7 @@ export default function OrderOperationModals(props: OrderOperationModalsProps) {
         transferLoading, handleTransferResponsible,
         sharePoAModalOpen, setSharePoAModalOpen, sharePoALoading, handleSharePoA,
         shareEmailsList, setShareEmailsList, customEmailInput, setCustomEmailInput, handleAddCustomEmail,
+        заменаДоверенности: замена, openDriverLink,
         driverLinkModalOpen, setDriverLinkModalOpen, driverLinkUrl, driverLinkLoading,
         regenerateDriverLink, driverPhone,
     } = props;
@@ -185,7 +192,45 @@ export default function OrderOperationModals(props: OrderOperationModalsProps) {
             />
         </Modal>
 
-        <Modal title="Отправить доверенность по email" open={sharePoAModalOpen} onCancel={() => setSharePoAModalOpen(false)} onOk={handleSharePoA} okText="Отправить" cancelText="Отмена" confirmLoading={sharePoALoading} width={480}>
+        <Modal
+            title={замена ? 'Отправить новую доверенность' : 'Отправить доверенность по email'}
+            open={sharePoAModalOpen}
+            onCancel={() => setSharePoAModalOpen(false)}
+            onOk={handleSharePoA}
+            okText="Отправить"
+            cancelText={замена ? 'Не сейчас' : 'Отмена'}
+            confirmLoading={sharePoALoading}
+            width={480}
+        >
+            {/* Окно открылось само, сразу после замены. Говорим, почему:
+                прежняя доверенность, уже разосланная, называет не тех. И
+                напоминаем про ссылку — прежнему водителю она больше не
+                открывается, а новому её ещё никто не отправил. */}
+            {замена && (
+                <div
+                    data-testid="poa-after-replace"
+                    className="mb-4 grid gap-2 rounded-xl border border-solid border-border bg-muted/40 px-3 py-2.5 text-[13px] leading-snug"
+                >
+                    <div className="font-medium text-foreground">
+                        {замена.водитель ? 'Водитель заменён' : 'Машина заменена'}: {замена.было} → {замена.стало}
+                    </div>
+                    <div className="text-muted-foreground">
+                        Доверенность уже выписана на {замена.водитель ? 'нового водителя' : 'новую машину'}.
+                        Отправьте её тем, кто получал прежнюю, — в прежней {замена.водитель ? 'указан другой водитель' : 'указана другая машина'}.
+                    </div>
+                    {замена.водитель && openDriverLink && (
+                        <div className="flex flex-wrap items-center gap-2 border-0 border-t border-solid border-border pt-2">
+                            <span className="min-w-0 flex-1 text-muted-foreground">
+                                Ссылка прежнего водителя больше не работает — новому отправьте новую.
+                            </span>
+                            <Button size="sm" variant="outline" onClick={openDriverLink} disabled={driverLinkLoading}>
+                                {driverLinkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                                Ссылка для водителя
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
             <div style={{ marginBottom: 16 }}>
                 <Text type="secondary">Выберите получателей для отправки доверенности (PDF):</Text>
             </div>
@@ -212,7 +257,7 @@ export default function OrderOperationModals(props: OrderOperationModalsProps) {
                 <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>Добавить получателя вручную:</Text>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <Input placeholder="example@mail.com" value={customEmailInput} onChange={(e) => setCustomEmailInput(e.target.value)} onPressEnter={handleAddCustomEmail} />
-                    <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddCustomEmail}>Добавить</Button>
+                    <AntButton type="dashed" icon={<PlusOutlined />} onClick={handleAddCustomEmail}>Добавить</AntButton>
                 </div>
             </div>
         </Modal>
@@ -224,16 +269,20 @@ export default function OrderOperationModals(props: OrderOperationModalsProps) {
             onCancel={() => setDriverLinkModalOpen(false)}
             footer={null}
             width={520}
+            // Открывается и поверх окна новой доверенности — после замены
+            // водителя. Без этого оно могло оказаться под ним: какое окно
+            // сверху, antd решает по тому, какое открывали первым.
+            zIndex={1010}
         >
             <p style={{ color: 'var(--lc-text-ter)', fontSize: 13, marginTop: 0 }}>
                 Отправьте эту ссылку водителю в WhatsApp. Он откроет её на телефоне, увидит адрес и груз (без сумм), включит геолокацию и будет отмечать статусы. Ссылка работает только по этому адресу — храните её в секрете.
             </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <Input value={driverLinkUrl} readOnly onFocus={(e) => e.target.select()} />
-                <Button type="primary" icon={<CopyOutlined />} onClick={() => { navigator.clipboard?.writeText(driverLinkUrl); toast.success('Ссылка скопирована'); }}>Копировать</Button>
+                <AntButton type="primary" icon={<CopyOutlined />} onClick={() => { navigator.clipboard?.writeText(driverLinkUrl); toast.success('Ссылка скопирована'); }}>Копировать</AntButton>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Button
+                <AntButton
                     icon={<WhatsAppOutlined />}
                     style={{ background: '#25D366', color: '#fff', borderColor: '#25D366' }}
                     onClick={() => {
@@ -243,8 +292,8 @@ export default function OrderOperationModals(props: OrderOperationModalsProps) {
                     }}
                 >
                     Отправить в WhatsApp
-                </Button>
-                <Button icon={<SwapOutlined />} onClick={regenerateDriverLink} loading={driverLinkLoading}>Перевыпустить</Button>
+                </AntButton>
+                <AntButton icon={<SwapOutlined />} onClick={regenerateDriverLink} loading={driverLinkLoading}>Перевыпустить</AntButton>
             </div>
         </Modal>
         </>

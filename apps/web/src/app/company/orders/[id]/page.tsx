@@ -23,6 +23,7 @@ import { prepareCompanyOptions } from '@/lib/company-helper';
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
+import { заменаНаРейсе, type ЗаменаНаРейсе } from '@/lib/driver-pool';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
@@ -304,6 +305,9 @@ export default function OrderDetailPage() {
     const [sharePoALoading, setSharePoALoading] = useState(false);
     const [shareEmailsList, setShareEmailsList] = useState<{ email: string; checked: boolean; label: string }[]>([]);
     const [customEmailInput, setCustomEmailInput] = useState('');
+    // Окно открылось само, сразу после замены водителя или машины: кого на
+    // кого сменили. Обычное «На почту» — null.
+    const [заменаДоверенности, setЗаменаДоверенности] = useState<ЗаменаНаРейсе | null>(null);
 
     // Передача заявки другому менеджеру (админ компании)
     const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -1249,7 +1253,11 @@ export default function OrderDetailPage() {
         } catch { toast.error('Ошибка скачивания доверенности'); }
     };
 
-    const openSharePoAModal = () => {
+    // Кнопка «На почту» передаёт сюда событие клика — поэтому отдельная
+    // обёртка без параметров.
+    const openSharePoAModal = () => { void показатьОтправкуДоверенности(null); };
+
+    const показатьОтправкуДоверенности = async (замена: ЗаменаНаРейсе | null) => {
         const order = data?.order;
         if (!order) return;
         const list: { email: string; checked: boolean; label: string }[] = [];
@@ -1278,8 +1286,34 @@ export default function OrderDetailPage() {
             const key = `${item.email}||${item.label}`;
             if (!seen.has(key)) { seen.add(key); uniqueList.push(item); }
         }
+
+        // Кому ушла прежняя доверенность по этому рейсу. Раньше адреса,
+        // вписанные вручную, не запоминались вовсе, и в следующий раз их
+        // набирали заново. Теперь они в списке и отмечены сверху.
+        let прежние: string[] = [];
+        try {
+            const res = await api.get(`/orders/${orderId}/power-of-attorney/recipients`);
+            прежние = res.data?.emails || [];
+        } catch { /* не узнали — окно откроется с обычным списком */ }
+        const получали = (email: string) => прежние.some((п) => п.toLowerCase() === email.toLowerCase());
+        for (const item of uniqueList) {
+            if (получали(item.email)) item.label = `${item.label} · получали прежнюю`;
+        }
+        for (const email of прежние) {
+            if (!uniqueList.some((item) => item.email.toLowerCase() === email.toLowerCase())) {
+                uniqueList.push({ email, checked: true, label: 'Получали прежнюю доверенность' });
+            }
+        }
+        uniqueList.sort((а, б) => Number(получали(б.email)) - Number(получали(а.email)));
+        // После замены водителя — туда же, куда ушла прежняя, и только туда:
+        // у них на руках бумага на другого человека, остальным она не нужна.
+        if (замена && прежние.length) {
+            for (const item of uniqueList) item.checked = получали(item.email);
+        }
+
         setShareEmailsList(uniqueList);
         setCustomEmailInput('');
+        setЗаменаДоверенности(замена);
         setSharePoAModalOpen(true);
     };
 
@@ -2186,7 +2220,16 @@ export default function OrderDetailPage() {
                     open={assignModalOpen}
                     onCancel={() => setAssignModalOpen(false)}
                     orderId={orderId as string}
-                    onSuccess={() => fetchData()}
+                    onSuccess={async (сохранённая) => {
+                        // Сменили водителя или машину — прежняя доверенность,
+                        // уже отправленная складу, называет не тех. Новую
+                        // предлагаем отправить сразу, а не ждём, пока о ней
+                        // вспомнят на воротах. Открываем после обновления
+                        // карточки: окно ссылки берёт телефон нового водителя.
+                        const замена = заменаНаРейсе(data.order, сохранённая);
+                        await fetchData();
+                        if (замена) await показатьОтправкуДоверенности(замена);
+                    }}
                     initialValues={{
                         driverId: data.order.driverId || undefined,
                         partnerId: data.order.partnerId || undefined,
@@ -2238,6 +2281,8 @@ export default function OrderDetailPage() {
                 customEmailInput={customEmailInput}
                 setCustomEmailInput={setCustomEmailInput}
                 handleAddCustomEmail={handleAddCustomEmail}
+                заменаДоверенности={заменаДоверенности}
+                openDriverLink={openDriverLink}
                 driverLinkModalOpen={driverLinkModalOpen}
                 setDriverLinkModalOpen={setDriverLinkModalOpen}
                 driverLinkUrl={driverLinkUrl}

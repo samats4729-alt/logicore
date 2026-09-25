@@ -43,7 +43,11 @@ function actionTitle(entry: Extract<Entry, { kind: 'ACTION' }>): string {
     const { action, entity, label } = entry;
 
     if (entity === 'document') return `Вложен документ · ${label || 'файл'}`;
-    if (entity === 'order_document') return `Сформирован документ · ${label || ''}`.trim();
+    if (entity === 'order_document') {
+        // Проведение и отправка — не формирование: раньше и они читались как
+        // «Сформирован документ · Отправлен: …».
+        return action === 'CREATE' ? `Сформирован документ · ${label || ''}`.trim() : (label || 'Документ рейса');
+    }
     if (entity === 'order') {
         if (action === 'CREATE') return 'Заявка создана';
         if (action === 'UPDATE') return 'Заявка изменена';

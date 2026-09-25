@@ -19,7 +19,8 @@ interface AssignDriverModalProps {
     open: boolean;
     onCancel: () => void;
     orderId: string;
-    onSuccess: () => void;
+    /** Получает заявку, как её сохранил сервер: по ней видно, кого на кого сменили. */
+    onSuccess: (order?: any) => void;
     initialValues?: {
         driverId?: string;
         partnerId?: string;
@@ -447,9 +448,9 @@ export default function AssignDriverModal({
                 assignedDriverTrailer: свойВодитель ? undefined : null,
             };
 
-            await api.put(`/company/orders/${orderId}/assign-driver`, payload);
+            const res = await api.put(`/company/orders/${orderId}/assign-driver`, payload);
             toast.success('Водитель успешно назначен');
-            onSuccess();
+            onSuccess(res.data);
             onCancel();
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Ошибка при сохранении назначения');
@@ -538,7 +539,8 @@ export default function AssignDriverModal({
                             >
                                 Рейс уже в пути — меняем водителя без остановки рейса: статус останется прежним,
                                 в истории запишем, кого на кого сменили. Ссылка прежнего водителя перестанет
-                                работать — новому отправьте новую кнопкой «Ссылка для водителя».
+                                работать. Сразу после замены предложим отправить новую доверенность и ссылку
+                                новому водителю.
                             </div>
                         )}
 
