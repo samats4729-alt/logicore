@@ -98,6 +98,45 @@ test.describe('Общая база водителей', () => {
         await expect(окно.locator('.ant-select-selector').filter({ hasText: /Выберите водителя из базы|\(\+?\d/ })).toBeVisible();
     });
 
+    test('рейс в пути: водителя можно сменить — окно предупреждает, что статус останется', async ({ page }) => {
+        // Машина сломалась в дороге — водителя меняют. Раньше «Заменить
+        // водителя» на выехавшем рейсе отвечало «Нельзя назначить водителя на
+        // эту заявку». Окно только открываем — ничего не сохраняем.
+        await login(page);
+        const внешние: any[] = await (await page.request.get(`${API}/external-companies`)).json();
+        const перевозчики = new Set(внешние.filter((к) => к.isCarrier).map((к) => к.id));
+        const заявки: any[] = (await (await page.request.get(
+            `${API}/company/orders?page=1&limit=100&type=active`,
+        )).json()).data ?? [];
+        const вПути = заявки.find((з) =>
+            ['EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(з.status)
+            && перевозчики.has(з.subForwarderId)
+            // Окно назначения само пишет перевозчика и в partnerId — это тот же перевозчик.
+            && (!з.partnerId || з.partnerId === з.subForwarderId)
+            && (з.assignedDriverName || з.driverId));
+        test.skip(!вПути, 'на стенде нет рейса в пути у внешнего перевозчика');
+
+        await page.goto(`/company/orders/${вПути.id}`);
+        await page.getByRole('button', { name: 'Заменить водителя' }).click();
+        const окно = page.locator('.ant-modal').filter({ hasText: 'Назначить перевозчика и водителя' });
+
+        await expect(окно.getByTestId('replace-on-road')).toContainText('статус останется прежним');
+        await expect(окно.locator('.ant-steps-item-process')).toContainText('Водитель');
+    });
+
+    test('в завершённом рейсе водителя не меняют — кнопки нет', async ({ page }) => {
+        await login(page);
+        const заявки: any[] = (await (await page.request.get(
+            `${API}/company/orders?page=1&limit=100&type=active`,
+        )).json()).data ?? [];
+        const завершённый = заявки.find((з) => з.status === 'COMPLETED' && (з.assignedDriverName || з.driverId));
+        test.skip(!завершённый, 'на стенде нет завершённого рейса с водителем');
+
+        await page.goto(`/company/orders/${завершённый.id}`);
+        await expect(page.getByText('Водитель и машина')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Заменить водителя' })).toHaveCount(0);
+    });
+
     test('по госномеру водитель тоже находится', async ({ page }) => {
         await login(page);
         const водители = await база(page);

@@ -160,6 +160,93 @@ describe('Назначить водителя из общей базы', () => {
     });
 });
 
+describe('Замена водителя в пути', () => {
+    // Машина сломалась в дороге — водителя меняют, рейс едет дальше. Раньше
+    // сервер отвечал «Нельзя назначить водителя на эту заявку» на любой рейс,
+    // который уже выехал.
+    const вПути = (сверху: any = {}) => рейс({
+        status: OrderStatus.IN_TRANSIT,
+        driverId: 'водитель-а',
+        assignedDriverName: 'Иванов Иван',
+        driverToken: 'ссылка-прежнего',
+        ...сверху,
+    });
+
+    it('в пути водителя можно сменить, и статус рейса остаётся', async () => {
+        const { service, записано } = сервис(вПути());
+
+        await service.assignDriver('рейс-1', 'водитель-б', ИП_Б, {}, { requesterCompanyId: МЫ, userId: 'диспетчер' });
+
+        const data = записано();
+        expect(data.driverId).toBe('водитель-б');
+        expect(data.assignedDriverName).toBe('Петров Пётр');
+        expect(data.status).toBeUndefined();
+        expect(data.assignedAt).toBeUndefined();
+        expect(data.statusHistory.create).toMatchObject({
+            status: OrderStatus.IN_TRANSIT,
+            changedById: 'диспетчер',
+            comment: 'Водитель заменён в пути: Иванов Иван → Петров Пётр',
+        });
+    });
+
+    it('ссылка прежнего водителя перестаёт работать', async () => {
+        const { service, записано } = сервис(вПути());
+
+        await service.assignDriver('рейс-1', 'водитель-б', ИП_Б, {}, { requesterCompanyId: МЫ });
+
+        expect(записано().driverToken).toBeNull();
+    });
+
+    it('тот же водитель, поправили машину — ссылка остаётся', async () => {
+        const { service, записано } = сервис(вПути());
+
+        await service.assignDriver('рейс-1', 'водитель-а', ИП_А, {}, {
+            requesterCompanyId: МЫ,
+            trip: { plate: '321 NEW 02' },
+        });
+
+        expect(записано().driverToken).toBeUndefined();
+        expect(записано().assignedDriverPlate).toBe('321 NEW 02');
+        expect(записано().statusHistory.create.comment).toContain('Поправлены данные водителя');
+    });
+
+    it('при проблеме в дороге — тоже можно', async () => {
+        const { service, записано } = сервис(вПути({ status: OrderStatus.PROBLEM }));
+
+        await service.assignDriver('рейс-1', 'водитель-б', ИП_Б, {}, { requesterCompanyId: МЫ });
+
+        expect(записано().driverId).toBe('водитель-б');
+        expect(записано().statusHistory.create.status).toBe(OrderStatus.PROBLEM);
+    });
+
+    it('в завершённом рейсе — нельзя: документы уже подписаны', async () => {
+        const { service, prisma } = сервис(вПути({ status: OrderStatus.COMPLETED }));
+
+        await expect(service.assignDriver('рейс-1', 'водитель-б', ИП_Б, {}, { requesterCompanyId: МЫ }))
+            .rejects.toThrow('Рейс уже завершён');
+        expect(prisma.order.update).not.toHaveBeenCalled();
+    });
+
+    it('в отменённой заявке — нельзя', async () => {
+        const { service, prisma } = сервис(вПути({ status: OrderStatus.CANCELLED }));
+
+        await expect(service.assignDriver('рейс-1', 'водитель-б', ИП_Б, {}, { requesterCompanyId: МЫ }))
+            .rejects.toThrow('Заявка отменена');
+        expect(prisma.order.update).not.toHaveBeenCalled();
+    });
+
+    it('до выезда — как было: статус «Назначен», и смена водителя гасит старую ссылку', async () => {
+        const { service, записано } = сервис(рейс({
+            status: OrderStatus.ASSIGNED, driverId: 'водитель-а', assignedDriverName: 'Иванов Иван', driverToken: 'старая',
+        }));
+
+        await service.assignDriver('рейс-1', 'водитель-б', ИП_Б, {}, { requesterCompanyId: МЫ, userId: 'диспетчер' });
+
+        expect(записано()).toMatchObject({ status: OrderStatus.ASSIGNED, driverToken: null });
+        expect(записано().statusHistory.create).toMatchObject({ status: OrderStatus.ASSIGNED, changedById: 'диспетчер' });
+    });
+});
+
 describe('Нештатный водитель без перевозчика', () => {
     it('свой — на рейс нашего перевозчика', async () => {
         const { service, записано } = сервис(рейс());
@@ -254,12 +341,24 @@ describe('Правка рейса со сменой водителя', () => {
         });
     });
 
+    it('сменили водителя в пути правкой — ссылка прежнего гаснет, статус не трогаем', async () => {
+        const { service, записано } = сервис(рейс({
+            status: OrderStatus.IN_TRANSIT, driverId: 'водитель-а', driverToken: 'ссылка-прежнего',
+        }));
+
+        await service.update('рейс-1', { driverId: 'водитель-б' }, правщик);
+
+        expect(записано().driverToken).toBeNull();
+        expect(записано().status).toBeUndefined();
+    });
+
     it('водитель тот же, машину рейса поправили в форме', async () => {
         const { service, prisma, записано } = сервис(рейс({ status: OrderStatus.ASSIGNED, driverId: 'водитель-а' }));
 
         await service.update('рейс-1', { driverId: 'водитель-а', tripPlate: '321 ZZZ 02' }, правщик);
 
         expect(записано().assignedDriverPlate).toBe('321 ZZZ 02');
+        expect(записано().driverToken).toBeUndefined();
         expect(prisma.user.findUnique).not.toHaveBeenCalled();
     });
 

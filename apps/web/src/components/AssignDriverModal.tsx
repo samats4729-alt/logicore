@@ -26,12 +26,17 @@ interface AssignDriverModalProps {
         /** Стороны заявки: по ним окно понимает, кто везёт рейс. */
         forwarderId?: string;
         subForwarderId?: string;
+        /** Статус рейса: в пути водителя меняют, а статус не трогают. */
+        status?: string;
         assignedDriverName?: string;
         assignedDriverPhone?: string;
         assignedDriverPlate?: string;
         assignedDriverTrailer?: string;
     };
 }
+
+/** Рейс уже едет: водитель выехал на погрузку и дальше или в дороге проблема. */
+const РЕЙС_В_ПУТИ = ['EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING', 'PROBLEM'];
 
 type Старт = {
     transportType: 'own' | 'carrier';
@@ -518,6 +523,25 @@ export default function AssignDriverModal({
                 const isOwn = transportType === 'own';
                 return (
                     <div style={{ padding: '12px 0' }}>
+                        {/* Рейс уже едет — сломалась машина, водителя меняют.
+                            Говорим, что будет со статусом и со ссылкой: иначе
+                            диспетчер побоится, что рейс вернётся в «Назначен»,
+                            а прежний водитель так и останется с доступом. */}
+                        {РЕЙС_В_ПУТИ.includes(исходные.current?.status || '') && (
+                            <div
+                                data-testid="replace-on-road"
+                                style={{
+                                    marginBottom: 12, padding: '10px 12px', borderRadius: 8, fontSize: 12.5,
+                                    background: token.colorFillAlter, border: `1px solid ${token.colorBorderSecondary}`,
+                                    color: token.colorText, lineHeight: 1.45,
+                                }}
+                            >
+                                Рейс уже в пути — меняем водителя без остановки рейса: статус останется прежним,
+                                в истории запишем, кого на кого сменили. Ссылка прежнего водителя перестанет
+                                работать — новому отправьте новую кнопкой «Ссылка для водителя».
+                            </div>
+                        )}
+
                         {/* За кого ставим водителя. Шаги с перевозчиком окно
                             могло пропустить, взяв его из заявки, — здесь видно,
                             кто это; сменить можно кнопкой «Назад». */}

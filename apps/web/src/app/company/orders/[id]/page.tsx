@@ -2192,6 +2192,7 @@ export default function OrderDetailPage() {
                         partnerId: data.order.partnerId || undefined,
                         forwarderId: data.order.forwarderId || undefined,
                         subForwarderId: data.order.subForwarderId || undefined,
+                        status: data.order.status || undefined,
                         assignedDriverName: data.order.assignedDriverName || undefined,
                         assignedDriverPhone: data.order.assignedDriverPhone || undefined,
                         assignedDriverPlate: data.order.assignedDriverPlate || undefined,

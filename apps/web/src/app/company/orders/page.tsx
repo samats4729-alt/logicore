@@ -1796,6 +1796,7 @@ export default function CompanyOrdersPage() {
                         partnerId: selectedOrder.partnerId || undefined,
                         forwarderId: selectedOrder.forwarderId || undefined,
                         subForwarderId: selectedOrder.subForwarderId || undefined,
+                        status: selectedOrder.status || undefined,
                         assignedDriverName: selectedOrder.assignedDriverName || undefined,
                         assignedDriverPhone: selectedOrder.assignedDriverPhone || undefined,
                         assignedDriverPlate: selectedOrder.assignedDriverPlate || undefined,
