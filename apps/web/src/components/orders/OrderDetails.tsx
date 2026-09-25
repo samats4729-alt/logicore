@@ -395,9 +395,14 @@ export default function OrderDetails({
                                 </button>
 
                                 <div className={styles.acts}>
-                                    <button type="button" className={styles.act} onClick={openAssignModal}>
-                                        <UserPlus size={13} /> Заменить водителя
-                                    </button>
+                                    {/* В пути менять можно — сломалась машина. В
+                                        завершённом или отменённом рейсе нельзя:
+                                        кнопка там вела только к отказу сервера. */}
+                                    {order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
+                                        <button type="button" className={styles.act} onClick={openAssignModal}>
+                                            <UserPlus size={13} /> Заменить водителя
+                                        </button>
+                                    )}
                                     <button type="button" className={styles.act} onClick={onOpenDocuments}>
                                         <FileText size={13} />
                                         Документы рейса{documentsCount > 0 ? ` (${documentsCount})` : ''}

@@ -36,6 +36,21 @@ const STATUS_CHAIN = [
     OrderStatus.COMPLETED
 ];
 
+/**
+ * Рейс уже едет: водитель выехал на погрузку и дальше, вплоть до выгрузки,
+ * или в дороге случилась проблема. Водителя на таком рейсе можно сменить —
+ * сломалась машина, — но статус рейса при этом не сбрасывается.
+ */
+export const РЕЙС_В_ПУТИ: readonly OrderStatus[] = [
+    OrderStatus.EN_ROUTE_PICKUP,
+    OrderStatus.AT_PICKUP,
+    OrderStatus.LOADING,
+    OrderStatus.IN_TRANSIT,
+    OrderStatus.AT_DELIVERY,
+    OrderStatus.UNLOADING,
+    OrderStatus.PROBLEM,
+];
+
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     DRAFT: [OrderStatus.PENDING, OrderStatus.CANCELLED],
     PENDING: [OrderStatus.ASSIGNED, OrderStatus.DRAFT, OrderStatus.CANCELLED],
@@ -637,8 +652,9 @@ export class OrdersService {
         /**
          * Кто назначает и на какой машине рейс. Нет — назначает
          * администратор платформы: своей базы водителей у него нет.
+         * `userId` — кто именно: его имя встанет в истории рейса.
          */
-        context?: { requesterCompanyId?: string; trip?: МашинаРейса },
+        context?: { requesterCompanyId?: string; trip?: МашинаРейса; userId?: string },
     ) {
         const order = await this.findById(orderId);
 
@@ -656,7 +672,21 @@ export class OrdersService {
             }
         }
 
-        if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.ASSIGNED) {
+        // До выезда водителя ставят и меняют, как всегда. В пути — тоже:
+        // машина сломалась, водителя сменили, рейс едет дальше. Раньше замена
+        // в пути отвечала «Нельзя назначить водителя на эту заявку», и
+        // диспетчеру было нечем записать, кто теперь везёт груз.
+        //
+        // Закрытый рейс не меняем: по завершённому уже подписаны документы,
+        // отменённый никуда не едет.
+        if (order.status === OrderStatus.COMPLETED) {
+            throw new BadRequestException('Рейс уже завершён — водителя в нём не поменять');
+        }
+        if (order.status === OrderStatus.CANCELLED) {
+            throw new BadRequestException('Заявка отменена — водителя в ней не поменять');
+        }
+        const заменаВПути = РЕЙС_В_ПУТИ.includes(order.status);
+        if (!заменаВПути && order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.ASSIGNED) {
             throw new BadRequestException('Нельзя назначить водителя на эту заявку');
         }
 
@@ -706,6 +736,13 @@ export class OrdersService {
             throw new BadRequestException('Необходимо указать водителя (ID или заполнить вручную)');
         }
 
+        // Сменился человек за рулём — не тот же водитель, которому поправили
+        // машину.
+        const сменилсяВодитель = driverId
+            ? driverId !== order.driverId
+            : !!order.driverId || driverName !== order.assignedDriverName;
+        const прежний = order.assignedDriverName || null;
+
         return this.prisma.order.update({
             where: { id: orderId },
             data: {
@@ -716,17 +753,39 @@ export class OrdersService {
                 assignedDriverPhone: driverPhone,
                 assignedDriverPlate: driverPlate,
                 assignedDriverTrailer: driverTrailer,
-                assignedAt: new Date(),
-                status: OrderStatus.ASSIGNED,
-                isConfirmed: true,
-                statusHistory: {
-                    create: {
+                // Ссылка водителя открывает рейс тому, кому её отправили.
+                // Сменился водитель — прежняя ссылка больше не работает: иначе
+                // снятый с рейса водитель мог бы и дальше отмечать статусы и
+                // слать накладные. Новому — новая ссылка, кнопкой в заявке.
+                ...(сменилсяВодитель ? { driverToken: null } : {}),
+                ...(заменаВПути
+                    ? {
+                        // Рейс в пути: статус остаётся, где был, — груз уже
+                        // погружен или едет. В истории — кого на кого сменили.
+                        statusHistory: {
+                            create: {
+                                status: order.status,
+                                changedById: context?.userId ?? null,
+                                comment: сменилсяВодитель
+                                    ? `Водитель заменён в пути: ${прежний || 'без водителя'} → ${driverName}`
+                                    : `Поправлены данные водителя в пути: ${driverName}`,
+                            },
+                        },
+                    }
+                    : {
+                        assignedAt: new Date(),
                         status: OrderStatus.ASSIGNED,
-                        comment: hasManual
-                            ? `Назначен водитель вручную: ${driverName}`
-                            : `Назначен водитель: ${driverName}`,
-                    },
-                },
+                        isConfirmed: true,
+                        statusHistory: {
+                            create: {
+                                status: OrderStatus.ASSIGNED,
+                                changedById: context?.userId ?? null,
+                                comment: hasManual
+                                    ? `Назначен водитель вручную: ${driverName}`
+                                    : `Назначен водитель: ${driverName}`,
+                            },
+                        },
+                    }),
             },
             include: { driver: true },
         });
@@ -1307,6 +1366,8 @@ export class OrdersService {
                 рейс,
             );
             Object.assign(updateData, снимок);
+            // Как и при назначении: ссылка снятого с рейса водителя гаснет.
+            updateData.driverToken = null;
         } else if (order.driverId && (tripPlate !== undefined || tripTrailer !== undefined)) {
             // Водитель тот же, а машину рейса поправили в форме.
             if (tripPlate !== undefined) updateData.assignedDriverPlate = tripPlate?.trim() || null;

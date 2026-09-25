@@ -448,6 +448,7 @@ export class CompanyController {
             // ставить на рейсы его перевозчиков.
             requesterCompanyId: req.user.companyId,
             trip: { plate: dto.tripPlate, trailer: dto.tripTrailer },
+            userId: req.user.id,
         });
     }
 
