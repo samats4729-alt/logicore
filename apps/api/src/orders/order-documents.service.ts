@@ -33,6 +33,12 @@ export function разобратьПочты(raw?: string | string[] | null): st
 }
 
 /**
+ * Метка записи журнала: доверенность ушла письмом из карточки рейса
+ * (кнопка «На почту»). В записи — адреса, куда она ушла.
+ */
+export const POA_SHARE_KIND = 'POWER_OF_ATTORNEY_SHARE';
+
+/**
  * Что в документе относится к машине и водителю.
  *
  * Ровно эти поля меняются, когда машина сломалась и вышла другая. Всё
@@ -362,6 +368,42 @@ export class OrderDocumentsService {
             inCabinet: !!recipientCompanyId,
             replacedVersion: document.replacesId ? document.version - 1 : null,
         };
+    }
+
+    /**
+     * Кому ушла последняя доверенность по рейсу.
+     *
+     * Сменили водителя — новую доверенность отправляют туда же, куда ушла
+     * прежняя: там на руках бумага с другим водителем. Отправляют её двумя
+     * путями — письмом из карточки рейса и сохранённой версией из «Документов
+     * рейса», — поэтому смотрим оба и берём свежее. Только свою компанию: у
+     * второй стороны рейса свои получатели.
+     */
+    async lastPowerOfAttorneyRecipients(orderId: string, companyId: string | null) {
+        const [письма, версия] = await Promise.all([
+            this.prisma.auditLog.findMany({
+                where: { orderId, companyId, entity: 'order_document' },
+                orderBy: { createdAt: 'desc' },
+                take: 20,
+                select: { createdAt: true, details: true },
+            }),
+            companyId
+                ? this.prisma.orderDocument.findFirst({
+                    where: { orderId, companyId, kind: 'POWER_OF_ATTORNEY', sentAt: { not: null }, sentToEmail: { not: null } },
+                    orderBy: { sentAt: 'desc' },
+                    select: { sentAt: true, sentToEmail: true },
+                })
+                : null,
+        ]);
+
+        const письмо = письма.find((з) => (з.details as any)?.kind === POA_SHARE_KIND);
+        const варианты = [
+            письмо && { at: письмо.createdAt, emails: разобратьПочты((письмо.details as any)?.emails) },
+            версия?.sentAt && { at: версия.sentAt, emails: разобратьПочты(версия.sentToEmail) },
+        ].filter((в): в is { at: Date; emails: string[] } => !!в && в.emails.length > 0);
+
+        варианты.sort((а, б) => б.at.getTime() - а.at.getTime());
+        return варианты[0] ?? { at: null, emails: [] as string[] };
     }
 
     /**

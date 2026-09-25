@@ -4,7 +4,7 @@ import { OrdersService } from './orders.service';
 import { OrdersExportService } from './orders-export.service';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
-import { OrderDocumentsService } from './order-documents.service';
+import { OrderDocumentsService, POA_SHARE_KIND, разобратьПочты } from './order-documents.service';
 import { OrderSettlementsService } from './order-settlements.service';
 import { ACCOUNTING_ORDER_FIELDS, canTouchAccounting } from '../auth/accounting-access';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
@@ -474,6 +474,20 @@ export class OrdersController {
         res.end(pdfBuffer);
     }
 
+    @Get(':id/power-of-attorney/recipients')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Кому ушла последняя доверенность по рейсу' })
+    async powerOfAttorneyRecipients(@Param('id') id: string, @Request() req: any) {
+        // Сначала — что рейс виден этому человеку: адреса получателей не
+        // отдаём по одному лишь номеру заявки.
+        await this.ordersService.findById(id, {
+            userId: req.user.sub,
+            role: req.user.role,
+            companyId: req.user.companyId,
+        });
+        return this.orderDocuments.lastPowerOfAttorneyRecipients(id, req.user.companyId ?? null);
+    }
+
     @Post(':id/share-power-of-attorney')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Отправить доверенность по email получателям' })
@@ -523,13 +537,16 @@ export class OrdersController {
         const pickupCity = pickupPoint?.location?.city || pickupPoint?.location?.address || '';
         const deliveryCity = deliveryPoint?.location?.city || deliveryPoint?.location?.address || '';
 
+        // Машина и телефон — из рейса, как в самой доверенности и в карточке.
+        // Раньше письмо брало номер из карточки водителя: вложенная
+        // доверенность называла одну машину, а текст письма — другую.
         const driverInfo = {
             fullName: driver
                 ? `${driver.lastName || ''} ${driver.firstName || ''} ${driver.middleName || ''}`.trim()
                 : ((order as any).assignedDriverName || undefined),
             vehicleModel: driver?.vehicleModel || undefined,
-            vehiclePlate: driver?.vehiclePlate || (order as any).assignedDriverPlate || undefined,
-            phone: driver?.phone || (order as any).assignedDriverPhone || undefined,
+            vehiclePlate: (order as any).assignedDriverPlate || driver?.vehiclePlate || undefined,
+            phone: (order as any).assignedDriverPhone || driver?.phone || undefined,
             route: (pickupCity && deliveryCity) ? `${pickupCity} → ${deliveryCity}` : undefined,
         };
 
@@ -539,6 +556,21 @@ export class OrdersController {
                 this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, senderCompanyName, pdfBuffer, driverInfo)
             )
         );
+
+        // В историю рейса: сменили водителя — видно, ушла ли новая
+        // доверенность и кому. Раньше отправка не оставляла следа вовсе.
+        // Адреса лежат и отдельно: по ним новую доверенность после замены
+        // водителя предлагают отправить туда же, куда ушла прежняя.
+        const адреса = разобратьПочты(body.emails);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order_document',
+            entityLabel: `Отправлена доверенность · водитель ${driverInfo.fullName || '—'} → ${адреса.join(', ')}`,
+            details: { kind: POA_SHARE_KIND, emails: адреса },
+            orderId: id,
+        });
 
         return { success: true, message: 'Доверенность успешно отправлена на указанные адреса' };
     }
