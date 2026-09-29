@@ -9,7 +9,7 @@ import {
     DollarOutlined, CalculatorOutlined, TruckOutlined, TeamOutlined, CarryOutOutlined,
     NotificationOutlined, ShopOutlined, CoffeeOutlined, UserAddOutlined, DisconnectOutlined,
     CarOutlined, InboxOutlined, PushpinOutlined, FileTextOutlined, EnvironmentOutlined, DashboardOutlined,
-    AimOutlined, IdcardOutlined
+    AimOutlined, IdcardOutlined, KeyOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { alreadyExistsMessage } from '@/lib/driver-pool';
@@ -17,6 +17,7 @@ import { useAuthStore } from '@/store/auth';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import UserAvatar from '@/components/UserAvatar';
 import EmployeeAccessModal from '@/components/company/EmployeeAccessModal';
+import EmployeeLoginDialog from '@/components/company/EmployeeLoginDialog';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import PillTabs from '@/components/ui/PillTabs';
@@ -239,6 +240,8 @@ export default function CompanyUsersPage() {
     const [myCompanies, setMyCompanies] = useState<any[]>([]);
     // Кому сейчас правим доступ к организациям холдинга (A-01).
     const [accessUser, setAccessUser] = useState<CompanyUser | null>(null);
+    // Чей вход (почту и пароль) правит руководитель; null — окно закрыто.
+    const [loginUser, setLoginUser] = useState<CompanyUser | null>(null);
 
     // Original modals state
     const [editModalOpen, setEditModalOpen] = useState(false);
@@ -827,6 +830,16 @@ export default function CompanyUsersPage() {
                                 />
                             )
                         )}
+                        {u.id !== currentUser?.id && u.role !== 'COMPANY_ADMIN' && u.role !== 'DRIVER' && (
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<KeyOutlined style={{ fontSize: 12 }} />}
+                                title="Почта и пароль для входа"
+                                aria-label="Почта и пароль для входа"
+                                onClick={() => setLoginUser(u)}
+                            />
+                        )}
                         {!isRoot && u.departmentId && (
                             <Button
                                 type="text"
@@ -1159,6 +1172,17 @@ export default function CompanyUsersPage() {
                     {myCompanies.length > 1 && record.role !== 'DRIVER' && (
                         <Tooltip title="Доступ к организациям">
                             <Button icon={<BankOutlined />} onClick={() => setAccessUser(record)} />
+                        </Tooltip>
+                    )}
+                    {/* Свой вход руководитель меняет в профиле, а вход другого
+                        руководителя компании не трогает вовсе. */}
+                    {record.id !== currentUser?.id && record.role !== 'COMPANY_ADMIN' && record.role !== 'DRIVER' && (
+                        <Tooltip title="Почта и пароль для входа">
+                            <Button
+                                icon={<KeyOutlined />}
+                                aria-label="Почта и пароль для входа"
+                                onClick={() => setLoginUser(record)}
+                            />
                         </Tooltip>
                     )}
                     {record.id !== currentUser?.id && record.role !== 'COMPANY_ADMIN' && (
@@ -2589,6 +2613,12 @@ export default function CompanyUsersPage() {
                     </div>
                 </div>
             </Modal>
+
+            <EmployeeLoginDialog
+                employee={loginUser}
+                onClose={() => setLoginUser(null)}
+                onSaved={fetchData}
+            />
 
             <EmployeeAccessModal
                 userId={accessUser?.id ?? null}
