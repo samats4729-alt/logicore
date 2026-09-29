@@ -15,6 +15,7 @@ import { managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } 
 import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
 import { MODULE_PERMISSIONS } from '../auth/module-permissions';
 import { D, ZERO, toNum } from '../common/utils/money';
+import { нормализоватьПочту } from '../common/utils/email';
 import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
@@ -167,10 +168,37 @@ export class CompanyService {
         return [...ids];
     }
 
-    async createInvitation(companyId: string, email: string, role: UserRole, permissions: string[] = [], departmentId?: string, position?: string, inviterUserId?: string, sharedCompanyIds?: string[]) {
+    async createInvitation(companyId: string, rawEmail: string, role: UserRole, permissions: string[] = [], departmentId?: string, position?: string, inviterUserId?: string, sharedCompanyIds?: string[]) {
         // Платформенного ADMIN нельзя назначить через приглашение компании
         if (role === UserRole.ADMIN) {
             throw new ForbiddenException('Недопустимая роль для приглашения');
+        }
+
+        // Почта — логин сотрудника. Храним её в одном виде: заглавная буква,
+        // которую поставил телефон, не должна потом мешать входу.
+        const email = нормализоватьПочту(rawEmail);
+
+        // Кому приглашение не поможет — говорим сразу, а не когда человек
+        // уже заполнит форму. Выключенного сотрудника этой компании
+        // приглашать можно: по новому приглашению он вернётся.
+        const занята = await this.prisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' } },
+            select: { id: true, isActive: true, companyId: true },
+        });
+        if (занята?.isActive) {
+            const уНас = занята.companyId === companyId || !!(await this.prisma.userCompanyRelation.findUnique({
+                where: { userId_companyId: { userId: занята.id, companyId } },
+                select: { userId: true },
+            }));
+            throw new BadRequestException(уНас
+                ? 'Этот сотрудник уже работает в компании — приглашать заново не нужно. '
+                    + 'Не может войти — пусть нажмёт «Забыли пароль?» на странице входа.'
+                : 'Эта почта уже зарегистрирована в другой компании. Пригласите сотрудника на другую почту.');
+        }
+        if (занята && занята.companyId !== companyId) {
+            throw new BadRequestException(
+                'Эта почта уже была зарегистрирована в другой компании. Пригласите сотрудника на другую почту.',
+            );
         }
 
         // Мультикомпания: в какие ещё организации владельца дать доступ новому сотруднику.

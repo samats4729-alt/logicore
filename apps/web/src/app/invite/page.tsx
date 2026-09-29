@@ -92,6 +92,13 @@ function InviteForm() {
             <div style={{ textAlign: 'center', marginBottom: 24 }}>
                 <Title level={3}>Регистрация сотрудника</Title>
                 <Text>Вы приглашены в компанию <strong style={{ color: '#1677ff' }}>{invitationInfo?.companyName}</strong></Text>
+                {/* Почту человек здесь не вводит — её вписал руководитель, и она
+                    же логин. Раньше её не показывали вовсе: потом на странице
+                    входа человек набирал свою почту, а заведён был под другой. */}
+                <div data-testid="invite-login-email" style={{ marginTop: 12 }}>
+                    <Text type="secondary">Входить вы будете по почте </Text>
+                    <Text strong>{invitationInfo?.email}</Text>
+                </div>
             </div>
             
             <Form layout="vertical" onFinish={handleRegister} size="large">
