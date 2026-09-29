@@ -27,7 +27,10 @@ interface Accrual {
     baseAmount?: number | null;
     percentValue?: number | null;
     percentBase?: string | null;
-    schemeSnapshot?: any;
+    /** Норма рейсов из правила бонуса. */
+    threshold?: number | null;
+    /** Почему процент обнулён: «рейс отменён», «рейс передан другому менеджеру». */
+    reversedReason?: string | null;
     createdAt: string;
     order?: {
         id: string;
@@ -50,6 +53,16 @@ function monthLabel(periodMonth: string) {
 }
 
 const fmt = (v: number) => v.toLocaleString('ru-RU');
+
+/** «1 рейс» / «3 рейса» / «5 рейсов». */
+function рейсовСловом(n: number): string {
+    const хвост = n % 100;
+    const последняя = n % 10;
+    if (хвост > 10 && хвост < 20) return 'рейсов';
+    if (последняя === 1) return 'рейс';
+    if (последняя >= 2 && последняя <= 4) return 'рейса';
+    return 'рейсов';
+}
 
 export default function MySalaryPage() {
     const [dates, setDates] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
@@ -132,8 +145,13 @@ export default function MySalaryPage() {
             dataIndex: 'amount',
             key: 'amount',
             align: 'right' as const,
-            render: (v: number) => (
-                <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(v)} ₸</span>
+            render: (v: number, r: Accrual) => (
+                <>
+                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(v)} ₸</span>
+                    {r.reversedReason && (
+                        <div style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>{r.reversedReason}</div>
+                    )}
+                </>
             ),
         },
     ];
@@ -248,21 +266,23 @@ export default function MySalaryPage() {
                                     </div>
                                 ) : (
                                     <div className={styles.list}>
-                                        {kpiAccruals.map(k => {
-                                            const snap = k.schemeSnapshot as any;
-                                            return (
-                                                <div key={k.id} className={styles.item}>
-                                                    <span className={styles.itemIcon}><Star size={14} /></span>
-                                                    <span className={styles.itemText}>
-                                                        <span className={styles.itemLabel}>{monthLabel(k.periodMonth)}</span>
+                                        {kpiAccruals.map(k => (
+                                            <div key={k.id} className={styles.item}>
+                                                <span className={styles.itemIcon}><Star size={14} /></span>
+                                                <span className={styles.itemText}>
+                                                    <span className={styles.itemLabel}>{monthLabel(k.periodMonth)}</span>
+                                                    {/* Норму отдаёт сервер. Раньше она бралась из поля,
+                                                        которого в ответе не было, и у каждого бонуса
+                                                        стояло «норма — 0 рейсов». */}
+                                                    {k.threshold ? (
                                                         <span className={styles.itemDesc}>
-                                                            норма — {snap?.threshold || 0} рейсов за месяц
+                                                            норма — {k.threshold} {рейсовСловом(k.threshold)} за месяц
                                                         </span>
-                                                    </span>
-                                                    <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(k.amount)} ₸</b>
-                                                </div>
-                                            );
-                                        })}
+                                                    ) : null}
+                                                </span>
+                                                <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(k.amount)} ₸</b>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                             </div>

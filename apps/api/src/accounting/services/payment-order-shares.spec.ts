@@ -91,7 +91,7 @@ describe('Платёж, разнесённый по заявкам', () => {
             prisma,
             { checkPeriodNotClosed: jest.fn() } as any,
             { ensureCompanyFinanceSettings: jest.fn() } as any,
-            { processOrderTrigger: jest.fn() } as any,
+            { processOrderTrigger: jest.fn(), revokeUnpaidPercent: jest.fn() } as any,
             { release: jest.fn(), reduce: jest.fn() } as any,
             { rateOn: jest.fn().mockResolvedValue(null) } as any,
             new FinanceCalculatorService(),

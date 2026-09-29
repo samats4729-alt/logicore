@@ -107,6 +107,7 @@ describe('PaymentsService atomicity', () => {
             processOrderTrigger: jest.fn().mockImplementation(async () => {
                 calls.push('payroll.trigger');
             }),
+            revokeUnpaidPercent: jest.fn(),
         };
 
         const service = new PaymentsService(

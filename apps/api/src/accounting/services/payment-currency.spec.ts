@@ -50,7 +50,7 @@ describe('Валюта платежа', () => {
             prisma,
             { checkPeriodNotClosed: jest.fn() } as any,
             { ensureCompanyFinanceSettings: jest.fn() } as any,
-            { processOrderTrigger: jest.fn() } as any,
+            { processOrderTrigger: jest.fn(), revokeUnpaidPercent: jest.fn() } as any,
             { release: jest.fn(), reduce: jest.fn() } as any,
             currency as any,
             new FinanceCalculatorService(),

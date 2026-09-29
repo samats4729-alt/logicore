@@ -925,6 +925,10 @@ export class PaymentsService {
         if (refund.orderId) {
             await this.runCustomerPaidTrigger(refund.orderId, customerPaidBecameTrue);
         }
+        // Заявки, чьи доли возврат уменьшил, могли перестать быть оплаченными.
+        for (const share of source.orderShares) {
+            await this.runCustomerPaidTrigger(share.orderId, false);
+        }
 
         return refund;
     }
@@ -1048,7 +1052,7 @@ export class PaymentsService {
         // Смена привязки к заявке затрагивает две заявки сразу: прежнюю и новую.
         // Обе пересчитываются в одной транзакции с самим платежом, иначе при
         // сбое посередине одна из заявок останется с неверными флагами.
-        const { updated, paidTriggers } = await this.prisma.$transaction(async (tx) => {
+        const { updated, paidTriggers, affectedOrders } = await this.prisma.$transaction(async (tx) => {
             const row = await tx.payment.update({
                 where: { id: paymentId },
                 data: {
@@ -1094,11 +1098,13 @@ export class PaymentsService {
                 });
             }
 
-            return { updated: row, paidTriggers: triggers };
+            return { updated: row, paidTriggers: triggers, affectedOrders: [...affected] };
         }, { timeout: PaymentsService.FINANCE_TX_TIMEOUT_MS });
 
-        for (const oid of paidTriggers) {
-            await this.runCustomerPaidTrigger(oid, true);
+        // Каждая затронутая заявка могла как стать оплаченной, так и
+        // перестать: сумму уменьшили или платёж перевесили на другую заявку.
+        for (const oid of affectedOrders) {
+            await this.runCustomerPaidTrigger(oid, paidTriggers.includes(oid));
         }
 
         return updated;
@@ -1167,6 +1173,10 @@ export class PaymentsService {
 
         if (updated.orderId) {
             await this.runCustomerPaidTrigger(updated.orderId, customerPaidBecameTrue);
+        }
+        // Заявки, закрытые долями удалённого платежа, снова не оплачены.
+        for (const share of payment.orderShares) {
+            await this.runCustomerPaidTrigger(share.orderId, false);
         }
 
         return updated;
@@ -1326,10 +1336,15 @@ export class PaymentsService {
      * деньги уже записаны, а начисление пересчитывается отдельно.
      */
     private async runCustomerPaidTrigger(orderId: string, customerPaidBecameTrue: boolean) {
-        if (!customerPaidBecameTrue) return;
-
         try {
-            await this.payrollService.processOrderTrigger(orderId, 'CUSTOMER_PAID');
+            if (customerPaidBecameTrue) {
+                await this.payrollService.processOrderTrigger(orderId, 'CUSTOMER_PAID');
+            } else {
+                // Оплату могли удалить, вернуть или поднять цену рейса — тогда
+                // процент «за оплату» снимается. Если заявка по-прежнему
+                // оплачена или процента за оплату нет, ничего не происходит.
+                await this.payrollService.revokeUnpaidPercent(orderId);
+            }
         } catch (err) {
             console.warn(`Payroll trigger failed for CUSTOMER_PAID: ${err}`);
         }

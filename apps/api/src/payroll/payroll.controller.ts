@@ -3,9 +3,62 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PayrollService } from './payroll.service';
-import { D, ZERO, money, sumOf, toNum } from '../common/utils/money';
-import { kzCurrentMonth } from '../common/utils/business-date';
+import { PayrollService, responsibleOrdersWhere } from './payroll.service';
+import { D, ZERO, sumOf, toNum } from '../common/utils/money';
+import { kzCurrentMonth, kzMonthBounds } from '../common/utils/business-date';
+
+const SCHEME_TYPES = ['FIXED', 'PERCENT', 'HYBRID'];
+const PERCENT_BASES = ['MARGIN', 'ORDER_AMOUNT'];
+
+/**
+ * Поля схемы — перечислены руками и проверены.
+ *
+ * Раньше сюда шло что угодно: отрицательный оклад, процент 5000 (база его
+ * не вмещает — сохранение падало ошибкой сервера) или выдуманный тип схемы.
+ */
+function schemeData(dto: any) {
+    const type = dto?.type;
+    if (!SCHEME_TYPES.includes(type)) {
+        throw new BadRequestException('Неизвестный тип схемы');
+    }
+    const fixedAmount = Number(dto.fixedAmount || 0);
+    const percentValue = Number(dto.percentValue || 0);
+    if (!Number.isFinite(fixedAmount) || fixedAmount < 0) {
+        throw new BadRequestException('Оклад не может быть отрицательным');
+    }
+    if (!Number.isFinite(percentValue) || percentValue < 0 || percentValue > 100) {
+        throw new BadRequestException('Процент — от 0 до 100');
+    }
+    const percentBase = dto.percentBase || 'MARGIN';
+    if (!PERCENT_BASES.includes(percentBase)) {
+        throw new BadRequestException('Процент считается от маржи или от суммы рейса');
+    }
+    const accrualStatus = dto.accrualStatus || 'COMPLETED';
+    if (typeof accrualStatus !== 'string') {
+        throw new BadRequestException('Некорректный момент начисления');
+    }
+    return {
+        type,
+        fixedAmount,
+        percentValue,
+        percentBase,
+        accrualStatus,
+        isActive: dto.isActive !== undefined ? !!dto.isActive : true,
+    };
+}
+
+/** Кто в зарплатной ведомости: без водителей и получателей груза. */
+const NOT_ON_PAYROLL: UserRole[] = [UserRole.DRIVER, UserRole.RECIPIENT];
+
+/** Почему процент по рейсу обнулён — словами для сотрудника. */
+function reversedReason(snapshot: any): string | null {
+    switch (snapshot?._reversedReason) {
+        case 'order_cancelled': return 'рейс отменён';
+        case 'responsible_changed': return 'рейс передан другому менеджеру';
+        case 'payment_cancelled': return 'оплата снята — вернётся, когда заказчик оплатит';
+        default: return null;
+    }
+}
 
 function getMonthsRange(fromStr: string, toStr: string): string[] {
     try {
@@ -61,33 +114,18 @@ export class PayrollController {
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
     async upsertGeneralScheme(@Request() req: any, @Body() dto: any) {
         const companyId = req.user.companyId;
+        const data = schemeData(dto);
         const existing = await this.prisma.payrollScheme.findFirst({
             where: { companyId, userId: null },
         });
         if (existing) {
             return this.prisma.payrollScheme.update({
                 where: { id: existing.id },
-                data: {
-                    type: dto.type,
-                    fixedAmount: Number(dto.fixedAmount || 0),
-                    percentValue: Number(dto.percentValue || 0),
-                    percentBase: dto.percentBase || 'MARGIN',
-                    accrualStatus: dto.accrualStatus || 'COMPLETED',
-                    isActive: dto.isActive !== undefined ? !!dto.isActive : true,
-                },
+                data,
             });
         } else {
             return this.prisma.payrollScheme.create({
-                data: {
-                    companyId,
-                    userId: null,
-                    type: dto.type,
-                    fixedAmount: Number(dto.fixedAmount || 0),
-                    percentValue: Number(dto.percentValue || 0),
-                    percentBase: dto.percentBase || 'MARGIN',
-                    accrualStatus: dto.accrualStatus || 'COMPLETED',
-                    isActive: dto.isActive !== undefined ? !!dto.isActive : true,
-                },
+                data: { companyId, userId: null, ...data },
             });
         }
     }
@@ -109,33 +147,18 @@ export class PayrollController {
             throw new BadRequestException('Пользователь не найден в вашей компании');
         }
 
+        const data = schemeData(dto);
         const existing = await this.prisma.payrollScheme.findFirst({
             where: { companyId, userId },
         });
         if (existing) {
             return this.prisma.payrollScheme.update({
                 where: { id: existing.id },
-                data: {
-                    type: dto.type,
-                    fixedAmount: Number(dto.fixedAmount || 0),
-                    percentValue: Number(dto.percentValue || 0),
-                    percentBase: dto.percentBase || 'MARGIN',
-                    accrualStatus: dto.accrualStatus || 'COMPLETED',
-                    isActive: dto.isActive !== undefined ? !!dto.isActive : true,
-                },
+                data,
             });
         } else {
             return this.prisma.payrollScheme.create({
-                data: {
-                    companyId,
-                    userId,
-                    type: dto.type,
-                    fixedAmount: Number(dto.fixedAmount || 0),
-                    percentValue: Number(dto.percentValue || 0),
-                    percentBase: dto.percentBase || 'MARGIN',
-                    accrualStatus: dto.accrualStatus || 'COMPLETED',
-                    isActive: dto.isActive !== undefined ? !!dto.isActive : true,
-                },
+                data: { companyId, userId, ...data },
             });
         }
     }
@@ -194,13 +217,24 @@ export class PayrollController {
                 throw new BadRequestException('Пользователь не найден в вашей компании');
             }
         }
+        const threshold = Number(dto.threshold);
+        const bonusAmount = Number(dto.bonusAmount);
+        if (!Number.isInteger(threshold) || threshold < 1) {
+            throw new BadRequestException('Норма — целое число рейсов, не меньше одного');
+        }
+        if (!Number.isFinite(bonusAmount) || bonusAmount < 0) {
+            throw new BadRequestException('Бонус не может быть отрицательным');
+        }
+        if ((dto.metric || 'COMPLETED_ORDERS_MONTH') !== 'COMPLETED_ORDERS_MONTH') {
+            throw new BadRequestException('Неизвестный показатель для бонуса');
+        }
         return this.prisma.payrollKpiRule.create({
             data: {
                 companyId,
                 userId: dto.userId || null,
-                metric: dto.metric || 'COMPLETED_ORDERS_MONTH',
-                threshold: Number(dto.threshold),
-                bonusAmount: Number(dto.bonusAmount),
+                metric: 'COMPLETED_ORDERS_MONTH',
+                threshold,
+                bonusAmount,
                 isActive: dto.isActive !== undefined ? !!dto.isActive : true,
             },
         });
@@ -237,16 +271,38 @@ export class PayrollController {
             throw new BadRequestException('Некорректный формат периода');
         }
 
+        // Удалённый сотрудник остаётся в отчёте только за те месяцы, когда
+        // ему что-то начислено: его история не пропадает, но и оклад ему
+        // больше не приписывается.
+        const accruedUserIds = (await this.prisma.payrollAccrual.findMany({
+            where: { companyId, periodMonth: { in: months } },
+            select: { userId: true },
+            distinct: ['userId'],
+        })).map(a => a.userId);
+
         const users = await this.prisma.user.findMany({
             where: {
-                OR: [
-                    { companyId },
-                    { userCompanyRelations: { some: { companyId } } }
+                AND: [
+                    {
+                        OR: [
+                            { companyId },
+                            { userCompanyRelations: { some: { companyId } } }
+                        ],
+                    },
+                    { OR: [{ isActive: true }, { id: { in: accruedUserIds } }] },
                 ],
-                role: { notIn: [UserRole.DRIVER, UserRole.RECIPIENT] },
+                role: { notIn: NOT_ON_PAYROLL },
             },
-            select: { id: true, firstName: true, lastName: true, role: true },
+            select: {
+                id: true, firstName: true, lastName: true, role: true, companyId: true,
+                // Роль человека именно в этой организации: в соседней он может
+                // быть бухгалтером, а здесь — менеджером.
+                userCompanyRelations: { where: { companyId }, select: { role: true } },
+            },
         });
+
+        const { start } = kzMonthBounds(months[0]);
+        const { end } = kzMonthBounds(months[months.length - 1]);
 
         const rows = [];
         let totalSalary = ZERO;
@@ -255,11 +311,17 @@ export class PayrollController {
         let grandTotal = ZERO;
 
         for (const user of users) {
+            const role = user.userCompanyRelations[0]?.role ?? user.role;
+            if (NOT_ON_PAYROLL.includes(role)) continue;
+
             // Lazy calculation of SALARY and KPI
             await this.payrollService.ensureMonthlyAccruals(companyId, user.id, months);
 
+            // Только начисления этой организации: у человека в двух компаниях
+            // зарплата одной не должна попадать в ведомость другой.
             const accruals = await this.prisma.payrollAccrual.findMany({
                 where: {
+                    companyId,
                     userId: user.id,
                     periodMonth: { in: months },
                 },
@@ -270,26 +332,20 @@ export class PayrollController {
             const kpiTotal = sumOf(accruals.filter(a => a.kind === 'KPI'), (a) => a.amount);
             const total = salary.plus(percentTotal).plus(kpiTotal);
 
-            // Completed orders count in range
-            const start = new Date(months[0] + '-01T00:00:00.000Z');
-            const end = new Date(months[months.length - 1] + '-01T00:00:00.000Z');
-            end.setMonth(end.getMonth() + 1);
-
+            // Завершённые рейсы, которые человек вёл в этой компании
             const ordersCount = await this.prisma.order.count({
                 where: {
-                    responsibleManagerId: user.id,
-                    status: 'COMPLETED',
-                    completedAt: {
-                        gte: start,
-                        lt: end,
-                    },
+                    AND: [
+                        responsibleOrdersWhere(companyId, user.id),
+                        { status: 'COMPLETED', completedAt: { gte: start, lt: end } },
+                    ],
                 },
             });
 
             rows.push({
                 userId: user.id,
                 name: `${user.lastName || ''} ${user.firstName || ''}`.trim() || 'Сотрудник',
-                role: user.role,
+                role,
                 salary: toNum(salary),
                 percentTotal: toNum(percentTotal),
                 kpiTotal: toNum(kpiTotal),
@@ -323,13 +379,14 @@ export class PayrollController {
         const currentMonth = kzCurrentMonth();
 
         if (!companyId) {
-            return { total: 0, salary: 0, percentTotal: 0, kpiTotal: 0, ordersCount: 0 };
+            return { total: 0, salary: 0, percentTotal: 0, kpiTotal: 0, ordersCount: 0, hasScheme: false };
         }
 
         await this.payrollService.ensureMonthlyAccruals(companyId, userId, [currentMonth]);
 
         const accruals = await this.prisma.payrollAccrual.findMany({
             where: {
+                companyId,
                 userId,
                 periodMonth: currentMonth,
             },
@@ -339,26 +396,27 @@ export class PayrollController {
         const percentTotal = sumOf(accruals.filter(a => a.kind === 'PERCENT'), (a) => a.amount);
         const kpiTotal = sumOf(accruals.filter(a => a.kind === 'KPI'), (a) => a.amount);
 
-        const start = new Date(currentMonth + '-01T00:00:00.000Z');
-        const end = new Date(start);
-        end.setMonth(start.getMonth() + 1);
-
+        const { start, end } = kzMonthBounds(currentMonth);
         const ordersCount = await this.prisma.order.count({
             where: {
-                responsibleManagerId: userId,
-                status: 'COMPLETED',
-                completedAt: {
-                    gte: start,
-                    lt: end,
-                },
+                AND: [
+                    responsibleOrdersWhere(companyId, userId),
+                    { status: 'COMPLETED', completedAt: { gte: start, lt: end } },
+                ],
             },
         });
 
         const total = salary.plus(percentTotal).plus(kpiTotal);
 
-        // Check if there is any scheme configured to decide visibility of the metric
+        // Показывать ли человеку «Мою зарплату». Раньше — только при схеме
+        // оклада или процента, и тот, кому компания платит одни бонусы, своих
+        // денег в кабинете не видел вовсе, хотя они ему начислены.
         const scheme = await this.payrollService.getSchemeFor(companyId, userId);
-        const hasScheme = !!scheme;
+        const hasScheme = !!scheme
+            || accruals.length > 0
+            || (await this.prisma.payrollKpiRule.count({
+                where: { companyId, isActive: true, OR: [{ userId: null }, { userId }] },
+            })) > 0;
 
         return {
             total,
@@ -395,6 +453,7 @@ export class PayrollController {
 
         const accruals = await this.prisma.payrollAccrual.findMany({
             where: {
+                companyId,
                 userId,
                 periodMonth: { in: months },
             },
@@ -413,25 +472,33 @@ export class PayrollController {
         const kpiTotal = sumOf(accruals.filter(a => a.kind === 'KPI'), (a) => a.amount);
         const total = salary.plus(percentTotal).plus(kpiTotal);
 
-        const mappedAccruals = accruals.map(a => {
-            const ord = a.orderId ? orderMap.get(a.orderId) : null;
-            const snapshot = a.schemeSnapshot as any;
-            return {
-                id: a.id,
-                kind: a.kind,
-                amount: a.amount,
-                periodMonth: a.periodMonth,
-                baseAmount: a.baseAmount,
-                percentValue: snapshot?.percentValue ?? null,
-                percentBase: snapshot?.percentBase ?? null,
-                createdAt: a.createdAt,
-                order: ord ? {
-                    id: ord.id,
-                    orderNumber: ord.orderNumber,
-                    date: ord.completedAt || ord.createdAt,
-                } : null,
-            };
-        });
+        const mappedAccruals = accruals
+            // Снятый бонус и убранный оклад — нулевые записи-следы; в списке
+            // «Оклад по месяцам» и «Бонусы» они выглядели бы как «0 ₸ за август».
+            // Обнулённый процент оставляем: человеку важно видеть, куда делись
+            // деньги за рейс, и причина пишется рядом.
+            .filter(a => a.kind === 'PERCENT' || !D(a.amount).isZero())
+            .map(a => {
+                const ord = a.orderId ? orderMap.get(a.orderId) : null;
+                const snapshot = a.schemeSnapshot as any;
+                return {
+                    id: a.id,
+                    kind: a.kind,
+                    amount: a.amount,
+                    periodMonth: a.periodMonth,
+                    baseAmount: a.baseAmount,
+                    percentValue: snapshot?.percentValue ?? null,
+                    percentBase: snapshot?.percentBase ?? null,
+                    threshold: snapshot?.threshold ?? null,
+                    reversedReason: reversedReason(snapshot),
+                    createdAt: a.createdAt,
+                    order: ord ? {
+                        id: ord.id,
+                        orderNumber: ord.orderNumber,
+                        date: ord.completedAt || ord.createdAt,
+                    } : null,
+                };
+            });
 
         return {
             accruals: mappedAccruals,
