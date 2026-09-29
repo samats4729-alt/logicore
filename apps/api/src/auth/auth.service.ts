@@ -12,6 +12,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import { нормализоватьПочту } from '../common/utils/email';
 
 @Injectable()
 export class AuthService {
@@ -35,10 +36,10 @@ export class AuthService {
         password: string,
         deviceId: string,
     ): Promise<{ accessToken: string; user: any }> {
-        const user = await this.prisma.user.findUnique({
-            where: { email },
-            include: { company: true },
-        });
+        const id = await this.idПоПочте(email);
+        const user = id
+            ? await this.prisma.user.findUnique({ where: { id }, include: { company: true } })
+            : null;
 
         if (!user || !user.passwordHash) {
             throw new UnauthorizedException('Неверный email или пароль');
@@ -106,6 +107,29 @@ export class AuthService {
                 company: user.company,
             },
         };
+    }
+
+    /**
+     * Чья это почта — без оглядки на большие буквы и пробелы по краям.
+     *
+     * Сначала буква в букву: если когда-то завели две записи, отличающиеся
+     * только регистром, человек попадёт в ту, которую набрал. Потом — без
+     * учёта регистра, но только если такая запись одна: угадывать между
+     * двумя нельзя.
+     */
+    private async idПоПочте(введено?: string | null): Promise<string | null> {
+        const почта = String(введено ?? '').trim();
+        if (!почта) return null;
+        for (const вариант of new Set([почта, нормализоватьПочту(почта)])) {
+            const точно = await this.prisma.user.findUnique({ where: { email: вариант }, select: { id: true } });
+            if (точно) return точно.id;
+        }
+        const похожие = await this.prisma.user.findMany({
+            where: { email: { equals: почта, mode: 'insensitive' } },
+            select: { id: true },
+            take: 2,
+        });
+        return похожие.length === 1 ? похожие[0].id : null;
     }
 
     /**
@@ -334,9 +358,8 @@ export class AuthService {
     // ==================== ВОССТАНОВЛЕНИЕ ПАРОЛЯ ====================
 
     async forgotPassword(email: string): Promise<{ message: string }> {
-        const user = await this.prisma.user.findUnique({
-            where: { email },
-        });
+        const id = await this.idПоПочте(email);
+        const user = id ? await this.prisma.user.findUnique({ where: { id } }) : null;
 
         if (!user) {
             // Для безопасности всегда возвращаем success, чтобы не раскрывать базу email-ов
@@ -918,9 +941,27 @@ export class AuthService {
         };
     }
 
+    /**
+     * Регистрация по приглашению.
+     *
+     * Удалить сотрудника в кабинете — значит выключить его: запись с почтой
+     * и телефоном остаётся, на ней его рейсы и история. Раньше повторное
+     * приглашение упиралось в эту запись — «Пользователь с таким телефоном
+     * уже существует», — и вернуть человека было нечем. Теперь:
+     * - телефон держат только действующие: у выключенного номер не занят;
+     * - та же почта у выключенного сотрудника этой же компании — это он и
+     *   вернулся: запись включается, имя, телефон и пароль — новые, доступ —
+     *   ровно по новому приглашению, прежние входы с его устройств гаснут.
+     *
+     * И вход после регистрации теперь записывает сессию. Раньше пропуск
+     * выдавался без неё, и первый же запрос кабинета отвечал «Сессия
+     * недействительна»: человек только что зарегистрировался — и уже на
+     * странице входа, где надо набрать почту, которую ему нигде не показали.
+     */
     async registerInvitedUser(dto: any) {
-        const { token, firstName, lastName, phone, password } = dto;
-        
+        const { token, firstName, lastName, password } = dto;
+        const phone = String(dto.phone ?? '').trim();
+
         const invitation = await this.prisma.invitation.findUnique({
             where: { token },
         });
@@ -929,78 +970,130 @@ export class AuthService {
             throw new BadRequestException('Приглашение недействительно или просрочено');
         }
 
-        const existingPhone = await this.prisma.user.findFirst({ where: { phone } });
+        const email = нормализоватьПочту(invitation.email);
+        const прежнийId = await this.idПоПочте(email);
+        const прежний = прежнийId
+            ? await this.prisma.user.findUnique({
+                where: { id: прежнийId },
+                select: { id: true, isActive: true, companyId: true },
+            })
+            : null;
+        if (прежний?.isActive) {
+            throw new BadRequestException(
+                `Почта ${email} уже зарегистрирована — войдите под ней на странице входа. `
+                + 'Не помните пароль — нажмите там «Забыли пароль?».',
+            );
+        }
+        if (прежний && прежний.companyId !== invitation.companyId) {
+            // Возвращать запись из чужой компании нельзя: вместе с ней ожили
+            // бы её старые доступы.
+            throw new BadRequestException(
+                'Эта почта уже была зарегистрирована в другой компании. Попросите пригласить вас на другую почту.',
+            );
+        }
+
+        const existingPhone = await this.prisma.user.findFirst({
+            where: {
+                phone,
+                isActive: true,
+                ...(прежний ? { id: { not: прежний.id } } : {}),
+            },
+            select: { id: true },
+        });
         if (existingPhone) {
             throw new BadRequestException('Пользователь с таким телефоном уже существует');
         }
 
         const passwordHash = await bcrypt.hash(password, 12);
+        // Мультикомпания: доступ в дополнительные организации владельца («общая команда»)
+        const extraCompanyIds = (invitation.sharedCompanyIds || []).filter(
+            (cid) => cid && cid !== invitation.companyId,
+        );
+        const доступ = [invitation.companyId, ...extraCompanyIds];
+        let снятыйДоступ: string[] = [];
 
         const result = await this.prisma.$transaction(async (tx) => {
-            const user = await tx.user.create({
-                data: {
-                    email: invitation.email,
-                    phone,
-                    firstName,
-                    lastName,
-                    passwordHash,
-                    role: invitation.role,
-                    permissions: invitation.permissions,
-                    companyId: invitation.companyId,
-                    departmentId: invitation.departmentId,
-                    position: invitation.position,
-                },
-            });
+            const данные = {
+                email,
+                phone,
+                firstName,
+                lastName,
+                passwordHash,
+                role: invitation.role,
+                permissions: invitation.permissions,
+                companyId: invitation.companyId,
+                departmentId: invitation.departmentId,
+                position: invitation.position,
+            };
+            const user = прежний
+                ? await tx.user.update({ where: { id: прежний.id }, data: { ...данные, isActive: true } })
+                : await tx.user.create({ data: данные });
 
             await tx.invitation.update({
                 where: { id: invitation.id },
                 data: { isUsed: true },
             });
 
-            // Создаём связь UserCompanyRelation с основной организацией
-            await tx.userCompanyRelation.create({
-                data: {
-                    userId: user.id,
-                    companyId: invitation.companyId,
-                    role: invitation.role,
-                },
-            });
+            if (прежний) {
+                // Вернулся — доступ ровно по новому приглашению: связи с
+                // организациями, которых в нём нет, вместе с ним не оживают.
+                const лишние = await tx.userCompanyRelation.findMany({
+                    where: { userId: user.id, companyId: { notIn: доступ } },
+                    select: { companyId: true },
+                });
+                снятыйДоступ = лишние.map((с) => с.companyId);
+                await tx.userCompanyRelation.deleteMany({
+                    where: { userId: user.id, companyId: { notIn: доступ } },
+                });
+                await tx.session.deleteMany({ where: { userId: user.id } });
+            }
 
-            // Мультикомпания: доступ в дополнительные организации владельца («общая команда»)
-            const extraCompanyIds = (invitation.sharedCompanyIds || []).filter(
-                (cid) => cid && cid !== invitation.companyId,
-            );
-            if (extraCompanyIds.length) {
-                await tx.userCompanyRelation.createMany({
-                    data: extraCompanyIds.map((cid) => ({
-                        userId: user.id,
-                        companyId: cid,
-                        role: invitation.role,
-                    })),
-                    skipDuplicates: true,
+            for (const companyId of доступ) {
+                await tx.userCompanyRelation.upsert({
+                    where: { userId_companyId: { userId: user.id, companyId } },
+                    create: { userId: user.id, companyId, role: invitation.role },
+                    update: { role: invitation.role },
                 });
             }
 
             return user;
         });
 
+        if (прежний) {
+            try {
+                await this.redisService.deleteSession(result.id);
+            } catch (e) {
+                console.warn('Redis deleteSession failed (ignoring):', e);
+            }
+            await this.auditService.log({
+                companyId: invitation.companyId,
+                user: { id: result.id, firstName: result.firstName, lastName: result.lastName, role: result.role },
+                action: 'UPDATE',
+                entity: 'employee',
+                entityId: result.id,
+                entityLabel: 'Сотрудник вернулся по новому приглашению',
+            });
+        }
+
         // Двойная запись в новый слой (не должна ломать регистрацию)
         try {
             await this.identityService.syncMembership(result.id, invitation.companyId, invitation.role as any, { isPrimary: true, position: invitation.position });
-            const extra = (invitation.sharedCompanyIds || []).filter((cid) => cid && cid !== invitation.companyId);
-            for (const cid of extra) {
+            for (const cid of extraCompanyIds) {
                 await this.identityService.syncMembership(result.id, cid, invitation.role as any, { isPrimary: false });
+            }
+            for (const cid of снятыйДоступ) {
+                await this.identityService.removeMembership(result.id, cid);
             }
         } catch (e) {
             console.warn('syncMembership (invited user) failed:', e);
         }
 
-        const payload = {
+        const accessToken = await this.issueSession(result.id, {
             sub: result.id,
+            email: result.email,
             role: result.role,
             companyId: result.companyId,
-        };
-        const accessToken = this.jwtService.sign(payload);
+        }, 'web');
 
         const company = await this.prisma.company.findUnique({
             where: { id: result.companyId! },
