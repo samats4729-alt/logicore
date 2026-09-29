@@ -74,7 +74,20 @@ export class CompanyController {
         @Param('id') userId: string,
         @Body() dto: Partial<CreateCompanyUserDto>,
     ) {
-        return this.companyService.updateCompanyUser(req.user.companyId, userId, dto);
+        const result = await this.companyService.updateCompanyUser(req.user.companyId, userId, dto, req.user.sub);
+        // Кто и когда сменил сотруднику вход — в журнал: после такой правки
+        // человек входит по-другому, и спросят именно об этом.
+        const что = [
+            dto?.email !== undefined ? `почта для входа → ${result.email}` : null,
+            dto?.password !== undefined ? 'задан новый пароль' : null,
+        ].filter(Boolean);
+        if (что.length) {
+            await this.auditService.log({
+                companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'employee',
+                entityId: userId, entityLabel: `Вход сотрудника ${result.firstName ?? ''} ${result.lastName ?? ''}: ${что.join(', ')}`.replace(/\s+/g, ' '),
+            });
+        }
+        return result;
     }
 
     @Put('users/:id/permissions')

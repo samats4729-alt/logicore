@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { нормализоватьПочту } from '../common/utils/email';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { UserRole } from '@prisma/client';
@@ -291,11 +292,26 @@ export class UsersService {
         vehiclePlate?: string;
         vehicleModel?: string;
     }) {
+        // Почта — логин. Занятую отвечаем словами, а не ошибкой сервера, и
+        // ту же почту другими буквами тоже считаем занятой: иначе в системе
+        // появлялись два человека с одним ящиком.
+        let email: string | undefined;
+        if (data.email !== undefined) {
+            email = нормализоватьПочту(data.email);
+            if (!email) throw new BadRequestException('Укажите почту — по ней вы входите в систему');
+            const занята = await this.prisma.user.findFirst({
+                where: { email: { equals: email, mode: 'insensitive' }, id: { not: userId } },
+                select: { id: true },
+            });
+            if (занята) {
+                throw new BadRequestException('Эта почта уже занята другим пользователем — укажите другую.');
+            }
+        }
         return this.update(userId, {
             firstName: data.firstName,
             lastName: data.lastName,
             middleName: data.middleName,
-            email: data.email,
+            email,
             phone: data.phone,
             vehiclePlate: data.vehiclePlate,
             vehicleModel: data.vehicleModel,

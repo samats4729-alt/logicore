@@ -5,6 +5,7 @@ import {
     AccountingDocumentDirection,
     AccountingDocumentStatus,
     AccountingDocumentType,
+    Prisma,
     UserRole,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
@@ -16,6 +17,7 @@ import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
 import { MODULE_PERMISSIONS } from '../auth/module-permissions';
 import { D, ZERO, toNum } from '../common/utils/money';
 import { нормализоватьПочту } from '../common/utils/email';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../auth/password-policy';
 import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
@@ -27,6 +29,14 @@ import {
     ORDER_FINANCE_SELECT,
     orderFinancePayments,
 } from '../accounting/services/finance-calculator.service';
+
+/**
+ * Какие роли руководитель выдаёт в своей компании. Платформенного
+ * администратора, водителя и прочие служебные роли — нет.
+ */
+const РОЛИ_В_КОМПАНИИ: readonly string[] = ['COMPANY_ADMIN', 'LOGISTICIAN', 'WAREHOUSE_MANAGER', 'ACCOUNTANT'];
+
+const ПОХОЖЕ_НА_ПОЧТУ = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 
 const ROLE_LABELS_RU: Record<string, string> = {
     COMPANY_ADMIN: 'Администратор',
@@ -418,18 +428,20 @@ export class CompanyService {
     }
 
     /**
-     * Обновить пользователя компании
+     * Правка сотрудника руководителем: имя, телефон, роль в компании, почта
+     * для входа и новый пароль.
+     *
+     * Поля — только перечисленные. Раньше сюда уходило тело запроса целиком:
+     * у ручки нет класса-описания, и проверка его пропускала. Одним запросом
+     * руководитель любой компании делал сотрудника — или себя —
+     * администратором всей платформы (роль «ADMIN» без компании), и при входе
+     * тому открывались все компании платформы.
+     *
+     * Почту и пароль руководителя компании этой правкой не поменять: иначе
+     * второй руководитель забирал бы вход первого. Их он меняет сам, в
+     * профиле.
      */
-    async updateCompanyUser(
-        companyId: string,
-        userId: string,
-        data: Partial<{
-            firstName: string;
-            lastName: string;
-            role: 'COMPANY_ADMIN' | 'LOGISTICIAN' | 'WAREHOUSE_MANAGER' | 'ACCOUNTANT';
-            password: string;
-        }>,
-    ) {
+    async updateCompanyUser(companyId: string, userId: string, data: any, requesterId?: string) {
         const user = await this.prisma.user.findFirst({
             where: { id: userId, companyId },
         });
@@ -437,7 +449,12 @@ export class CompanyService {
             throw new NotFoundException('Пользователь не найден');
         }
 
-        if (data.role && user.role === 'COMPANY_ADMIN' && data.role !== 'COMPANY_ADMIN') {
+        const тело = data && typeof data === 'object' ? data : {};
+        if (тело.role !== undefined && !РОЛИ_В_КОМПАНИИ.includes(тело.role)) {
+            throw new BadRequestException('Недопустимая роль');
+        }
+
+        if (тело.role && user.role === 'COMPANY_ADMIN' && тело.role !== 'COMPANY_ADMIN') {
             const adminCount = await this.prisma.user.count({
                 where: {
                     companyId,
@@ -454,10 +471,30 @@ export class CompanyService {
             }
         }
 
-        const updateData: any = { ...data };
-        if (data.password) {
-            updateData.passwordHash = await bcrypt.hash(data.password, 12);
-            delete updateData.password;
+        const меняетсяВход = тело.email !== undefined || тело.password !== undefined;
+        if (меняетсяВход && user.role === 'COMPANY_ADMIN' && user.id !== requesterId) {
+            throw new ForbiddenException('Почту и пароль руководителя компании меняет он сам — в своём профиле.');
+        }
+
+        const updateData: Prisma.UserUpdateInput = {};
+        if (typeof тело.firstName === 'string' && тело.firstName.trim()) updateData.firstName = тело.firstName.trim();
+        if (typeof тело.lastName === 'string' && тело.lastName.trim()) updateData.lastName = тело.lastName.trim();
+        if (typeof тело.phone === 'string' && тело.phone.trim()) updateData.phone = тело.phone.trim();
+        if (тело.role !== undefined) updateData.role = тело.role;
+
+        if (тело.email !== undefined) {
+            const email = нормализоватьПочту(тело.email);
+            if (!ПОХОЖЕ_НА_ПОЧТУ.test(email)) {
+                throw new BadRequestException(`«${String(тело.email).trim()}» не похоже на адрес почты`);
+            }
+            await this.почтаСвободна(email, userId);
+            updateData.email = email;
+        }
+        if (тело.password !== undefined) {
+            if (String(тело.password).length < MIN_PASSWORD_LENGTH) {
+                throw new BadRequestException(PASSWORD_TOO_SHORT);
+            }
+            updateData.passwordHash = await bcrypt.hash(String(тело.password), 12);
         }
 
         const updated = await this.prisma.user.update({
@@ -474,15 +511,37 @@ export class CompanyService {
         });
 
         // Синхронизируем роль в связи с компанией — при логине JWT берёт роль из relation
-        if (data.role) {
+        if (тело.role) {
             await this.prisma.userCompanyRelation.upsert({
                 where: { userId_companyId: { userId, companyId } },
-                update: { role: data.role as UserRole },
-                create: { userId, companyId, role: data.role as UserRole },
+                update: { role: тело.role as UserRole },
+                create: { userId, companyId, role: тело.role as UserRole },
             });
         }
 
+        // Задали новый пароль — прежние входы с его устройств гаснут: пароль
+        // меняют, когда старый забыт или мог уйти в чужие руки.
+        if (тело.password !== undefined) {
+            await this.prisma.session.deleteMany({ where: { userId } });
+            try {
+                await this.redisService.deleteSession(userId);
+            } catch (e) {
+                console.warn('Redis deleteSession failed (ignoring):', e);
+            }
+        }
+
         return updated;
+    }
+
+    /** Почта свободна — никто другой под ней не входит, без учёта регистра. */
+    async почтаСвободна(email: string, кромеUserId: string) {
+        const занята = await this.prisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' }, id: { not: кромеUserId } },
+            select: { id: true },
+        });
+        if (занята) {
+            throw new BadRequestException('Эта почта уже занята другим пользователем — укажите другую.');
+        }
     }
 
     /**
