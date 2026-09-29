@@ -79,6 +79,22 @@ export function kzMonthShifted(shift: number, at: Date = new Date()): string {
     return `${сдвинутый.getUTCFullYear()}-${String(сдвинутый.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Границы месяца `YYYY-MM` по Казахстану: [начало, начало следующего).
+ *
+ * Зарплатный месяц — казахстанский. Раньше рейсы за месяц считались по
+ * полуночи UTC, и рейс, закрытый первого числа до 05:00 по Алматы, уходил
+ * в прошлый месяц — а с ним и норма для бонуса.
+ */
+export function kzMonthBounds(periodMonth: string): { start: Date; end: Date } {
+    const [year, month] = periodMonth.split('-').map(Number);
+    const offset = KZ_UTC_OFFSET_MINUTES * MINUTE;
+    return {
+        start: new Date(Date.UTC(year, month - 1, 1) - offset),
+        end: new Date(Date.UTC(year, month, 1) - offset),
+    };
+}
+
 /** Сегодняшняя дата Казахстана строкой `YYYY-MM-DD`. */
 export function kzTodayString(at: Date = new Date()): string {
     return kzToday(at).toISOString().slice(0, 10);

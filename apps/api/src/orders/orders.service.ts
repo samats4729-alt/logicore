@@ -1772,6 +1772,11 @@ export class OrdersService {
         }
 
         const result = await this.setCompanyResponsible(orderId, companyId, targetUserId, false);
+
+        // Рейс уже завершён или оплачен и процент начислен прежнему менеджеру —
+        // он переходит новому ответственному вместе с рейсом.
+        await this.payrollService.onResponsibleChanged(orderId, companyId);
+
         return { ...result, orderNumber: order.orderNumber, targetName: `${target.lastName} ${target.firstName}` };
     }
 

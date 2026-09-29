@@ -84,7 +84,7 @@ describe('Правка платежа с разнесением по заявк�
             prisma,
             { checkPeriodNotClosed: jest.fn() } as any,
             { ensureCompanyFinanceSettings: jest.fn() } as any,
-            { processOrderTrigger: jest.fn() } as any,
+            { processOrderTrigger: jest.fn(), revokeUnpaidPercent: jest.fn() } as any,
             { release: jest.fn(), reduce: jest.fn() } as any,
             { toBase: jest.fn().mockResolvedValue(null) } as any,
             new FinanceCalculatorService(),
