@@ -421,6 +421,123 @@ describe('PayrollService — процент получает ответстве�
     });
 });
 
+describe('PayrollService.individualizeTerms — общие условия становятся своими у каждого', () => {
+    function build(opts: { general?: any; generalRules?: any[]; own?: any[]; ownRules?: any[]; users?: any[] }) {
+        const tx: any = {
+            payrollScheme: {
+                findMany: jest.fn().mockResolvedValue(opts.own ?? []),
+                createMany: jest.fn(),
+                update: jest.fn(),
+            },
+            payrollKpiRule: {
+                findMany: jest.fn().mockResolvedValue(opts.ownRules ?? []),
+                createMany: jest.fn(),
+                deleteMany: jest.fn(),
+            },
+        };
+        const prisma: any = {
+            payrollScheme: { findFirst: jest.fn().mockResolvedValue(opts.general ?? null) },
+            payrollKpiRule: { findMany: jest.fn().mockResolvedValue(opts.generalRules ?? []) },
+            user: {
+                findMany: jest.fn().mockResolvedValue(opts.users ?? [
+                    { id: 'u1', role: 'LOGISTICIAN', userCompanyRelations: [] },
+                    { id: 'u2', role: 'LOGISTICIAN', userCompanyRelations: [] },
+                    { id: 'driver', role: 'DRIVER', userCompanyRelations: [] },
+                ]),
+            },
+            $transaction: jest.fn(async (fn: any) => fn(tx)),
+        };
+        return { service: new PayrollService(prisma, new FinanceCalculatorService()), prisma, tx };
+    }
+    const general = { id: 'g', userId: null, type: 'HYBRID', fixedAmount: 150000, percentValue: 5, percentBase: 'MARGIN', accrualStatus: 'COMPLETED', isActive: true };
+
+    it('общих условий нет — ничего не трогаем', async () => {
+        const { service, prisma } = build({});
+        await service.individualizeTerms(COMPANY);
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('кто жил на общей схеме — получает те же цифры своими; общая выключается', async () => {
+        const { service, tx } = build({ general, own: [{ id: 's2', userId: 'u2', isActive: true }] });
+
+        await service.individualizeTerms(COMPANY);
+
+        const created = tx.payrollScheme.createMany.mock.calls[0][0].data;
+        expect(created).toHaveLength(1); // u2 уже со своей, водителю не положено
+        expect(created[0]).toMatchObject({ companyId: COMPANY, userId: 'u1', fixedAmount: 150000, percentValue: 5, isActive: true });
+        expect(tx.payrollScheme.update).toHaveBeenCalledWith({ where: { id: 'g' }, data: { isActive: false } });
+    });
+
+    it('общий бонус — каждому свой такой же, общий удаляется, пауза сохраняется', async () => {
+        const { service, tx } = build({
+            generalRules: [{ id: 'r', userId: null, metric: 'COMPLETED_ORDERS_MONTH', threshold: 3, bonusAmount: 50000, isActive: false }],
+            ownRules: [{ userId: 'u2' }],
+        });
+
+        await service.individualizeTerms(COMPANY);
+
+        const created = tx.payrollKpiRule.createMany.mock.calls[0][0].data;
+        expect(created).toEqual([{ companyId: COMPANY, userId: 'u1', metric: 'COMPLETED_ORDERS_MONTH', threshold: 3, bonusAmount: 50000, isActive: false }]);
+        expect(tx.payrollKpiRule.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r'] } } });
+    });
+});
+
+describe('PayrollService.pendingPercent — проценты, которые ещё придут', () => {
+    function build(scheme: Record<string, any>, orders: any[], accrued: any[] = []) {
+        const prisma: any = makePrismaMock();
+        prisma.order.findMany = jest.fn().mockResolvedValue(orders);
+        prisma.payrollAccrual.findMany.mockResolvedValue(accrued);
+        prisma.payrollScheme.findFirst.mockResolvedValue(percentScheme(scheme));
+        prisma.payment.findMany.mockResolvedValue([]);
+        prisma.income.findMany.mockResolvedValue([]);
+        prisma.expense.findMany.mockResolvedValue([]);
+        return new PayrollService(prisma, new FinanceCalculatorService());
+    }
+    const order = (overrides: Record<string, any>) => makeOrder({
+        responsibles: [{ companyId: COMPANY, userId: MANAGER }], ...overrides,
+    });
+
+    it('схема «после оплаты»: завершённый неоплаченный рейс ждёт оплаты', async () => {
+        const service = build({ accrualStatus: 'CUSTOMER_PAID', percentBase: 'MARGIN', percentValue: 10 }, [
+            order({ id: 'o1', orderNumber: '001', status: 'COMPLETED', isCustomerPaid: false }),
+            order({ id: 'o2', orderNumber: '002', status: 'COMPLETED', isCustomerPaid: true }),
+        ]);
+
+        const pending = (await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)!;
+
+        expect(pending).toHaveLength(1);
+        expect(pending[0]).toMatchObject({ orderNumber: '001', reason: 'unpaid', baseAmount: 100000, amount: 10000 });
+    });
+
+    it('схема «после завершения»: рейс в пути — придёт после завершения', async () => {
+        const service = build({ accrualStatus: 'COMPLETED', percentBase: 'ORDER_AMOUNT', percentValue: 5 }, [
+            order({ id: 'o1', orderNumber: '001', status: 'IN_TRANSIT' }),
+            order({ id: 'o2', orderNumber: '002', status: 'COMPLETED' }),
+        ]);
+
+        const pending = (await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)!;
+
+        expect(pending).toHaveLength(1);
+        expect(pending[0]).toMatchObject({ orderNumber: '001', reason: 'in_progress', amount: 25000 });
+    });
+
+    it('уже начисленный процент в ожидании не числится', async () => {
+        const service = build({ accrualStatus: 'CUSTOMER_PAID' }, [
+            order({ id: 'o1', orderNumber: '001', status: 'COMPLETED', isCustomerPaid: false }),
+        ], [{ orderId: 'o1', userId: MANAGER }]);
+
+        expect((await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)).toBeUndefined();
+    });
+
+    it('только оклад — ждать нечего', async () => {
+        const service = build({ type: 'FIXED', fixedAmount: 300000 }, [
+            order({ id: 'o1', orderNumber: '001', status: 'IN_TRANSIT' }),
+        ]);
+
+        expect((await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)).toBeUndefined();
+    });
+});
+
 describe('PayrollService.ensureMonthlyAccruals — оклады и KPI-бонусы за месяц', () => {
     let prisma: ReturnType<typeof makePrismaMock>;
     let service: PayrollService;
@@ -615,6 +732,67 @@ describe('PayrollService.ensureMonthlyAccruals — оклады и KPI-бону�
         );
     });
 
+    it('бонусы за план выключили — бонус текущего месяца снимается', async () => {
+        const current = kzCurrentMonth();
+        prisma.payrollScheme.findFirst.mockResolvedValue(null);
+        prisma.payrollKpiRule.findMany.mockResolvedValue([]); // все правила на паузе
+        prisma.payrollAccrual.findMany.mockResolvedValue([
+            { id: 'kpi-acc', amount: new Prisma.Decimal(50000), schemeSnapshot: { threshold: 3 } },
+        ]);
+
+        await service.ensureMonthlyAccruals(COMPANY, MANAGER, [current]);
+
+        expect(prisma.payrollAccrual.findMany).toHaveBeenCalledWith({
+            where: { companyId: COMPANY, userId: MANAGER, periodMonth: current, kind: 'KPI', NOT: { amount: 0 } },
+        });
+        const { where, data } = prisma.payrollAccrual.update.mock.calls[0][0];
+        expect(where).toEqual({ id: 'kpi-acc' });
+        expect(data.amount).toBe(0);
+        expect(data.schemeSnapshot._reversedReason).toBe('rule_disabled');
+    });
+
+    it('работающее правило не снимается — только выключенные', async () => {
+        const current = kzCurrentMonth();
+        prisma.payrollScheme.findFirst.mockResolvedValue(null);
+        prisma.payrollKpiRule.findMany.mockResolvedValue([
+            { id: 'kpi-1', metric: 'COMPLETED_ORDERS_MONTH', threshold: 10, bonusAmount: 50000, isActive: true },
+        ]);
+        prisma.order.count.mockResolvedValue(0);
+
+        await service.ensureMonthlyAccruals(COMPANY, MANAGER, [current]);
+
+        expect(prisma.payrollAccrual.findMany).toHaveBeenCalledWith({
+            where: {
+                companyId: COMPANY, userId: MANAGER, periodMonth: current, kind: 'KPI',
+                NOT: { amount: 0 }, kpiRuleId: { notIn: ['kpi-1'] },
+            },
+        });
+    });
+
+    it('прошлые месяцы при выключении бонусов не трогаются', async () => {
+        prisma.payrollScheme.findFirst.mockResolvedValue(null);
+        prisma.payrollKpiRule.findMany.mockResolvedValue([]);
+
+        await service.ensureMonthlyAccruals(COMPANY, MANAGER, [MONTH]);
+
+        expect(prisma.payrollAccrual.findMany).not.toHaveBeenCalled();
+        expect(prisma.payrollAccrual.update).not.toHaveBeenCalled();
+    });
+
+    it('свой бонус заменяет общий, а не складывается с ним', async () => {
+        prisma.payrollScheme.findFirst.mockResolvedValue(null);
+        prisma.payrollKpiRule.findMany.mockResolvedValue([
+            { id: 'general', userId: null, metric: 'COMPLETED_ORDERS_MONTH', threshold: 3, bonusAmount: 50000, isActive: true },
+            { id: 'own', userId: MANAGER, metric: 'COMPLETED_ORDERS_MONTH', threshold: 2, bonusAmount: 30000, isActive: true },
+        ]);
+        prisma.order.count.mockResolvedValue(3); // выполнены обе нормы
+
+        await service.ensureMonthlyAccruals(COMPANY, MANAGER, [MONTH]);
+
+        expect(prisma.payrollAccrual.create).toHaveBeenCalledTimes(1);
+        expect(prisma.payrollAccrual.create.mock.calls[0][0].data.kpiRuleId).toBe('own');
+    });
+
     it('та же сумма оклада — запись не переписывается', async () => {
         // Суммы из базы приходят объектами Decimal: сравнение `!==` считало
         // их разными всегда и переписывало оклад при каждом открытии отчёта.
@@ -627,5 +805,29 @@ describe('PayrollService.ensureMonthlyAccruals — оклады и KPI-бону�
 
         expect(prisma.payrollAccrual.update).not.toHaveBeenCalled();
         expect(prisma.payrollAccrual.create).not.toHaveBeenCalled();
+    });
+});
+
+describe('PayrollService.planTrips — за какие рейсы бонус за план', () => {
+    it('список и число «N из M» считаются по одному условию', async () => {
+        const prisma: any = makePrismaMock();
+        prisma.order.findMany = jest.fn().mockResolvedValue([
+            { id: 'o1', orderNumber: '001', completedAt: new Date('2026-06-03T10:00:00Z'), customerCompany: { name: 'ТОО «Заказчик»' } },
+            { id: 'o2', orderNumber: '002', completedAt: new Date('2026-06-20T10:00:00Z'), customerCompany: null },
+        ]);
+        prisma.order.count.mockResolvedValue(2);
+        const service = new PayrollService(prisma, new FinanceCalculatorService());
+
+        const trips = await service.planTrips(COMPANY, MANAGER, '2026-06');
+        await service.bonusProgress(COMPANY, MANAGER, '2026-06', [{ id: 'r1', threshold: 2, bonusAmount: 50000 }]);
+
+        expect(trips).toEqual([
+            { id: 'o1', orderNumber: '001', completedAt: new Date('2026-06-03T10:00:00Z'), customer: 'ТОО «Заказчик»' },
+            { id: 'o2', orderNumber: '002', completedAt: new Date('2026-06-20T10:00:00Z'), customer: null },
+        ]);
+        // Одно и то же условие: список не разойдётся с числом, за которое заплатили.
+        expect(prisma.order.findMany.mock.calls[0][0].where).toEqual(prisma.order.count.mock.calls[0][0].where);
+        // Только завершённые рейсы этого человека в этом месяце.
+        expect(JSON.stringify(prisma.order.findMany.mock.calls[0][0].where)).toContain('"status":"COMPLETED"');
     });
 });
