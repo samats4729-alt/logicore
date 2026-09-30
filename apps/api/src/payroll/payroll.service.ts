@@ -16,6 +16,50 @@ interface Payee {
 }
 
 /**
+ * Процент, который ещё придёт.
+ *
+ * `reason`: `unpaid` — рейс завершён, ждёт оплаты заказчика;
+ * `in_progress_paid` — рейс в работе, процент придёт после оплаты;
+ * `in_progress` — рейс в работе, процент придёт после завершения.
+ */
+export interface PendingTrip {
+    orderId: string;
+    orderNumber: string;
+    status: string;
+    reason: 'unpaid' | 'in_progress_paid' | 'in_progress';
+    baseAmount: number;
+    percentValue: number;
+    percentBase: string;
+    amount: number;
+}
+
+/** Схема оплаты для экрана — числами, без служебных полей. */
+export function schemeView(s: PayrollScheme) {
+    return {
+        id: s.id,
+        userId: s.userId,
+        type: s.type,
+        fixedAmount: D(s.fixedAmount).toNumber(),
+        percentValue: D(s.percentValue).toNumber(),
+        percentBase: s.percentBase,
+        accrualStatus: s.accrualStatus,
+        isActive: s.isActive,
+    };
+}
+
+/** Бонус за план для экрана. */
+export function bonusRuleView(r: PayrollKpiRule) {
+    return {
+        id: r.id,
+        userId: r.userId,
+        threshold: r.threshold,
+        bonusAmount: D(r.bonusAmount).toNumber(),
+        personal: r.userId !== null,
+        isActive: r.isActive,
+    };
+}
+
+/**
  * Рейсы, которые человек ведёт в этой компании.
  *
  * Ответственный за рейс — тот, кто стоит в карточке рейса («Ответственный ·
@@ -32,6 +76,22 @@ export function responsibleOrdersWhere(companyId: string, userId: string): Prism
         OR: [
             { responsibles: { some: { companyId, userId } } },
             { responsibles: { none: {} }, responsibleManagerId: userId, responsibleManager: { companyId } },
+        ],
+    };
+}
+
+/**
+ * Рейсы, которые идут в зачёт плана за месяц: человек их вёл, и они
+ * завершены в этом месяце. Одно условие на три места — начисление бонуса,
+ * прогресс «осталось N рейсов» и список рейсов в карточке, — чтобы список
+ * всегда сходился с числом, за которое заплатили.
+ */
+export function planTripsWhere(companyId: string, userId: string, periodMonth: string): Prisma.OrderWhereInput {
+    const { start, end } = kzMonthBounds(periodMonth);
+    return {
+        AND: [
+            responsibleOrdersWhere(companyId, userId),
+            { status: 'COMPLETED', completedAt: { gte: start, lt: end } },
         ],
     };
 }
@@ -184,13 +244,7 @@ export class PayrollService {
 
             if (!loaded) {
                 scheme = await this.getSchemeFor(companyId, userId);
-                kpiRules = await this.prisma.payrollKpiRule.findMany({
-                    where: {
-                        companyId,
-                        isActive: true,
-                        OR: [{ userId: null }, { userId }],
-                    },
-                });
+                kpiRules = await this.bonusRulesFor(companyId, userId);
                 loaded = true;
             }
 
@@ -204,7 +258,271 @@ export class PayrollService {
             for (const rule of kpiRules) {
                 await this.ensureKpi(companyId, userId, periodMonth, rule);
             }
+
+            // Бонус за план выключили или правило удалили — в текущем месяце
+            // этого бонуса больше нет. Прошлые месяцы остаются как были.
+            if (periodMonth === nowStr) {
+                await this.dropInactiveKpi(companyId, userId, periodMonth, kpiRules.map(r => r.id));
+            }
         }
+    }
+
+    /**
+     * Бонусы за план, которые действуют для человека.
+     *
+     * Свой бонус заменяет общий, а не складывается с ним — так же, как свои
+     * условия оплаты заменяют общую схему. Раньше они суммировались: Марии
+     * поставили свой план «2 рейса — 30 000», а общий «3 рейса — 50 000»
+     * продолжал считаться поверх, и в ведомости выходило два бонуса.
+     */
+    async bonusRulesFor(companyId: string, userId: string): Promise<PayrollKpiRule[]> {
+        const rules = await this.prisma.payrollKpiRule.findMany({
+            where: {
+                companyId,
+                isActive: true,
+                OR: [{ userId: null }, { userId }],
+            },
+            orderBy: { createdAt: 'asc' },
+        });
+        const personal = rules.filter(r => r.userId === userId);
+        return personal.length ? personal : rules.filter(r => !r.userId);
+    }
+
+    /**
+     * Общие условия → свои у каждого. Один раз на компанию.
+     *
+     * Владелец (30.09.2026) убрал деление на «общие» и «свои»: у каждого
+     * сотрудника просто его оклад, процент и бонус, а одинаковое многим
+     * назначают, отметив их галочками. Чтобы никто не потерял деньги, общая
+     * схема и общий бонус раскладываются каждому работающему сотруднику как
+     * его собственные — с теми же цифрами, — после чего общая схема
+     * выключается, а общий бонус удаляется. Новому сотруднику после этого
+     * ничего не начисляется, пока ему не назначат.
+     *
+     * Вызывается при открытии экранов зарплаты руководителем. Повторный
+     * вызов ничего не делает: общих условий уже нет.
+     */
+    async individualizeTerms(companyId: string) {
+        const [general, generalRules] = await Promise.all([
+            this.prisma.payrollScheme.findFirst({ where: { companyId, userId: null, isActive: true } }),
+            this.prisma.payrollKpiRule.findMany({ where: { companyId, userId: null }, orderBy: { createdAt: 'asc' } }),
+        ]);
+        if (!general && !generalRules.length) return;
+
+        const members = await this.payrollMemberIds(companyId);
+
+        await this.prisma.$transaction(async (tx) => {
+            if (general) {
+                const own = await tx.payrollScheme.findMany({
+                    where: { companyId, userId: { in: members } },
+                    select: { id: true, userId: true, isActive: true },
+                });
+                const copy = {
+                    type: general.type,
+                    fixedAmount: general.fixedAmount,
+                    percentValue: general.percentValue,
+                    percentBase: general.percentBase,
+                    accrualStatus: general.accrualStatus,
+                    isActive: true,
+                };
+                const withOwn = new Set(own.map(s => s.userId));
+                const missing = members.filter(id => !withOwn.has(id));
+                if (missing.length) {
+                    await tx.payrollScheme.createMany({ data: missing.map(userId => ({ companyId, userId, ...copy })) });
+                }
+                // Своя схема была, но выключена — человек жил на общей: даём ему её цифры.
+                for (const s of own.filter(x => !x.isActive)) {
+                    await tx.payrollScheme.update({ where: { id: s.id }, data: copy });
+                }
+                await tx.payrollScheme.update({ where: { id: general.id }, data: { isActive: false } });
+            }
+
+            if (generalRules.length) {
+                const ownRules = await tx.payrollKpiRule.findMany({
+                    where: { companyId, userId: { in: members } },
+                    select: { userId: true },
+                });
+                const withOwnRule = new Set(ownRules.map(r => r.userId));
+                const data = members
+                    .filter(id => !withOwnRule.has(id))
+                    .flatMap(userId => generalRules.map(r => ({
+                        companyId,
+                        userId,
+                        metric: r.metric,
+                        threshold: r.threshold,
+                        bonusAmount: r.bonusAmount,
+                        // Бонусы на паузе остаются на паузе.
+                        isActive: r.isActive,
+                    })));
+                if (data.length) await tx.payrollKpiRule.createMany({ data });
+                // Не выключаем, а удаляем: галочка «Платить бонусы» включает все
+                // правила разом и вернула бы общий бонус обратно.
+                await tx.payrollKpiRule.deleteMany({ where: { id: { in: generalRules.map(r => r.id) } } });
+            }
+        });
+    }
+
+    /** Кто получает зарплату в компании: работающие, без водителей и получателей груза. */
+    private async payrollMemberIds(companyId: string): Promise<string[]> {
+        const users = await this.prisma.user.findMany({
+            where: {
+                isActive: true,
+                OR: [{ companyId }, { userCompanyRelations: { some: { companyId } } }],
+            },
+            select: { id: true, role: true, userCompanyRelations: { where: { companyId }, select: { role: true } } },
+        });
+        return users
+            .filter(u => !['DRIVER', 'RECIPIENT'].includes(u.userCompanyRelations[0]?.role ?? u.role))
+            .map(u => u.id);
+    }
+
+    /**
+     * Как человеку платят сейчас: действующая схема (своя или общая) и
+     * бонусы за план. Одним ответом — чтобы экран не складывал это сам.
+     */
+    async termsFor(companyId: string, userId: string) {
+        const [scheme, bonusRules, anyActiveRule] = await Promise.all([
+            this.getSchemeFor(companyId, userId),
+            this.bonusRulesFor(companyId, userId),
+            this.prisma.payrollKpiRule.count({ where: { companyId, isActive: true } }),
+        ]);
+        return {
+            scheme: scheme ? schemeView(scheme) : null,
+            schemeSource: scheme ? (scheme.userId ? 'personal' : 'general') as 'personal' | 'general' : null,
+            bonusRules: bonusRules.map(bonusRuleView),
+            bonusesEnabled: anyActiveRule > 0,
+        };
+    }
+
+    /**
+     * Сколько рейсов человек закрыл за месяц против нормы каждого бонуса.
+     * Для строки «до бонуса осталось 1 рейс».
+     */
+    /**
+     * За какие рейсы бонус за план: список завершённых за месяц рейсов
+     * человека. Раньше руководитель видел только «10 из 10» и сумму, а какие
+     * именно рейсы засчитаны — нигде (владелец, 30.09.2026).
+     */
+    async planTrips(companyId: string, userId: string, periodMonth: string) {
+        const orders = await this.prisma.order.findMany({
+            where: planTripsWhere(companyId, userId, periodMonth),
+            select: {
+                id: true,
+                orderNumber: true,
+                completedAt: true,
+                customerCompany: { select: { name: true } },
+            },
+            orderBy: { completedAt: 'asc' },
+        });
+        return orders.map(o => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            completedAt: o.completedAt,
+            customer: o.customerCompany?.name ?? null,
+        }));
+    }
+
+    async bonusProgress(companyId: string, userId: string, periodMonth: string, rules: { id: string; threshold: number; bonusAmount: any }[]) {
+        if (!rules.length) return [];
+        const done = await this.prisma.order.count({ where: planTripsWhere(companyId, userId, periodMonth) });
+        return rules.map(r => ({
+            ruleId: r.id,
+            threshold: r.threshold,
+            bonusAmount: D(r.bonusAmount).toNumber(),
+            done,
+        }));
+    }
+
+    /**
+     * Проценты, которые ещё придут: рейс не завершён или заказчик не
+     * оплатил, а схема начисляет процент именно за это событие.
+     *
+     * Сумма — оценка по сегодняшней цене и марже; окончательная считается в
+     * момент начисления. Раньше этих денег не было видно нигде, и менеджер не
+     * понимал, почему у него за рейс ноль.
+     */
+    async pendingPercent(companyId: string, userIds: string[]): Promise<Map<string, PendingTrip[]>> {
+        const result = new Map<string, PendingTrip[]>();
+        if (!userIds.length) return result;
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                status: { notIn: ['CANCELLED', 'DRAFT'] },
+                OR: [
+                    { responsibles: { some: { companyId, userId: { in: userIds } } } },
+                    { responsibles: { none: {} }, responsibleManagerId: { in: userIds }, responsibleManager: { companyId } },
+                ],
+            },
+            include: { responsibles: { select: { companyId: true, userId: true } } },
+            orderBy: { createdAt: 'asc' },
+        });
+        if (!orders.length) return result;
+
+        const orderIds = orders.map(o => o.id);
+        const accrued = await this.prisma.payrollAccrual.findMany({
+            where: { orderId: { in: orderIds }, kind: 'PERCENT', NOT: { amount: 0 } },
+            select: { orderId: true, userId: true },
+        });
+        const accruedKey = new Set(accrued.map(a => `${a.orderId}:${a.userId}`));
+
+        const schemes = new Map<string, PayrollScheme | null>();
+        for (const userId of userIds) schemes.set(userId, await this.getSchemeFor(companyId, userId));
+
+        // Маржу считаем разом по всем рейсам: четыре запроса вместо четырёх
+        // на каждый рейс.
+        const [payments, shares, incomes, expenses] = await Promise.all([
+            this.prisma.payment.findMany({ where: { orderId: { in: orderIds }, isDeleted: false } }),
+            this.prisma.paymentOrderShare.findMany({
+                where: { orderId: { in: orderIds }, payment: { isDeleted: false } },
+                select: { ...PAYMENT_SHARE_SELECT, orderId: true },
+            }),
+            this.prisma.income.findMany({ where: { orderId: { in: orderIds }, companyId, isDeleted: false } }),
+            this.prisma.expense.findMany({ where: { orderId: { in: orderIds }, companyId, isDeleted: false } }),
+        ]);
+        const byOrder = <T extends { orderId: string | null }>(rows: T[], id: string) => rows.filter(r => r.orderId === id);
+
+        for (const order of orders) {
+            const userId = order.responsibles.find(r => r.companyId === companyId)?.userId
+                ?? (order.responsibles.length ? null : order.responsibleManagerId);
+            if (!userId || !userIds.includes(userId)) continue;
+            if (accruedKey.has(`${order.id}:${userId}`)) continue;
+
+            const scheme = schemes.get(userId);
+            if (!scheme || scheme.type === 'FIXED' || D(scheme.percentValue).lte(0)) continue;
+
+            const forPayment = scheme.accrualStatus === 'CUSTOMER_PAID';
+            if (forPayment && order.isCustomerPaid) continue;
+            if (!forPayment && order.status === scheme.accrualStatus) continue;
+
+            let base: Money = ZERO;
+            if (scheme.percentBase === 'ORDER_AMOUNT') {
+                base = D(order.customerPrice);
+            } else {
+                base = this.calculator.computeOrderFinance({
+                    order,
+                    payments: [...byOrder(payments, order.id), ...sharesAsPayments(byOrder(shares, order.id))],
+                    incomes: byOrder(incomes, order.id),
+                    expenses: byOrder(expenses, order.id),
+                    companyId,
+                }).margin;
+            }
+            const amount = roundMoney(base.times(D(scheme.percentValue)).div(100));
+            if (amount.lte(0)) continue;
+
+            const list = result.get(userId) ?? [];
+            list.push({
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                status: order.status,
+                reason: forPayment ? (order.status === 'COMPLETED' ? 'unpaid' : 'in_progress_paid') : 'in_progress',
+                baseAmount: base.toNumber(),
+                percentValue: D(scheme.percentValue).toNumber(),
+                percentBase: scheme.percentBase,
+                amount: amount.toNumber(),
+            });
+            result.set(userId, list);
+        }
+        return result;
     }
 
     // ==================== внутреннее ====================
@@ -397,15 +715,7 @@ export class PayrollService {
         if (rule.metric !== 'COMPLETED_ORDERS_MONTH') return;
 
         // Количество завершённых рейсов, которые человек вёл в этой компании за месяц
-        const { start, end } = kzMonthBounds(periodMonth);
-        const count = await this.prisma.order.count({
-            where: {
-                AND: [
-                    responsibleOrdersWhere(companyId, userId),
-                    { status: 'COMPLETED', completedAt: { gte: start, lt: end } },
-                ],
-            },
-        });
+        const count = await this.prisma.order.count({ where: planTripsWhere(companyId, userId, periodMonth) });
 
         const existing = await this.prisma.payrollAccrual.findFirst({
             where: { companyId, userId, periodMonth, kind: 'KPI', kpiRuleId: rule.id },
@@ -453,6 +763,32 @@ export class PayrollService {
             });
         } catch (e: any) {
             if (e.code !== 'P2002') throw e;
+        }
+    }
+
+    private async dropInactiveKpi(companyId: string, userId: string, periodMonth: string, activeRuleIds: string[]) {
+        const stale = await this.prisma.payrollAccrual.findMany({
+            where: {
+                companyId,
+                userId,
+                periodMonth,
+                kind: 'KPI',
+                NOT: { amount: 0 },
+                ...(activeRuleIds.length ? { kpiRuleId: { notIn: activeRuleIds } } : {}),
+            },
+        });
+        for (const accrual of stale) {
+            await this.prisma.payrollAccrual.update({
+                where: { id: accrual.id },
+                data: {
+                    amount: 0,
+                    schemeSnapshot: {
+                        ...((accrual.schemeSnapshot as any) || {}),
+                        _reversedReason: 'rule_disabled',
+                        _reversedAt: new Date().toISOString(),
+                    },
+                },
+            });
         }
     }
 

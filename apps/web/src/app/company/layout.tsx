@@ -30,6 +30,7 @@ import {
     NotificationOutlined,
     CustomerServiceOutlined,
     CreditCardOutlined,
+    WalletOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
@@ -346,6 +347,16 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 icon: <UserOutlined />,
                 label: 'Профиль',
                 onClick: () => router.push('/company/profile'),
+            },
+            // «Моя зарплата» — личное, как профиль, и открыта каждому. Раньше
+            // ссылка жила только в разделе «Деньги», а менеджеру без доступа к
+            // бухгалтерии он не виден: свою зарплату он находил лишь по
+            // плитке на главной (владелец, 30.09.2026).
+            {
+                key: '/company/my-salary',
+                icon: <WalletOutlined />,
+                label: 'Моя зарплата',
+                onClick: () => router.push('/company/my-salary'),
             },
             // «Подписка» — там, где её ищут. Про тариф было написано только
             // плиткой на главной, среди рабочих цифр: кто продлевает, заходит

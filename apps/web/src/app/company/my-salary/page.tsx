@@ -1,160 +1,57 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Table } from 'antd';
-import { Banknote, CalendarDays, Route, Star } from 'lucide-react';
-import { api } from '@/lib/api';
+import { useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
-import Link from 'next/link';
-import Loader from '@/components/ui/Loader';
+import { Wallet } from 'lucide-react';
+import { api } from '@/lib/api';
+import { EmployeeMonth, месяцСловом, тенге } from '@/lib/payroll';
+import MonthSwitcher from '@/components/payroll/MonthSwitcher';
+import EmployeeMonthDetails from '@/components/payroll/EmployeeMonthDetails';
+import MyYearReport from '@/components/payroll/MyYearReport';
 import styles from '@/components/nova/nova.module.css';
-import { MonthRangeField } from '@/components/ui/DateField';
 
 /**
- * Что человеку начислили — его собственный экран.
+ * Что человеку начислено — его собственный экран.
  *
  * Сервер отдаёт только свои начисления: чужую зарплату отсюда не видно ни
- * при каких правах. Разбивка на три части — оклад, проценты по рейсам,
- * бонусы — та же, что у руководителя в разделе «Зарплата и мотивация»,
- * чтобы разговор о деньгах шёл по одним и тем же числам.
+ * при каких правах. Разложено так же, как в карточке сотрудника у
+ * руководителя, — чтобы разговор о деньгах шёл по одним и тем же числам.
+ *
+ * Здесь же — как человеку платят, сколько рейсов осталось до бонуса и что
+ * придёт позже. Раньше сотрудник видел только итог и не понимал, почему за
+ * рейс ноль: рейс не оплачен, и процент придёт после оплаты.
+ *
+ * Под плитками — отчёт по месяцам за год: сколько вышло в каждом месяце и
+ * итог за год. Нажатие на месяц раскрывает его расшифровку ниже.
  */
-
-interface Accrual {
-    id: string;
-    kind: 'SALARY' | 'PERCENT' | 'KPI';
-    amount: number;
-    periodMonth: string;
-    baseAmount?: number | null;
-    percentValue?: number | null;
-    percentBase?: string | null;
-    /** Норма рейсов из правила бонуса. */
-    threshold?: number | null;
-    /** Почему процент обнулён: «рейс отменён», «рейс передан другому менеджеру». */
-    reversedReason?: string | null;
-    createdAt: string;
-    order?: {
-        id: string;
-        orderNumber: string;
-        date: string;
-    } | null;
-}
-
-const MONTHS = [
-    'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
-    'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
-];
-
-/** «2026-08» → «август 2026». Месяц по-русски: `dayjs` без локали пишет
- *  его по-английски, и в ведомости появлялось «August 2026». */
-function monthLabel(periodMonth: string) {
-    const [year, month] = periodMonth.split('-');
-    const name = MONTHS[Number(month) - 1];
-    return name ? `${name} ${year}` : periodMonth;
-}
-
-const fmt = (v: number) => v.toLocaleString('ru-RU');
-
-/** «1 рейс» / «3 рейса» / «5 рейсов». */
-function рейсовСловом(n: number): string {
-    const хвост = n % 100;
-    const последняя = n % 10;
-    if (хвост > 10 && хвост < 20) return 'рейсов';
-    if (последняя === 1) return 'рейс';
-    if (последняя >= 2 && последняя <= 4) return 'рейса';
-    return 'рейсов';
-}
-
 export default function MySalaryPage() {
-    const [dates, setDates] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-        dayjs().startOf('month'),
-        dayjs().endOf('month'),
-    ]);
-    const [loading, setLoading] = useState(true);
-    const [data, setData] = useState<{
-        accruals: Accrual[];
-        totals: { salary: number; percentTotal: number; kpiTotal: number; total: number };
-    }>({ accruals: [], totals: { salary: 0, percentTotal: 0, kpiTotal: 0, total: 0 } });
-
-    const loadData = async (start: dayjs.Dayjs, end: dayjs.Dayjs) => {
-        setLoading(true);
-        try {
-            const from = start.format('YYYY-MM');
-            const to = end.format('YYYY-MM');
-            const res = await api.get(`/payroll/my?from=${from}&to=${to}`);
-            setData(res.data);
-        } catch (err) {
-            console.error('Failed to load salary details', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const currentMonth = dayjs().format('YYYY-MM');
+    const [month, setMonth] = useState(currentMonth);
+    const [data, setData] = useState<EmployeeMonth | null>(null);
+    const [failed, setFailed] = useState(false);
+    const detailsRef = useRef<HTMLElement>(null);
 
     useEffect(() => {
-        if (dates[0] && dates[1]) {
-            loadData(dates[0], dates[1]);
-        }
-    }, [dates]);
+        let alive = true;
+        setData(null);
+        setFailed(false);
+        api.get(`/payroll/my?from=${month}&to=${month}`)
+            .then(res => { if (alive) setData(res.data); })
+            .catch(() => { if (alive) setFailed(true); });
+        return () => { alive = false; };
+    }, [month]);
 
-    const percentAccruals = data.accruals.filter(a => a.kind === 'PERCENT');
-    const salaryAccruals = data.accruals.filter(a => a.kind === 'SALARY');
-    const kpiAccruals = data.accruals.filter(a => a.kind === 'KPI');
+    /**
+     * Бонусы показываем, если бонус за план человеку положен или уже
+     * начислялся. Компании, которые планов не ставят, иначе видели бы у
+     * сотрудников вечный «0 ₸» про то, чего у них нет.
+     */
+    const showBonuses = !!data && (data.bonusesEnabled || data.totals.kpiTotal > 0);
 
-    const columns = [
-        {
-            title: 'Рейс',
-            key: 'order',
-            render: (_: any, r: Accrual) => r.order ? (
-                <Link href={`/company/orders/${r.order.id}`} className="lc-ordernum" style={{ fontSize: 13 }}>
-                    {r.order.orderNumber}
-                </Link>
-            ) : '—',
-        },
-        {
-            title: 'Завершён',
-            key: 'date',
-            render: (_: any, r: Accrual) => r.order?.date
-                ? <span style={{ fontSize: 12 }}>{dayjs(r.order.date).format('DD.MM.YYYY, HH:mm')}</span>
-                : '—',
-        },
-        {
-            title: 'Считали от',
-            dataIndex: 'baseAmount',
-            key: 'base',
-            align: 'right' as const,
-            render: (v: number | null, r: Accrual) => {
-                if (v === null || v === undefined) return '—';
-                return (
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
-                        {fmt(v)} ₸
-                        <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>
-                            {r.percentBase === 'MARGIN' ? ' · маржа' : ' · сумма рейса'}
-                        </span>
-                    </span>
-                );
-            },
-        },
-        {
-            title: 'Ставка',
-            dataIndex: 'percentValue',
-            key: 'rate',
-            align: 'center' as const,
-            render: (v: number | null) => v !== null && v !== undefined ? `${v}%` : '—',
-        },
-        {
-            title: 'Начислено',
-            dataIndex: 'amount',
-            key: 'amount',
-            align: 'right' as const,
-            render: (v: number, r: Accrual) => (
-                <>
-                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(v)} ₸</span>
-                    {r.reversedReason && (
-                        <div style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>{r.reversedReason}</div>
-                    )}
-                </>
-            ),
-        },
-    ];
+    const openMonth = (m: string) => {
+        setMonth(m);
+        detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
 
     return (
         <div className={styles.page}>
@@ -163,133 +60,70 @@ export default function MySalaryPage() {
                     <div className={styles.eyebrow}>Деньги · Мои начисления</div>
                     <h1 className={styles.title}>Моя зарплата</h1>
                     <p className={styles.subtitle}>
-                        Сколько начислено вам: оклад, проценты с рейсов и бонусы. Чужих начислений
-                        здесь нет.
+                        Сколько начислено вам и за что. Чужих начислений здесь нет.
                     </p>
                 </div>
                 <div className={styles.heroActions}>
-                    <MonthRangeField
-                        value={dates}
-                        onChange={(val) => {
-                            if (val && val[0] && val[1]) setDates([val[0], val[1]]);
-                        }}
-                        allowClear={false}
-                        placeholder={['Начало', 'Конец']}
-                    />
+                    <MonthSwitcher value={month} max={currentMonth} onChange={setMonth} />
                 </div>
             </div>
 
-            {loading ? (
-                <Loader size="large" full />
+            {failed ? null : !data ? (
+                <div className={styles.tiles}>
+                    {[0, 1, 2, 3].map(i => <div key={i} className={`${styles.tile} h-[86px] animate-pulse`} />)}
+                </div>
             ) : (
-                <>
-                    {/* Начислено — зелёным: это единственное место, где цвет
-                        разрешён поверх чёрно-белой темы. */}
-                    <div className={styles.tiles}>
-                        <div className={styles.tile}>
-                            <div className={styles.tileHead}><span className={styles.tileLabel}>Всего за период</span></div>
-                            <div className={`${styles.tileValue} ${styles.valuePos}`}>{fmt(data.totals.total)} ₸</div>
-                        </div>
-                        <div className={styles.tile}>
-                            <div className={styles.tileHead}><span className={styles.tileLabel}>Оклад</span></div>
-                            <div className={styles.tileValue}>{fmt(data.totals.salary)} ₸</div>
-                        </div>
-                        <div className={styles.tile}>
-                            <div className={styles.tileHead}><span className={styles.tileLabel}>Проценты с рейсов</span></div>
-                            <div className={styles.tileValue}>{fmt(data.totals.percentTotal)} ₸</div>
-                        </div>
-                        <div className={styles.tile}>
-                            <div className={styles.tileHead}><span className={styles.tileLabel}>Бонусы</span></div>
-                            <div className={styles.tileValue}>{fmt(data.totals.kpiTotal)} ₸</div>
+                /* Начислено — зелёным: единственное место, где цвет разрешён
+                   поверх чёрно-белой темы. */
+                <div className={`${styles.tiles} ${showBonuses ? '' : styles.tiles3}`}>
+                    <div className={styles.tile}>
+                        <div className={styles.tileHead}><span className={styles.tileLabel}>Всего за месяц</span></div>
+                        <div className={`${styles.tileValue} ${styles.valuePos}`}>{тенге(data.totals.total)}</div>
+                        <div className={styles.tileSub}>
+                            {data.pendingTotal > 0 ? `ещё ${тенге(data.pendingTotal)} придёт позже` : месяцСловом(month)}
                         </div>
                     </div>
-
-                    <section className={styles.card}>
-                        <div className={styles.cardHead}>
-                            <Route size={14} />
-                            <h2 className={styles.cardTitle}>Проценты по рейсам</h2>
-                            <span className={styles.cardCount}>{percentAccruals.length}</span>
-                        </div>
-                        {percentAccruals.length === 0 ? (
-                            <div className={styles.empty}>
-                                За выбранные месяцы процентов нет. Они начисляются, когда рейс
-                                доходит до статуса, заданного в вашей схеме.
-                            </div>
-                        ) : (
-                            <Table
-                                columns={columns}
-                                dataSource={percentAccruals}
-                                rowKey="id"
-                                size="small"
-                                pagination={percentAccruals.length > 10 ? { pageSize: 10, showSizeChanger: false } : false}
-                            />
-                        )}
-                    </section>
-
-                    <div className={styles.duo} style={{ marginTop: 14 }}>
-                        <section className={styles.card}>
-                            <div className={styles.cardHead}>
-                                <CalendarDays size={14} />
-                                <h2 className={styles.cardTitle}>Оклад по месяцам</h2>
-                                <span className={styles.cardCount}>{salaryAccruals.length}</span>
-                            </div>
-                            <div className={styles.cardBody}>
-                                {salaryAccruals.length === 0 ? (
-                                    <div className={styles.empty}>Оклад за этот период не начислялся.</div>
-                                ) : (
-                                    <div className={styles.list}>
-                                        {salaryAccruals.map(s => (
-                                            <div key={s.id} className={styles.item}>
-                                                <span className={styles.itemIcon}><Banknote size={14} /></span>
-                                                <span className={styles.itemText}>
-                                                    <span className={styles.itemLabel}>{monthLabel(s.periodMonth)}</span>
-                                                </span>
-                                                <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(s.amount)} ₸</b>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </section>
-
-                        <section className={styles.card}>
-                            <div className={styles.cardHead}>
-                                <Star size={14} />
-                                <h2 className={styles.cardTitle}>Бонусы за месяц</h2>
-                                <span className={styles.cardCount}>{kpiAccruals.length}</span>
-                            </div>
-                            <div className={styles.cardBody}>
-                                {kpiAccruals.length === 0 ? (
-                                    <div className={styles.empty}>
-                                        Бонусов не было. Бонус приходит, когда за месяц закрыто не
-                                        меньше рейсов, чем задано в правиле.
-                                    </div>
-                                ) : (
-                                    <div className={styles.list}>
-                                        {kpiAccruals.map(k => (
-                                            <div key={k.id} className={styles.item}>
-                                                <span className={styles.itemIcon}><Star size={14} /></span>
-                                                <span className={styles.itemText}>
-                                                    <span className={styles.itemLabel}>{monthLabel(k.periodMonth)}</span>
-                                                    {/* Норму отдаёт сервер. Раньше она бралась из поля,
-                                                        которого в ответе не было, и у каждого бонуса
-                                                        стояло «норма — 0 рейсов». */}
-                                                    {k.threshold ? (
-                                                        <span className={styles.itemDesc}>
-                                                            норма — {k.threshold} {рейсовСловом(k.threshold)} за месяц
-                                                        </span>
-                                                    ) : null}
-                                                </span>
-                                                <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(k.amount)} ₸</b>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </section>
+                    <div className={styles.tile}>
+                        <div className={styles.tileHead}><span className={styles.tileLabel}>Оклад</span></div>
+                        <div className={styles.tileValue}>{тенге(data.totals.salary)}</div>
                     </div>
-                </>
+                    <div className={styles.tile}>
+                        <div className={styles.tileHead}><span className={styles.tileLabel}>Проценты с рейсов</span></div>
+                        <div className={styles.tileValue}>{тенге(data.totals.percentTotal)}</div>
+                    </div>
+                    {showBonuses && (
+                        <div className={styles.tile}>
+                            <div className={styles.tileHead}><span className={styles.tileLabel}>Бонус за план</span></div>
+                            <div className={styles.tileValue}>{тенге(data.totals.kpiTotal)}</div>
+                        </div>
+                    )}
+                </div>
             )}
+
+            {/* Отчёт за год не зависит от выбранного месяца внутри года: при
+                переключении месяца он не перезагружается и не мигает. */}
+            <MyYearReport
+                year={month.slice(0, 4)}
+                selected={month}
+                lastMonth={currentMonth}
+                onSelect={openMonth}
+            />
+
+            <section ref={detailsRef} className={`${styles.card} scroll-mt-20`}>
+                <div className={styles.cardHead}>
+                    <Wallet size={14} />
+                    <h2 className={styles.cardTitle}>За что начислено · {месяцСловом(month)}</h2>
+                </div>
+                {failed ? (
+                    <div className={styles.empty}>Не удалось загрузить начисления за месяц. Обновите страницу.</div>
+                ) : !data ? (
+                    <div className="h-64 animate-pulse" />
+                ) : (
+                    <div className={styles.cardBody}>
+                        <EmployeeMonthDetails data={data} showTotal={false} who="self" />
+                    </div>
+                )}
+            </section>
         </div>
     );
 }
