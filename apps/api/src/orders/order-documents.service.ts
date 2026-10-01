@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CompanyVerificationStatus, OrderDocumentKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderContractService } from './order-contract.service';
-import { OrderSettlementsService } from './order-settlements.service';
 import { PowerOfAttorneyService, PowerOfAttorneySnapshot } from './power-of-attorney.service';
 import { EmailService } from '../email/email.service';
 import { RedisService } from '../redis/redis.service';
@@ -76,7 +75,6 @@ export class OrderDocumentsService {
         private readonly prisma: PrismaService,
         private readonly contracts: OrderContractService,
         private readonly poa: PowerOfAttorneyService,
-        private readonly settlements: OrderSettlementsService,
         private readonly email: EmailService,
         private readonly redis: RedisService,
     ) {}
@@ -154,9 +152,15 @@ export class OrderDocumentsService {
     /**
      * Провести документ: содержимое замирает, печать разрешена.
      *
-     * Пока расчёты по рейсу не проверены, проводить нечего: именно налоговая
-     * часть и срок оплаты в договоре и бывают неверными, а печать на документе
-     * означает, что компания за них отвечает.
+     * Ни от чего, кроме самого документа, проведение не зависит. Раньше
+     * договор-заявка не проводилась, пока по рейсу не проверены расчёты:
+     * бухгалтер нажимал «Провести» и получал «Сначала разберитесь с
+     * расчётами… в карточке перевозчика не заполнены условия расчётов» — даже
+     * когда всё нужное уже стояло в самой заявке. Договор с перевозчиком
+     * подписывают до рейса, а карточки контрагентов заполняют когда придётся;
+     * держать одно в заложниках у другого незачем. Что именно заверять,
+     * решает тот, кто нажимает «Провести»: черновик перед этим можно открыть
+     * и проверить (решение владельца по просьбе бухгалтера, 02.10.2026).
      */
     async post(documentId: string, companyId: string, userId: string) {
         const document = await this.prisma.orderDocument.findFirst({
@@ -166,15 +170,6 @@ export class OrderDocumentsService {
         if (!document) throw new NotFoundException('Документ не найден');
         if (document.status === 'POSTED' || document.status === 'SENT') {
             throw new BadRequestException('Документ уже проведён');
-        }
-
-        const settlements = await this.settlements.stateOf(document.orderId, companyId);
-        if (!settlements.confirmed) {
-            throw new BadRequestException(
-                settlements.missing.length
-                    ? `Сначала разберитесь с расчётами. ${settlements.missing.join('. ')}`
-                    : 'Расчёты по рейсу не подтверждены — проверьте их во вкладке «Финансы»',
-            );
         }
 
         const updated = await this.prisma.orderDocument.update({

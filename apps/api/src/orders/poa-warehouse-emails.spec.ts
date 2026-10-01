@@ -64,7 +64,6 @@ function build(options: {
         prisma,
         { renderFromSnapshot: jest.fn().mockResolvedValue(Buffer.from('pdf')), summaryOf: jest.fn(() => ({})) } as any,
         poa,
-        { stateOf: jest.fn().mockResolvedValue({ confirmed: true, missing: [] }) } as any,
         email,
         redis,
     );
