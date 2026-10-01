@@ -125,11 +125,10 @@ function makeService(stampAllowed = false) {
     };
     const service = new OrderContractService(prisma, stamps);
     const poa = new PowerOfAttorneyService(prisma, stamps);
-    // Проверка расчётов и почта здесь не участвуют: эти тесты про печатную
-    // форму и версии, а не про проведение и отправку.
-    const settlements: any = { stateOf: jest.fn(async () => ({ confirmed: true, missing: [] })) };
+    // Почта здесь не участвует: эти тесты про печатную форму и версии, а не
+    // про отправку.
     const email: any = { sendOrderDocumentEmail: jest.fn() };
-    const documents = new OrderDocumentsService(prisma, service, poa, settlements, email, { delByPattern: jest.fn() } as any);
+    const documents = new OrderDocumentsService(prisma, service, poa, email, { delByPattern: jest.fn() } as any);
     return { service, documents, poa, prisma, stamps, stampBuffer, saved };
 }
 

@@ -35,8 +35,6 @@ const CONTRACT_SNAPSHOT = {
 function build(options: {
     last?: any;
     document?: any;
-    confirmed?: boolean;
-    missing?: string[];
     counterparty?: any;
     onPlatform?: any;
     pickups?: any[];
@@ -100,18 +98,12 @@ function build(options: {
         renderFromSnapshot: jest.fn().mockResolvedValue(Buffer.from('pdf')),
         summaryOf: jest.fn(() => ({})),
     };
-    const settlements: any = {
-        stateOf: jest.fn().mockResolvedValue({
-            confirmed: options.confirmed ?? true,
-            missing: options.missing ?? [],
-        }),
-    };
     const email: any = { sendOrderDocumentEmail: jest.fn().mockResolvedValue(undefined) };
 
     const redis: any = { delByPattern: jest.fn().mockResolvedValue(undefined) };
 
-    const service = new OrderDocumentsService(prisma, contracts, poa, settlements, email, redis);
-    return { service, prisma, created, updates, saved, email, settlements };
+    const service = new OrderDocumentsService(prisma, contracts, poa, email, redis);
+    return { service, prisma, created, updates, saved, email };
 }
 
 describe('Жизнь документа по рейсу', () => {
@@ -248,15 +240,16 @@ describe('Жизнь документа по рейсу', () => {
             expect(updates[0].data.postedAt).toBeInstanceOf(Date);
         });
 
-        it('пока расчёты не проверены — проводить нечего, и сказано почему', async () => {
-            const { service, updates } = build({
-                confirmed: false,
-                missing: ['В карточке перевозчика «ИП Сериков» не заполнены условия расчётов'],
-            });
+        // Просьба бухгалтера (02.10.2026): договор-заявка не должна зависеть
+        // ни от чего. Раньше без проверенных расчётов и заполненных карточек
+        // контрагентов «Провести» отвечало отказом.
+        it('проводится, даже если расчёты по рейсу не проверены', async () => {
+            const { service, updates } = build();
 
-            await expect(service.post('d-1', 'c-1', 'u-9'))
-                .rejects.toThrow(/В карточке перевозчика/);
-            expect(updates).toHaveLength(0);
+            await service.post('d-1', 'c-1', 'u-9');
+
+            expect(updates).toHaveLength(1);
+            expect(updates[0].data.status).toBe('POSTED');
         });
 
         it('дважды не проводится', async () => {
