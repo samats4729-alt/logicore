@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, Store } from 'lucide-react';
+import { ArrowRight, Plus, Store, UsersRound } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
 import { EXCHANGE_LOAD_STATUS_LABELS } from '@/lib/vocabulary';
-import { ExchangeFilter, ExchangeList, грузКратко, когдаПогрузка } from '@/lib/exchange';
+import { ExchangeFilter, ExchangeList, exchangeStatus, грузКратко, когдаПогрузка } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusPill from '@/components/ui/StatusPill';
@@ -30,6 +30,14 @@ export default function ExchangePage() {
     const [filter, setFilter] = useState<ExchangeFilter>('active');
     const [data, setData] = useState<ExchangeList | null>(null);
     const [failed, setFailed] = useState(false);
+    /* Парк — компания-посредник: ей видны и водители, которые возят через неё. */
+    const [isPark, setIsPark] = useState(false);
+
+    useEffect(() => {
+        let alive = true;
+        exchangeStatus().then((s) => { if (alive) setIsPark(s.isPark); });
+        return () => { alive = false; };
+    }, []);
 
     useEffect(() => {
         let alive = true;
@@ -51,6 +59,11 @@ export default function ExchangePage() {
                     </p>
                 </div>
                 <div className={styles.heroActions}>
+                    {isPark && (
+                        <Button variant="outline" onClick={() => router.push('/company/exchange/drivers')}>
+                            <UsersRound className="h-4 w-4" /> Водители парка
+                        </Button>
+                    )}
                     <Button onClick={() => router.push('/company/exchange/new')}>
                         <Plus className="h-4 w-4" /> Поставить груз
                     </Button>

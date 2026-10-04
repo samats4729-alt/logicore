@@ -91,19 +91,92 @@ export function ответСервера(error: any, fallback: string): string {
     return fallback;
 }
 
+export interface ExchangeStatus {
+    /** Биржа включена на сервере. */
+    enabled: boolean;
+    /** Компания — парк: у неё есть раздел «Водители биржи». */
+    isPark: boolean;
+}
+
 /**
- * Включена ли биржа на сервере. Спрашиваем один раз за сессию: вкладка в
- * меню не должна мигать при каждом переходе.
+ * Включена ли биржа и парк ли компания. Спрашиваем один раз за сессию:
+ * вкладка в меню не должна мигать при каждом переходе.
  */
-let enabledRequest: Promise<boolean> | null = null;
-export function exchangeEnabled(): Promise<boolean> {
-    if (!enabledRequest) {
-        enabledRequest = api.get('/exchange/status')
-            .then((r) => !!r.data?.enabled)
+let statusRequest: Promise<ExchangeStatus> | null = null;
+export function exchangeStatus(): Promise<ExchangeStatus> {
+    if (!statusRequest) {
+        statusRequest = api.get('/exchange/status')
+            .then((r) => ({ enabled: !!r.data?.enabled, isPark: !!r.data?.isPark }))
             .catch(() => {
-                enabledRequest = null;
-                return false;
+                statusRequest = null;
+                return { enabled: false, isPark: false };
             });
     }
-    return enabledRequest;
+    return statusRequest;
+}
+
+export function exchangeEnabled(): Promise<boolean> {
+    return exchangeStatus().then((s) => s.enabled);
+}
+
+// ==================== водители биржи ====================
+
+export type DriverDocumentKind =
+    'ID_FRONT' | 'ID_BACK' | 'SELFIE_WITH_ID' | 'LICENSE' | 'VEHICLE_REGISTRATION' | 'POWER_OF_ATTORNEY' | 'IP_CERTIFICATE';
+
+/** Подписи фото — те же слова, что видит водитель в приложении. */
+export const DRIVER_DOCUMENT_TITLES: Record<DriverDocumentKind, string> = {
+    ID_FRONT: 'Удостоверение — лицевая сторона',
+    ID_BACK: 'Удостоверение — обратная сторона',
+    SELFIE_WITH_ID: 'Фото с удостоверением в руке',
+    LICENSE: 'Водительское удостоверение',
+    VEHICLE_REGISTRATION: 'Техпаспорт',
+    POWER_OF_ATTORNEY: 'Доверенность от владельца машины',
+    IP_CERTIFICATE: 'Документ о регистрации ИП',
+};
+
+export interface ExchangeDriver {
+    id: string;
+    kind: 'IP' | 'PARK' | null;
+    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'BLOCKED';
+    park: { id: string; name: string } | null;
+    lastName: string | null;
+    firstName: string | null;
+    middleName: string | null;
+    iin: string | null;
+    phone: string | null;
+    email: string | null;
+    ipName: string | null;
+    ipIin: string | null;
+    vehiclePlate: string | null;
+    vehicleBodyType: string | null;
+    vehicleCapacityKg: number | null;
+    vehicleIsOwn: boolean;
+    contractSignedAt: string | null;
+    submittedAt: string | null;
+    reviewedAt: string | null;
+    rejectReason: string | null;
+    blockedAt: string | null;
+    blockedReason: string | null;
+    tripsCompleted: number;
+    createdAt: string;
+    documents: { id: string; kind: DriverDocumentKind; fileName: string; mimeType: string; createdAt: string }[];
+    missing: string[];
+}
+
+export type ParkDriverFilter = 'pending' | 'approved' | 'rejected' | 'blocked' | 'all';
+
+export interface ParkDriverList {
+    drivers: ExchangeDriver[];
+    counts: Record<ParkDriverFilter, number>;
+}
+
+/** «Сериков Серик Серикович» — или «без имени», если анкета пустая. */
+export function фиоВодителя(d: Pick<ExchangeDriver, 'lastName' | 'firstName' | 'middleName'>): string {
+    return [d.lastName, d.firstName, d.middleName].filter(Boolean).join(' ') || 'Без имени';
+}
+
+/** «900101 300123» — ИИН читается группами. */
+export function иинКрасиво(iin: string | null): string {
+    return iin ? `${iin.slice(0, 6)} ${iin.slice(6)}` : '—';
 }

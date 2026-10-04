@@ -40,6 +40,10 @@ export const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
     OPEN: { bg: '#fff4e5', fg: '#b45309' },
     TAKEN: { bg: '#e8f0fe', fg: '#1d4ed8' },
     DELIVERED: { bg: '#e7f8ef', fg: '#15803d' },
+    // Водитель биржи: допущен, отказ, заблокирован.
+    APPROVED: { bg: '#e7f8ef', fg: '#15803d' },
+    REJECTED: { bg: '#f1f2f4', fg: '#5f6672' },
+    BLOCKED: { bg: '#fee2e2', fg: '#dc2626' },
 };
 
 // Подписи статусов живут в общем словаре; реэкспорт оставлен, потому что
@@ -62,6 +66,9 @@ const GLYPHS: Record<string, React.ComponentType<{ className?: string }>> = {
     OPEN: Clock,
     TAKEN: UserRound,
     DELIVERED: Check,
+    APPROVED: Check,
+    REJECTED: X,
+    BLOCKED: X,
 };
 
 /** Восклицательный знак: в наборе иконок он есть только внутри кружка, а

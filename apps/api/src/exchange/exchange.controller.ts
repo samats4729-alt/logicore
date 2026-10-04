@@ -5,13 +5,13 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { Response } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AllowWithoutCompany, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PrismaService } from '../prisma/prisma.service';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { S3Service } from '../s3/s3.service';
-import { fileResponseHeaders, MAX_UPLOAD_SIZE } from '../documents/allowed-files';
+import { MAX_UPLOAD_SIZE } from '../documents/allowed-files';
+import { sendExchangeFile } from './exchange-files';
 import { AuditService } from '../audit/audit.service';
 import { ExchangeService } from './exchange.service';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
@@ -19,16 +19,26 @@ import {
     CancelExchangeLoadDto, CreateExchangeLoadDto, ExchangeLoadsQueryDto, RoutePricesQueryDto,
 } from './dto/exchange-load.dto';
 
-/** Включена ли биржа — кабинет по этому решает, показывать ли вкладку. */
+/**
+ * Включена ли биржа и парк ли компания — кабинет по этому решает, какие
+ * вкладки показывать. Приложение водителя (без компании) спрашивает то же.
+ */
 @ApiTags('exchange')
 @Controller('exchange')
 @UseGuards(JwtAuthGuard)
+@AllowWithoutCompany()
 @ApiBearerAuth()
 export class ExchangeStatusController {
+    constructor(private readonly prisma: PrismaService) {}
+
     @Get('status')
     @ApiOperation({ summary: 'Включена ли биржа на этом сервере' })
-    status() {
-        return { enabled: exchangeEnabled() };
+    async status(@Request() req: any) {
+        if (!exchangeEnabled()) return { enabled: false, isPark: false };
+        const company = req.user.companyId
+            ? await this.prisma.company.findUnique({ where: { id: req.user.companyId }, select: { isPark: true } })
+            : null;
+        return { enabled: true, isPark: !!company?.isPark };
     }
 }
 
@@ -110,15 +120,7 @@ export class ExchangeController {
     @Get('photos/:photoId')
     @ApiOperation({ summary: 'Фото груза' })
     async photo(@Request() req: any, @Param('photoId') photoId: string, @Res() res: Response) {
-        const photo = await this.service.photo(req.user.companyId, photoId);
-        res.set(fileResponseHeaders(photo.fileName, photo.mimeType));
-        if (this.s3.isS3Enabled()) {
-            const { stream } = await this.s3.downloadFile(photo.fileKey);
-            return stream.pipe(res);
-        }
-        const absolute = path.join(process.cwd(), photo.fileKey);
-        if (!fs.existsSync(absolute)) return res.status(404).json({ message: 'Файл не найден' });
-        return fs.createReadStream(absolute).pipe(res);
+        return sendExchangeFile(this.s3, res, await this.service.photo(req.user.companyId, photoId));
     }
 
     @Delete('photos/:photoId')

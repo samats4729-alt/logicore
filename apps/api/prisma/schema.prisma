@@ -222,6 +222,8 @@ model User {
 
   /// Грузы, которые человек поставил на биржу.
   exchangeLoads ExchangeLoad[] @relation("UserExchangeLoads")
+  /// Анкета водителя биржи — если человек пришёл через приложение.
+  exchangeDriver ExchangeDriver? @relation("UserExchangeDriver")
 
   @@index([phone])
   @@index([role])
@@ -532,6 +534,12 @@ model Company {
 
   /// Грузы компании на бирже.
   exchangeLoads ExchangeLoad[] @relation("CompanyExchangeLoads")
+
+  /// Парк — компания-посредник на бирже: арендует машину с экипажем у
+  /// водителей без ИП, чтобы перевозка шла законно. Ставит отметку только
+  /// владелец платформы в админке.
+  isPark          Boolean          @default(false)
+  exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
 }
 
 // ... existing models ...
@@ -3102,4 +3110,117 @@ model ExchangeLoadPhoto {
   createdAt DateTime @default(now())
 
   @@index([loadId])
+}
+
+/// Кем водитель работает на бирже.
+enum ExchangeDriverKind {
+  IP // Свой ИП — сам перевозчик, проверки нет
+  PARK // Без ИП — через парк, который арендует машину с экипажем
+}
+
+/// Путь анкеты водителя.
+enum ExchangeDriverStatus {
+  DRAFT // Заполняет анкету
+  PENDING // Отправил, парк проверяет
+  APPROVED // Допущен — видит грузы
+  REJECTED // Парк отказал, можно исправить и отправить снова
+  BLOCKED // Заблокирован за обман — вернуться нельзя
+}
+
+/// Водитель биржи — пришёл сам, через приложение, входом Google.
+///
+/// Не путать с водителем компании (User с ролью DRIVER и companyId): того
+/// заводит компания. Здесь человек регистрируется сам, а допускает его парк.
+model ExchangeDriver {
+  id     String               @id @default(cuid())
+  userId String               @unique
+  user   User                 @relation("UserExchangeDriver", fields: [userId], references: [id], onDelete: Cascade)
+  kind   ExchangeDriverKind?
+  status ExchangeDriverStatus @default(DRAFT)
+
+  /// Парк, через который работает водитель без ИП.
+  parkCompanyId String?
+  park          Company? @relation("ParkExchangeDrivers", fields: [parkCompanyId], references: [id], onDelete: SetNull)
+
+  lastName   String?
+  firstName  String?
+  middleName String?
+  /// Один ИИН — один водитель на всей бирже.
+  iin        String? @unique
+  /// Вписан водителем; парк при проверке звонит на него.
+  phone      String?
+
+  /// Данные ИП — у водителя-перевозчика.
+  ipName String?
+  ipIin  String?
+
+  vehiclePlate      String?
+  vehicleBodyType   String?
+  vehicleCapacityKg Int?
+  /// Машина записана на водителя. Нет — нужна доверенность от владельца.
+  vehicleIsOwn      Boolean @default(true)
+
+  /// Договор с парком подписан в приложении. Подпись через eGov — позже.
+  contractSignedAt     DateTime?
+  contractSignedDevice String?
+  contractSignedIp     String?
+
+  submittedAt   DateTime?
+  reviewedAt    DateTime?
+  reviewedById  String?
+  rejectReason  String?
+  blockedAt     DateTime?
+  blockedReason String?
+
+  /// Сколько рейсов довёз — от этого растёт доверие (аванс, дорогие грузы).
+  tripsCompleted Int @default(0)
+
+  documents ExchangeDriverDocument[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parkCompanyId, status])
+  @@index([status])
+}
+
+/// Какой документ сфотографирован.
+enum ExchangeDriverDocumentKind {
+  ID_FRONT // Удостоверение, лицевая сторона
+  ID_BACK // Удостоверение, обратная сторона
+  SELFIE_WITH_ID // Водитель с удостоверением в руке
+  LICENSE // Водительское удостоверение
+  VEHICLE_REGISTRATION // Техпаспорт
+  POWER_OF_ATTORNEY // Доверенность от владельца машины
+  IP_CERTIFICATE // Документ о регистрации ИП
+}
+
+model ExchangeDriverDocument {
+  id       String                     @id @default(cuid())
+  driverId String
+  driver   ExchangeDriver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  kind     ExchangeDriverDocumentKind
+  fileKey  String
+  fileName String
+  mimeType String
+  size     Int
+
+  createdAt DateTime @default(now())
+
+  @@index([driverId])
+}
+
+/// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с
+/// тем же ИИН, ни с тем же телефоном, ни с той же машиной.
+model ExchangeBlocklist {
+  id          String   @id @default(cuid())
+  /// IIN, PHONE или PLATE.
+  kind        String
+  /// Приведённое значение: только цифры у ИИН и телефона, номер — без пробелов, заглавными.
+  value       String
+  reason      String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([kind, value])
 }

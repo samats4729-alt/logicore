@@ -25,6 +25,17 @@ const HTTP_METHODS = new Set(['Get', 'Post', 'Put', 'Patch', 'Delete', 'Options'
 const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     // Своё, личное — не про организацию.
     'AuthController.logout': 'выход',
+    // Биржа: водитель приходит сам, через приложение, и компании у него нет.
+    // Всё ниже отбирается по самому водителю (своя анкета, свои фото).
+    'ExchangeStatusController.status': 'включена ли биржа — одно да/нет',
+    'ExchangeDriverController.me': 'своя анкета водителя биржи',
+    'ExchangeDriverController.update': 'своя анкета водителя биржи',
+    'ExchangeDriverController.parks': 'список парков биржи для выбора в анкете',
+    'ExchangeDriverController.addDocument': 'свои фото документов',
+    'ExchangeDriverController.removeDocument': 'свои фото документов',
+    'ExchangeDriverController.document': 'свои фото документов',
+    'ExchangeDriverController.signContract': 'подпись своего договора с парком',
+    'ExchangeDriverController.submit': 'отправка своей анкеты',
     'AuthController.getMe': 'кто я — этим живёт весь фронтенд',
     'UsersController.uploadMyAvatar': 'своё фото',
     'UsersController.getMyAvatar': 'своё фото',

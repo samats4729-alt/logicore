@@ -1,13 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ExchangeLoadStatus, Prisma } from '@prisma/client';
-import * as fs from 'fs';
-import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { cityKey } from '../cities/city-key';
 import { kzTodayString } from '../common/utils/business-date';
 import { assertAllowedUpload } from '../documents/allowed-files';
+import { removeExchangeFile, safeExtension, storeExchangeFile } from './exchange-files';
 import { CreateExchangeLoadDto, ExchangeListFilter, RoutePricesQueryDto } from './dto/exchange-load.dto';
 
 /** Номер груза на экране: «Б-0042». Буква — чтобы не путать с номером заявки. */
@@ -276,15 +275,8 @@ export class ExchangeService {
             throw new BadRequestException(`Не больше ${MAX_LOAD_PHOTOS} фото на груз`);
         }
 
-        const ext = path.extname(file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '') || '.jpg';
-        const fileKey = `uploads/exchange/${loadId}/${randomUUID()}${ext}`;
-        if (this.s3.isS3Enabled()) {
-            await this.s3.uploadFile(fileKey, file.buffer, file.mimetype);
-        } else {
-            const absolute = path.join(process.cwd(), fileKey);
-            fs.mkdirSync(path.dirname(absolute), { recursive: true });
-            fs.writeFileSync(absolute, file.buffer);
-        }
+        const fileKey = `uploads/exchange/${loadId}/${randomUUID()}${safeExtension(file.originalname)}`;
+        await storeExchangeFile(this.s3, fileKey, file);
 
         return this.prisma.exchangeLoadPhoto.create({
             data: {
@@ -317,10 +309,7 @@ export class ExchangeService {
         await this.prisma.exchangeLoadPhoto.delete({ where: { id: photo.id } });
         // Файл чистим после записи: если удаление файла не удалось, фото уже
         // не показывается, а мусор в хранилище никому не мешает.
-        try {
-            if (this.s3.isS3Enabled()) await this.s3.deleteFile(photo.fileKey);
-            else fs.rmSync(path.join(process.cwd(), photo.fileKey), { force: true });
-        } catch { /* см. выше */ }
+        await removeExchangeFile(this.s3, photo.fileKey);
         return { ok: true };
     }
 }

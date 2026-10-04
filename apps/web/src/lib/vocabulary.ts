@@ -65,6 +65,15 @@ export const EXCHANGE_LOAD_STATUS_LABELS: Record<string, string> = {
     CANCELLED: 'Снят',
 };
 
+/** Анкета водителя биржи — где она сейчас. */
+export const EXCHANGE_DRIVER_STATUS_LABELS: Record<string, string> = {
+    DRAFT: 'Заполняет',
+    PENDING: 'На проверке',
+    APPROVED: 'Допущен',
+    REJECTED: 'Отказ',
+    BLOCKED: 'Заблокирован',
+};
+
 export const QUOTE_REQUEST_STATUS_LABELS: Record<string, string> = {
     NEW: 'Новый',
     IN_PROGRESS: 'В работе',

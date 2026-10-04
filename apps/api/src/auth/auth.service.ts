@@ -691,6 +691,14 @@ export class AuthService {
     }
 
     /**
+     * Кто вошёл через Google — без входа и без регистрации. Нужно бирже:
+     * водитель регистрируется сам, и перед входом ему заводится запись.
+     */
+    async googleProfile(token: string) {
+        return this.verifyGoogleToken(token);
+    }
+
+    /**
      * Вход через Google
      */
     async loginWithGoogle(googleToken: string, deviceId: string): Promise<{ accessToken: string; user: any }> {
