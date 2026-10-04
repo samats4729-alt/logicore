@@ -220,6 +220,9 @@ model User {
   // Комиссия менеджера (% от маржи)
   commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
 
+  /// Грузы, которые человек поставил на биржу.
+  exchangeLoads ExchangeLoad[] @relation("UserExchangeLoads")
+
   @@index([phone])
   @@index([role])
   @@index([departmentId])
@@ -526,6 +529,9 @@ model Company {
   /// которые подставлялись вслепую.
   carrierPaymentDays Int?
   carrierPaymentFrom String?
+
+  /// Грузы компании на бирже.
+  exchangeLoads ExchangeLoad[] @relation("CompanyExchangeLoads")
 }
 
 // ... existing models ...
@@ -680,6 +686,9 @@ model City {
 
   originQuoteRequests      QuoteRequest[] @relation("OriginQuoteRequests")
   destinationQuoteRequests QuoteRequest[] @relation("DestinationQuoteRequests")
+
+  originExchangeLoads      ExchangeLoad[] @relation("OriginExchangeLoads")
+  destinationExchangeLoads ExchangeLoad[] @relation("DestinationExchangeLoads")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2996,4 +3005,101 @@ model CurrencyRevaluationLine {
   /// считается от неё, а не от курса документа.
   @@index([documentId])
   @@index([accountId])
+}
+
+// ============================================================
+// БИРЖА
+// ============================================================
+
+/// Где груз на бирже.
+///
+/// Пока водителей нет, груз живёт в двух состояниях: ищем машину или снят.
+/// Остальные заведены сразу, чтобы следующий этап (водитель взял груз,
+/// везёт, довёз) не переделывал список у заказчика.
+enum ExchangeLoadStatus {
+  OPEN // Ищем машину — груз виден водителям
+  TAKEN // Водитель взял, едет на погрузку
+  IN_TRANSIT // Погрузились, в пути
+  DELIVERED // Довезли
+  CANCELLED // Снят с биржи заказчиком
+}
+
+/// Груз, который компания поставила на биржу.
+///
+/// Отдельно от заявки (Order): заявка — это рейс, у которого уже есть
+/// перевозчик, водитель и документы. Груз на бирже — предложение, которое
+/// ещё никто не взял. Когда водитель возьмёт груз, из него появится рейс, а
+/// груз запомнит, какой.
+///
+/// Маршрут — города и адреса текстом, как в запросах на расчёт: справочник
+/// знает не все посёлки. `...CityKey` — приведённое написание («г. Шымкент»
+/// и «Чимкент» дают один ключ), по нему ищутся прошлые цены направления.
+model ExchangeLoad {
+  id  String @id @default(cuid())
+  /// Порядковый номер на всей бирже — из него печатается «Б-0001».
+  seq Int    @unique @default(autoincrement())
+
+  /// Компания, которая поставила груз и за него платит.
+  companyId   String
+  company     Company            @relation("CompanyExchangeLoads", fields: [companyId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User               @relation("UserExchangeLoads", fields: [createdById], references: [id])
+  status      ExchangeLoadStatus @default(OPEN)
+
+  originCityId        String?
+  originCity          City?   @relation("OriginExchangeLoads", fields: [originCityId], references: [id], onDelete: SetNull)
+  originCityName      String
+  originCityKey       String
+  originAddress       String?
+  destinationCityId   String?
+  destinationCity     City?   @relation("DestinationExchangeLoads", fields: [destinationCityId], references: [id], onDelete: SetNull)
+  destinationCityName String
+  destinationCityKey  String
+  destinationAddress  String?
+
+  /// День погрузки.
+  loadingDate DateTime @db.Date
+  /// Время погрузки словами, как говорит заказчик: «с 9 до 12», «после обеда».
+  loadingTime String?
+
+  /// Тип кузова: тент, рефрижератор, борт.
+  bodyType         String
+  /// Что везём.
+  cargoDescription String
+  /// Вес в килограммах — как в заявке; на экране тонны.
+  weightKg         Int?
+  volumeM3         Decimal? @db.Decimal(10, 2)
+  /// Что ещё важно водителю: растентовка, гидроборт, температура, ремни.
+  requirements     String?
+
+  /// Сколько заказчик платит за перевозку, ₸.
+  price Decimal @db.Decimal(18, 2)
+
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  photos ExchangeLoadPhoto[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([status, loadingDate])
+  @@index([originCityKey, destinationCityKey])
+}
+
+/// Фото груза: водителю проще решить, увидев, что везти.
+model ExchangeLoadPhoto {
+  id       String       @id @default(cuid())
+  loadId   String
+  load     ExchangeLoad @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  /// Путь в хранилище — в S3 или в папке uploads, если S3 не настроен.
+  fileKey  String
+  fileName String
+  mimeType String
+  size     Int
+
+  createdAt DateTime @default(now())
+
+  @@index([loadId])
 }

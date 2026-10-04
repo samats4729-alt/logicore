@@ -26,6 +26,7 @@ import {
     RiseOutlined,
     FileProtectOutlined,
     CalculatorOutlined,
+    ShopOutlined,
     BarChartOutlined,
     NotificationOutlined,
     CustomerServiceOutlined,
@@ -52,6 +53,7 @@ import { BETA_LABEL, betaStateOf, getBetaSection } from '@/lib/beta-sections';
 import Loader from '@/components/ui/Loader';
 import { isNavItemActive } from '@/lib/cabinet-nav';
 import { ROLE_LABELS } from '@/lib/vocabulary';
+import { exchangeEnabled } from '@/lib/exchange';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -90,6 +92,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
        шагами наверху и отметка о подтверждении рядом с именем компании. */
     const [verification, setVerification] = useState<any>(null);
     const [auditEnabled, setAuditEnabled] = useState(false);
+    /* Биржа строится в отдельной ветке и включается на сервере
+       выключателем. Выключена — пункта в меню нет вовсе. */
+    const [exchangeOn, setExchangeOn] = useState(false);
     const { theme, setTheme } = useTheme();
 
     useEffect(() => {
@@ -97,6 +102,13 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         api.get('/my-company')
             .then((res) => setVerification(res.data))
             .catch(() => setVerification(null));
+    }, [user?.companyId]);
+
+    useEffect(() => {
+        if (!user?.companyId) return;
+        let alive = true;
+        exchangeEnabled().then((on) => { if (alive) setExchangeOn(on); });
+        return () => { alive = false; };
     }, [user?.companyId]);
 
     useEffect(() => {
@@ -235,6 +247,16 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 key: '/company/requests',
                 icon: <CalculatorOutlined />,
                 label: 'Запросы',
+            });
+        }
+
+        // --- БИРЖА (груз ставится, водители берут его в приложении) ---
+        // Права — как у заявок: кто ведёт заявки, тот ставит и грузы.
+        if (exchangeOn && hasPerm('orders')) {
+            items.push({
+                key: '/company/exchange',
+                icon: <ShopOutlined />,
+                label: 'Биржа',
             });
         }
 

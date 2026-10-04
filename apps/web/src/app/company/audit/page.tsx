@@ -26,6 +26,7 @@ const ENTITY_LABELS: Record<string, string> = {
     permissions: 'Права',
     location: 'Адрес',
     subscription: 'Подписка',
+    exchange_load: 'Груз на бирже',
 };
 
 export default function CompanyAuditPage() {

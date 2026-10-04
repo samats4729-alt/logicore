@@ -36,6 +36,10 @@ export const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
     PROBLEM: { bg: '#fee2e2', fg: '#dc2626' },
     CANCELLED: { bg: '#fdeaea', fg: '#b91c1c' },
     POSTED: { bg: '#e7f8ef', fg: '#15803d' },
+    // Биржа: груз ищет машину, водитель найден, доставлен.
+    OPEN: { bg: '#fff4e5', fg: '#b45309' },
+    TAKEN: { bg: '#e8f0fe', fg: '#1d4ed8' },
+    DELIVERED: { bg: '#e7f8ef', fg: '#15803d' },
 };
 
 // Подписи статусов живут в общем словаре; реэкспорт оставлен, потому что
@@ -55,6 +59,9 @@ const GLYPHS: Record<string, React.ComponentType<{ className?: string }>> = {
     COMPLETED: Check,
     POSTED: Check,
     CANCELLED: X,
+    OPEN: Clock,
+    TAKEN: UserRound,
+    DELIVERED: Check,
 };
 
 /** Восклицательный знак: в наборе иконок он есть только внутри кружка, а
@@ -111,7 +118,11 @@ export function statusTone(status: string): React.CSSProperties {
     return { ['--sp' as string]: meta.fg, ['--sp-dark' as string]: lighten(meta.fg) };
 }
 
-export default function StatusPill({ status }: { status: string }) {
+/**
+ * `label` — для сущностей со своими словами при тех же красках: груз на
+ * бирже «Ищем машину», а не «Ожидает». Плашка одна на всё приложение.
+ */
+export default function StatusPill({ status, label }: { status: string; label?: string }) {
     const meta = STATUS_PILL[status] || STATUS_PILL.DRAFT;
     const Glyph = status === 'PROBLEM' ? Bang : GLYPHS[status] || FileText;
 
@@ -123,7 +134,7 @@ export default function StatusPill({ status }: { status: string }) {
             <i className={styles.dot}>
                 <Glyph className={styles.glyph} />
             </i>
-            {STATUS_LABELS[status] || status}
+            {label || STATUS_LABELS[status] || status}
         </span>
     );
 }

@@ -33,6 +33,7 @@ const ACTION_META: Record<string, { label: string; danger?: boolean }> = {
 const ENTITY_LABELS: Record<string, string> = {
     order: 'Заявка',
     order_document: 'Документ рейса',
+    exchange_load: 'Груз на бирже',
     document: 'Документ',
     accounting_document: 'Бухгалтерский документ',
     accounting_document_numbering: 'Нумерация документов',

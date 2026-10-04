@@ -2,9 +2,10 @@ name: API Integration Tests
 
 on:
   push:
-    branches: [ main ]
+    # birzha — биржа строится отдельно от рабочей ветки и проверяется так же.
+    branches: [ main, birzha ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, birzha ]
 
 jobs:
   build:
@@ -201,6 +202,9 @@ jobs:
       # десятки страниц подряд. Упирался в предел при этом не тот запрос,
       # который лишний, а случайный соседний — и падало не там, где причина.
       THROTTLE_LIMIT: "100000"
+      # Биржа: на стенде проверок включена, чтобы её экраны проверялись
+      # вместе с остальными. На рабочем сервере выключатель не стоит.
+      EXCHANGE_ENABLED: "true"
 
     steps:
       - name: Checkout repository
