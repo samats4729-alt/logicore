@@ -376,7 +376,8 @@
     margin: 0 0 12px;
 }
 
-.doc ul {
+.doc ul,
+.doc ol {
     margin: 0 0 12px;
     padding-left: 18px;
 }

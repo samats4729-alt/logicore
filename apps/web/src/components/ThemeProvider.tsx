@@ -101,7 +101,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
      * Остальные страницы (приглашения, публичные ссылки на документы) под
      * тёмную не рисовались — там тема остаётся светлой.
      */
-    const THEMED = ['/company', '/admin', '/billing', '/login', '/register', '/forgot-password', '/reset-password', '/terms', '/privacy'];
+    const THEMED = ['/company', '/admin', '/billing', '/login', '/register', '/forgot-password', '/reset-password', '/terms', '/privacy', '/delete-account'];
     const isCabinet = !!pathname && (pathname === '/' || THEMED.some((p) => pathname.startsWith(p)));
     const [theme, setTheme] = useState<Theme>('light');
 
