@@ -1,10 +1,16 @@
-import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
-import { useStore } from '@/store';
+import { isExchangeDriver, useStore } from '@/store';
 
+/**
+ * Куда вести после запуска.
+ *
+ * Водитель компании (вход по телефону и паролю) — к своему рейсу.
+ * Водитель биржи (вход через Google, без компании) — на биржу: там анкета,
+ * пока его не допустили, и грузы, когда допустили.
+ */
 export default function IndexScreen() {
-    const { isAuthenticated, isLoading } = useStore();
+    const { isAuthenticated, isLoading, user } = useStore();
 
     if (isLoading) {
         return (
@@ -14,11 +20,9 @@ export default function IndexScreen() {
         );
     }
 
-    if (isAuthenticated) {
-        return <Redirect href="/(tabs)" />;
-    }
-
-    return <Redirect href="/login" />;
+    if (!isAuthenticated) return <Redirect href="/login" />;
+    if (isExchangeDriver(user)) return <Redirect href="/exchange" />;
+    return <Redirect href="/(tabs)" />;
 }
 
 const styles = StyleSheet.create({

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -13,12 +13,49 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useStore } from '@/store';
+import * as SecureStore from '@/lib/secure';
+import { GOOGLE_WEB_CLIENT_ID, isExchangeDriver, useStore } from '@/store';
+import { api, setAuthToken } from '@/lib/api';
+import { exchangeApi, ответ } from '@/lib/exchange';
 import { BRAND, RADIUS } from '@/lib/theme';
 
 export default function LoginScreen() {
-    const { login } = useStore();
+    const { login, loginWithGoogle } = useStore();
     const [phone, setPhone] = useState('+7');
+    /* Биржа включена на сервере — показываем вход водителя биржи. Старый
+       сервер без биржи ответит «нет», и раздела не будет вовсе. */
+    const [exchangeOn, setExchangeOn] = useState(false);
+    const [googleBusy, setGoogleBusy] = useState(false);
+    const [devToken, setDevToken] = useState('');
+
+    useEffect(() => {
+        exchangeApi.publicStatus().then(setExchangeOn);
+    }, []);
+
+    const handleGoogle = async () => {
+        setGoogleBusy(true);
+        try {
+            const ok = await loginWithGoogle();
+            if (ok) router.replace('/exchange');
+        } catch (error: any) {
+            Alert.alert('Не удалось войти через Google', ответ(error, error?.message || 'Попробуйте ещё раз'));
+        } finally {
+            setGoogleBusy(false);
+        }
+    };
+
+    /** Только в тестовой сборке: вход по пропуску со стенда разработчика. */
+    const handleDevToken = async () => {
+        try {
+            await setAuthToken(devToken.trim());
+            const { data: user } = await api.post('/auth/me');
+            await SecureStore.setItemAsync('user', JSON.stringify(user));
+            useStore.setState({ user, isAuthenticated: true });
+            router.replace(isExchangeDriver(user) ? '/exchange' : '/(tabs)');
+        } catch (error: any) {
+            Alert.alert('Пропуск не подошёл', ответ(error, 'Проверьте пропуск'));
+        }
+    };
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -122,6 +159,46 @@ export default function LoginScreen() {
                         Нет доступа? Обратитесь к диспетчеру вашей компании — он выдаст пароль в карточке водителя.
                     </Text>
                 </View>
+
+                {exchangeOn && !!GOOGLE_WEB_CLIENT_ID && (
+                    <View style={styles.exchangeCard}>
+                        <Text style={styles.exchangeEyebrow}>БИРЖА ГРУЗОВ</Text>
+                        <Text style={styles.exchangeTitle}>Работаете сами?</Text>
+                        <Text style={styles.exchangeText}>
+                            Со своим ИП или через парк — берите грузы с биржи. Регистрация займёт 5 минут.
+                        </Text>
+                        <TouchableOpacity
+                            style={[styles.googleButton, googleBusy && { opacity: 0.7 }]}
+                            onPress={handleGoogle}
+                            disabled={googleBusy}
+                            accessibilityLabel="Войти через Google"
+                        >
+                            {googleBusy ? <ActivityIndicator color="#0b0d12" /> : (
+                                <>
+                                    <Ionicons name="logo-google" size={18} color="#0b0d12" />
+                                    <Text style={styles.googleText}>Войти через Google</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {__DEV__ && (
+                    <View style={styles.devBox}>
+                        <Text style={styles.devTitle}>Тестовая сборка: вход по пропуску</Text>
+                        <TextInput
+                            style={styles.devInput}
+                            placeholder="Пропуск со стенда"
+                            placeholderTextColor="#6b7280"
+                            value={devToken}
+                            onChangeText={setDevToken}
+                            autoCapitalize="none"
+                        />
+                        <TouchableOpacity onPress={handleDevToken} style={styles.devButton}>
+                            <Text style={styles.devButtonText}>Войти</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -233,4 +310,30 @@ const styles = StyleSheet.create({
         marginTop: 16,
         textAlign: 'center',
     },
+    exchangeCard: {
+        marginTop: 14,
+        borderRadius: RADIUS.card + 4,
+        padding: 22,
+        backgroundColor: 'rgba(255,255,255,0.06)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+    },
+    exchangeEyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 3, color: 'rgba(255,255,255,0.45)' },
+    exchangeTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginTop: 8, letterSpacing: -0.4 },
+    exchangeText: { fontSize: 13.5, lineHeight: 19, color: 'rgba(255,255,255,0.6)', marginTop: 6, marginBottom: 16 },
+    googleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        height: 52,
+        borderRadius: RADIUS.button,
+        backgroundColor: '#ffffff',
+    },
+    googleText: { color: '#0b0d12', fontSize: 16, fontWeight: '700' },
+    devBox: { marginTop: 14, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#374151', borderStyle: 'dashed' },
+    devTitle: { color: '#9ca3af', fontSize: 12, marginBottom: 8 },
+    devInput: { height: 44, borderRadius: 10, borderWidth: 1, borderColor: '#374151', color: '#fff', paddingHorizontal: 10, fontSize: 12 },
+    devButton: { marginTop: 8, height: 40, borderRadius: 10, backgroundColor: '#374151', alignItems: 'center', justifyContent: 'center' },
+    devButtonText: { color: '#fff', fontWeight: '700' },
 });

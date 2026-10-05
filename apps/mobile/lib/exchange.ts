@@ -1,0 +1,199 @@
+import { api } from '@/lib/api';
+
+/** Анкета водителя биржи — как её отдаёт сервер. */
+export interface DriverProfile {
+    id: string;
+    kind: 'IP' | 'PARK' | null;
+    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'BLOCKED';
+    park: { id: string; name: string } | null;
+    lastName: string | null;
+    firstName: string | null;
+    middleName: string | null;
+    iin: string | null;
+    phone: string | null;
+    email: string | null;
+    ipName: string | null;
+    ipIin: string | null;
+    vehiclePlate: string | null;
+    vehicleBodyType: string | null;
+    vehicleCapacityKg: number | null;
+    vehicleIsOwn: boolean;
+    contractSignedAt: string | null;
+    rejectReason: string | null;
+    blockedReason: string | null;
+    tripsCompleted: number;
+    documents: { id: string; kind: DocumentKind; fileName: string; mimeType: string }[];
+    /** Чего не хватает, чтобы отправить анкету — словами. */
+    missing: string[];
+}
+
+export type DocumentKind =
+    'ID_FRONT' | 'ID_BACK' | 'SELFIE_WITH_ID' | 'LICENSE' | 'VEHICLE_REGISTRATION' | 'POWER_OF_ATTORNEY' | 'IP_CERTIFICATE';
+
+export const DOCUMENTS: { kind: DocumentKind; title: string; hint: string }[] = [
+    { kind: 'ID_FRONT', title: 'Удостоверение — лицевая сторона', hint: 'Сфотографируйте целиком, без бликов' },
+    { kind: 'ID_BACK', title: 'Удостоверение — обратная сторона', hint: 'Чтобы читался ИИН' },
+    { kind: 'SELFIE_WITH_ID', title: 'Фото с удостоверением в руке', hint: 'Лицо и документ в кадре' },
+    { kind: 'LICENSE', title: 'Водительское удостоверение', hint: 'Лицевая сторона' },
+    { kind: 'VEHICLE_REGISTRATION', title: 'Техпаспорт машины', hint: 'Видно госномер и владельца' },
+    { kind: 'POWER_OF_ATTORNEY', title: 'Доверенность от владельца', hint: 'Если машина не ваша' },
+];
+
+export interface Park {
+    id: string;
+    name: string;
+    bin: string | null;
+}
+
+/** Груз в ленте и в рейсе. */
+export interface Load {
+    id: string;
+    number: string;
+    status: 'OPEN' | 'TAKEN' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+    originCityName: string;
+    originAddress: string | null;
+    destinationCityName: string;
+    destinationAddress: string | null;
+    loadingDate: string;
+    loadingTime: string | null;
+    bodyType: string;
+    cargoDescription: string;
+    weightKg: number | null;
+    volumeM3: number | null;
+    requirements: string | null;
+    price: number;
+    takenAt: string | null;
+    loadedAt: string | null;
+    deliveredAt: string | null;
+    companyName: string | null;
+    photoIds: string[];
+    /** Контакт отправителя — только у того, кто груз взял. */
+    contact: { name: string | null; phone: string | null } | null;
+}
+
+/**
+ * Типы кузова — тот же список, что у компании при постановке груза: по
+ * точному совпадению лента показывает водителю «его» грузы.
+ */
+export const BODY_TYPES = [
+    'тент', 'рефрижератор', 'изотерм', 'бортовая', 'открытая', 'контейнеровоз', 'самосвал', 'трал',
+    'платформа', 'манипулятор', 'автовоз', 'цельномет.', 'цистерна пищ.', 'цистерна хим.', 'цистерна газовая',
+    'цистерна изотерм.', 'бензовоз', 'зерновоз', 'зерновоз-самосвал', 'лесовоз', 'панелевоз', 'негабарит',
+    'микроавтобус', 'спецмашина', 'тягач', 'эвакуатор', 'автокран', 'бетономеситель', 'цементовоз', 'скотовоз',
+    'птицевоз', 'муковоз', 'кормовоз', 'металловоз (ломовоз)', 'стекловоз', 'трубовоз', 'рулоновоз', 'щеповоз',
+    'масловоз', 'битумовоз', 'меблевоз', 'цельнопластик', 'контейнер пустой', 'экскаватор',
+    'автобус грузопас.', 'автобус люкс',
+];
+
+const МЕСЯЦЫ = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+/** «12 окт, с 9 до 12». */
+export function когда(load: Pick<Load, 'loadingDate' | 'loadingTime'>): string {
+    const [y, m, d] = load.loadingDate.slice(0, 10).split('-').map(Number);
+    const day = `${d} ${МЕСЯЦЫ[m - 1]}`;
+    void y;
+    return load.loadingTime ? `${day}, ${load.loadingTime}` : day;
+}
+
+/** «450 000 ₸». */
+export function деньги(value: number): string {
+    return `${Math.round(value).toLocaleString('ru-RU').replace(/,/g, ' ')} ₸`;
+}
+
+/** «20 т · 86 м³ · тент». */
+export function груз(load: Pick<Load, 'weightKg' | 'volumeM3' | 'bodyType'>): string {
+    return [
+        load.weightKg != null ? `${(load.weightKg / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} т` : null,
+        load.volumeM3 ? `${load.volumeM3} м³` : null,
+        load.bodyType,
+    ].filter(Boolean).join(' · ');
+}
+
+/**
+ * ИИН прошёл проверку — те же правила, что на сервере: 12 цифр, дата
+ * рождения, век и контрольная цифра. Ошибку видно сразу под полем, а не
+ * после отказа сервера.
+ */
+export function иинВерный(raw: string): boolean {
+    const iin = raw.replace(/\D/g, '');
+    if (!/^\d{12}$/.test(iin)) return false;
+    const d = iin.split('').map(Number);
+    const month = Number(iin.slice(2, 4));
+    const day = Number(iin.slice(4, 6));
+    if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+    if (d[6] < 1 || d[6] > 6) return false;
+    const sum = (w: number[]) => w.reduce((s, x, i) => s + x * d[i], 0) % 11;
+    let check = sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    if (check === 10) {
+        check = sum([3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2]);
+        if (check === 10) return false;
+    }
+    return check === d[11];
+}
+
+/** Казахстанский мобильный: «8 701…», «+7 (701)…», «701…» — все годятся. */
+export function телефонВерный(raw: string): boolean {
+    let digits = raw.replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('8')) digits = `7${digits.slice(1)}`;
+    if (digits.length === 10) digits = `7${digits}`;
+    return /^7\d{10}$/.test(digits);
+}
+
+/** Что ответил сервер — словами; список проверок склеиваем. */
+export function ответ(error: any, fallback: string): string {
+    const m = error?.response?.data?.message;
+    if (Array.isArray(m)) return m.join('. ');
+    if (typeof m === 'string' && m) return m;
+    if (error?.message === 'Network Error') return 'Нет связи с сервером. Проверьте интернет.';
+    return fallback;
+}
+
+export const exchangeApi = {
+    /** Включена ли биржа — до входа. Старый сервер без биржи ответит 404 → «нет». */
+    publicStatus: () => api.get('/exchange/public-status').then((r) => !!r.data?.enabled).catch(() => false),
+    me: () => api.get<DriverProfile>('/exchange/driver/me').then((r) => r.data),
+    update: (data: Partial<Record<string, unknown>>) => api.put<DriverProfile>('/exchange/driver/me', data).then((r) => r.data),
+    parks: () => api.get<Park[]>('/exchange/driver/parks').then((r) => r.data),
+    uploadDocument: (kind: DocumentKind, uri: string) => {
+        const form = new FormData();
+        form.append('kind', kind);
+        form.append('file', { uri, name: `${kind.toLowerCase()}.jpg`, type: 'image/jpeg' } as any);
+        return api.post<DriverProfile>('/exchange/driver/me/documents', form, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 60000,
+        }).then((r) => r.data);
+    },
+    removeDocument: (id: string) => api.delete<DriverProfile>(`/exchange/driver/me/documents/${id}`).then((r) => r.data),
+    signContract: (deviceId: string) =>
+        api.post<DriverProfile>('/exchange/driver/me/sign-contract', {}, { headers: { 'X-Device-Id': deviceId } }).then((r) => r.data),
+    submit: () => api.post<DriverProfile>('/exchange/driver/me/submit').then((r) => r.data),
+    /** Вернуть принятую анкету на правку — после отправки её снова проверят. */
+    reopen: () => api.post<DriverProfile>('/exchange/driver/me/reopen').then((r) => r.data),
+    deleteAccount: () => api.post('/exchange/driver/me/delete'),
+
+    feed: (bodyType?: string) => api.get<Load[]>('/exchange/driver/loads', { params: bodyType ? { bodyType } : {} }).then((r) => r.data),
+    load: (id: string) => api.get<Load>(`/exchange/driver/loads/${id}`).then((r) => r.data),
+    take: (id: string) => api.post<Load>(`/exchange/driver/loads/${id}/take`).then((r) => r.data),
+    decline: (id: string, reason: string) => api.post(`/exchange/driver/loads/${id}/decline`, { reason }),
+    trips: () => api.get<Load[]>('/exchange/driver/trips').then((r) => r.data),
+    advance: (id: string, to: 'IN_TRANSIT' | 'DELIVERED') =>
+        api.post<Load>(`/exchange/driver/trips/${id}/advance`, { to }).then((r) => r.data),
+    release: (id: string, reason: string) => api.post(`/exchange/driver/trips/${id}/release`, { reason }),
+};
+
+/** Адрес фото груза — картинка грузится с пропуском (заголовок авторизации). */
+export const loadPhotoPath = (photoId: string) => `/exchange/driver/load-photos/${photoId}`;
+export const documentPath = (docId: string) => `/exchange/driver/me/documents/${docId}`;
+
+/** Название парка в кавычках, если своих нет: «Алем» → «Алем», ТОО «Алем» → ТОО «Алем». */
+export function вКавычках(name: string | null | undefined): string {
+    if (!name) return '—';
+    return /[«"]/.test(name) ? name : `«${name}»`;
+}
+
+/** «+77011234567» → «+7 701 123 45 67»: так номер читают и диктуют. */
+export function телефонКрасиво(phone: string | null | undefined): string {
+    const d = (phone ?? '').replace(/\D/g, '');
+    if (d.length !== 11) return phone || '—';
+    return `+${d[0]} ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}`;
+}

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/lib/secure';
 import Constants from 'expo-constants';
 
 /**
@@ -25,14 +25,25 @@ export const initializeApi = async () => {
     }
 };
 
+/**
+ * Что делать, когда вход кончился (пропуск истёк или вход выполнен на
+ * другом телефоне). Задаёт корневой экран: вернуть человека ко входу,
+ * а не оставлять на экранах, которые только пишут «не удалось загрузить».
+ */
+let unauthorizedHandler: (() => void) | null = null;
+export const onUnauthorized = (handler: (() => void) | null) => { unauthorizedHandler = handler; };
+
 // Интерцептор для обработки 401
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         if (error.response?.status === 401) {
+            // Отказ на сам вход (неверный пароль) — это не «вход кончился».
+            const hadPass = !!error.config?.headers?.Authorization;
             await SecureStore.deleteItemAsync('token');
             await SecureStore.deleteItemAsync('user');
             delete api.defaults.headers.common['Authorization'];
+            if (hadPass) unauthorizedHandler?.();
         }
         return Promise.reject(error);
     }

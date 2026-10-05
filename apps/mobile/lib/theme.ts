@@ -13,6 +13,15 @@ export const BRAND = {
     danger: '#dc2626',
 };
 
+/**
+ * Выбранный вариант (фишка, кузов, «моя машина»): в светлой теме — чёрный
+ * с белым текстом, как пилюли платформы; в тёмной — белый с чёрным, иначе
+ * выбранное сливается с фоном и выглядит невыбранным.
+ */
+export function selectedColors(isDark: boolean) {
+    return isDark ? { bg: '#ffffff', fg: BRAND.dark } : { bg: BRAND.dark, fg: '#ffffff' };
+}
+
 export const lightColors = {
     background: '#f4f5f7',
     card: '#ffffff',
