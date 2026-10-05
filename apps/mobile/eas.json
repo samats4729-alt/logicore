@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "API_URL": "http://localhost:3001",
+        "SITE_URL": "http://localhost:3000",
+        "GOOGLE_WEB_CLIENT_ID": "5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "API_URL": "https://api.logicore.kz",
+        "SITE_URL": "https://logicore.kz",
+        "GOOGLE_WEB_CLIENT_ID": "5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": { "buildType": "app-bundle" },
+      "env": {
+        "API_URL": "https://api.logicore.kz",
+        "SITE_URL": "https://logicore.kz",
+        "GOOGLE_WEB_CLIENT_ID": "5010908858-q66i33df9kjpij46u5sevjb1ftl9lo2d.apps.googleusercontent.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

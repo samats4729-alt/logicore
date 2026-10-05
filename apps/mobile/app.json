@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "LogiCore Driver",
+    "name": "LogiCore Водитель",
     "slug": "logcomp-driver",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "logcomp",
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#2B89C6"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -22,6 +22,7 @@
         "NSLocationWhenInUseUsageDescription": "Приложение использует геолокацию для отслеживания рейса",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Геолокация нужна для отслеживания вашего маршрута в фоновом режиме",
         "NSLocationAlwaysUsageDescription": "Геолокация нужна для отслеживания вашего маршрута в фоновом режиме",
+        "NSCameraUsageDescription": "Камера нужна, чтобы сфотографировать документы",
         "UIBackgroundModes": [
           "location",
           "fetch"
@@ -35,11 +36,18 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
         "CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#2B89C6"
       }
     },
     "web": {
@@ -51,24 +59,29 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Разрешите доступ к геолокации для отслеживания маршрута"
+          "locationAlwaysAndWhenInUsePermission": "Разрешите доступ к геолокации для отслеживания маршрута",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Разрешите доступ к камере для фото документов"
+          "cameraPermission": "Разрешите доступ к камере для фото документов",
+          "microphonePermission": false
         }
       ],
-      [
-        "@rnmapbox/maps",
-        {
-          "downloadToken": "YOUR_MAPBOX_DOWNLOAD_TOKEN"
-        }
-      ]
+      "@rnmapbox/maps",
+      "@react-native-google-signin/google-signin"
     ],
     "extra": {
-      "apiUrl": "http://192.168.2.103:3001"
-    }
+      "apiUrl": "http://localhost:3001",
+      "googleWebClientId": "",
+      "router": {},
+      "eas": {
+        "projectId": "9a17d768-28b4-482a-9444-60bd9d95f05b"
+      }
+    },
+    "owner": "pontipilat"
   }
 }
