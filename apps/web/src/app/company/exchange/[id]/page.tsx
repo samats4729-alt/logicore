@@ -1,41 +1,41 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Images, ListChecks, Package, Phone, Truck, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Building2, MapPin, MessageSquareText, Package } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
-import { EXCHANGE_LOAD_STATUS_LABELS } from '@/lib/vocabulary';
-import { ExchangeLoad, вКавычках, датаПрошла, когдаПогрузка, телефонКрасиво, тонн } from '@/lib/exchange';
+import { ExchangeOrder, день, тонн } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
-import StatusPill from '@/components/ui/StatusPill';
-import { LoadPhotos } from '@/components/exchange/LoadPhotos';
-import { CancelLoadDialog } from '@/components/exchange/CancelLoadDialog';
 import styles from '@/components/nova/nova.module.css';
 
-/** Путь груза по бирже — какие шаги впереди. */
-const STEPS: { status: ExchangeLoad['status']; title: string; hint: string }[] = [
-    { status: 'OPEN', title: 'Ищем машину', hint: 'Груз виден водителям' },
-    { status: 'TAKEN', title: 'Водитель найден', hint: 'Едет на погрузку' },
-    { status: 'IN_TRANSIT', title: 'В пути', hint: 'Погрузились, везут' },
-    { status: 'DELIVERED', title: 'Доставлен', hint: 'Водитель отметит доставку' },
-];
+const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
+    PICKUP: 'Погрузка',
+    ADDITIONAL_PICKUP: 'Догруз',
+    DELIVERY: 'Выгрузка',
+};
 
-export default function ExchangeLoadPage() {
+/**
+ * Заявка с биржи — как её видит перевозчик.
+ *
+ * Всё, чтобы решить «повезу или нет»: маршрут по точкам с датами, груз и
+ * условия, цена и примечание компании. Адресов нет — их получит тот, кого
+ * компания выберет. Откликнуться с ценой можно будет на следующем шаге.
+ */
+export default function ExchangeOrderPage() {
     const { id } = useParams<{ id: string }>();
     const router = useRouter();
-    const [load, setLoad] = useState<ExchangeLoad | null>(null);
+    const [order, setOrder] = useState<ExchangeOrder | null>(null);
     const [failed, setFailed] = useState<string | null>(null);
-    const [cancelOpen, setCancelOpen] = useState(false);
 
-    const reload = useCallback(() => {
-        api.get(`/exchange/loads/${id}`)
-            .then((r) => setLoad(r.data))
-            .catch((e) => setFailed(e?.response?.status === 404 ? 'Груз не найден' : 'Не удалось загрузить груз. Обновите страницу.'));
+    useEffect(() => {
+        api.get(`/exchange/board/${id}`)
+            .then((r) => setOrder(r.data))
+            .catch((e) => setFailed(e?.response?.status === 404
+                ? 'Заявка уже снята с биржи или у неё появился исполнитель.'
+                : 'Не удалось загрузить заявку — проверьте интернет и обновите страницу.'));
     }, [id]);
-
-    useEffect(() => { reload(); }, [reload]);
 
     const back = (
         <Button variant="outline" onClick={() => router.push('/company/exchange')}>
@@ -43,13 +43,13 @@ export default function ExchangeLoadPage() {
         </Button>
     );
 
-    if (failed || !load) {
+    if (failed || !order) {
         return (
             <div className={styles.page}>
                 <div className={styles.hero}>
                     <div>
                         <div className={styles.eyebrow}>Биржа</div>
-                        <h1 className={styles.title}>{failed ? 'Груз' : 'Загрузка…'}</h1>
+                        <h1 className={styles.title}>{failed ? 'Заявка недоступна' : 'Загрузка…'}</h1>
                     </div>
                     <div className={styles.heroActions}>{back}</div>
                 </div>
@@ -58,175 +58,119 @@ export default function ExchangeLoadPage() {
         );
     }
 
-    const isOpen = load.status === 'OPEN';
-    /** Когда шаг случился — вместо подсказки показываем время. */
-    const stepTime = (status: ExchangeLoad['status']) => ({
-        OPEN: load.createdAt, TAKEN: load.takenAt, IN_TRANSIT: load.loadedAt, DELIVERED: load.deliveredAt, CANCELLED: null,
-    } as Record<ExchangeLoad['status'], string | null>)[status];
-    const cancelled = load.status === 'CANCELLED';
-    const reached = STEPS.findIndex((s) => s.status === load.status);
+    const temp = order.tempMin != null || order.tempMax != null
+        ? `${order.tempMin ?? '…'}…${order.tempMax ?? '…'} °C`
+        : null;
 
     return (
         <div className={styles.page}>
             <div className={styles.hero}>
                 <div>
-                    <div className={styles.eyebrow}>Биржа · груз {load.number}</div>
+                    <div className={styles.eyebrow}>Биржа · заявка {order.orderNumber}</div>
                     <h1 className={`${styles.title} flex flex-wrap items-center gap-2`}>
-                        {load.originCityName} <ArrowRight className="h-6 w-6 text-muted-foreground" /> {load.destinationCityName}
+                        {order.from} <ArrowRight className="h-6 w-6 text-muted-foreground" /> {order.to}
                     </h1>
-                    <p className={`${styles.subtitle} flex flex-wrap items-center gap-2`}>
-                        <StatusPill status={load.status} label={EXCHANGE_LOAD_STATUS_LABELS[load.status]} />
-                        <span>
-                            поставлен {dayjs(load.createdAt).format('DD.MM.YYYY HH:mm')}
-                            {load.createdByName ? ` · ${load.createdByName}` : ''}
-                        </span>
+                    <p className={styles.subtitle}>
+                        {order.companyName ?? 'Компания'} · погрузка {день(order.loadingDate)}
+                        {order.publishedAt ? ` · на бирже с ${dayjs(order.publishedAt).format('DD.MM HH:mm')}` : ''}
                     </p>
                 </div>
-                <div className={styles.heroActions}>
-                    {back}
-                    {isOpen && (
-                        <Button variant="outline" className="text-destructive" onClick={() => setCancelOpen(true)}>
-                            <X className="h-4 w-4" /> Снять с биржи
-                        </Button>
-                    )}
-                </div>
+                <div className={styles.heroActions}>{back}</div>
             </div>
 
-            {датаПрошла(load) && (
-                <div className="mb-4 flex items-start gap-2 rounded-xl border border-solid border-amber-300 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>
-                        День погрузки прошёл — водители этот груз уже не видят. Снимите его с биржи и поставьте заново с новой датой.
-                    </span>
+            {order.own && (
+                <div className="mb-4 rounded-xl border border-solid border-border bg-muted/40 px-3 py-2.5 text-[13px]">
+                    Это ваша заявка. Управлять ею — в{' '}
+                    <a className="lc-link" href={`/company/orders/${order.id}`}>карточке заявки</a>.
                 </div>
             )}
 
-            {cancelled && (
-                <div className={styles.card}>
-                    <div className={styles.cardBody}>
-                        <p className="m-0 text-[13px]">
-                            Снят с биржи {load.cancelledAt ? dayjs(load.cancelledAt).format('DD.MM.YYYY HH:mm') : ''}
-                            {load.cancelReason ? ` — ${load.cancelReason}` : ''}.
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {!cancelled && (
-                <section className={styles.card}>
-                    <div className={styles.cardHead}>
-                        <ListChecks size={14} />
-                        <h2 className={styles.cardTitle}>Ход перевозки</h2>
-                    </div>
-                    <div className={styles.cardBody}>
-                        <ol className="m-0 grid list-none gap-3 p-0 sm:grid-cols-4">
-                            {STEPS.map((s, i) => {
-                                const done = i < reached || (i === reached && s.status === 'DELIVERED');
-                                const now = i === reached && s.status !== 'DELIVERED';
-                                return (
-                                    <li
-                                        key={s.status}
-                                        aria-current={now ? 'step' : undefined}
-                                        className={`rounded-xl border border-solid p-3 ${now ? 'border-foreground' : 'border-border'} ${i > reached ? 'opacity-50' : ''}`}
-                                    >
-                                        <div className="flex items-center gap-1.5 text-[13px] font-semibold">
-                                            {done && <Check className="h-3.5 w-3.5" />}
-                                            {s.title}
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="space-y-4">
+                    <section className={styles.card} style={{ marginBottom: 0 }}>
+                        <div className={styles.cardHead}>
+                            <MapPin size={14} />
+                            <h2 className={styles.cardTitle}>Маршрут</h2>
+                        </div>
+                        <ol className="m-0 list-none space-y-3 p-4">
+                            {order.points.map((p, i) => (
+                                <li key={i} className="flex items-start gap-3 text-[13px]">
+                                    <span
+                                        aria-hidden
+                                        className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-solid border-foreground ${p.type === 'DELIVERY' ? '' : 'bg-foreground'}`}
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="font-semibold">
+                                            {p.city}{p.region ? <span className="font-normal text-muted-foreground">, {p.region}</span> : null}
                                         </div>
-                                        <div className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">
-                                            {stepTime(s.status) ? dayjs(stepTime(s.status)!).format('DD.MM HH:mm') : s.hint}
+                                        <div className="text-[12px] text-muted-foreground">
+                                            {POINT_TITLE[p.type]} · {p.date ? dayjs(p.date).format('DD.MM.YYYY') : 'дата не указана'}
                                         </div>
-                                    </li>
-                                );
-                            })}
+                                    </div>
+                                </li>
+                            ))}
                         </ol>
-                        {isOpen && !датаПрошла(load) && (
-                            <p className="m-0 mt-3 text-[12px] text-muted-foreground">
-                                Груз виден допущенным водителям в приложении. Кто первым нажмёт «Беру», тот и повезёт — его имя и телефон появятся здесь.
-                            </p>
-                        )}
-                    </div>
-                </section>
-            )}
+                        <p className="m-0 border-0 border-t border-solid border-border px-4 py-2.5 text-[12px] text-muted-foreground">
+                            Точные адреса компания откроет исполнителю, которого выберет.
+                        </p>
+                    </section>
 
-            {load.driver && (
-                <section className={styles.card}>
-                    <div className={styles.cardHead}>
-                        <UserRound size={14} />
-                        <h2 className={styles.cardTitle}>Кто везёт</h2>
-                    </div>
-                    <div className={`${styles.cardBody} flex flex-wrap items-start justify-between gap-4`}>
-                        <div className="space-y-2 text-[13px]">
-                            <div className="text-[15px] font-semibold">
-                                {[load.driver.lastName, load.driver.firstName, load.driver.middleName].filter(Boolean).join(' ') || 'Водитель'}
+                    <section className={styles.card} style={{ marginBottom: 0 }}>
+                        <div className={styles.cardHead}>
+                            <Package size={14} />
+                            <h2 className={styles.cardTitle}>Груз и условия</h2>
+                        </div>
+                        <div className={`${styles.cardBody} space-y-2 text-[13px]`}>
+                            <Row label="Что везём" value={order.cargoDescription} />
+                            <Row label="Кузов" value={order.bodyType} />
+                            <Row label="Вес и объём" value={[тонн(order.weightKg), order.volumeM3 ? `${order.volumeM3} м³` : null].filter(Boolean).join(' · ')} />
+                            {order.palletCount != null && <Row label="Паллет" value={String(order.palletCount)} />}
+                            {order.natureOfCargo && <Row label="Характер груза" value={order.natureOfCargo} />}
+                            {order.loadingTypes.length > 0 && <Row label="Загрузка" value={order.loadingTypes.join(', ')} />}
+                            {order.packagingTypes.length > 0 && <Row label="Упаковка" value={order.packagingTypes.join(', ')} />}
+                            {temp && <Row label="Температура" value={temp} />}
+                            {order.adr && <Row label="Опасный груз" value={order.adrClass ? `ДОПОГ, класс ${order.adrClass}` : 'ДОПОГ'} />}
+                            {order.requirements && <Row label="Требования" value={order.requirements} />}
+                        </div>
+                    </section>
+                </div>
+
+                <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+                    <section className={styles.card} style={{ marginBottom: 0 }}>
+                        <div className={styles.cardHead}>
+                            <Building2 size={14} />
+                            <h2 className={styles.cardTitle}>Цена</h2>
+                        </div>
+                        <div className={styles.cardBody}>
+                            <div className="text-[12px] text-muted-foreground">Компания предлагает исполнителю</div>
+                            <div className="text-[26px] font-bold leading-tight tabular-nums">
+                                {order.price != null ? moneyShort(order.price) : 'договорная'}
                             </div>
-                            <Row label="Машина" value={[load.driver.vehiclePlate, load.driver.vehicleBodyType].filter(Boolean).join(' · ') || '—'} />
-                            <Row label="Работает" value={load.driver.kind === 'IP' ? 'свой ИП' : load.driver.park ? `через парк ${вКавычках(load.driver.park.name)}` : '—'} />
+                            <p className="m-0 mt-3 text-[12px] text-muted-foreground">
+                                Откликнуться — согласиться на эту цену или предложить свою — можно будет на следующем шаге.
+                                Компания сама выберет, кто повезёт.
+                            </p>
                         </div>
-                        {load.driver.phone && (
-                            <a
-                                href={`tel:${load.driver.phone}`}
-                                aria-label={`Позвонить водителю ${телефонКрасиво(load.driver.phone)}`}
-                                className="inline-flex h-9 items-center gap-2 rounded-xl border border-solid border-border bg-background px-3 text-[13px] font-medium text-foreground no-underline hover:bg-muted/50"
-                            >
-                                <Phone className="h-4 w-4" /> <span className="tabular-nums">{телефонКрасиво(load.driver.phone)}</span>
-                            </a>
-                        )}
-                    </div>
-                </section>
-            )}
+                    </section>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-                <section className={styles.card} style={{ marginBottom: 0 }}>
-                    <div className={styles.cardHead}>
-                        <Truck size={14} />
-                        <h2 className={styles.cardTitle}>Маршрут и погрузка</h2>
-                    </div>
-                    <div className={`${styles.cardBody} space-y-2 text-[13px]`}>
-                        <Row label="Откуда" value={[load.originCityName, load.originAddress].filter(Boolean).join(', ')} />
-                        <Row label="Куда" value={[load.destinationCityName, load.destinationAddress].filter(Boolean).join(', ')} />
-                        <Row label="Погрузка" value={когдаПогрузка(load)} />
-                    </div>
-                </section>
-
-                <section className={styles.card} style={{ marginBottom: 0 }}>
-                    <div className={styles.cardHead}>
-                        <Package size={14} />
-                        <h2 className={styles.cardTitle}>Груз и цена</h2>
-                    </div>
-                    <div className={`${styles.cardBody} space-y-2 text-[13px]`}>
-                        <div className="pb-1">
-                            <div className="text-[12px] text-muted-foreground">Цена перевозки</div>
-                            <div className="text-[24px] font-bold leading-tight tabular-nums">{moneyShort(load.price)}</div>
-                        </div>
-                        <Row label="Что везём" value={load.cargoDescription} />
-                        <Row label="Кузов" value={load.bodyType} />
-                        <Row label="Вес и объём" value={[тонн(load.weightKg), load.volumeM3 ? `${load.volumeM3} м³` : null].filter(Boolean).join(' · ') || '—'} />
-                        {load.requirements && <Row label="Важно водителю" value={load.requirements} />}
-                    </div>
-                </section>
+                    {order.note && (
+                        <section className={styles.card} style={{ marginBottom: 0 }}>
+                            <div className={styles.cardHead}>
+                                <MessageSquareText size={14} />
+                                <h2 className={styles.cardTitle}>От компании</h2>
+                            </div>
+                            <div className={`${styles.cardBody} whitespace-pre-wrap text-[13px]`}>{order.note}</div>
+                        </section>
+                    )}
+                </aside>
             </div>
-
-            {(load.photos.length > 0 || isOpen) && (
-                <section className={styles.card} style={{ marginTop: 16 }}>
-                    <div className={styles.cardHead}>
-                        <Images size={14} />
-                        <h2 className={styles.cardTitle}>Фото груза</h2>
-                    </div>
-                    <div className={styles.cardBody}>
-                        <LoadPhotos load={load} editable={isOpen} onChanged={reload} />
-                    </div>
-                </section>
-            )}
-
-            <CancelLoadDialog load={load} open={cancelOpen} onOpenChange={setCancelOpen} onDone={reload} />
         </div>
     );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: string | null | undefined }) {
     return (
-        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-2">
+        <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2">
             <span className="text-muted-foreground">{label}</span>
             <span className="whitespace-pre-wrap">{value || '—'}</span>
         </div>

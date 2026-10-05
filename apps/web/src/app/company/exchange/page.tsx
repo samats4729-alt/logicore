@@ -1,76 +1,68 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Plus, Store, Truck, UsersRound } from 'lucide-react';
+import { AlertTriangle, ArrowRight, FileText, Search, Store, UsersRound, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
-import { EXCHANGE_LOAD_STATUS_LABELS } from '@/lib/vocabulary';
-import {
-    ExchangeFilter, ExchangeList, ExchangeLoad, exchangeStatus, водительКратко, грузКратко, датаПрошла, когдаПогрузка,
-} from '@/lib/exchange';
+import { VEHICLE_TYPES } from '@/lib/constants';
+import { ExchangeOrder, exchangeStatus, грузКратко, день, черезТочки } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import StatusPill from '@/components/ui/StatusPill';
 import styles from '@/components/nova/nova.module.css';
 
-const FILTERS: { key: ExchangeFilter; label: string }[] = [
-    { key: 'active', label: 'В работе' },
-    { key: 'done', label: 'Доставлены' },
-    { key: 'cancelled', label: 'Сняты' },
-    { key: 'all', label: 'Все' },
-];
-
-/** Пустой список — у каждой вкладки свои слова: что здесь бывает. */
-const EMPTY: Record<ExchangeFilter, string> = {
-    active: 'Сейчас на бирже ваших грузов нет. Поставьте груз — допущенные водители увидят его в приложении.',
-    done: 'Доставленных грузов пока нет. Здесь появятся грузы, которые водитель довёз.',
-    cancelled: 'Снятых грузов нет.',
-    all: 'Вы ещё не ставили грузы на биржу.',
-};
+type Tab = 'board' | 'mine';
 
 /**
- * Биржа — грузы компании.
+ * Биржа.
  *
- * Сверху то, что сейчас в работе: груз ищет машину или едет. Доставленные
- * и снятые — во вкладках, чтобы не мешали. На узком экране таблица
- * превращается в карточки: маршрут, цена и статус видны без прокрутки вбок.
+ * Первая вкладка — заявки других компаний, которые ищут, кто повезёт:
+ * перевозчик смотрит, откуда и куда, когда, что за груз и за сколько.
+ * Вторая — свои заявки, выставленные на биржу. Выставляют из карточки
+ * заявки: биржа — это обычная заявка, у которой пока нет исполнителя.
  */
 export default function ExchangePage() {
     const router = useRouter();
-    const [filter, setFilter] = useState<ExchangeFilter>('active');
-    const [data, setData] = useState<ExchangeList | null>(null);
+    const [tab, setTab] = useState<Tab>('board');
+    const [board, setBoard] = useState<ExchangeOrder[] | null>(null);
+    const [mine, setMine] = useState<ExchangeOrder[] | null>(null);
     const [failed, setFailed] = useState(false);
-    /* Парк — компания-посредник: ей видны и водители, которые возят через неё. */
     const [isPark, setIsPark] = useState(false);
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [bodyType, setBodyType] = useState('');
 
     useEffect(() => {
         let alive = true;
         exchangeStatus().then((s) => { if (alive) setIsPark(s.isPark); });
+        setFailed(false);
+        Promise.all([api.get('/exchange/board'), api.get('/exchange/mine')])
+            .then(([b, m]) => { if (alive) { setBoard(b.data); setMine(m.data); } })
+            .catch(() => { if (alive) setFailed(true); });
         return () => { alive = false; };
     }, []);
 
-    useEffect(() => {
-        let alive = true;
-        setFailed(false);
-        api.get(`/exchange/loads?status=${filter}`)
-            .then((r) => { if (alive) setData(r.data); })
-            .catch(() => { if (alive) setFailed(true); });
-        return () => { alive = false; };
-    }, [filter]);
+    /** Фильтр прямо в браузере: заявок на бирже сотни, не тысячи. */
+    const shown = useMemo(() => {
+        const has = (v: string | null, needle: string) => !needle.trim() || (v ?? '').toLowerCase().includes(needle.trim().toLowerCase());
+        const list = tab === 'board' ? board : mine;
+        return (list ?? []).filter((o) => has(o.from, from) && has(o.to, to) && has(o.bodyType, bodyType));
+    }, [tab, board, mine, from, to, bodyType]);
+    const filtered = !!(from.trim() || to.trim() || bodyType);
+    const stale = (mine ?? []).filter((o) => o.stale).length;
 
-    const open = (load: ExchangeLoad) => router.push(`/company/exchange/${load.id}`);
-    const stale = data?.loads.filter(датаПрошла).length ?? 0;
+    const open = (o: ExchangeOrder) => router.push(tab === 'board' ? `/company/exchange/${o.id}` : `/company/orders/${o.id}`);
 
     return (
         <div className={styles.page}>
             <div className={styles.hero}>
                 <div>
-                    <div className={styles.eyebrow}>Биржа грузов</div>
-                    <h1 className={styles.title}>Ваши грузы</h1>
+                    <div className={styles.eyebrow}>Биржа</div>
+                    <h1 className={styles.title}>Биржа заявок</h1>
                     <p className={styles.subtitle}>
-                        Поставьте груз — допущенные водители увидят его в приложении.
-                        Кто первым нажмёт «Беру», тот и везёт.
+                        Заявки других компаний, которым нужен исполнитель. Свою заявку выставляют на биржу из её карточки —
+                        кнопкой «Выставить на биржу», пока исполнителя нет.
                     </p>
                 </div>
                 <div className={styles.heroActions}>
@@ -79,33 +71,33 @@ export default function ExchangePage() {
                             <UsersRound className="h-4 w-4" /> Водители парка
                         </Button>
                     )}
-                    <Button onClick={() => router.push('/company/exchange/new')}>
-                        <Plus className="h-4 w-4" /> Поставить груз
+                    <Button variant="outline" onClick={() => router.push('/company/orders')}>
+                        <FileText className="h-4 w-4" /> К заявкам
                     </Button>
                 </div>
             </div>
 
             <div className={styles.pills} role="tablist" style={{ marginBottom: 12 }}>
-                {FILTERS.map((f) => (
+                {([['board', 'Заявки на бирже', board], ['mine', 'Мои на бирже', mine]] as const).map(([key, label, list]) => (
                     <button
-                        key={f.key}
+                        key={key}
                         type="button"
                         role="tab"
-                        aria-selected={filter === f.key}
-                        className={`${styles.pill} ${filter === f.key ? styles.pillActive : ''}`}
-                        onClick={() => setFilter(f.key)}
+                        aria-selected={tab === key}
+                        className={`${styles.pill} ${tab === key ? styles.pillActive : ''}`}
+                        onClick={() => setTab(key)}
                     >
-                        {f.label}{data ? ` · ${data.counts[f.key]}` : ''}
+                        {label}{list ? ` · ${list.length}` : ''}
                     </button>
                 ))}
             </div>
 
-            {stale > 0 && (
+            {tab === 'mine' && stale > 0 && (
                 <div className="mb-3 flex items-start gap-2 rounded-xl border border-solid border-amber-300 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
-                        {stale === 1 ? 'У одного груза' : `У ${stale} грузов`} день погрузки уже прошёл — водители такие грузы не видят.
-                        Откройте груз, снимите его и поставьте заново с новой датой.
+                        {stale === 1 ? 'У одной заявки' : `У ${stale} заявок`} день погрузки уже прошёл — на бирже их больше никто не видит.
+                        Поменяйте дату в заявке или снимите её с биржи.
                     </span>
                 </div>
             )}
@@ -113,97 +105,107 @@ export default function ExchangePage() {
             <section className={styles.card}>
                 <div className={styles.cardHead}>
                     <Store size={14} />
-                    <h2 className={styles.cardTitle}>{FILTERS.find((f) => f.key === filter)?.label}</h2>
-                    {data && <span className={styles.cardCount}>{data.loads.length}</span>}
+                    <h2 className={styles.cardTitle}>{tab === 'board' ? 'Ищут исполнителя' : 'Ваши заявки на бирже'}</h2>
+                    <span className={styles.cardCount}>{shown.length}</span>
                 </div>
+
+                <div className="flex flex-wrap items-center gap-2 border-0 border-b border-solid border-border px-4 py-3">
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input aria-label="Откуда" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="Откуда" className="h-8 w-40 pl-8 text-[13px]" />
+                    </div>
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input aria-label="Куда" value={to} onChange={(e) => setTo(e.target.value)} placeholder="Куда" className="h-8 w-40 pl-8 text-[13px]" />
+                    </div>
+                    <select
+                        aria-label="Кузов"
+                        value={bodyType}
+                        onChange={(e) => setBodyType(e.target.value)}
+                        className={`h-8 rounded-xl border border-solid border-input bg-background px-3 text-[13px] [font-family:inherit] ${bodyType ? '' : 'text-muted-foreground'}`}
+                    >
+                        <option value="">Любой кузов</option>
+                        {VEHICLE_TYPES.filter((t) => t !== 'не указан').map((t) => <option key={t} value={t} className="text-foreground">{t}</option>)}
+                    </select>
+                    {filtered && (
+                        <Button variant="ghost" size="sm" onClick={() => { setFrom(''); setTo(''); setBodyType(''); }}>
+                            <X className="h-3.5 w-3.5" /> Сбросить
+                        </Button>
+                    )}
+                </div>
+
                 {failed ? (
-                    <div className={styles.empty}>Не удалось загрузить грузы — проверьте интернет и обновите страницу.</div>
-                ) : !data ? (
+                    <div className={styles.empty}>Не удалось загрузить биржу — проверьте интернет и обновите страницу.</div>
+                ) : !board || !mine ? (
                     <div className="space-y-2 p-4" aria-label="Загрузка">
                         {[0, 1, 2].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/60" />)}
                     </div>
-                ) : data.loads.length === 0 ? (
+                ) : shown.length === 0 ? (
                     <div className={styles.empty}>
-                        <p className="m-0">{EMPTY[filter]}</p>
-                        {(filter === 'active' || filter === 'all') && (
-                            <Button className="mt-3" onClick={() => router.push('/company/exchange/new')}>
-                                <Plus className="h-4 w-4" /> Поставить груз
-                            </Button>
-                        )}
+                        {filtered
+                            ? 'По этому фильтру заявок нет. Попробуйте другой город или сбросьте фильтр.'
+                            : tab === 'board'
+                                ? 'Сейчас на бирже нет заявок других компаний. Загляните позже.'
+                                : 'Ваших заявок на бирже нет. Откройте заявку без исполнителя и нажмите «Выставить на биржу».'}
                     </div>
                 ) : (
                     <>
-                        {/* Широкий экран — таблица */}
                         <Table className="hidden border-collapse text-[13px] md:table">
                             <TableHeader>
                                 <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Груз</TableHead>
                                     <TableHead className="h-9 text-[11px] uppercase tracking-wide">Маршрут</TableHead>
                                     <TableHead className="h-9 text-[11px] uppercase tracking-wide">Погрузка</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Что везём</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Водитель</TableHead>
+                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Груз</TableHead>
+                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">{tab === 'board' ? 'Компания' : 'Заявка'}</TableHead>
                                     <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Цена</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {data.loads.map((load) => (
+                                {shown.map((o) => (
                                     <TableRow
-                                        key={load.id}
+                                        key={o.id}
                                         className="cursor-pointer border-0 border-b border-solid border-border"
-                                        onClick={() => open(load)}
-                                        aria-label={`Открыть груз ${load.number}`}
+                                        onClick={() => open(o)}
+                                        aria-label={`Открыть заявку ${o.orderNumber}`}
                                     >
                                         <TableCell className="py-2.5">
-                                            <div className="font-semibold tabular-nums">{load.number}</div>
-                                            <div className="mt-1"><StatusPill status={load.status} label={EXCHANGE_LOAD_STATUS_LABELS[load.status]} /></div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-1.5 font-medium">
-                                                {load.originCityName} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /> {load.destinationCityName}
+                                            <div className="flex items-center gap-1.5 font-semibold">
+                                                {o.from} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /> {o.to}
                                             </div>
-                                            {(load.originAddress || load.destinationAddress) && (
-                                                <div className="mt-0.5 max-w-[280px] truncate text-[12px] text-muted-foreground">
-                                                    {[load.originAddress, load.destinationAddress].filter(Boolean).join(' → ')}
-                                                </div>
-                                            )}
+                                            {черезТочки(o) && <div className="mt-0.5 text-[12px] text-muted-foreground">{черезТочки(o)}</div>}
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
-                                            <LoadingDate load={load} />
+                                            {o.stale
+                                                ? <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300"><AlertTriangle className="h-3.5 w-3.5" /> {день(o.loadingDate)} — прошла</span>
+                                                : день(o.loadingDate)}
                                         </TableCell>
-                                        <TableCell className="max-w-[240px] truncate text-muted-foreground">{грузКратко(load)}</TableCell>
-                                        <TableCell className="whitespace-nowrap">
-                                            <DriverCell load={load} />
-                                        </TableCell>
-                                        <TableCell className="text-right font-semibold tabular-nums">{moneyShort(load.price)}</TableCell>
+                                        <TableCell className="max-w-[280px] truncate text-muted-foreground">{грузКратко(o)}</TableCell>
+                                        <TableCell className="whitespace-nowrap">{tab === 'board' ? (o.companyName ?? '—') : o.orderNumber}</TableCell>
+                                        <TableCell className="text-right font-semibold tabular-nums">{o.price != null ? moneyShort(o.price) : 'договорная'}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
 
-                        {/* Узкий экран — карточки */}
                         <ul className="m-0 list-none divide-y divide-border p-0 md:hidden">
-                            {data.loads.map((load) => (
-                                <li key={load.id}>
+                            {shown.map((o) => (
+                                <li key={o.id}>
                                     <button
                                         type="button"
-                                        onClick={() => open(load)}
-                                        aria-label={`Открыть груз ${load.number}`}
-                                        className="flex w-full flex-col gap-1.5 bg-transparent px-4 py-3 text-left [font-family:inherit]"
+                                        onClick={() => open(o)}
+                                        aria-label={`Открыть заявку ${o.orderNumber}`}
+                                        className="flex w-full flex-col gap-1 bg-transparent px-4 py-3 text-left [font-family:inherit]"
                                     >
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="text-[12px] font-semibold tabular-nums text-muted-foreground">{load.number}</span>
-                                            <StatusPill status={load.status} label={EXCHANGE_LOAD_STATUS_LABELS[load.status]} />
-                                        </div>
                                         <div className="flex items-baseline justify-between gap-3">
                                             <span className="flex flex-wrap items-center gap-1.5 text-[15px] font-semibold">
-                                                {load.originCityName} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /> {load.destinationCityName}
+                                                {o.from} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /> {o.to}
                                             </span>
-                                            <span className="shrink-0 text-[15px] font-bold tabular-nums">{moneyShort(load.price)}</span>
+                                            <span className="shrink-0 text-[15px] font-bold tabular-nums">{o.price != null ? moneyShort(o.price) : 'договорная'}</span>
                                         </div>
-                                        <div className="text-[12px] text-muted-foreground"><LoadingDate load={load} /> · {грузКратко(load)}</div>
-                                        {load.driver && (
-                                            <div className="flex items-center gap-1.5 text-[12px]"><Truck className="h-3.5 w-3.5 text-muted-foreground" />{водительКратко(load.driver)}</div>
-                                        )}
+                                        <div className="text-[12px] text-muted-foreground">
+                                            {день(o.loadingDate)}{черезТочки(o) ? ` · ${черезТочки(o)}` : ''} · {грузКратко(o)}
+                                        </div>
+                                        <div className="text-[12px] text-muted-foreground">{tab === 'board' ? o.companyName : `Заявка ${o.orderNumber}`}</div>
                                     </button>
                                 </li>
                             ))}
@@ -213,21 +215,4 @@ export default function ExchangePage() {
             </section>
         </div>
     );
-}
-
-/** День погрузки; прошёл, а груз всё ещё ищет машину — предупреждение рядом. */
-function LoadingDate({ load }: { load: ExchangeLoad }) {
-    if (!датаПрошла(load)) return <>{когдаПогрузка(load)}</>;
-    return (
-        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300" title="Водители этот груз уже не видят">
-            <AlertTriangle className="h-3.5 w-3.5" /> {когдаПогрузка(load)} — дата прошла
-        </span>
-    );
-}
-
-/** Кто везёт; пока водителя нет — что происходит с грузом. */
-function DriverCell({ load }: { load: ExchangeLoad }) {
-    if (load.driver) return <span>{водительКратко(load.driver)}</span>;
-    if (load.status === 'OPEN') return <span className="text-muted-foreground">ищем водителя</span>;
-    return <span className="text-muted-foreground">—</span>;
 }

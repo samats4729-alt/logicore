@@ -38,6 +38,7 @@ import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
 import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
 import OrderHistory from '@/components/orders/OrderHistory';
+import OrderExchangePanel from '@/components/exchange/OrderExchangePanel';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import {
     EMPTY_CARGO, totalPallets,
@@ -1740,6 +1741,9 @@ export default function OrderDetailPage() {
                                     setCargo={setCargoState}
                                 />
                             ) : (
+                                <>
+                                {/* Биржа: найти исполнителя, пока его нет. */}
+                                <OrderExchangePanel orderId={orderId} reloadKey={order.updatedAt} />
                                 <OrderDetails
                                     order={order}
                                     partners={partners}
@@ -1760,6 +1764,7 @@ export default function OrderDetailPage() {
                                     openTransferModal={openTransferModal}
                                     onOpenDocuments={() => setActiveTab('documents')}
                                 />
+                                </>
                             )
                         )
                     },

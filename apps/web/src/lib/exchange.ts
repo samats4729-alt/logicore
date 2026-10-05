@@ -1,51 +1,65 @@
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 
-/** Груз на бирже — как его отдаёт сервер. */
-export interface ExchangeLoad {
-    id: string;
-    number: string;
-    status: 'OPEN' | 'TAKEN' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
-    originCityId: string | null;
-    originCityName: string;
-    originAddress: string | null;
-    destinationCityId: string | null;
-    destinationCityName: string;
-    destinationAddress: string | null;
-    loadingDate: string;
-    loadingTime: string | null;
-    bodyType: string;
-    cargoDescription: string;
-    weightKg: number | null;
-    volumeM3: number | null;
-    requirements: string | null;
-    price: number;
-    cancelledAt: string | null;
-    cancelReason: string | null;
-    createdAt: string;
-    createdByName: string | null;
-    photos: { id: string; fileName: string; mimeType: string }[];
-    takenAt: string | null;
-    loadedAt: string | null;
-    deliveredAt: string | null;
-    /** Кто везёт — как только водитель нажал «Беру». */
-    driver: {
-        lastName: string | null;
-        firstName: string | null;
-        middleName: string | null;
-        phone: string | null;
-        kind: 'IP' | 'PARK' | null;
-        vehiclePlate: string | null;
-        vehicleBodyType: string | null;
-        park: { name: string } | null;
-    } | null;
+/** Точка маршрута на бирже — только город и день: адрес откроется исполнителю. */
+export interface ExchangePoint {
+    type: 'PICKUP' | 'ADDITIONAL_PICKUP' | 'DELIVERY';
+    city: string;
+    region: string | null;
+    date: string | null;
 }
 
-export type ExchangeFilter = 'active' | 'done' | 'cancelled' | 'all';
+/** Заявка на бирже — как её видят другие компании и водители. */
+export interface ExchangeOrder {
+    id: string;
+    orderNumber: string;
+    /** Компания, которая ищет исполнителя. */
+    companyName: string | null;
+    from: string;
+    to: string;
+    loadingDate: string | null;
+    points: ExchangePoint[];
+    cargoDescription: string | null;
+    weightKg: number | null;
+    volumeM3: number | null;
+    bodyType: string | null;
+    natureOfCargo: string | null;
+    palletCount: number | null;
+    loadingTypes: string[];
+    packagingTypes: string[];
+    tempMin: number | null;
+    tempMax: number | null;
+    adr: boolean | null;
+    adrClass: string | null;
+    requirements: string | null;
+    /** Цена, которую компания предлагает исполнителю. */
+    price: number | null;
+    note: string | null;
+    publishedAt: string | null;
+    /** Своя заявка (карточка биржи) — откликаться на неё незачем. */
+    own?: boolean;
+    /** Своя заявка с прошедшей погрузкой — её уже никто не видит. */
+    stale?: boolean;
+}
 
-export interface ExchangeList {
-    loads: ExchangeLoad[];
-    counts: Record<ExchangeFilter, number>;
+/** Биржа в карточке заявки: на бирже ли и можно ли выставить. */
+export interface ExchangeOrderState {
+    orderId: string;
+    orderNumber: string;
+    onExchange: boolean;
+    canPublish: boolean;
+    /** Почему выставить нельзя — словами. */
+    reason: string | null;
+    publishedAt: string | null;
+    price: number | null;
+    note: string | null;
+    closedAt: string | null;
+    closeReason: string | null;
+    /** Откуда и куда — для подсказки «почём возили». */
+    from: string | null;
+    to: string | null;
+    /** Подсказка: сколько в заявке заложено перевозчику. */
+    suggestedPrice: number | null;
 }
 
 /** Прошлая перевозка по направлению — биржа или свой рейс. */
@@ -75,23 +89,31 @@ export function тонн(kg: number | null | undefined): string | null {
 const МЕСЯЦЫ = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 /**
- * «12 окт, с 9 до 12» — день погрузки и время словами. Месяц пишем сами:
- * русской локали у dayjs в проекте нет, и `MMM` давал «Oct».
+ * «12 окт» — день словами. Месяц пишем сами: русской локали у dayjs в
+ * проекте нет, и `MMM` давал «Oct».
  */
-export function когдаПогрузка(load: Pick<ExchangeLoad, 'loadingDate' | 'loadingTime'>): string {
-    const d = dayjs(load.loadingDate.slice(0, 10));
-    const day = `${d.date()} ${МЕСЯЦЫ[d.month()]}`;
-    return load.loadingTime ? `${day}, ${load.loadingTime}` : day;
+export function день(date: string | null | undefined): string {
+    if (!date) return 'дата не указана';
+    const d = dayjs(date);
+    return `${d.date()} ${МЕСЯЦЫ[d.month()]}`;
 }
 
 /** Строка груза: «Напитки · 20 т · 86 м³ · тент». */
-export function грузКратко(load: Pick<ExchangeLoad, 'cargoDescription' | 'weightKg' | 'volumeM3' | 'bodyType'>): string {
+export function грузКратко(o: Pick<ExchangeOrder, 'cargoDescription' | 'weightKg' | 'volumeM3' | 'bodyType'>): string {
     return [
-        load.cargoDescription,
-        тонн(load.weightKg),
-        load.volumeM3 ? `${load.volumeM3} м³` : null,
-        load.bodyType,
-    ].filter(Boolean).join(' · ');
+        o.cargoDescription,
+        тонн(o.weightKg),
+        o.volumeM3 ? `${o.volumeM3} м³` : null,
+        o.bodyType,
+    ].filter(Boolean).join(' · ') || '—';
+}
+
+/** Промежуточные точки: «через Тараз» / «ещё 2 точки» — маршрут длиннее двух городов. */
+export function черезТочки(o: Pick<ExchangeOrder, 'points'>): string | null {
+    const middle = o.points.slice(1, -1);
+    if (!middle.length) return null;
+    if (middle.length === 1) return `через ${middle[0].city}`;
+    return `ещё ${middle.length} точки`;
 }
 
 /**
@@ -208,17 +230,3 @@ export function вКавычках(name: string | null | undefined): string {
     return /[«"]/.test(name) ? name : `«${name}»`;
 }
 
-/**
- * Груз ищет машину, а день погрузки уже прошёл. Водители такой груз не
- * видят — лента показывает погрузку с сегодняшнего дня. Компании об этом
- * надо сказать прямо, иначе она ждёт водителя, которого не будет.
- */
-export function датаПрошла(load: Pick<ExchangeLoad, 'status' | 'loadingDate'>): boolean {
-    return load.status === 'OPEN' && dayjs(load.loadingDate.slice(0, 10)).isBefore(dayjs().startOf('day'));
-}
-
-/** «Проверкин Н. · 123ABC02» — водитель в строке списка. */
-export function водительКратко(d: NonNullable<ExchangeLoad['driver']>): string {
-    const name = [d.lastName, d.firstName ? `${d.firstName[0]}.` : null].filter(Boolean).join(' ') || 'Водитель';
-    return [name, d.vehiclePlate].filter(Boolean).join(' · ');
-}

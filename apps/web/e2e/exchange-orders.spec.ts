@@ -1,13 +1,17 @@
 import { test, expect } from '@playwright/test';
 
+const API = process.env.E2E_API_URL || 'http://localhost:3001';
+
 /**
- * Биржа: компания ставит груз, видит его в списке и снимает.
+ * Биржа на заявках: заявку без исполнителя выставляют на биржу из её
+ * карточки, она появляется в «Мои на бирже», и её снимают с причиной.
  *
  * Биржа включается выключателем на сервере (EXCHANGE_ENABLED). Где он не
  * стоит — вкладки нет, и проверять нечего: тест пропускается, а не падает.
+ * Так же — если на стенде нет ни одной заявки без исполнителя.
  */
-test.describe('Биржа · грузы компании', () => {
-    test('груз ставится, открывается в карточке и снимается с причиной', async ({ page }) => {
+test.describe('Биржа · заявки', () => {
+    test('заявка без исполнителя выставляется на биржу и снимается с причиной', async ({ page }) => {
         test.setTimeout(150_000);
         await page.goto('/company');
 
@@ -15,38 +19,39 @@ test.describe('Биржа · грузы компании', () => {
         const enabled = await tab.waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
         test.skip(!enabled, 'Биржа на этом сервере выключена');
 
-        await tab.click();
-        await expect(page.getByRole('heading', { name: 'Ваши грузы', level: 1 })).toBeVisible({ timeout: 60_000 });
-        await page.getByRole('button', { name: 'Поставить груз' }).click();
-        await expect(page.getByRole('heading', { name: 'Поставить груз' })).toBeVisible({ timeout: 60_000 });
-
-        // Пустая форма не отправляется — сказано, чего не хватает.
-        await expect(page.getByText(/Осталось заполнить: откуда, куда/)).toBeVisible();
-
-        for (const [button, city] of [['Откуда', 'Шымкент'], ['Куда', 'Алматы']] as const) {
-            await page.getByRole('button', { name: button }).click();
-            await page.locator('input[placeholder="Начните вводить название города"]').last().fill(city);
-            await page.getByRole('dialog').last().locator('ul li button').first().click();
+        // Свободную заявку спрашиваем у самого сервера: он знает, кому её
+        // можно выставить (экспедитору, пока исполнителя нет).
+        const list = await page.request.get(`${API}/orders?status=PENDING&limit=50`);
+        const body = await list.json();
+        const orders: { id: string; orderNumber: string }[] = Array.isArray(body) ? body : body.data ?? [];
+        let target: { id: string; orderNumber: string } | null = null;
+        for (const o of orders) {
+            const state = await page.request.get(`${API}/exchange/orders/${o.id}`);
+            if (state.ok() && (await state.json()).canPublish) { target = o; break; }
         }
-        await page.getByPlaceholder('Например: напитки на паллетах').fill('Проверка биржи');
-        await page.getByLabel('Тип кузова').selectOption('тент');
-        await page.getByPlaceholder('Например: 20', { exact: true }).fill('20');
-        await page.getByLabel('Цена перевозки').fill('450000');
-        await expect(page.getByLabel('Цена перевозки')).toHaveValue('450 000');
+        test.skip(!target, 'На стенде нет заявки без исполнителя');
 
-        await page.getByRole('button', { name: 'Поставить на биржу' }).click();
+        await page.goto(`/company/orders/${target!.id}`);
+        await page.getByRole('button', { name: 'Выставить на биржу' }).click();
+        const publish = page.getByRole('dialog');
+        await publish.getByLabel('Цена для исполнителя').fill('450000');
+        await expect(publish.getByLabel('Цена для исполнителя')).toHaveValue('450 000');
+        await publish.getByRole('button', { name: 'Выставить', exact: true }).click();
+        await expect(page.getByText(/На бирже с .* за 450\s000/)).toBeVisible({ timeout: 30_000 });
 
-        // Карточка груза: номер с буквой Б, статус «Ищем машину».
-        await expect(page.getByText(/Биржа · груз Б-\d+/)).toBeVisible({ timeout: 60_000 });
-        await expect(page.getByText('Ищем машину').first()).toBeVisible();
-        await expect(page.getByText('450 000 ₸').first()).toBeVisible();
+        // Своя заявка — во вкладке «Мои на бирже», не среди чужих.
+        await page.goto('/company/exchange');
+        await expect(page.getByRole('heading', { name: 'Биржа заявок', level: 1 })).toBeVisible({ timeout: 60_000 });
+        await page.getByRole('tab', { name: /Мои на бирже/ }).click();
+        await expect(page.getByText(target!.orderNumber).first()).toBeVisible();
 
-        // Снять: вопрос, причина, и груз уходит во вкладку «Сняты».
+        // Снять: вопрос, причина, и можно выставить снова.
+        await page.goto(`/company/orders/${target!.id}`);
         await page.getByRole('button', { name: 'Снять с биржи' }).click();
-        const dialog = page.getByRole('dialog');
-        await dialog.getByRole('button', { name: 'Нашли машину сами' }).click();
-        await dialog.getByRole('button', { name: 'Снять с биржи' }).click();
-        await expect(page.getByText(/Снят с биржи .* — Нашли машину сами/)).toBeVisible({ timeout: 30_000 });
-        await expect(page.getByRole('button', { name: 'Снять с биржи' })).toHaveCount(0);
+        const close = page.getByRole('dialog');
+        await close.getByRole('button', { name: 'Нашли исполнителя сами' }).click();
+        await close.getByRole('button', { name: 'Снять с биржи' }).click();
+        await expect(page.getByText(/Снята с биржи .* — Нашли исполнителя сами/)).toBeVisible({ timeout: 30_000 });
+        await expect(page.getByRole('button', { name: 'Выставить на биржу' })).toBeVisible();
     });
 });

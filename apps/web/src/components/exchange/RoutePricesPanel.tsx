@@ -11,7 +11,7 @@ import { RoutePrices, тонн } from '@/lib/exchange';
  * Почём возили по направлению — факты под полем цены.
  *
  * Цену не придумываем: так решил владелец ещё для запросов на расчёт
- * (quote-memory.ts на сервере). Здесь прошлые грузы биржи по этому
+ * (quote-memory.ts на сервере). Здесь прошлые заявки биржи по этому
  * направлению и свои рейсы — сколько платили перевозчику. Решает человек.
  */
 export function RoutePricesPanel({ origin, destination, onUse }: {
@@ -52,7 +52,7 @@ export function RoutePricesPanel({ origin, destination, onUse }: {
     }
 
     const rows = [
-        ...data.exchange.map((r) => ({ ...r, where: r.own ? `ваш груз ${r.number}` : `биржа ${r.number}` })),
+        ...data.exchange.map((r) => ({ ...r, where: r.own ? `ваша заявка ${r.number} на бирже` : `биржа, заявка ${r.number}` })),
         ...data.ownOrders.map((r) => ({ ...r, where: `ваш рейс ${r.orderNumber}` })),
     ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
 
