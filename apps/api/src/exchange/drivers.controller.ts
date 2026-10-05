@@ -21,7 +21,7 @@ import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import {
     AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverReasonDto, ParkDriversQueryDto,
-    SetParkDto, TripAdvanceDto, UpdateDriverProfileDto,
+    SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -133,58 +133,18 @@ export class ExchangeDriverController {
         return this.loads.deleteAccount(req.user.sub);
     }
 
-    // ==================== грузы и рейсы ====================
+    // ==================== биржа ====================
 
     @Get('loads')
-    @ApiOperation({ summary: 'Лента грузов' })
+    @ApiOperation({ summary: 'Лента: заявки на бирже' })
     feed(@Request() req: any, @Query() query: DriverFeedQueryDto) {
         return this.loads.feed(req.user.sub, query.bodyType);
     }
 
     @Get('loads/:id')
-    @ApiOperation({ summary: 'Карточка груза' })
+    @ApiOperation({ summary: 'Заявка с биржи' })
     load(@Request() req: any, @Param('id') id: string) {
         return this.loads.card(req.user.sub, id);
-    }
-
-    @Get('load-photos/:id')
-    @ApiOperation({ summary: 'Фото груза' })
-    async loadPhoto(@Request() req: any, @Param('id') id: string, @Res() res: Response) {
-        return sendExchangeFile(this.s3, res, await this.loads.photo(req.user.sub, id));
-    }
-
-    @Post('loads/:id/take')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Беру груз' })
-    take(@Request() req: any, @Param('id') id: string) {
-        return this.loads.take(req.user.sub, id);
-    }
-
-    @Post('loads/:id/decline')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Не беру — с причиной' })
-    decline(@Request() req: any, @Param('id') id: string, @Body() dto: DriverReasonDto) {
-        return this.loads.decline(req.user.sub, id, dto.reason);
-    }
-
-    @Get('trips')
-    @ApiOperation({ summary: 'Мои рейсы' })
-    trips(@Request() req: any) {
-        return this.loads.trips(req.user.sub);
-    }
-
-    @Post('trips/:id/advance')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Погрузился / Доставил' })
-    advance(@Request() req: any, @Param('id') id: string, @Body() dto: TripAdvanceDto) {
-        return this.loads.advance(req.user.sub, id, dto.to);
-    }
-
-    @Post('trips/:id/release')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Сняться с рейса до погрузки' })
-    release(@Request() req: any, @Param('id') id: string, @Body() dto: DriverReasonDto) {
-        return this.loads.release(req.user.sub, id, dto.reason);
     }
 }
 

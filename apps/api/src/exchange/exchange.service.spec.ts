@@ -1,226 +1,163 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { ExchangeService, loadNumber, MAX_LOAD_PHOTOS } from './exchange.service';
+import { ExchangeService } from './exchange.service';
+import { EXCHANGE_ORDER_SELECT, exchangeView, managerOf, notPast } from './exchange-orders';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
-import { kzTodayString } from '../common/utils/business-date';
 
-const COMPANY = 'company-1';
+const OUR = 'company-ours';
+const OTHER = 'company-other';
 const USER = 'user-1';
 
-function row(overrides: Record<string, any> = {}) {
+/** Заявка, как её отдаёт выборка состояния биржи. */
+function order(overrides: Record<string, any> = {}) {
     return {
-        id: 'load-1', seq: 7, status: 'OPEN',
-        originCityId: null, originCityName: 'Шымкент', originAddress: null,
-        destinationCityId: null, destinationCityName: 'Алматы', destinationAddress: null,
-        loadingDate: new Date('2030-01-10T00:00:00Z'), loadingTime: null,
-        bodyType: 'Тент', cargoDescription: 'Напитки', weightKg: 20000, volumeM3: null, requirements: null,
-        price: 450000, cancelledAt: null, cancelReason: null, createdAt: new Date(),
-        createdBy: { firstName: 'Алия', lastName: 'Менеджер' },
-        photos: [],
+        id: 'order-1', orderNumber: '3K-2607', status: 'PENDING',
+        customerCompanyId: 'client-1', forwarderId: OUR, subForwarderId: null,
+        partnerId: null, driverId: null, assignedDriverName: null,
+        driverCost: 400000,
+        exchangePublishedAt: null, exchangePrice: null, exchangeNote: null,
+        exchangeClosedAt: null, exchangeCloseReason: null,
+        routePoints: [{ pointType: 'PICKUP', location: { city: 'Шымкент', cityRecord: null } }, { pointType: 'DELIVERY', location: { city: 'Алматы', cityRecord: null } }],
         ...overrides,
     };
 }
 
-function build(overrides: Record<string, any> = {}) {
+/** Заявка, как её отдаёт выборка биржи (то, что видят другие). */
+function boardRow(overrides: Record<string, any> = {}) {
+    return {
+        id: 'order-2', orderNumber: '7A-0042',
+        cargoDescription: 'Напитки', cargoWeight: 20000, cargoVolume: 82, cargoType: 'Тент', natureOfCargo: null,
+        palletCount: 33, loadingTypes: ['задняя'], packagingTypes: [], tempMin: null, tempMax: null, adr: null, adrClass: null,
+        requirements: null, exchangePrice: 450000, exchangeNote: 'Ремни 10 шт', exchangePublishedAt: new Date(),
+        forwarder: { name: 'ТОО Экспедитор' }, customerCompany: { name: 'ТОО Клиент' }, subForwarder: null,
+        subForwarderId: null, forwarderId: OTHER,
+        routePoints: [
+            { pointType: 'PICKUP', sequence: 1, expectedDate: new Date('2030-01-10T03:00:00Z'), location: { city: 'Шымкент', region: null, cityRecord: null } },
+            { pointType: 'DELIVERY', sequence: 2, expectedDate: new Date('2030-01-12T03:00:00Z'), location: { city: 'алматы', region: null, cityRecord: { name: 'Алматы' } } },
+        ],
+        ...overrides,
+    };
+}
+
+function build(state = order()) {
     const prisma: any = {
-        city: { findUnique: jest.fn().mockResolvedValue(null) },
-        exchangeLoad: {
-            create: jest.fn(async (args: any) => row({ ...args.data })),
+        order: {
+            findFirst: jest.fn().mockResolvedValue(state),
             findMany: jest.fn().mockResolvedValue([]),
-            findFirst: jest.fn().mockResolvedValue(row()),
-            groupBy: jest.fn().mockResolvedValue([]),
+            count: jest.fn().mockResolvedValue(0),
+            update: jest.fn(),
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
-        exchangeLoadPhoto: {
-            create: jest.fn(async (args: any) => ({ id: 'p-1', fileName: args.data.fileName, mimeType: args.data.mimeType })),
-            findFirst: jest.fn(),
-            delete: jest.fn(),
-        },
-        order: { findMany: jest.fn().mockResolvedValue([]) },
-        ...overrides,
     };
-    const s3: any = { isS3Enabled: () => true, uploadFile: jest.fn(), deleteFile: jest.fn() };
-    return { service: new ExchangeService(prisma, s3), prisma, s3 };
+    return { service: new ExchangeService(prisma), prisma };
 }
 
-const dto = (overrides: Record<string, any> = {}) => ({
-    originCityName: ' г. Шымкент ',
-    destinationCityName: 'Алматы',
-    loadingDate: '2030-01-10',
-    bodyType: 'Тент',
-    cargoDescription: ' Напитки ',
-    weightKg: 20000,
-    price: 450000,
-    ...overrides,
-});
-
-describe('Биржа: груз от компании', () => {
-    it('номер груза — с буквой Б, чтобы не путать с номером заявки', () => {
-        expect(loadNumber(7)).toBe('Б-0007');
-        expect(loadNumber(12345)).toBe('Б-12345');
+describe('Биржа: кто выставляет заявку', () => {
+    it('выставляет компания, которая ищет исполнителя: суб-экспедитор, иначе экспедитор, иначе заказчик', () => {
+        expect(managerOf({ subForwarderId: 'sub', forwarderId: 'fwd', customerCompanyId: 'cli' })).toBe('sub');
+        expect(managerOf({ forwarderId: 'fwd', customerCompanyId: 'cli' })).toBe('fwd');
+        expect(managerOf({ customerCompanyId: 'cli' })).toBe('cli');
     });
 
-    it('груз ставится от компании и человека, город запоминается ключом направления', async () => {
+    it('свободную заявку экспедитор выставляет — с ценой и примечанием', async () => {
         const { service, prisma } = build();
-        const load = await service.create(COMPANY, USER, dto());
-
-        const data = prisma.exchangeLoad.create.mock.calls[0][0].data;
-        expect(data.companyId).toBe(COMPANY);
-        expect(data.createdById).toBe(USER);
-        expect(data.originCityName).toBe('г. Шымкент');
-        expect(data.originCityKey).toBe('шымкент');
-        expect(data.cargoDescription).toBe('Напитки');
-        expect(data.loadingDate.toISOString()).toBe('2030-01-10T00:00:00.000Z');
-        expect(load.number).toBe('Б-0007');
-        expect(load.createdByName).toBe('Менеджер Алия');
+        const after = order({ exchangePublishedAt: new Date(), exchangePrice: 450000, exchangeNote: 'Ремни' });
+        prisma.order.findFirst.mockResolvedValueOnce(order()).mockResolvedValueOnce(after);
+        const state = await service.publish(OUR, USER, 'order-1', { price: 450000, note: ' Ремни ' });
+        const call = prisma.order.updateMany.mock.calls[0][0];
+        expect(call.where).toMatchObject({ id: 'order-1', partnerId: null, driverId: null, assignedDriverName: null });
+        expect(call.data).toMatchObject({ exchangePrice: 450000, exchangeNote: 'Ремни', exchangePublishedById: USER, exchangeClosedAt: null });
+        expect(state.onExchange).toBe(true);
     });
 
-    it('выдуманная ссылка на город не ломает сохранение — город остаётся текстом', async () => {
+    it('заказчик, у которого рейс ведёт экспедитор, выставить не может', async () => {
+        const { service } = build(order({ customerCompanyId: OUR, forwarderId: OTHER }));
+        await expect(service.publish(OUR, USER, 'order-1', { price: 1 })).rejects.toThrow(/только компания, которая ищет исполнителя/);
+    });
+
+    it('с исполнителем или в работе — не выставить, и сказано почему', async () => {
+        await expect(build(order({ driverId: 'd-1' })).service.publish(OUR, USER, 'order-1', { price: 1 }))
+            .rejects.toThrow(/уже есть исполнитель/);
+        await expect(build(order({ partnerId: 'carrier' })).service.publish(OUR, USER, 'order-1', { price: 1 }))
+            .rejects.toThrow(/уже есть исполнитель/);
+        await expect(build(order({ status: 'IN_TRANSIT' })).service.publish(OUR, USER, 'order-1', { price: 1 }))
+            .rejects.toThrow(/в работе или закрыта/);
+    });
+
+    it('без погрузки и выгрузки — не выставить', async () => {
+        const { service } = build(order({ routePoints: [{ pointType: 'PICKUP', location: { city: 'Шымкент', cityRecord: null } }] }));
+        await expect(service.publish(OUR, USER, 'order-1', { price: 1 })).rejects.toThrow(/погрузку и выгрузку/);
+    });
+
+    it('исполнителя назначили, пока открыта форма, — заявка на биржу не уходит', async () => {
         const { service, prisma } = build();
-        await service.create(COMPANY, USER, dto({ originCityId: 'нет-такого' }));
-        expect(prisma.exchangeLoad.create.mock.calls[0][0].data.originCityId).toBeNull();
+        prisma.order.updateMany.mockResolvedValue({ count: 0 });
+        await expect(service.publish(OUR, USER, 'order-1', { price: 1 })).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('вчерашний день погрузки не принимается', async () => {
+    it('чужая заявка — «не найдена»', async () => {
         const { service, prisma } = build();
-        await expect(service.create(COMPANY, USER, dto({ loadingDate: '2020-01-01' })))
-            .rejects.toThrow(/уже прошёл/);
-        expect(prisma.exchangeLoad.create).not.toHaveBeenCalled();
+        prisma.order.findFirst.mockResolvedValue(null);
+        await expect(service.state(OUR, 'order-x')).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('сегодняшний день погрузки принимается', async () => {
-        const { service } = build();
-        await expect(service.create(COMPANY, USER, dto({ loadingDate: kzTodayString() }))).resolves.toBeDefined();
+    it('снять — с причиной; снятую второй раз не снять', async () => {
+        const published = order({ exchangePublishedAt: new Date() });
+        const { service, prisma } = build(published);
+        await service.unpublish(OUR, 'order-1', ' Нашли машину сами ');
+        expect(prisma.order.update.mock.calls[0][0].data).toMatchObject({ exchangeCloseReason: 'Нашли машину сами' });
+
+        const closed = build(order({ exchangePublishedAt: new Date(), exchangeClosedAt: new Date() }));
+        await expect(closed.service.unpublish(OUR, 'order-1', 'ещё раз')).rejects.toThrow(/уже не на бирже/);
     });
 
-    it('город из одних знаков препинания — не город', async () => {
-        const { service } = build();
-        await expect(service.create(COMPANY, USER, dto({ originCityName: ' . ' })))
-            .rejects.toThrow(/откуда везти/);
-    });
-});
-
-describe('Биржа: список и карточка', () => {
-    it('компания видит только свои грузы, по умолчанию — те, что в работе', async () => {
-        const { service, prisma } = build();
-        await service.list(COMPANY);
-        const where = prisma.exchangeLoad.findMany.mock.calls[0][0].where;
-        expect(where.companyId).toBe(COMPANY);
-        expect(where.status.in).toEqual(['OPEN', 'TAKEN', 'IN_TRANSIT']);
-    });
-
-    it('счётчики вкладок считаются по статусам', async () => {
-        const { service } = build({
-            exchangeLoad: {
-                findMany: jest.fn().mockResolvedValue([]),
-                groupBy: jest.fn().mockResolvedValue([
-                    { status: 'OPEN', _count: { _all: 2 } },
-                    { status: 'TAKEN', _count: { _all: 1 } },
-                    { status: 'CANCELLED', _count: { _all: 4 } },
-                ]),
-            },
-        });
-        const { counts } = await service.list(COMPANY, 'all');
-        expect(counts).toEqual({ active: 3, done: 0, cancelled: 4, all: 7 });
-    });
-
-    it('чужой груз — «не найден»', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValue(null);
-        await expect(service.findOne(COMPANY, 'load-x')).rejects.toBeInstanceOf(NotFoundException);
-        expect(prisma.exchangeLoad.findFirst.mock.calls[0][0].where).toEqual({ id: 'load-x', companyId: COMPANY });
+    it('назначили исполнителя обычным порядком — заявка уже не числится на бирже', async () => {
+        const { service } = build(order({ exchangePublishedAt: new Date(), driverId: 'd-1', status: 'ASSIGNED' }));
+        const state = await service.state(OUR, 'order-1');
+        expect(state.onExchange).toBe(false);
     });
 });
 
-describe('Биржа: снять груз', () => {
-    it('пока груз ищет машину — снимается с причиной', async () => {
+describe('Биржа: что видят другие', () => {
+    it('свои заявки на бирже не показываются', async () => {
         const { service, prisma } = build();
-        await service.cancel(COMPANY, 'load-1', ' клиент отменил ');
-        const args = prisma.exchangeLoad.updateMany.mock.calls[0][0];
-        expect(args.where).toEqual({ id: 'load-1', companyId: COMPANY, status: 'OPEN' });
-        expect(args.data.status).toBe('CANCELLED');
-        expect(args.data.cancelReason).toBe('клиент отменил');
-    });
-
-    it('взятый водителем груз кнопкой не снимается', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValue(row({ status: 'TAKEN' }));
-        await expect(service.cancel(COMPANY, 'load-1', 'передумали')).rejects.toThrow(/взял водитель/);
-        expect(prisma.exchangeLoad.updateMany).not.toHaveBeenCalled();
-    });
-
-    it('водитель взял в ту же секунду — снятие не перезаписывает его', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.updateMany.mockResolvedValue({ count: 0 });
-        await expect(service.cancel(COMPANY, 'load-1', 'передумали')).rejects.toBeInstanceOf(BadRequestException);
-    });
-});
-
-describe('Биржа: почём возили по направлению', () => {
-    it('прошлые грузы биржи и свои рейсы по тому же направлению, медиана — без случайных выбросов', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findMany.mockResolvedValue([
-            { seq: 1, loadingDate: new Date(), price: 400000, bodyType: 'Тент', weightKg: 20000, companyId: 'other' },
-            { seq: 2, loadingDate: new Date(), price: 900000, bodyType: 'Реф', weightKg: 20000, companyId: COMPANY },
+        await service.board(OUR);
+        const where = prisma.order.findMany.mock.calls[0][0].where;
+        // Пустое поле — тоже «не своя»: иначе заявка без суб-экспедитора пропадала с биржи.
+        expect(where.AND).toEqual([
+            { OR: [{ customerCompanyId: null }, { customerCompanyId: { not: OUR } }] },
+            { OR: [{ forwarderId: null }, { forwarderId: { not: OUR } }] },
+            { OR: [{ subForwarderId: null }, { subForwarderId: { not: OUR } }] },
         ]);
-        const point = (pointType: string, sequence: number, city: string) => ({ pointType, sequence, location: { city, cityRecord: null } });
-        prisma.order.findMany.mockResolvedValue([
-            { orderNumber: '001', createdAt: new Date(), driverCost: 420000, cargoType: 'Тент', cargoWeight: 19500,
-                routePoints: [point('PICKUP', 1, 'Чимкент'), point('DELIVERY', 2, 'г. Алматы')] },
-            { orderNumber: '002', createdAt: new Date(), driverCost: 100000, cargoType: 'Тент', cargoWeight: 1000,
-                routePoints: [point('PICKUP', 1, 'Шымкент'), point('DELIVERY', 2, 'Тараз')] },
-        ]);
-
-        const res = await service.routePrices(COMPANY, { originCityName: 'Шымкент', destinationCityName: 'Алматы' });
-
-        expect(res.exchange.map((r) => r.number)).toEqual(['Б-0001', 'Б-0002']);
-        expect(res.exchange[1].own).toBe(true);
-        // «Чимкент» — тот же Шымкент; рейс в Тараз — другое направление.
-        expect(res.ownOrders.map((o) => o.orderNumber)).toEqual(['001']);
-        expect(res.summary).toEqual({ count: 3, min: 400000, max: 900000, median: 420000 });
-        // Снятые грузы — не цена рынка.
-        expect(prisma.exchangeLoad.findMany.mock.calls[0][0].where.status).toEqual({ not: 'CANCELLED' });
-        // Свои рейсы — только своей компании.
-        expect(prisma.order.findMany.mock.calls[0][0].where.forwarderId).toBe(COMPANY);
+        expect(where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
     });
 
-    it('нет истории — нет и сводки', async () => {
-        const { service } = build();
-        const res = await service.routePrices(COMPANY, { originCityName: 'Шымкент', destinationCityName: 'Алматы' });
-        expect(res.summary).toBeNull();
-    });
-});
-
-describe('Биржа: фото груза', () => {
-    const image = (overrides: Record<string, any> = {}) => ({
-        originalname: 'груз.jpg', mimetype: 'image/jpeg', size: 1000, buffer: Buffer.from('x'), ...overrides,
-    }) as any;
-
-    it('фото ложится в хранилище и в карточку груза', async () => {
-        const { service, prisma, s3 } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValue({ id: 'load-1', status: 'OPEN', _count: { photos: 0 } });
-        await service.addPhoto(COMPANY, 'load-1', image());
-        expect(s3.uploadFile.mock.calls[0][0]).toMatch(/^uploads\/exchange\/load-1\/.+\.jpg$/);
-        expect(prisma.exchangeLoadPhoto.create).toHaveBeenCalled();
+    it('видны города, даты, груз и цена — без адресов, заказчика и денег экспедитора', () => {
+        const view = exchangeView(boardRow() as any);
+        expect(view).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 450000, note: 'Ремни 10 шт', companyName: 'ТОО Экспедитор' });
+        const text = JSON.stringify(view);
+        expect(text).not.toMatch(/ТОО Клиент|customerPrice|driverCost|address/);
+        // В выборке биржи нет ни адресов, ни цен заказчика — лишнее не запросится.
+        const select = JSON.stringify(EXCHANGE_ORDER_SELECT);
+        expect(select).not.toMatch(/address|customerPrice|driverCost|"name":true,"address"/);
     });
 
-    it('не фото — не принимается', async () => {
+    it('погрузка в прошлом — не показываем; без даты — показываем', () => {
+        const now = new Date('2030-01-11T06:00:00Z');
+        expect(notPast(boardRow() as any, now)).toBe(false);
+        expect(notPast(boardRow({ routePoints: [{ pointType: 'PICKUP', sequence: 1, expectedDate: null, location: { city: 'Шымкент', region: null, cityRecord: null } }] }) as any, now)).toBe(true);
+    });
+
+    it('фильтр «откуда» и «кузов» — без учёта регистра', async () => {
         const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValue({ id: 'load-1', status: 'OPEN', _count: { photos: 0 } });
-        await expect(service.addPhoto(COMPANY, 'load-1', image({ mimetype: 'application/pdf', originalname: 'a.pdf' })))
-            .rejects.toThrow(/только фотографии/);
+        prisma.order.findMany.mockResolvedValue([boardRow(), boardRow({ id: 'order-3', cargoType: 'Реф' })]);
+        expect((await service.board(OUR, { from: 'шым', bodyType: 'тент' })).map((v) => v.id)).toEqual(['order-2']);
+        expect(await service.board(OUR, { to: 'Астана' })).toEqual([]);
     });
 
-    it(`больше ${MAX_LOAD_PHOTOS} фото — нельзя`, async () => {
+    it('снятая или занятая заявка — «уже снята с биржи»', async () => {
         const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValue({ id: 'load-1', status: 'OPEN', _count: { photos: MAX_LOAD_PHOTOS } });
-        await expect(service.addPhoto(COMPANY, 'load-1', image())).rejects.toThrow(/Не больше/);
-    });
-
-    it('чужое фото не отдаётся', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoadPhoto.findFirst.mockResolvedValue(null);
-        await expect(service.photo(COMPANY, 'p-1')).rejects.toBeInstanceOf(NotFoundException);
-        expect(prisma.exchangeLoadPhoto.findFirst.mock.calls[0][0].where).toEqual({ id: 'p-1', load: { companyId: COMPANY } });
+        prisma.order.findFirst.mockResolvedValue(null);
+        await expect(service.card(OUR, 'order-2')).rejects.toThrow(/снята с биржи/);
     });
 });
 

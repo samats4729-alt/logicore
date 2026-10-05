@@ -1,15 +1,17 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 
-function loadRow(overrides: Record<string, any> = {}) {
+function boardRow(overrides: Record<string, any> = {}) {
     return {
-        id: 'load-1', seq: 3, status: 'OPEN',
-        originCityName: 'Шымкент', originAddress: null, destinationCityName: 'Алматы', destinationAddress: null,
-        loadingDate: new Date('2030-01-10T00:00:00Z'), loadingTime: null, bodyType: 'тент', cargoDescription: 'Напитки',
-        weightKg: 20000, volumeM3: null, requirements: null, price: 420000,
-        takenAt: null, loadedAt: null, deliveredAt: null, driverId: null,
-        company: { name: 'ТОО Заказчик' }, photos: [{ id: 'p-1' }],
-        createdBy: { firstName: 'Алия', lastName: 'Менеджер', phone: '+77010000000' },
+        id: 'order-1', orderNumber: '7A-0042',
+        cargoDescription: 'Напитки', cargoWeight: 20000, cargoVolume: null, cargoType: 'Тент', natureOfCargo: null,
+        palletCount: null, loadingTypes: [], packagingTypes: [], tempMin: null, tempMax: null, adr: null, adrClass: null,
+        requirements: null, exchangePrice: 420000, exchangeNote: null, exchangePublishedAt: new Date(),
+        forwarder: { name: 'ТОО Экспедитор' }, customerCompany: null, subForwarder: null, subForwarderId: null, forwarderId: 'fwd',
+        routePoints: [
+            { pointType: 'PICKUP', sequence: 1, expectedDate: new Date('2099-01-10T03:00:00Z'), location: { city: 'Шымкент', region: null, cityRecord: null } },
+            { pointType: 'DELIVERY', sequence: 2, expectedDate: null, location: { city: 'Алматы', region: null, cityRecord: null } },
+        ],
         ...overrides,
     };
 }
@@ -20,13 +22,10 @@ function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', trip
             findUnique: jest.fn().mockResolvedValue(driver),
             update: jest.fn(),
         },
-        exchangeLoad: {
-            findMany: jest.fn().mockResolvedValue([]),
-            findFirst: jest.fn().mockResolvedValue(loadRow()),
-            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        order: {
+            findMany: jest.fn().mockResolvedValue([boardRow()]),
+            findFirst: jest.fn().mockResolvedValue(boardRow()),
         },
-        exchangeLoadDecline: { create: jest.fn() },
-        exchangeLoadPhoto: { findFirst: jest.fn() },
         exchangeDriverDocument: { deleteMany: jest.fn() },
         session: { deleteMany: jest.fn() },
         user: { update: jest.fn() },
@@ -37,112 +36,43 @@ function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', trip
 }
 
 describe('Биржа · водитель: допуск', () => {
-    it('анкета на проверке — грузов не видно, и сказано почему', async () => {
+    it('анкета на проверке — заявок не видно, и сказано почему', async () => {
         const { service } = build({ id: 'd-1', status: 'PENDING' });
         await expect(service.feed('u-1')).rejects.toThrow(/на проверке у парка/);
     });
 
-    it('заблокированный грузов не видит', async () => {
+    it('заблокированный заявок не видит', async () => {
         const { service } = build({ id: 'd-1', status: 'BLOCKED' });
         await expect(service.feed('u-1')).rejects.toBeInstanceOf(ForbiddenException);
     });
 });
 
 describe('Биржа · водитель: лента', () => {
-    it('только грузы, которые ищут машину, с сегодняшнего дня, без тех, от которых отказался', async () => {
+    it('только заявки на бирже без исполнителя, с городами и ценой', async () => {
         const { service, prisma } = build();
-        await service.feed('u-1', 'тент');
-        const where = prisma.exchangeLoad.findMany.mock.calls[0][0].where;
-        expect(where.status).toBe('OPEN');
-        expect(where.loadingDate.gte).toBeInstanceOf(Date);
-        expect(where.declines).toEqual({ none: { driverId: 'd-1' } });
-        expect(where.bodyType).toBe('тент');
+        const feed = await service.feed('u-1');
+        expect(prisma.order.findMany.mock.calls[0][0].where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
+        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 420000, orderNumber: '7A-0042' });
     });
 
-    it('контакт отправителя — только тому, кто груз взял', async () => {
+    it('«мой кузов» — без учёта регистра', async () => {
         const { service, prisma } = build();
-        expect((await service.card('u-1', 'load-1')).contact).toBeNull();
-        prisma.exchangeLoad.findFirst.mockResolvedValue(loadRow({ status: 'TAKEN', driverId: 'd-1' }));
-        expect((await service.card('u-1', 'load-1')).contact).toEqual({ name: 'Алия Менеджер', phone: '+77010000000' });
+        prisma.order.findMany.mockResolvedValue([boardRow(), boardRow({ id: 'order-2', cargoType: 'Рефрижератор' })]);
+        expect((await service.feed('u-1', 'тент')).map((v) => v.id)).toEqual(['order-1']);
     });
 
-    it('чужой взятый груз не открывается', async () => {
+    it('снятая заявка — так и сказано', async () => {
         const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValue(null);
-        await expect(service.card('u-1', 'load-1')).rejects.toBeInstanceOf(NotFoundException);
-        expect(prisma.exchangeLoad.findFirst.mock.calls[0][0].where.OR).toEqual([{ status: 'OPEN' }, { driverId: 'd-1' }]);
-    });
-});
-
-describe('Биржа · водитель: «Беру»', () => {
-    it('кто первый — тот везёт: груз берётся только если ещё ищет машину', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst
-            .mockResolvedValueOnce(null) // активного рейса нет
-            .mockResolvedValue(loadRow({ status: 'TAKEN', driverId: 'd-1' }));
-        await service.take('u-1', 'load-1');
-        const args = prisma.exchangeLoad.updateMany.mock.calls[0][0];
-        expect(args.where).toMatchObject({ id: 'load-1', status: 'OPEN' });
-        expect(args.data).toMatchObject({ status: 'TAKEN', driverId: 'd-1' });
-    });
-
-    it('опоздал — «уже взял другой водитель»', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValueOnce(null);
-        prisma.exchangeLoad.updateMany.mockResolvedValue({ count: 0 });
-        await expect(service.take('u-1', 'load-1')).rejects.toThrow(/другой водитель/);
-    });
-
-    it('один рейс за раз — сначала довезти текущий', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValueOnce({ seq: 7 });
-        await expect(service.take('u-1', 'load-1')).rejects.toThrow(/Б-0007/);
-        expect(prisma.exchangeLoad.updateMany).not.toHaveBeenCalled();
-    });
-});
-
-describe('Биржа · водитель: рейс', () => {
-    it('в своих рейсах телефон отправителя открыт — звонить прямо с экрана рейса', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findMany.mockResolvedValue([loadRow({ status: 'TAKEN', driverId: 'd-1' })]);
-        const [trip] = await service.trips('u-1');
-        expect(prisma.exchangeLoad.findMany.mock.calls[0][0].where).toEqual({ driverId: 'd-1' });
-        expect(trip.contact).toEqual({ name: 'Алия Менеджер', phone: '+77010000000' });
-        expect(trip).not.toHaveProperty('createdBy');
-    });
-
-    it('«Погрузился» — только из «взят», «Доставил» — только из «в пути»', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValue(loadRow({ status: 'IN_TRANSIT', driverId: 'd-1' }));
-        await service.advance('u-1', 'load-1', 'IN_TRANSIT');
-        expect(prisma.exchangeLoad.updateMany.mock.calls[0][0].where).toMatchObject({ status: 'TAKEN', driverId: 'd-1' });
-        await service.advance('u-1', 'load-1', 'DELIVERED');
-        expect(prisma.exchangeLoad.updateMany.mock.calls[1][0].where).toMatchObject({ status: 'IN_TRANSIT' });
-    });
-
-    it('довёз — счётчик рейсов растёт', async () => {
-        const { service, prisma } = build();
-        prisma.exchangeLoad.findFirst.mockResolvedValue(loadRow({ status: 'DELIVERED', driverId: 'd-1' }));
-        await service.advance('u-1', 'load-1', 'DELIVERED');
-        expect(prisma.exchangeDriver.update.mock.calls[0][0].data).toEqual({ tripsCompleted: { increment: 1 } });
-    });
-
-    it('сняться можно только до погрузки, и отказ записывается', async () => {
-        const { service, prisma } = build();
-        await service.release('u-1', 'load-1', 'сломалась машина');
-        expect(prisma.exchangeLoad.updateMany.mock.calls[0][0].where).toMatchObject({ status: 'TAKEN', driverId: 'd-1' });
-        expect(prisma.exchangeLoadDecline.create.mock.calls[0][0].data).toMatchObject({ afterTaking: true, reason: 'сломалась машина' });
-
-        prisma.exchangeLoad.updateMany.mockResolvedValue({ count: 0 });
-        await expect(service.release('u-1', 'load-1', 'передумал')).rejects.toBeInstanceOf(BadRequestException);
+        prisma.order.findFirst.mockResolvedValue(null);
+        await expect(service.card('u-1', 'order-1')).rejects.toThrow(/снята с биржи/);
     });
 });
 
 describe('Биржа · водитель: удалить аккаунт', () => {
     it('личные данные стираются, вход закрывается', async () => {
         const { service, prisma } = build();
+        prisma.order.findFirst.mockResolvedValue(null);
         prisma.exchangeDriver.findUnique.mockResolvedValue({ id: 'd-1', documents: [{ id: 'doc-1', fileKey: 'uploads/x.jpg' }] });
-        prisma.exchangeLoad.findFirst.mockResolvedValue(null);
         await service.deleteAccount('u-1');
         expect(prisma.exchangeDriver.update.mock.calls[0][0].data).toMatchObject({ iin: null, phone: null, lastName: null });
         expect(prisma.user.update.mock.calls[0][0].data).toMatchObject({ isActive: false, googleId: null, email: null });
@@ -150,8 +80,8 @@ describe('Биржа · водитель: удалить аккаунт', () => 
 
     it('с грузом в пути аккаунт не удалить', async () => {
         const { service, prisma } = build();
-        prisma.exchangeDriver.findUnique.mockResolvedValue({ id: 'd-1', documents: [] });
-        prisma.exchangeLoad.findFirst.mockResolvedValue({ seq: 3 });
-        await expect(service.deleteAccount('u-1')).rejects.toThrow(/довезите/);
+        prisma.order.findFirst.mockResolvedValue({ orderNumber: '7A-0042' });
+        await expect(service.deleteAccount('u-1')).rejects.toThrow(/довезите груз по заявке 7A-0042/);
+        expect(prisma.user.update).not.toHaveBeenCalled();
     });
 });

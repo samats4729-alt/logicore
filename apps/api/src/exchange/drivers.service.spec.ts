@@ -140,7 +140,7 @@ describe('Биржа: отправить анкету', () => {
 describe('Биржа: поменять данные после допуска', () => {
     function withTrips(row: any, active: number) {
         const built = build(row);
-        built.prisma.exchangeLoad = { count: jest.fn().mockResolvedValue(active) };
+        built.prisma.order = { count: jest.fn().mockResolvedValue(active) };
         return built;
     }
 

@@ -297,8 +297,8 @@ export class ExchangeDriversService {
         if (EDITABLE.includes(driver.status)) return this.view(driver);
         if (driver.status !== 'APPROVED') throw new BadRequestException('Анкета на проверке у парка — дождитесь решения');
 
-        const activeTrips = await this.prisma.exchangeLoad.count({
-            where: { driverId: driver.id, status: { in: ['TAKEN', 'IN_TRANSIT'] } },
+        const activeTrips = await this.prisma.order.count({
+            where: { driverId: driver.userId, status: { in: ['ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING', 'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING', 'PROBLEM'] } },
         });
         if (activeTrips) throw new BadRequestException('Сначала довезите текущий груз — во время рейса данные менять нельзя');
 

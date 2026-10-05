@@ -221,7 +221,6 @@ model User {
   commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
 
   /// Грузы, которые человек поставил на биржу.
-  exchangeLoads ExchangeLoad[] @relation("UserExchangeLoads")
   /// Анкета водителя биржи — если человек пришёл через приложение.
   exchangeDriver ExchangeDriver? @relation("UserExchangeDriver")
 
@@ -533,7 +532,6 @@ model Company {
   carrierPaymentFrom String?
 
   /// Грузы компании на бирже.
-  exchangeLoads ExchangeLoad[] @relation("CompanyExchangeLoads")
 
   /// Парк — компания-посредник на бирже: арендует машину с экипажем у
   /// водителей без ИП, чтобы перевозка шла законно. Ставит отметку только
@@ -695,8 +693,6 @@ model City {
   originQuoteRequests      QuoteRequest[] @relation("OriginQuoteRequests")
   destinationQuoteRequests QuoteRequest[] @relation("DestinationQuoteRequests")
 
-  originExchangeLoads      ExchangeLoad[] @relation("OriginExchangeLoads")
-  destinationExchangeLoads ExchangeLoad[] @relation("DestinationExchangeLoads")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -966,6 +962,22 @@ model Order {
   completionReviewedById String?
   completionReviewedBy   User?     @relation("ReviewedCompletions", fields: [completionReviewedById], references: [id], onDelete: SetNull)
 
+  // ─── Биржа ───
+  //
+  // Заявку без исполнителя компания выставляет на биржу: её видят
+  // перевозчики, водители с ИП и водители парков, и предлагают цену.
+  // На бирже сейчас — выставлена и не снята.
+  /// Когда и кто выставил заявку на биржу.
+  exchangePublishedAt   DateTime?
+  exchangePublishedById String?
+  /// Цена, которую компания предлагает исполнителю, ₸. Видна всем на бирже.
+  exchangePrice         Decimal?  @db.Decimal(18, 2)
+  /// Что ещё важно исполнителю — видно всем на бирже.
+  exchangeNote          String?
+  /// Снята с биржи: вручную с причиной или когда выбран исполнитель.
+  exchangeClosedAt      DateTime?
+  exchangeCloseReason   String?
+
   // Relations
   routePoints               OrderRoutePoint[]
   documents                 Document[]
@@ -1001,6 +1013,7 @@ model Order {
   @@index([subForwarderId])
   /// Журнал спрашивает «что ещё не проверено» на каждой отрисовке списка.
   @@index([driverCompletedAt, completionReviewedAt])
+  @@index([exchangePublishedAt, exchangeClosedAt])
 }
 
 model OrderRoutePoint {
@@ -3019,109 +3032,6 @@ model CurrencyRevaluationLine {
 // БИРЖА
 // ============================================================
 
-/// Где груз на бирже.
-///
-/// Пока водителей нет, груз живёт в двух состояниях: ищем машину или снят.
-/// Остальные заведены сразу, чтобы следующий этап (водитель взял груз,
-/// везёт, довёз) не переделывал список у заказчика.
-enum ExchangeLoadStatus {
-  OPEN // Ищем машину — груз виден водителям
-  TAKEN // Водитель взял, едет на погрузку
-  IN_TRANSIT // Погрузились, в пути
-  DELIVERED // Довезли
-  CANCELLED // Снят с биржи заказчиком
-}
-
-/// Груз, который компания поставила на биржу.
-///
-/// Отдельно от заявки (Order): заявка — это рейс, у которого уже есть
-/// перевозчик, водитель и документы. Груз на бирже — предложение, которое
-/// ещё никто не взял. Когда водитель возьмёт груз, из него появится рейс, а
-/// груз запомнит, какой.
-///
-/// Маршрут — города и адреса текстом, как в запросах на расчёт: справочник
-/// знает не все посёлки. `...CityKey` — приведённое написание («г. Шымкент»
-/// и «Чимкент» дают один ключ), по нему ищутся прошлые цены направления.
-model ExchangeLoad {
-  id  String @id @default(cuid())
-  /// Порядковый номер на всей бирже — из него печатается «Б-0001».
-  seq Int    @unique @default(autoincrement())
-
-  /// Компания, которая поставила груз и за него платит.
-  companyId   String
-  company     Company            @relation("CompanyExchangeLoads", fields: [companyId], references: [id], onDelete: Cascade)
-  createdById String
-  createdBy   User               @relation("UserExchangeLoads", fields: [createdById], references: [id])
-  status      ExchangeLoadStatus @default(OPEN)
-
-  originCityId        String?
-  originCity          City?   @relation("OriginExchangeLoads", fields: [originCityId], references: [id], onDelete: SetNull)
-  originCityName      String
-  originCityKey       String
-  originAddress       String?
-  destinationCityId   String?
-  destinationCity     City?   @relation("DestinationExchangeLoads", fields: [destinationCityId], references: [id], onDelete: SetNull)
-  destinationCityName String
-  destinationCityKey  String
-  destinationAddress  String?
-
-  /// День погрузки.
-  loadingDate DateTime @db.Date
-  /// Время погрузки словами, как говорит заказчик: «с 9 до 12», «после обеда».
-  loadingTime String?
-
-  /// Тип кузова: тент, рефрижератор, борт.
-  bodyType         String
-  /// Что везём.
-  cargoDescription String
-  /// Вес в килограммах — как в заявке; на экране тонны.
-  weightKg         Int?
-  volumeM3         Decimal? @db.Decimal(10, 2)
-  /// Что ещё важно водителю: растентовка, гидроборт, температура, ремни.
-  requirements     String?
-
-  /// Сколько заказчик платит за перевозку, ₸.
-  price Decimal @db.Decimal(18, 2)
-
-  cancelledAt  DateTime?
-  cancelReason String?
-
-  photos ExchangeLoadPhoto[]
-
-  /// Кто везёт: водитель биржи, нажавший «Беру».
-  driverId    String?
-  driver      ExchangeDriver?       @relation("DriverExchangeLoads", fields: [driverId], references: [id], onDelete: SetNull)
-  takenAt     DateTime?
-  /// Погрузился — груз в пути.
-  loadedAt    DateTime?
-  deliveredAt DateTime?
-  declines    ExchangeLoadDecline[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId, status])
-  @@index([status, loadingDate])
-  @@index([originCityKey, destinationCityKey])
-  @@index([driverId, status])
-}
-
-/// Фото груза: водителю проще решить, увидев, что везти.
-model ExchangeLoadPhoto {
-  id       String       @id @default(cuid())
-  loadId   String
-  load     ExchangeLoad @relation(fields: [loadId], references: [id], onDelete: Cascade)
-  /// Путь в хранилище — в S3 или в папке uploads, если S3 не настроен.
-  fileKey  String
-  fileName String
-  mimeType String
-  size     Int
-
-  createdAt DateTime @default(now())
-
-  @@index([loadId])
-}
-
 /// Кем водитель работает на бирже.
 enum ExchangeDriverKind {
   IP // Свой ИП — сам перевозчик, проверки нет
@@ -3186,8 +3096,6 @@ model ExchangeDriver {
   tripsCompleted Int @default(0)
 
   documents ExchangeDriverDocument[]
-  loads     ExchangeLoad[]          @relation("DriverExchangeLoads")
-  declines  ExchangeLoadDecline[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3237,20 +3145,3 @@ model ExchangeBlocklist {
   @@unique([kind, value])
 }
 
-/// Водитель отказался от груза — с причиной. Груз пропадает из его ленты,
-/// а история отказов показывает парку надёжность водителя.
-model ExchangeLoadDecline {
-  id       String         @id @default(cuid())
-  loadId   String
-  load     ExchangeLoad   @relation(fields: [loadId], references: [id], onDelete: Cascade)
-  driverId String
-  driver   ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  reason   String
-  /// Отказ после того, как уже взял груз (снялся с рейса), — не просто «не моё».
-  afterTaking Boolean @default(false)
-
-  createdAt DateTime @default(now())
-
-  @@index([driverId])
-  @@index([loadId])
-}
