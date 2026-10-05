@@ -1,125 +1,85 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { API_URL, getAuthHeader } from '@/lib/api';
-import { DriverProfile, Load, exchangeApi, loadPhotoPath, груз, деньги, когда, телефонКрасиво, ответ } from '@/lib/exchange';
+import { DriverProfile, ExchangeOrder, exchangeApi, груз, деньги, когда, ответ } from '@/lib/exchange';
 import { BRAND } from '@/lib/theme';
-import { Badge, Button, Card, Empty, Route, Row } from '@/components/kit';
-import { Sheet } from '@/components/Sheet';
+import { Button, Card, Empty, Row } from '@/components/kit';
 
-/** Почему не берёт — частые причины одним нажатием. */
-const DECLINE_REASONS = ['Не мой кузов', 'Не успеваю к дате', 'Далеко ехать', 'Низкая цена'];
+const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
+    PICKUP: 'Погрузка',
+    ADDITIONAL_PICKUP: 'Догруз',
+    DELIVERY: 'Выгрузка',
+};
 
 /**
- * Карточка груза.
+ * Заявка с биржи.
  *
- * «Беру» — после вопроса: взял груз — обязан отвезти, сняться можно только
- * до погрузки и с причиной. Телефон отправителя открывается тому, кто взял.
+ * Всё, чтобы решить «повезу или нет»: маршрут по точкам с датами, груз,
+ * цена и что ещё важно компании. Точные адреса компания откроет тому, кого
+ * выберет. Откликнуться с ценой — следующим обновлением.
  */
-export default function LoadScreen() {
+export default function OrderScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { colors } = useAppTheme();
     const insets = useSafeAreaInsets();
-    const [load, setLoad] = useState<Load | null>(null);
+    const [order, setOrder] = useState<ExchangeOrder | null>(null);
     const [me, setMe] = useState<DriverProfile | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
-    const [photo, setPhoto] = useState<string | null>(null);
-    /** Уже везёт другой груз — второй взять нельзя: говорим заранее, а не отказом после «Беру». */
-    const [busyWith, setBusyWith] = useState<Load | null>(null);
 
     const fetch = useCallback(async () => {
         try {
             setError(null);
-            const [l, d, trips] = await Promise.all([exchangeApi.load(id), exchangeApi.me(), exchangeApi.trips().catch(() => [] as Load[])]);
-            setLoad(l);
+            const [o, d] = await Promise.all([exchangeApi.order(id), exchangeApi.me()]);
+            setOrder(o);
             setMe(d);
-            setBusyWith(trips.find((t) => t.id !== id && (t.status === 'TAKEN' || t.status === 'IN_TRANSIT')) ?? null);
         } catch (e) {
-            setError(ответ(e, 'Груз недоступен'));
+            setError(ответ(e, 'Заявка недоступна'));
         }
     }, [id]);
     useEffect(() => { fetch(); }, [fetch]);
 
-    const take = () => {
-        if (!load) return;
-        Alert.alert(
-            `Взять груз ${load.number}?`,
-            `${load.originCityName} → ${load.destinationCityName}, ${когда(load)}.\nВзяли — обязаны отвезти. Сняться можно только до погрузки.`,
-            [
-                { text: 'Отмена', style: 'cancel' },
-                {
-                    text: 'Беру',
-                    onPress: async () => {
-                        setBusy(true);
-                        try {
-                            await exchangeApi.take(load.id);
-                            router.replace('/exchange/(tabs)/trip');
-                        } catch (e) {
-                            Alert.alert('Не получилось', ответ(e, 'Попробуйте ещё раз'));
-                            fetch();
-                        } finally {
-                            setBusy(false);
-                        }
-                    },
-                },
-            ],
-        );
-    };
-
-    const [declining, setDeclining] = useState(false);
-    const decline = async (reason: string) => {
-        if (!load) return;
-        try {
-            await exchangeApi.decline(load.id, reason);
-            router.back();
-        } catch (e) {
-            Alert.alert('Не получилось', ответ(e, 'Попробуйте ещё раз'));
-        }
-    };
-
     if (error) {
-        return <Empty icon="alert-circle-outline" title="Груз недоступен" text={error} action={<Button title="Назад к грузам" onPress={() => router.back()} />} />;
+        return <Empty icon="alert-circle-outline" title="Заявка недоступна" text={error} action={<Button title="Назад к грузам" onPress={() => router.back()} />} />;
     }
-    if (!load || !me) {
+    if (!order || !me) {
         return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator size="large" color={BRAND.primary} /></View>;
     }
 
-    const isOpen = load.status === 'OPEN';
-    const mine = !isOpen;
+    const temp = order.tempMin != null || order.tempMax != null ? `${order.tempMin ?? '…'}…${order.tempMax ?? '…'} °C` : null;
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 150 }}>
-                <View style={styles.head}>
-                    <Text style={{ color: colors.textTertiary, fontWeight: '700' }}>{load.number}</Text>
-                    {mine && <Badge label="Ваш рейс" tone="blue" />}
-                </View>
-
-                {load.photoIds.length > 0 && (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 12 }}>
-                        {load.photoIds.map((pid) => {
-                            const uri = `${API_URL}${loadPhotoPath(pid)}`;
-                            return (
-                                <Pressable key={pid} onPress={() => setPhoto(uri)} accessibilityLabel="Открыть фото груза">
-                                    <Image source={{ uri, headers: getAuthHeader() }} style={styles.photo} />
-                                </Pressable>
-                            );
-                        })}
-                    </ScrollView>
-                )}
+                <Text style={[styles.head, { color: colors.textTertiary }]}>Заявка {order.orderNumber}{order.companyName ? ` · ${order.companyName}` : ''}</Text>
 
                 <Card>
-                    <Route from={load.originCityName} fromAddress={load.originAddress} to={load.destinationCityName} toAddress={load.destinationAddress} />
+                    {order.points.map((p, i) => (
+                        <View key={i} style={styles.point}>
+                            <View style={styles.pointRail}>
+                                <View style={[styles.dot, p.type === 'DELIVERY'
+                                    ? { borderWidth: 2, borderColor: colors.text, backgroundColor: 'transparent' }
+                                    : { backgroundColor: colors.text }]} />
+                                {i < order.points.length - 1 && <View style={[styles.line, { backgroundColor: colors.border }]} />}
+                            </View>
+                            <View style={{ flex: 1, paddingBottom: i < order.points.length - 1 ? 14 : 0 }}>
+                                <Text style={[styles.city, { color: colors.text }]}>{p.city}</Text>
+                                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                                    {POINT_TITLE[p.type]} · {когда(p.date)}
+                                </Text>
+                            </View>
+                        </View>
+                    ))}
+                    <Text style={[styles.addrNote, { color: colors.textTertiary, borderTopColor: colors.border }]}>
+                        Точные адреса компания откроет тому, кого выберет исполнителем.
+                    </Text>
                 </Card>
 
                 <Card>
-                    <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>ОПЛАТА ЗА РЕЙС</Text>
-                    <Text style={[styles.price, { color: colors.text }]}>{деньги(load.price)}</Text>
-                    {me.kind === 'PARK' && (
+                    <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>КОМПАНИЯ ПРЕДЛАГАЕТ</Text>
+                    <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'Цена договорная'}</Text>
+                    {me.kind === 'PARK' && order.price != null && (
                         <Text style={{ color: colors.textSecondary, fontSize: 12.5, marginTop: 4 }}>
                             Через парк вы получите эту сумму за вычетом комиссии парка и налогов.
                         </Text>
@@ -127,75 +87,45 @@ export default function LoadScreen() {
                 </Card>
 
                 <Card>
-                    <Row icon="calendar-outline" label="Погрузка" value={когда(load)} />
-                    <Row icon="cube-outline" label="Что везём" value={load.cargoDescription} />
-                    <Row icon="bus-outline" label="Кузов и вес" value={груз(load)} />
-                    {!!load.requirements && <Row icon="alert-circle-outline" label="Важно" value={load.requirements} />}
-                    {!!load.companyName && <Row icon="business-outline" label="Заказчик" value={load.companyName} />}
+                    <Row icon="cube-outline" label="Что везём" value={order.cargoDescription || '—'} />
+                    <Row icon="bus-outline" label="Кузов и вес" value={груз(order) || '—'} />
+                    {order.palletCount != null && <Row icon="grid-outline" label="Паллет" value={String(order.palletCount)} />}
+                    {order.loadingTypes.length > 0 && <Row icon="swap-vertical-outline" label="Загрузка" value={order.loadingTypes.join(', ')} />}
+                    {temp && <Row icon="thermometer-outline" label="Температура" value={temp} />}
+                    {order.adr && <Row icon="warning-outline" label="Опасный груз" value={order.adrClass ? `ДОПОГ, класс ${order.adrClass}` : 'ДОПОГ'} />}
+                    {!!order.requirements && <Row icon="alert-circle-outline" label="Требования" value={order.requirements} />}
                 </Card>
 
-                {mine && load.contact && (
+                {!!order.note && (
                     <Card>
-                        <Row icon="person-outline" label="Контакт" value={load.contact.name ?? '—'} />
-                        {!!load.contact.phone && (
-                            <Button
-                                title={`Позвонить · ${телефонКрасиво(load.contact.phone)}`}
-                                icon="call-outline"
-                                variant="secondary"
-                                onPress={() => Linking.openURL(`tel:${load.contact!.phone}`)}
-                                style={{ marginTop: 8 }}
-                            />
-                        )}
+                        <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>ОТ КОМПАНИИ</Text>
+                        <Text style={{ color: colors.text, fontSize: 14.5, lineHeight: 20, marginTop: 4 }}>{order.note}</Text>
                     </Card>
                 )}
             </ScrollView>
 
             <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-                {isOpen && busyWith && (
-                    <Text style={[styles.footerNote, { color: colors.textSecondary }]}>
-                        Вы везёте {busyWith.number} ({busyWith.originCityName} → {busyWith.destinationCityName}). Новый груз можно взять после доставки.
-                    </Text>
-                )}
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {isOpen && !busyWith ? (
-                        <>
-                            <Button title="Не подходит" variant="secondary" onPress={() => setDeclining(true)} style={{ flex: 1 }} />
-                            <Button title="Беру" icon="checkmark" loading={busy} onPress={take} style={{ flex: 1.4 }} />
-                        </>
-                    ) : (
-                        <Button title="Открыть мой рейс" icon="navigate" onPress={() => router.replace('/exchange/(tabs)/trip')} style={{ flex: 1 }} />
-                    )}
-                </View>
+                <Text style={[styles.footerNote, { color: colors.textSecondary }]}>
+                    Откликнуться — согласиться на цену или предложить свою — можно будет в следующем обновлении приложения.
+                    Компания сама выберет, кто повезёт.
+                </Text>
+                <Button title="Назад к грузам" variant="secondary" onPress={() => router.back()} />
             </View>
-
-            <Sheet
-                visible={declining}
-                title="Почему не подходит?"
-                text="Груз пропадёт из вашей ленты. Причина поможет подбирать грузы точнее."
-                options={DECLINE_REASONS.map((reason) => ({ label: reason, onPress: () => decline(reason) }))}
-                onClose={() => setDeclining(false)}
-            />
-
-            <Modal visible={!!photo} transparent animationType="fade" onRequestClose={() => setPhoto(null)}>
-                <Pressable style={styles.viewer} onPress={() => setPhoto(null)} accessibilityLabel="Закрыть фото">
-                    {photo && <Image source={{ uri: photo, headers: getAuthHeader() }} style={styles.viewerImage} resizeMode="contain" />}
-                    <Ionicons name="close" size={30} color="#fff" style={[styles.viewerClose, { top: insets.top + 12 }]} />
-                </Pressable>
-            </Modal>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-    photo: { width: 140, height: 104, borderRadius: 14, backgroundColor: '#e5e7eb' },
+    head: { fontWeight: '700', marginBottom: 10 },
+    point: { flexDirection: 'row', gap: 12 },
+    pointRail: { alignItems: 'center', width: 12 },
+    dot: { width: 12, height: 12, borderRadius: 6, marginTop: 5 },
+    line: { width: 2, flex: 1, marginTop: 2 },
+    city: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+    addrNote: { fontSize: 12.5, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
     priceLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
     price: { fontSize: 30, fontWeight: '800', letterSpacing: -0.8, marginTop: 2 },
     footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
     footerNote: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
-    viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
-    viewerImage: { width: '100%', height: '80%' },
-    viewerClose: { position: 'absolute', right: 20 },
 });
-

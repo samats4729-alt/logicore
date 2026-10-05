@@ -1,32 +1,27 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { Load, груз, деньги, когдаПросто } from '@/lib/exchange';
+import { ExchangeOrder, груз, деньги, когдаПросто, черезТочки } from '@/lib/exchange';
 import { Card, Route } from '@/components/kit';
 
-/** Груз в ленте: маршрут, когда, что везём, цена. Нажатие — карточка. */
-export function LoadCard({ load, onPress }: { load: Load; onPress: () => void }) {
+/** Заявка в ленте: маршрут, когда, что везём, цена. Нажатие — карточка. */
+export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: () => void }) {
     const { colors } = useAppTheme();
+    const via = черезТочки(order);
     return (
         <Card onPress={onPress}>
             <View style={styles.top}>
                 <View style={styles.date}>
                     <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                    <Text style={[styles.dateText, { color: colors.textSecondary }]}>{когдаПросто(load)}</Text>
+                    <Text style={[styles.dateText, { color: colors.textSecondary }]}>{когдаПросто(order.loadingDate)}</Text>
                 </View>
-                <Text style={[styles.price, { color: colors.text }]}>{деньги(load.price)}</Text>
+                <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'договорная'}</Text>
             </View>
-            <Route from={load.originCityName} to={load.destinationCityName} />
+            <Route from={order.from} fromAddress={via} to={order.to} />
             <View style={[styles.bottom, { borderTopColor: colors.border }]}>
                 <Text style={[styles.cargo, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {load.cargoDescription} · {груз(load)}
+                    {[order.cargoDescription, груз(order)].filter(Boolean).join(' · ') || 'Груз не описан'}
                 </Text>
-                {load.photoIds.length > 0 && (
-                    <View style={styles.photos}>
-                        <Ionicons name="images-outline" size={14} color={colors.textTertiary} />
-                        <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{load.photoIds.length}</Text>
-                    </View>
-                )}
             </View>
         </Card>
     );
@@ -39,5 +34,4 @@ const styles = StyleSheet.create({
     price: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4 },
     bottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
     cargo: { flex: 1, fontSize: 13.5 },
-    photos: { flexDirection: 'row', alignItems: 'center', gap: 3 },
 });

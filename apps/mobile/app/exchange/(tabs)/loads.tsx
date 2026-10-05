@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { DriverProfile, Load, exchangeApi, грузов, ответ } from '@/lib/exchange';
+import { DriverProfile, ExchangeOrder, exchangeApi, грузов, ответ } from '@/lib/exchange';
 import { BRAND } from '@/lib/theme';
 import { Button, Chip, Empty } from '@/components/kit';
 import { LoadCard } from '@/components/LoadCard';
@@ -19,7 +19,7 @@ export default function LoadsScreen() {
     const [me, setMe] = useState<DriverProfile | null>(null);
     const [onlyMine, setOnlyMine] = useState(true);
     const [from, setFrom] = useState<string | null>(null);
-    const [loads, setLoads] = useState<Load[] | null>(null);
+    const [loads, setLoads] = useState<ExchangeOrder[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -30,7 +30,7 @@ export default function LoadsScreen() {
             setMe(profile);
             setLoads(await exchangeApi.feed(mine && profile.vehicleBodyType ? profile.vehicleBodyType : undefined));
         } catch (e) {
-            setError(ответ(e, 'Не удалось загрузить грузы — проверьте интернет'));
+            setError(ответ(e, 'Не удалось загрузить заявки — проверьте интернет'));
         }
     }, [me, onlyMine]);
 
@@ -42,10 +42,10 @@ export default function LoadsScreen() {
     /** Города погрузки из ленты — частые первыми. Один город — ряд не нужен. */
     const cities = useMemo(() => {
         const count = new Map<string, number>();
-        (loads ?? []).forEach((l) => count.set(l.originCityName, (count.get(l.originCityName) ?? 0) + 1));
+        (loads ?? []).forEach((l) => count.set(l.from, (count.get(l.from) ?? 0) + 1));
         return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
     }, [loads]);
-    const shown = useMemo(() => (loads ?? []).filter((l) => !from || l.originCityName === from), [loads, from]);
+    const shown = useMemo(() => (loads ?? []).filter((l) => !from || l.from === from), [loads, from]);
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -69,7 +69,7 @@ export default function LoadsScreen() {
             ) : (
                 <FlatList
                     data={shown}
-                    keyExtractor={(l: Load) => l.id}
+                    keyExtractor={(l: ExchangeOrder) => l.id}
                     contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 120, flexGrow: 1 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                     ListHeaderComponent={shown.length > 0 ? (
@@ -77,8 +77,8 @@ export default function LoadsScreen() {
                             {грузов(shown.length)}{from ? ` из ${from}` : ''} · ближайшие сверху
                         </Text>
                     ) : null}
-                    renderItem={({ item }: { item: Load }) => (
-                        <LoadCard load={item} onPress={() => router.push(`/exchange/load/${item.id}`)} />
+                    renderItem={({ item }: { item: ExchangeOrder }) => (
+                        <LoadCard order={item} onPress={() => router.push(`/exchange/load/${item.id}`)} />
                     )}
                     ListEmptyComponent={
                         <Empty

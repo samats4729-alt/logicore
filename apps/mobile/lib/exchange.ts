@@ -45,30 +45,40 @@ export interface Park {
     bin: string | null;
 }
 
-/** Груз в ленте и в рейсе. */
-export interface Load {
+/** Точка маршрута на бирже — город и день: адрес откроется исполнителю. */
+export interface ExchangePoint {
+    type: 'PICKUP' | 'ADDITIONAL_PICKUP' | 'DELIVERY';
+    city: string;
+    region: string | null;
+    date: string | null;
+}
+
+/** Заявка на бирже — компания ищет, кто повезёт. */
+export interface ExchangeOrder {
     id: string;
-    number: string;
-    status: 'OPEN' | 'TAKEN' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
-    originCityName: string;
-    originAddress: string | null;
-    destinationCityName: string;
-    destinationAddress: string | null;
-    loadingDate: string;
-    loadingTime: string | null;
-    bodyType: string;
-    cargoDescription: string;
+    orderNumber: string;
+    companyName: string | null;
+    from: string;
+    to: string;
+    loadingDate: string | null;
+    points: ExchangePoint[];
+    cargoDescription: string | null;
     weightKg: number | null;
     volumeM3: number | null;
+    bodyType: string | null;
+    natureOfCargo: string | null;
+    palletCount: number | null;
+    loadingTypes: string[];
+    packagingTypes: string[];
+    tempMin: number | null;
+    tempMax: number | null;
+    adr: boolean | null;
+    adrClass: string | null;
     requirements: string | null;
-    price: number;
-    takenAt: string | null;
-    loadedAt: string | null;
-    deliveredAt: string | null;
-    companyName: string | null;
-    photoIds: string[];
-    /** Контакт отправителя — только у того, кто груз взял. */
-    contact: { name: string | null; phone: string | null } | null;
+    /** Цена, которую компания предлагает исполнителю; нет — договорная. */
+    price: number | null;
+    note: string | null;
+    publishedAt: string | null;
 }
 
 /**
@@ -87,12 +97,11 @@ export const BODY_TYPES = [
 
 const МЕСЯЦЫ = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
-/** «12 окт, с 9 до 12». */
-export function когда(load: Pick<Load, 'loadingDate' | 'loadingTime'>): string {
-    const [y, m, d] = load.loadingDate.slice(0, 10).split('-').map(Number);
-    const day = `${d} ${МЕСЯЦЫ[m - 1]}`;
-    void y;
-    return load.loadingTime ? `${day}, ${load.loadingTime}` : day;
+/** «12 окт». Даты нет — так и пишем. */
+export function когда(date: string | null | undefined): string {
+    if (!date) return 'дата не указана';
+    const d = new Date(date);
+    return `${d.getDate()} ${МЕСЯЦЫ[d.getMonth()]}`;
 }
 
 /** «450 000 ₸». */
@@ -101,7 +110,7 @@ export function деньги(value: number): string {
 }
 
 /** «20 т · 86 м³ · тент». */
-export function груз(load: Pick<Load, 'weightKg' | 'volumeM3' | 'bodyType'>): string {
+export function груз(load: Pick<ExchangeOrder, 'weightKg' | 'volumeM3' | 'bodyType'>): string {
     return [
         load.weightKg != null ? `${(load.weightKg / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} т` : null,
         load.volumeM3 ? `${load.volumeM3} м³` : null,
@@ -171,18 +180,12 @@ export const exchangeApi = {
     reopen: () => api.post<DriverProfile>('/exchange/driver/me/reopen').then((r) => r.data),
     deleteAccount: () => api.post('/exchange/driver/me/delete'),
 
-    feed: (bodyType?: string) => api.get<Load[]>('/exchange/driver/loads', { params: bodyType ? { bodyType } : {} }).then((r) => r.data),
-    load: (id: string) => api.get<Load>(`/exchange/driver/loads/${id}`).then((r) => r.data),
-    take: (id: string) => api.post<Load>(`/exchange/driver/loads/${id}/take`).then((r) => r.data),
-    decline: (id: string, reason: string) => api.post(`/exchange/driver/loads/${id}/decline`, { reason }),
-    trips: () => api.get<Load[]>('/exchange/driver/trips').then((r) => r.data),
-    advance: (id: string, to: 'IN_TRANSIT' | 'DELIVERED') =>
-        api.post<Load>(`/exchange/driver/trips/${id}/advance`, { to }).then((r) => r.data),
-    release: (id: string, reason: string) => api.post(`/exchange/driver/trips/${id}/release`, { reason }),
+    feed: (bodyType?: string) =>
+        api.get<ExchangeOrder[]>('/exchange/driver/loads', { params: bodyType ? { bodyType } : {} }).then((r) => r.data),
+    order: (id: string) => api.get<ExchangeOrder>(`/exchange/driver/loads/${id}`).then((r) => r.data),
 };
 
 /** Адрес фото груза — картинка грузится с пропуском (заголовок авторизации). */
-export const loadPhotoPath = (photoId: string) => `/exchange/driver/load-photos/${photoId}`;
 export const documentPath = (docId: string) => `/exchange/driver/me/documents/${docId}`;
 
 /** Название парка в кавычках, если своих нет: «Алем» → «Алем», ТОО «Алем» → ТОО «Алем». */
@@ -198,16 +201,22 @@ export function телефонКрасиво(phone: string | null | undefined): 
     return `+${d[0]} ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}`;
 }
 
-/** «Сегодня, с 9 до 12», «Завтра», «12 окт» — водителю важнее «когда ехать», чем число. */
-export function когдаПросто(load: Pick<Load, 'loadingDate' | 'loadingTime'>): string {
-    const [y, m, d] = load.loadingDate.slice(0, 10).split('-').map(Number);
-    const day = new Date(y, m - 1, d).getTime();
+/** «Сегодня», «Завтра», «12 окт» — водителю важнее «когда ехать», чем число. */
+export function когдаПросто(date: string | null | undefined): string {
+    if (!date) return 'Дата не указана';
+    const d = new Date(date);
+    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const diff = Math.round((day - today) / 86_400_000);
-    const word = diff === 0 ? 'Сегодня' : diff === 1 ? 'Завтра' : diff === 2 ? 'Послезавтра' : null;
-    if (!word) return когда(load);
-    return load.loadingTime ? `${word}, ${load.loadingTime}` : word;
+    return diff === 0 ? 'Сегодня' : diff === 1 ? 'Завтра' : diff === 2 ? 'Послезавтра' : когда(date);
+}
+
+/** Промежуточные точки: «через Тараз» / «ещё 2 точки». */
+export function черезТочки(o: Pick<ExchangeOrder, 'points'>): string | null {
+    const middle = o.points.slice(1, -1);
+    if (!middle.length) return null;
+    return middle.length === 1 ? `через ${middle[0].city}` : `ещё ${middle.length} точки`;
 }
 
 /** 1 груз, 2 груза, 5 грузов. */
