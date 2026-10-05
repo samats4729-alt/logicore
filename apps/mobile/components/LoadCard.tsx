@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { Load, груз, деньги, когда } from '@/lib/exchange';
+import { Load, груз, деньги, когдаПросто } from '@/lib/exchange';
 import { Card, Route } from '@/components/kit';
 
 /** Груз в ленте: маршрут, когда, что везём, цена. Нажатие — карточка. */
@@ -12,7 +12,7 @@ export function LoadCard({ load, onPress }: { load: Load; onPress: () => void })
             <View style={styles.top}>
                 <View style={styles.date}>
                     <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                    <Text style={[styles.dateText, { color: colors.textSecondary }]}>{когда(load)}</Text>
+                    <Text style={[styles.dateText, { color: colors.textSecondary }]}>{когдаПросто(load)}</Text>
                 </View>
                 <Text style={[styles.price, { color: colors.text }]}>{деньги(load.price)}</Text>
             </View>

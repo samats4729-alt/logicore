@@ -197,3 +197,23 @@ export function телефонКрасиво(phone: string | null | undefined): 
     if (d.length !== 11) return phone || '—';
     return `+${d[0]} ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}`;
 }
+
+/** «Сегодня, с 9 до 12», «Завтра», «12 окт» — водителю важнее «когда ехать», чем число. */
+export function когдаПросто(load: Pick<Load, 'loadingDate' | 'loadingTime'>): string {
+    const [y, m, d] = load.loadingDate.slice(0, 10).split('-').map(Number);
+    const day = new Date(y, m - 1, d).getTime();
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const diff = Math.round((day - today) / 86_400_000);
+    const word = diff === 0 ? 'Сегодня' : diff === 1 ? 'Завтра' : diff === 2 ? 'Послезавтра' : null;
+    if (!word) return когда(load);
+    return load.loadingTime ? `${word}, ${load.loadingTime}` : word;
+}
+
+/** 1 груз, 2 груза, 5 грузов. */
+export function грузов(n: number): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    const word = mod10 === 1 && mod100 !== 11 ? 'груз' : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? 'груза' : 'грузов';
+    return `${n} ${word}`;
+}

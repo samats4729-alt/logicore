@@ -41,13 +41,16 @@ export default function TabsLayout() {
                     justifyContent: 'center',
                 },
                 tabBarItemStyle: {
-                    paddingVertical: 10,
+                    paddingTop: 6,
+                    paddingBottom: 10,
                     height: 65,
                 },
+                // Подпись под значком должна помещаться целиком: со старыми
+                // отступами она сжималась до пары пикселей и не читалась.
                 tabBarLabelStyle: {
-                    fontSize: 10,
+                    fontSize: 11,
+                    lineHeight: 14,
                     fontWeight: '600',
-                    marginBottom: 5,
                 },
                 headerStyle: {
                     backgroundColor: colors.card,

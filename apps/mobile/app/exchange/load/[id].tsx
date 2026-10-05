@@ -28,13 +28,16 @@ export default function LoadScreen() {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [photo, setPhoto] = useState<string | null>(null);
+    /** Уже везёт другой груз — второй взять нельзя: говорим заранее, а не отказом после «Беру». */
+    const [busyWith, setBusyWith] = useState<Load | null>(null);
 
     const fetch = useCallback(async () => {
         try {
             setError(null);
-            const [l, d] = await Promise.all([exchangeApi.load(id), exchangeApi.me()]);
+            const [l, d, trips] = await Promise.all([exchangeApi.load(id), exchangeApi.me(), exchangeApi.trips().catch(() => [] as Load[])]);
             setLoad(l);
             setMe(d);
+            setBusyWith(trips.find((t) => t.id !== id && (t.status === 'TAKEN' || t.status === 'IN_TRANSIT')) ?? null);
         } catch (e) {
             setError(ответ(e, 'Груз недоступен'));
         }
@@ -148,14 +151,21 @@ export default function LoadScreen() {
             </ScrollView>
 
             <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-                {isOpen ? (
-                    <>
-                        <Button title="Не подходит" variant="secondary" onPress={() => setDeclining(true)} style={{ flex: 1 }} />
-                        <Button title="Беру" icon="checkmark" loading={busy} onPress={take} style={{ flex: 1.4 }} />
-                    </>
-                ) : (
-                    <Button title="Открыть мой рейс" icon="navigate" onPress={() => router.replace('/exchange/(tabs)/trip')} style={{ flex: 1 }} />
+                {isOpen && busyWith && (
+                    <Text style={[styles.footerNote, { color: colors.textSecondary }]}>
+                        Вы везёте {busyWith.number} ({busyWith.originCityName} → {busyWith.destinationCityName}). Новый груз можно взять после доставки.
+                    </Text>
                 )}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {isOpen && !busyWith ? (
+                        <>
+                            <Button title="Не подходит" variant="secondary" onPress={() => setDeclining(true)} style={{ flex: 1 }} />
+                            <Button title="Беру" icon="checkmark" loading={busy} onPress={take} style={{ flex: 1.4 }} />
+                        </>
+                    ) : (
+                        <Button title="Открыть мой рейс" icon="navigate" onPress={() => router.replace('/exchange/(tabs)/trip')} style={{ flex: 1 }} />
+                    )}
+                </View>
             </View>
 
             <Sheet
@@ -182,7 +192,8 @@ const styles = StyleSheet.create({
     photo: { width: 140, height: 104, borderRadius: 14, backgroundColor: '#e5e7eb' },
     priceLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
     price: { fontSize: 30, fontWeight: '800', letterSpacing: -0.8, marginTop: 2 },
-    footer: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
+    footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
+    footerNote: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
     viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
     viewerImage: { width: '100%', height: '80%' },
     viewerClose: { position: 'absolute', right: 20 },

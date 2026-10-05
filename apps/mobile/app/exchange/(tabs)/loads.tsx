@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { DriverProfile, Load, exchangeApi, ответ } from '@/lib/exchange';
+import { DriverProfile, Load, exchangeApi, грузов, ответ } from '@/lib/exchange';
 import { BRAND } from '@/lib/theme';
 import { Button, Chip, Empty } from '@/components/kit';
 import { LoadCard } from '@/components/LoadCard';
@@ -11,12 +11,14 @@ import { LoadCard } from '@/components/LoadCard';
  * Лента грузов — те, что ищут машину, ближайшие сверху.
  *
  * По умолчанию — только под свой кузов: тентовику рефрижераторные грузы
- * не нужны. Переключатель «Все» — если хочется посмотреть рынок.
+ * не нужны. Переключатель «Все» — если хочется посмотреть рынок. Второй
+ * ряд — откуда: водитель обычно ищет груз там, где стоит сейчас.
  */
 export default function LoadsScreen() {
     const { colors } = useAppTheme();
     const [me, setMe] = useState<DriverProfile | null>(null);
     const [onlyMine, setOnlyMine] = useState(true);
+    const [from, setFrom] = useState<string | null>(null);
     const [loads, setLoads] = useState<Load[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
@@ -28,21 +30,37 @@ export default function LoadsScreen() {
             setMe(profile);
             setLoads(await exchangeApi.feed(mine && profile.vehicleBodyType ? profile.vehicleBodyType : undefined));
         } catch (e) {
-            setError(ответ(e, 'Не удалось загрузить грузы'));
+            setError(ответ(e, 'Не удалось загрузить грузы — проверьте интернет'));
         }
     }, [me, onlyMine]);
 
     useFocusEffect(useCallback(() => { load(); }, [load]));
 
-    const toggle = (mine: boolean) => { setOnlyMine(mine); setLoads(null); load(mine); };
+    const toggle = (mine: boolean) => { setOnlyMine(mine); setFrom(null); setLoads(null); load(mine); };
     const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+
+    /** Города погрузки из ленты — частые первыми. Один город — ряд не нужен. */
+    const cities = useMemo(() => {
+        const count = new Map<string, number>();
+        (loads ?? []).forEach((l) => count.set(l.originCityName, (count.get(l.originCityName) ?? 0) + 1));
+        return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+    }, [loads]);
+    const shown = useMemo(() => (loads ?? []).filter((l) => !from || l.originCityName === from), [loads, from]);
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsBar} contentContainerStyle={styles.chips}>
                 <Chip label={me?.vehicleBodyType ? `Мой кузов · ${me.vehicleBodyType}` : 'Мой кузов'} active={onlyMine} onPress={() => toggle(true)} />
-                <Chip label="Все грузы" active={!onlyMine} onPress={() => toggle(false)} />
+                <Chip label="Все кузова" active={!onlyMine} onPress={() => toggle(false)} />
             </ScrollView>
+            {cities.length > 1 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsBar} contentContainerStyle={styles.chips}>
+                    <Chip label="Откуда угодно" active={!from} onPress={() => setFrom(null)} />
+                    {cities.map(([city, n]) => (
+                        <Chip key={city} label={`${city} · ${n}`} active={from === city} onPress={() => setFrom(from === city ? null : city)} />
+                    ))}
+                </ScrollView>
+            )}
 
             {error ? (
                 <Empty icon="cloud-offline-outline" title="Не получилось" text={error} action={<Button title="Повторить" onPress={() => load()} />} />
@@ -50,19 +68,26 @@ export default function LoadsScreen() {
                 <ActivityIndicator style={{ marginTop: 40 }} size="large" color={BRAND.primary} />
             ) : (
                 <FlatList
-                    data={loads}
+                    data={shown}
                     keyExtractor={(l: Load) => l.id}
-                    contentContainerStyle={{ padding: 16, paddingBottom: 120, flexGrow: 1 }}
+                    contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 120, flexGrow: 1 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+                    ListHeaderComponent={shown.length > 0 ? (
+                        <Text style={[styles.count, { color: colors.textTertiary }]}>
+                            {грузов(shown.length)}{from ? ` из ${from}` : ''} · ближайшие сверху
+                        </Text>
+                    ) : null}
                     renderItem={({ item }: { item: Load }) => (
                         <LoadCard load={item} onPress={() => router.push(`/exchange/load/${item.id}`)} />
                     )}
                     ListEmptyComponent={
                         <Empty
                             icon="cube-outline"
-                            title="Пока грузов нет"
-                            text={onlyMine ? 'Под ваш кузов сейчас ничего. Потяните вниз, чтобы обновить, или посмотрите все грузы.' : 'Новые грузы появятся здесь. Потяните вниз, чтобы обновить.'}
-                            action={onlyMine ? <Button title="Показать все" variant="secondary" onPress={() => toggle(false)} /> : undefined}
+                            title={onlyMine ? 'Под ваш кузов грузов нет' : 'Пока грузов нет'}
+                            text={onlyMine
+                                ? 'Потяните экран вниз, чтобы проверить новые. Или посмотрите грузы под другие кузова.'
+                                : 'Потяните экран вниз, чтобы проверить новые.'}
+                            action={onlyMine ? <Button title="Показать все кузова" variant="secondary" onPress={() => toggle(false)} /> : undefined}
                         />
                     }
                 />
@@ -73,5 +98,6 @@ export default function LoadsScreen() {
 
 const styles = StyleSheet.create({
     chipsBar: { flexGrow: 0 },
-    chips: { gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+    chips: { gap: 8, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 2 },
+    count: { fontSize: 12.5, fontWeight: '600', marginBottom: 10, marginLeft: 2 },
 });
