@@ -146,7 +146,7 @@ export class ExchangeDriversService {
             throw new BadRequestException(
                 d.status === 'PENDING'
                     ? 'Анкета на проверке у парка — дождитесь решения'
-                    : 'Анкета уже принята. Чтобы что-то поменять, позвоните в свой парк',
+                    : 'Анкета уже принята. Чтобы что-то поменять, нажмите «Изменить данные» в профиле',
             );
         }
     }
@@ -281,6 +281,33 @@ export class ExchangeDriversService {
             select: DRIVER_SELECT,
         });
         return this.view(updated);
+    }
+
+    /**
+     * Поменять данные после допуска: сменилась машина, новый телефон.
+     *
+     * Анкета возвращается на правку и снова проходит отправку: с ИП —
+     * допуск сразу, как в первый раз; через парк — парк проверяет заново,
+     * иначе после проверки можно было бы подменить машину или человека.
+     * Пока рейс не закрыт — нельзя: заказчик видит машину из анкеты.
+     */
+    async reopen(userId: string) {
+        const driver = await this.ownDriver(userId);
+        if (driver.status === 'BLOCKED') throw new ForbiddenException('Вы заблокированы на бирже');
+        if (EDITABLE.includes(driver.status)) return this.view(driver);
+        if (driver.status !== 'APPROVED') throw new BadRequestException('Анкета на проверке у парка — дождитесь решения');
+
+        const activeTrips = await this.prisma.exchangeLoad.count({
+            where: { driverId: driver.id, status: { in: ['TAKEN', 'IN_TRANSIT'] } },
+        });
+        if (activeTrips) throw new BadRequestException('Сначала довезите текущий груз — во время рейса данные менять нельзя');
+
+        const { count } = await this.prisma.exchangeDriver.updateMany({
+            where: { id: driver.id, status: 'APPROVED' },
+            data: { status: 'DRAFT', reviewedAt: null, reviewedById: null },
+        });
+        if (!count) throw new BadRequestException('Анкета уже изменилась — обновите экран');
+        return this.view(await this.ownDriver(userId));
     }
 
     async addDocument(userId: string, kind: ExchangeDriverDocumentKind, file: Express.Multer.File) {

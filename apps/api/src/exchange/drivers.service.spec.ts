@@ -137,6 +137,33 @@ describe('Биржа: отправить анкету', () => {
     });
 });
 
+describe('Биржа: поменять данные после допуска', () => {
+    function withTrips(row: any, active: number) {
+        const built = build(row);
+        built.prisma.exchangeLoad = { count: jest.fn().mockResolvedValue(active) };
+        return built;
+    }
+
+    it('принятая анкета возвращается на правку — и потом снова через проверку', async () => {
+        const { service, prisma } = withTrips(driverRow({ status: 'APPROVED' }), 0);
+        await service.reopen('u-1');
+        const call = prisma.exchangeDriver.updateMany.mock.calls[0][0];
+        expect(call.where).toEqual({ id: 'd-1', status: 'APPROVED' });
+        expect(call.data.status).toBe('DRAFT');
+    });
+
+    it('во время рейса — нельзя: заказчик видит машину из анкеты', async () => {
+        const { service, prisma } = withTrips(driverRow({ status: 'APPROVED' }), 1);
+        await expect(service.reopen('u-1')).rejects.toThrow(/довезите текущий груз/);
+        expect(prisma.exchangeDriver.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('заблокированному — нельзя, на проверке — ждать решения', async () => {
+        await expect(withTrips(driverRow({ status: 'BLOCKED' }), 0).service.reopen('u-1')).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(withTrips(driverRow({ status: 'PENDING' }), 0).service.reopen('u-1')).rejects.toBeInstanceOf(BadRequestException);
+    });
+});
+
 describe('Биржа: анкета', () => {
     it('ИИН с ошибкой не сохраняется', async () => {
         const { service } = build();

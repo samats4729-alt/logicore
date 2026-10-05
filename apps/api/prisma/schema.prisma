@@ -3088,12 +3088,22 @@ model ExchangeLoad {
 
   photos ExchangeLoadPhoto[]
 
+  /// Кто везёт: водитель биржи, нажавший «Беру».
+  driverId    String?
+  driver      ExchangeDriver?       @relation("DriverExchangeLoads", fields: [driverId], references: [id], onDelete: SetNull)
+  takenAt     DateTime?
+  /// Погрузился — груз в пути.
+  loadedAt    DateTime?
+  deliveredAt DateTime?
+  declines    ExchangeLoadDecline[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([companyId, status])
   @@index([status, loadingDate])
   @@index([originCityKey, destinationCityKey])
+  @@index([driverId, status])
 }
 
 /// Фото груза: водителю проще решить, увидев, что везти.
@@ -3176,6 +3186,8 @@ model ExchangeDriver {
   tripsCompleted Int @default(0)
 
   documents ExchangeDriverDocument[]
+  loads     ExchangeLoad[]          @relation("DriverExchangeLoads")
+  declines  ExchangeLoadDecline[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3223,4 +3235,22 @@ model ExchangeBlocklist {
   createdAt   DateTime @default(now())
 
   @@unique([kind, value])
+}
+
+/// Водитель отказался от груза — с причиной. Груз пропадает из его ленты,
+/// а история отказов показывает парку надёжность водителя.
+model ExchangeLoadDecline {
+  id       String         @id @default(cuid())
+  loadId   String
+  load     ExchangeLoad   @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  driverId String
+  driver   ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  reason   String
+  /// Отказ после того, как уже взял груз (снялся с рейса), — не просто «не моё».
+  afterTaking Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([driverId])
+  @@index([loadId])
 }

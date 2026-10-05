@@ -31,6 +31,14 @@ const LOAD_SELECT = {
     loadingDate: true, loadingTime: true,
     bodyType: true, cargoDescription: true, weightKg: true, volumeM3: true, requirements: true,
     price: true, cancelledAt: true, cancelReason: true, createdAt: true,
+    takenAt: true, loadedAt: true, deliveredAt: true,
+    // Кто везёт — заказчик видит водителя и машину, как только груз взят.
+    driver: {
+        select: {
+            lastName: true, firstName: true, middleName: true, phone: true, kind: true,
+            vehiclePlate: true, vehicleBodyType: true, park: { select: { name: true } },
+        },
+    },
     createdBy: { select: { firstName: true, lastName: true } },
     photos: { select: { id: true, fileName: true, mimeType: true }, orderBy: { createdAt: 'asc' as const } },
 } satisfies Prisma.ExchangeLoadSelect;

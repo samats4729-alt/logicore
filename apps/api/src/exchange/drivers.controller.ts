@@ -15,12 +15,13 @@ import { setAuthCookie } from '../auth/auth-cookie';
 import { AuditService } from '../audit/audit.service';
 import { S3Service } from '../s3/s3.service';
 import { MAX_UPLOAD_SIZE } from '../documents/allowed-files';
-import { ExchangeEnabledGuard } from './exchange-enabled.guard';
+import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
+import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import {
-    AdminCompaniesQueryDto, DriverDocumentDto, DriverGoogleAuthDto, DriverReasonDto, ParkDriversQueryDto, SetParkDto,
-    UpdateDriverProfileDto,
+    AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverReasonDto, ParkDriversQueryDto,
+    SetParkDto, TripAdvanceDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -62,6 +63,7 @@ export class ExchangeDriverAuthController {
 export class ExchangeDriverController {
     constructor(
         private readonly drivers: ExchangeDriversService,
+        private readonly loads: ExchangeDriverLoadsService,
         private readonly s3: S3Service,
     ) {}
 
@@ -115,6 +117,89 @@ export class ExchangeDriverController {
     @ApiOperation({ summary: 'Отправить анкету' })
     submit(@Request() req: any) {
         return this.drivers.submit(req.user.sub);
+    }
+
+    @Post('me/reopen')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Вернуть принятую анкету на правку (сменилась машина, телефон)' })
+    reopen(@Request() req: any) {
+        return this.drivers.reopen(req.user.sub);
+    }
+
+    @Post('me/delete')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Удалить свой аккаунт' })
+    deleteAccount(@Request() req: any) {
+        return this.loads.deleteAccount(req.user.sub);
+    }
+
+    // ==================== грузы и рейсы ====================
+
+    @Get('loads')
+    @ApiOperation({ summary: 'Лента грузов' })
+    feed(@Request() req: any, @Query() query: DriverFeedQueryDto) {
+        return this.loads.feed(req.user.sub, query.bodyType);
+    }
+
+    @Get('loads/:id')
+    @ApiOperation({ summary: 'Карточка груза' })
+    load(@Request() req: any, @Param('id') id: string) {
+        return this.loads.card(req.user.sub, id);
+    }
+
+    @Get('load-photos/:id')
+    @ApiOperation({ summary: 'Фото груза' })
+    async loadPhoto(@Request() req: any, @Param('id') id: string, @Res() res: Response) {
+        return sendExchangeFile(this.s3, res, await this.loads.photo(req.user.sub, id));
+    }
+
+    @Post('loads/:id/take')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Беру груз' })
+    take(@Request() req: any, @Param('id') id: string) {
+        return this.loads.take(req.user.sub, id);
+    }
+
+    @Post('loads/:id/decline')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Не беру — с причиной' })
+    decline(@Request() req: any, @Param('id') id: string, @Body() dto: DriverReasonDto) {
+        return this.loads.decline(req.user.sub, id, dto.reason);
+    }
+
+    @Get('trips')
+    @ApiOperation({ summary: 'Мои рейсы' })
+    trips(@Request() req: any) {
+        return this.loads.trips(req.user.sub);
+    }
+
+    @Post('trips/:id/advance')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Погрузился / Доставил' })
+    advance(@Request() req: any, @Param('id') id: string, @Body() dto: TripAdvanceDto) {
+        return this.loads.advance(req.user.sub, id, dto.to);
+    }
+
+    @Post('trips/:id/release')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Сняться с рейса до погрузки' })
+    release(@Request() req: any, @Param('id') id: string, @Body() dto: DriverReasonDto) {
+        return this.loads.release(req.user.sub, id, dto.reason);
+    }
+}
+
+/**
+ * Включена ли биржа — до входа. Приложению водителя нужно решить, показывать
+ * ли «Войти через Google», ещё на экране входа. Открыт без логина: отдаёт
+ * одно да/нет. Перечислен в auth/open-routes.spec.ts.
+ */
+@ApiTags('exchange-drivers')
+@Controller('exchange')
+export class ExchangePublicController {
+    @Get('public-status')
+    @ApiOperation({ summary: 'Включена ли биржа (без входа)' })
+    status() {
+        return { enabled: exchangeEnabled() };
     }
 }
 

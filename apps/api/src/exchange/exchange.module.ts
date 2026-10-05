@@ -6,7 +6,9 @@ import { ExchangeController, ExchangeStatusController } from './exchange.control
 import { ExchangeService } from './exchange.service';
 import {
     ExchangeAdminController, ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController,
+    ExchangePublicController,
 } from './drivers.controller';
+import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeDriversService } from './drivers.service';
 
 /** Биржа грузов. Выключена, пока на сервере нет `EXCHANGE_ENABLED=true`. */
@@ -15,7 +17,8 @@ import { ExchangeDriversService } from './drivers.service';
     controllers: [
         ExchangeStatusController, ExchangeController,
         ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController, ExchangeAdminController,
+        ExchangePublicController,
     ],
-    providers: [ExchangeService, ExchangeDriversService],
+    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService],
 })
 export class ExchangeModule {}

@@ -70,6 +70,20 @@ export class DriverReasonDto {
     reason: string;
 }
 
+export class DriverFeedQueryDto {
+    @ApiProperty({ required: false, description: 'Тип кузова — только такие грузы' })
+    @IsString()
+    @IsOptional()
+    @MaxLength(60)
+    bodyType?: string;
+}
+
+export class TripAdvanceDto {
+    @ApiProperty({ enum: ['IN_TRANSIT', 'DELIVERED'] })
+    @IsIn(['IN_TRANSIT', 'DELIVERED'], { message: 'Неизвестный шаг рейса' })
+    to: 'IN_TRANSIT' | 'DELIVERED';
+}
+
 export const PARK_DRIVER_FILTERS = ['pending', 'approved', 'rejected', 'blocked', 'all'] as const;
 export type ParkDriverFilter = typeof PARK_DRIVER_FILTERS[number];
 
