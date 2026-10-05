@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { ArrowLeft, ArrowRight, Check, Images, ListChecks, Package, Truck, Wallet, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Images, ListChecks, Package, Truck, UserRound, Wallet, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
 import { EXCHANGE_LOAD_STATUS_LABELS } from '@/lib/vocabulary';
@@ -59,6 +59,10 @@ export default function ExchangeLoadPage() {
     }
 
     const isOpen = load.status === 'OPEN';
+    /** Когда шаг случился — вместо подсказки показываем время. */
+    const stepTime = (status: ExchangeLoad['status']) => ({
+        OPEN: load.createdAt, TAKEN: load.takenAt, IN_TRANSIT: load.loadedAt, DELIVERED: load.deliveredAt, CANCELLED: null,
+    } as Record<ExchangeLoad['status'], string | null>)[status];
     const cancelled = load.status === 'CANCELLED';
     const reached = STEPS.findIndex((s) => s.status === load.status);
 
@@ -163,16 +167,33 @@ export default function ExchangeLoadPage() {
                                             {done && <Check className="h-3.5 w-3.5" />}
                                             {s.title}
                                         </div>
-                                        <div className="mt-0.5 text-[12px] text-muted-foreground">{s.hint}</div>
+                                        <div className="mt-0.5 text-[12px] text-muted-foreground">
+                                            {stepTime(s.status) ? dayjs(stepTime(s.status)!).format('DD.MM HH:mm') : s.hint}
+                                        </div>
                                     </li>
                                 );
                             })}
                         </ol>
                         {isOpen && (
                             <p className="mt-3 text-[12px] text-muted-foreground">
-                                Водители увидят груз в приложении, когда подключим их к бирже — это следующий шаг.
+                                Груз виден допущенным водителям в приложении. Кто первым нажмёт «Беру», тот и повезёт.
                             </p>
                         )}
+                    </div>
+                </section>
+            )}
+
+            {load.driver && (
+                <section className={styles.card}>
+                    <div className={styles.cardHead}>
+                        <UserRound size={14} />
+                        <h2 className={styles.cardTitle}>Кто везёт</h2>
+                    </div>
+                    <div className={`${styles.cardBody} space-y-2 text-[13px]`}>
+                        <Row label="Водитель" value={[load.driver.lastName, load.driver.firstName, load.driver.middleName].filter(Boolean).join(' ') || '—'} />
+                        <Row label="Телефон" value={load.driver.phone || '—'} />
+                        <Row label="Машина" value={[load.driver.vehiclePlate, load.driver.vehicleBodyType].filter(Boolean).join(' · ') || '—'} />
+                        <Row label="Работает" value={load.driver.kind === 'IP' ? 'свой ИП' : load.driver.park ? `через парк «${load.driver.park.name}»` : '—'} />
                     </div>
                 </section>
             )}

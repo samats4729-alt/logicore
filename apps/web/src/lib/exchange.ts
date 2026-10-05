@@ -25,6 +25,20 @@ export interface ExchangeLoad {
     createdAt: string;
     createdByName: string | null;
     photos: { id: string; fileName: string; mimeType: string }[];
+    takenAt: string | null;
+    loadedAt: string | null;
+    deliveredAt: string | null;
+    /** Кто везёт — как только водитель нажал «Беру». */
+    driver: {
+        lastName: string | null;
+        firstName: string | null;
+        middleName: string | null;
+        phone: string | null;
+        kind: 'IP' | 'PARK' | null;
+        vehiclePlate: string | null;
+        vehicleBodyType: string | null;
+        park: { name: string } | null;
+    } | null;
 }
 
 export type ExchangeFilter = 'active' | 'done' | 'cancelled' | 'all';
