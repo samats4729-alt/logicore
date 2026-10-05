@@ -194,3 +194,31 @@ export function фиоВодителя(d: Pick<ExchangeDriver, 'lastName' | 'fir
 export function иинКрасиво(iin: string | null): string {
     return iin ? `${iin.slice(0, 6)} ${iin.slice(6)}` : '—';
 }
+
+/** «+77011234567» → «+7 701 123 45 67»: так номер читают и диктуют. */
+export function телефонКрасиво(phone: string | null | undefined): string {
+    const d = (phone ?? '').replace(/\D/g, '');
+    if (d.length !== 11) return phone || '—';
+    return `+${d[0]} ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}`;
+}
+
+/** Название в кавычках, если своих нет: Алем → «Алем», ТОО «Алем» → ТОО «Алем». */
+export function вКавычках(name: string | null | undefined): string {
+    if (!name) return '—';
+    return /[«"]/.test(name) ? name : `«${name}»`;
+}
+
+/**
+ * Груз ищет машину, а день погрузки уже прошёл. Водители такой груз не
+ * видят — лента показывает погрузку с сегодняшнего дня. Компании об этом
+ * надо сказать прямо, иначе она ждёт водителя, которого не будет.
+ */
+export function датаПрошла(load: Pick<ExchangeLoad, 'status' | 'loadingDate'>): boolean {
+    return load.status === 'OPEN' && dayjs(load.loadingDate.slice(0, 10)).isBefore(dayjs().startOf('day'));
+}
+
+/** «Проверкин Н. · 123ABC02» — водитель в строке списка. */
+export function водительКратко(d: NonNullable<ExchangeLoad['driver']>): string {
+    const name = [d.lastName, d.firstName ? `${d.firstName[0]}.` : null].filter(Boolean).join(' ') || 'Водитель';
+    return [name, d.vehiclePlate].filter(Boolean).join(' · ');
+}

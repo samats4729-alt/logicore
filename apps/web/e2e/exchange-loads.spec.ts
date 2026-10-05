@@ -16,7 +16,7 @@ test.describe('Биржа · грузы компании', () => {
         test.skip(!enabled, 'Биржа на этом сервере выключена');
 
         await tab.click();
-        await expect(page.getByRole('heading', { name: 'Биржа', level: 1 })).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByRole('heading', { name: 'Ваши грузы', level: 1 })).toBeVisible({ timeout: 60_000 });
         await page.getByRole('button', { name: 'Поставить груз' }).click();
         await expect(page.getByRole('heading', { name: 'Поставить груз' })).toBeVisible({ timeout: 60_000 });
 
@@ -28,9 +28,9 @@ test.describe('Биржа · грузы компании', () => {
             await page.locator('input[placeholder="Начните вводить название города"]').last().fill(city);
             await page.getByRole('dialog').last().locator('ul li button').first().click();
         }
-        await page.getByPlaceholder('Напитки на паллетах').fill('Проверка биржи');
+        await page.getByPlaceholder('Например: напитки на паллетах').fill('Проверка биржи');
         await page.getByLabel('Тип кузова').selectOption('тент');
-        await page.getByPlaceholder('20', { exact: true }).fill('20');
+        await page.getByPlaceholder('Например: 20', { exact: true }).fill('20');
         await page.getByLabel('Цена перевозки').fill('450000');
         await expect(page.getByLabel('Цена перевозки')).toHaveValue('450 000');
 

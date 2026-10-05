@@ -6,7 +6,7 @@ import dayjs from 'dayjs';
 import { ArrowLeft, UsersRound } from 'lucide-react';
 import { api } from '@/lib/api';
 import { EXCHANGE_DRIVER_STATUS_LABELS } from '@/lib/vocabulary';
-import { ParkDriverFilter, ParkDriverList, иинКрасиво, фиоВодителя } from '@/lib/exchange';
+import { ParkDriverFilter, ParkDriverList, иинКрасиво, фиоВодителя, телефонКрасиво } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusPill from '@/components/ui/StatusPill';
@@ -118,7 +118,7 @@ export default function ParkDriversPage() {
                                     </TableCell>
                                     <TableCell>
                                         <div className="tabular-nums">{иинКрасиво(d.iin)}</div>
-                                        <div className="text-[12px] text-muted-foreground tabular-nums">{d.phone || '—'}</div>
+                                        <div className="text-[12px] text-muted-foreground tabular-nums">{d.phone ? телефонКрасиво(d.phone) : '—'}</div>
                                     </TableCell>
                                     <TableCell>
                                         <div className="font-medium tabular-nums">{d.vehiclePlate || '—'}</div>

@@ -7,7 +7,7 @@ import { ArrowLeft, Ban, Check, FileSignature, Images, Loader2, Truck, UserRound
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { EXCHANGE_DRIVER_STATUS_LABELS } from '@/lib/vocabulary';
-import { ExchangeDriver, ответСервера, иинКрасиво, фиоВодителя } from '@/lib/exchange';
+import { ExchangeDriver, ответСервера, иинКрасиво, фиоВодителя, телефонКрасиво } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import StatusPill from '@/components/ui/StatusPill';
 import { DriverDocuments } from '@/components/exchange/DriverDocuments';
@@ -123,7 +123,7 @@ export default function ParkDriverPage() {
                     <div className={`${styles.cardBody} space-y-2 text-[13px]`}>
                         <Row label="ФИО" value={фиоВодителя(driver)} />
                         <Row label="ИИН" value={иинКрасиво(driver.iin)} />
-                        <Row label="Телефон" value={driver.phone ? <a className="lc-link" href={`tel:${driver.phone}`}>{driver.phone}</a> : '—'} />
+                        <Row label="Телефон" value={driver.phone ? <a className="lc-link" href={`tel:${driver.phone}`}>{телефонКрасиво(driver.phone)}</a> : '—'} />
                         <Row label="Почта Google" value={driver.email || '—'} />
                         <Row label="Рейсов довёз" value={String(driver.tripsCompleted)} />
                     </div>

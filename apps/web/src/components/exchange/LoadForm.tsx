@@ -67,6 +67,8 @@ export function LoadForm() {
     const [cities, setCities] = useState<CityOption[]>([]);
     const [photos, setPhotos] = useState<File[]>([]);
     const [saving, setSaving] = useState(false);
+    /** Нажимали «Поставить» — с этого момента пустые поля подсвечены на месте. */
+    const [tried, setTried] = useState(false);
 
     const set = <K extends keyof Values>(key: K, value: Values[K]) => setValues((v) => ({ ...v, [key]: value }));
 
@@ -95,6 +97,9 @@ export function LoadForm() {
         });
     };
 
+    /** Пустое обязательное поле после попытки отправить — подсказка под ним. */
+    const need = (key: string, text: string) => (tried && missing.includes(key) ? text : undefined);
+
     /** Чего не хватает — словами, до отправки. Сервер проверит то же самое. */
     const missing = [
         !values.originCityName.trim() && 'откуда',
@@ -106,6 +111,7 @@ export function LoadForm() {
     ].filter(Boolean) as string[];
 
     const submit = async () => {
+        setTried(true);
         if (missing.length) {
             toast.error(`Не заполнено: ${missing.join(', ')}`);
             return;
@@ -161,7 +167,7 @@ export function LoadForm() {
                     </div>
                     <div className={`${styles.cardBody} space-y-3`}>
                         <div className="grid gap-3 sm:grid-cols-2">
-                            <Field label="Город погрузки">
+                            <Field label="Город погрузки" error={need('откуда', 'Выберите город погрузки')}>
                                 <CityPicker
                                     title="Город погрузки"
                                     placeholder="Откуда"
@@ -172,7 +178,7 @@ export function LoadForm() {
                                     onImported={(c) => setCities((list) => [...list, c])}
                                 />
                             </Field>
-                            <Field label="Город выгрузки">
+                            <Field label="Город выгрузки" error={need('куда', 'Выберите город выгрузки')}>
                                 <CityPicker
                                     title="Город выгрузки"
                                     placeholder="Куда"
@@ -184,18 +190,18 @@ export function LoadForm() {
                                 />
                             </Field>
                             <Field label="Адрес погрузки" hint="улица, склад">
-                                <Input value={values.originAddress} onChange={(e) => set('originAddress', e.target.value)} placeholder="ул. Толе би, 12, склад 3" className="h-9 text-[13px]" />
+                                <Input value={values.originAddress} onChange={(e) => set('originAddress', e.target.value)} placeholder="Например: ул. Толе би, 12, склад 3" className="h-9 text-[13px]" />
                             </Field>
                             <Field label="Адрес выгрузки">
-                                <Input value={values.destinationAddress} onChange={(e) => set('destinationAddress', e.target.value)} placeholder="ул. Рыскулова, 57" className="h-9 text-[13px]" />
+                                <Input value={values.destinationAddress} onChange={(e) => set('destinationAddress', e.target.value)} placeholder="Например: ул. Рыскулова, 57" className="h-9 text-[13px]" />
                             </Field>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
-                            <Field label="День погрузки">
+                            <Field label="День погрузки" error={need('день погрузки', 'Укажите день погрузки')}>
                                 <DateStringField value={values.loadingDate} onChange={(v) => set('loadingDate', v)} className="h-9 text-[13px]" />
                             </Field>
                             <Field label="Время погрузки" hint="как удобно">
-                                <Input value={values.loadingTime} onChange={(e) => set('loadingTime', e.target.value)} placeholder="с 9 до 12" className="h-9 text-[13px]" />
+                                <Input value={values.loadingTime} onChange={(e) => set('loadingTime', e.target.value)} placeholder="Например: с 9 до 12" className="h-9 text-[13px]" />
                             </Field>
                         </div>
                     </div>
@@ -208,25 +214,25 @@ export function LoadForm() {
                     </div>
                     <div className={`${styles.cardBody} space-y-3`}>
                         <div className="grid gap-3 sm:grid-cols-2">
-                            <Field label="Что везём">
-                                <Input value={values.cargoDescription} onChange={(e) => set('cargoDescription', e.target.value)} placeholder="Напитки на паллетах" className="h-9 text-[13px]" />
+                            <Field label="Что везём" error={need('что везём', 'Напишите, что везём')}>
+                                <Input value={values.cargoDescription} onChange={(e) => set('cargoDescription', e.target.value)} placeholder="Например: напитки на паллетах" className="h-9 text-[13px]" />
                             </Field>
-                            <Field label="Тип кузова">
+                            <Field label="Тип кузова" error={need('тип кузова', 'Выберите тип кузова — водители ищут грузы по нему')}>
                                 <select
                                     aria-label="Тип кузова"
                                     value={values.bodyType}
                                     onChange={(e) => set('bodyType', e.target.value)}
-                                    className="h-9 w-full rounded-xl border border-solid border-input bg-background px-3 text-[13px]"
+                                    className={`h-9 w-full rounded-xl border border-solid border-input bg-background px-3 text-[13px] [font-family:inherit] ${values.bodyType ? '' : 'text-muted-foreground'}`}
                                 >
-                                    <option value="">выберите</option>
-                                    {VEHICLE_TYPES.filter((t) => t !== 'не указан').map((t) => <option key={t} value={t}>{t}</option>)}
+                                    <option value="">Выберите кузов</option>
+                                    {VEHICLE_TYPES.filter((t) => t !== 'не указан').map((t) => <option key={t} value={t} className="text-foreground">{t}</option>)}
                                 </select>
                             </Field>
                             <Field label="Вес, т">
-                                <Input value={values.weightTons} onChange={(e) => set('weightTons', e.target.value)} placeholder="20" inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
+                                <Input value={values.weightTons} onChange={(e) => set('weightTons', e.target.value)} placeholder="Например: 20" inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
                             </Field>
                             <Field label="Объём, м³">
-                                <Input value={values.volumeM3} onChange={(e) => set('volumeM3', e.target.value)} placeholder="86" inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
+                                <Input value={values.volumeM3} onChange={(e) => set('volumeM3', e.target.value)} placeholder="Например: 86" inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
                             </Field>
                         </div>
                         <Field label="Что ещё важно водителю" hint="необязательно">
@@ -274,14 +280,14 @@ export function LoadForm() {
                         <h2 className={styles.cardTitle}>Цена перевозки</h2>
                     </div>
                     <div className={`${styles.cardBody} space-y-3`}>
-                        <Field label="Сколько платите за перевозку, ₸">
+                        <Field label="Сколько платите за перевозку, ₸" error={need('цена', 'Укажите цену — без неё груз не поставить')}>
                             <Input
                                 aria-label="Цена перевозки"
                                 value={formatMoneyInput(parseMoneyInput(values.price))}
                                 onChange={(e) => set('price', parseMoneyInput(e.target.value).replace(/[^\d.]/g, ''))}
                                 placeholder="Сумма в тенге"
                                 inputMode="numeric"
-                                className="h-10 text-[15px] font-semibold tabular-nums"
+                                className="h-10 text-[15px] font-semibold tabular-nums placeholder:font-normal"
                             />
                         </Field>
                         <RoutePricesPanel
@@ -293,8 +299,12 @@ export function LoadForm() {
                             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                             Поставить на биржу
                         </Button>
-                        {missing.length > 0 && (
-                            <p className="text-[12px] text-muted-foreground">Осталось заполнить: {missing.join(', ')}.</p>
+                        {missing.length > 0 ? (
+                            <p className="m-0 text-[12px] text-muted-foreground">Осталось заполнить: {missing.join(', ')}.</p>
+                        ) : (
+                            <p className="m-0 text-[12px] text-muted-foreground">
+                                Груз сразу увидят допущенные водители в приложении. Кто первым нажмёт «Беру», тот и повезёт — вы увидите его имя и телефон в карточке груза.
+                            </p>
                         )}
                     </div>
                 </section>
@@ -303,14 +313,15 @@ export function LoadForm() {
     );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: React.ReactNode }) {
     return (
         <div className="flex flex-col gap-1">
-            <Label className="text-[12px] font-medium text-muted-foreground">
+            <Label className={`text-[12px] font-medium ${error ? 'text-destructive' : 'text-muted-foreground'}`}>
                 {label}
                 {hint && <span className="ml-1 font-normal opacity-70">· {hint}</span>}
             </Label>
             {children}
+            {error && <span role="alert" className="text-[12px] text-destructive">{error}</span>}
         </div>
     );
 }
