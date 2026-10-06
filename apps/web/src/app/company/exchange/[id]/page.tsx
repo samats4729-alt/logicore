@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
 import { ExchangeOrder, день, тонн } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
+import OfferForm from '@/components/exchange/OfferForm';
 import styles from '@/components/nova/nova.module.css';
 
 const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
@@ -21,7 +22,7 @@ const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
  *
  * Всё, чтобы решить «повезу или нет»: маршрут по точкам с датами, груз и
  * условия, цена и примечание компании. Адресов нет — их получит тот, кого
- * компания выберет. Откликнуться с ценой можно будет на следующем шаге.
+ * компания выберет. Справа — отклик: согласен на цену или своя цена.
  */
 export default function ExchangeOrderPage() {
     const { id } = useParams<{ id: string }>();
@@ -146,10 +147,11 @@ export default function ExchangeOrderPage() {
                             <div className="text-[26px] font-bold leading-tight tabular-nums">
                                 {order.price != null ? moneyShort(order.price) : 'договорная'}
                             </div>
-                            <p className="m-0 mt-3 text-[12px] text-muted-foreground">
-                                Откликнуться — согласиться на эту цену или предложить свою — можно будет на следующем шаге.
-                                Компания сама выберет, кто повезёт.
-                            </p>
+                            {!order.own && (
+                                <div className="mt-4">
+                                    <OfferForm order={order} onChanged={(myOffer) => setOrder({ ...order, myOffer })} />
+                                </div>
+                            )}
                         </div>
                     </section>
 

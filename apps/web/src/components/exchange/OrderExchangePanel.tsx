@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RoutePricesPanel } from './RoutePricesPanel';
+import OffersList from './OffersList';
 import nova from '@/components/nova/nova.module.css';
 
 /** Частые причины снять — одним нажатием. Своя — словами в поле. */
@@ -25,7 +26,7 @@ const CLOSE_REASONS = ['Нашли исполнителя сами', 'Клиен
  * нельзя (исполнитель уже есть, заявка в работе), блок не показывается
  * вовсе: лишняя серая плашка в карточке рейса только мешает.
  */
-export default function OrderExchangePanel({ orderId, reloadKey }: { orderId: string; reloadKey?: unknown }) {
+export default function OrderExchangePanel({ orderId, reloadKey, onChanged }: { orderId: string; reloadKey?: unknown; onChanged?: () => void }) {
     const [state, setState] = useState<ExchangeOrderState | null>(null);
     const [publishOpen, setPublishOpen] = useState(false);
     const [closeOpen, setCloseOpen] = useState(false);
@@ -55,7 +56,7 @@ export default function OrderExchangePanel({ orderId, reloadKey }: { orderId: st
                                 На бирже с {dayjs(state.publishedAt).format('DD.MM HH:mm')} · за {moneyShort(state.price ?? 0)}
                             </div>
                             <div className="mt-0.5 text-[12px] text-muted-foreground">
-                                Её видят перевозчики и водители. Отклики с ценой и выбор исполнителя появятся здесь на следующем шаге.
+                                Её видят перевозчики и водители. Выберите исполнителя из откликов ниже.
                             </div>
                         </div>
                         <Button variant="outline" className="text-destructive" onClick={() => setCloseOpen(true)}>
@@ -78,6 +79,12 @@ export default function OrderExchangePanel({ orderId, reloadKey }: { orderId: st
                     </>
                 )}
             </div>
+
+            {state.onExchange && (
+                <div className={nova.cardBody} style={{ paddingTop: 0 }}>
+                    <OffersList orderId={orderId} onAccepted={() => { load(); onChanged?.(); }} />
+                </div>
+            )}
 
             <PublishDialog state={state} open={publishOpen} onOpenChange={setPublishOpen} onDone={setState} />
             <CloseDialog state={state} open={closeOpen} onOpenChange={setCloseOpen} onDone={setState} />

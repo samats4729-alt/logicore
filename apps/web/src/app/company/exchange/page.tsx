@@ -180,7 +180,11 @@ export default function ExchangePage() {
                                                 : день(o.loadingDate)}
                                         </TableCell>
                                         <TableCell className="max-w-[280px] truncate text-muted-foreground">{грузКратко(o)}</TableCell>
-                                        <TableCell className="whitespace-nowrap">{tab === 'board' ? (o.companyName ?? '—') : o.orderNumber}</TableCell>
+                                        <TableCell className="whitespace-nowrap">
+                                            {tab === 'board' ? (o.companyName ?? '—') : o.orderNumber}
+                                            {o.myOfferStatus === 'ACTIVE' && <div className="text-[11px] font-medium text-[var(--nova-accent)]">вы откликнулись</div>}
+                                            {o.myOfferStatus === 'ACCEPTED' && <div className="text-[11px] font-medium text-emerald-600">вас выбрали</div>}
+                                        </TableCell>
                                         <TableCell className="text-right font-semibold tabular-nums">{o.price != null ? moneyShort(o.price) : 'договорная'}</TableCell>
                                     </TableRow>
                                 ))}

@@ -40,6 +40,46 @@ export interface ExchangeOrder {
     own?: boolean;
     /** Своя заявка с прошедшей погрузкой — её уже никто не видит. */
     stale?: boolean;
+    /** Свой отклик на эту заявку: ждёт решения, выбрали, выбрали другого. */
+    myOfferStatus?: OfferStatus | null;
+    myOffer?: OwnOffer | null;
+}
+
+export type OfferStatus = 'ACTIVE' | 'WITHDRAWN' | 'ACCEPTED' | 'REJECTED';
+
+/** Свой отклик — как его видит откликнувшийся. */
+export interface OwnOffer {
+    id: string;
+    status: OfferStatus;
+    price: number;
+    agreed: boolean;
+    readyDate: string | null;
+    comment: string | null;
+    updatedAt: string;
+}
+
+/** Отклик на свою заявку — кто, на чём, за сколько. */
+export interface ExchangeOffer {
+    id: string;
+    status: OfferStatus;
+    price: number;
+    agreed: boolean;
+    readyDate: string | null;
+    comment: string | null;
+    createdAt: string;
+    kind: 'DRIVER_IP' | 'DRIVER_PARK' | 'COMPANY';
+    name: string;
+    phone: string | null;
+    driver: {
+        ipName: string | null;
+        parkName: string | null;
+        vehiclePlate: string | null;
+        vehicleBodyType: string | null;
+        vehicleCapacityKg: number | null;
+        tripsCompleted: number;
+        since: string;
+    } | null;
+    company: { name: string; bin: string | null } | null;
 }
 
 /** Биржа в карточке заявки: на бирже ли и можно ли выставить. */
@@ -58,6 +98,8 @@ export interface ExchangeOrderState {
     /** Откуда и куда — для подсказки «почём возили». */
     from: string | null;
     to: string | null;
+    /** Сколько откликов ждут решения. */
+    offersCount: number;
     /** Подсказка: сколько в заявке заложено перевозчику. */
     suggestedPrice: number | null;
 }

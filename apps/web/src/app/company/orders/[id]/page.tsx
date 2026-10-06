@@ -1743,7 +1743,7 @@ export default function OrderDetailPage() {
                             ) : (
                                 <>
                                 {/* Биржа: найти исполнителя, пока его нет. */}
-                                <OrderExchangePanel orderId={orderId} reloadKey={order.updatedAt} />
+                                <OrderExchangePanel orderId={orderId} reloadKey={order.updatedAt} onChanged={fetchData} />
                                 <OrderDetails
                                     order={order}
                                     partners={partners}

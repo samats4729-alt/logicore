@@ -38,6 +38,8 @@ test.describe('Биржа · заявки', () => {
         await expect(publish.getByLabel('Цена для исполнителя')).toHaveValue('450 000');
         await publish.getByRole('button', { name: 'Выставить', exact: true }).click();
         await expect(page.getByText(/На бирже с .* за 450\s000/)).toBeVisible({ timeout: 30_000 });
+        // Откликов ещё нет — так и сказано, а не пустое место (или уже есть список).
+        await expect(page.getByText(/Откликов пока нет|Отклики ·/)).toBeVisible();
 
         // Своя заявка — во вкладке «Мои на бирже», не среди чужих.
         await page.goto('/company/exchange');
