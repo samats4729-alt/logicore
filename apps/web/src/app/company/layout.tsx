@@ -240,6 +240,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 { key: '/company/park', icon: <DashboardOutlined />, label: 'Парк' },
                 { key: '/company/park/drivers', icon: <TeamOutlined />, label: 'Водители' },
                 { key: '/company/park/trips', icon: <CarOutlined />, label: 'Рейсы' },
+                { key: '/company/park/payouts', icon: <DollarOutlined />, label: 'Выплаты' },
                 { key: '/company/cabinet', icon: <ApartmentOutlined />, label: 'Кабинет' },
             ];
         }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Copy, Loader2, MessageCircle, RefreshCw, Route, UserCheck, UserPlus, UsersRound, Wallet } from 'lucide-react';
+import { Copy, HandCoins, Loader2, MessageCircle, RefreshCw, Route, UserCheck, UserPlus, UsersRound, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
@@ -71,6 +71,7 @@ export default function ParkHome() {
         { icon: UsersRound, label: 'Водителей работает', value: String(data.approvedDrivers), hint: 'Допущены к бирже', href: '/company/park/drivers?status=approved', accent: false },
         { icon: Route, label: 'Сейчас в рейсе', value: String(data.activeTrips), hint: 'Рейсы водителей парка', href: '/company/park/trips', accent: false },
         { icon: Wallet, label: 'Довезли в этом месяце', value: moneyShort(data.monthSum), hint: `рейсов: ${data.monthTrips}`, href: '/company/park/trips?status=done', accent: false },
+        { icon: HandCoins, label: 'Выплаты ждут', value: moneyShort(data.pendingPayouts.net), hint: data.pendingPayouts.count ? `запросов: ${data.pendingPayouts.count} — выгрузите в 1С` : 'Запросов нет', href: '/company/park/payouts', accent: data.pendingPayouts.count > 0 },
     ] : [];
 
     return (
@@ -85,9 +86,9 @@ export default function ParkHome() {
                 </div>
             </div>
 
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 {!data
-                    ? [0, 1, 2, 3].map((i) => <div key={i} className={`${styles.card} h-28 animate-pulse`} style={{ marginBottom: 0 }} />)
+                    ? [0, 1, 2, 3, 4].map((i) => <div key={i} className={`${styles.card} h-28 animate-pulse`} style={{ marginBottom: 0 }} />)
                     : tiles.map((t) => (
                         <button
                             key={t.label}

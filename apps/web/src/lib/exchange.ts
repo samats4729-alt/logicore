@@ -282,6 +282,8 @@ export interface ParkOverview {
     monthTrips: number;
     monthSum: number;
     inviteCode: string;
+    /** Выплаты, которые ждут парка: запрошены или в 1С. */
+    pendingPayouts: { count: number; net: number };
 }
 
 export type ParkTripFilter = 'active' | 'done' | 'all';
@@ -306,4 +308,45 @@ export interface ParkTrip {
 export function ссылкаПриглашения(code: string): string {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://logicore.kz';
     return `${origin}/park-invite/${code}`;
+}
+
+export type PayoutStatus = 'REQUESTED' | 'EXPORTED' | 'PAID' | 'REJECTED';
+
+export const PAYOUT_STATUS_TEXT: Record<PayoutStatus, string> = {
+    REQUESTED: 'Запрошена',
+    EXPORTED: 'В 1С',
+    PAID: 'Выплачено',
+    REJECTED: 'Отклонена',
+};
+
+/** Выплата водителю парка — как её видит парк. */
+export interface ParkPayout {
+    id: string;
+    status: PayoutStatus;
+    gross: number;
+    commission: number;
+    opv: number;
+    vosms: number;
+    ipn: number;
+    net: number;
+    so: number;
+    trips: number;
+    iban: string | null;
+    bank: string | null;
+    requestedAt: string;
+    exportedAt: string | null;
+    paidAt: string | null;
+    rejectReason: string | null;
+    driver: { id: string; name: string; iin: string | null; phone: string | null };
+}
+
+/** Ставки удержаний парка, %. */
+export interface PayoutRates {
+    commissionPct: number;
+    opvPct: number;
+    vosmsPct: number;
+    ipnPct: number;
+    soPct: number;
+    updatedAt?: string | null;
+    isDefault?: boolean;
 }
