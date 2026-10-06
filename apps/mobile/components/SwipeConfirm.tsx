@@ -22,6 +22,10 @@ export function SwipeConfirm({ label, hint = 'Смахните вправо', on
     const { colors } = useAppTheme();
     const [width, setWidth] = useState(0);
     const [busy, setBusy] = useState(false);
+    /** По ползунку просто ткнули — показываем, что его надо тянуть. */
+    const [nudged, setNudged] = useState(false);
+    const nudgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (nudgeTimer.current) clearTimeout(nudgeTimer.current); }, []);
     const x = useRef(new Animated.Value(0)).current;
     const max = Math.max(0, width - KNOB - PAD * 2);
 
@@ -33,6 +37,20 @@ export function SwipeConfirm({ label, hint = 'Смахните вправо', on
     useEffect(() => { confirmRef.current = onConfirm; }, [onConfirm]);
 
     const back = () => Animated.spring(x, { toValue: 0, useNativeDriver: false, bounciness: 6 }).start();
+
+    // Ткнули, а не потянули: кружок сам чуть отъезжает вправо и возвращается,
+    // подпись на пару секунд меняется на «Проведите пальцем вправо».
+    const nudge = () => {
+        Animated.sequence([
+            Animated.timing(x, { toValue: Math.min(56, maxRef.current), duration: 220, useNativeDriver: false }),
+            Animated.spring(x, { toValue: 0, useNativeDriver: false, bounciness: 10 }),
+        ]).start();
+        setNudged(true);
+        if (nudgeTimer.current) clearTimeout(nudgeTimer.current);
+        nudgeTimer.current = setTimeout(() => setNudged(false), 2600);
+    };
+    const nudgeRef = useRef(nudge);
+    useEffect(() => { nudgeRef.current = nudge; });
 
     const finish = async () => {
         busyRef.current = true;
@@ -56,6 +74,7 @@ export function SwipeConfirm({ label, hint = 'Смахните вправо', on
         },
         onPanResponderRelease: (_e: unknown, g: { dx: number }) => {
             if (maxRef.current > 0 && g.dx >= maxRef.current * DONE_AT) finish();
+            else if (Math.abs(g.dx) < 8) nudgeRef.current();
             else back();
         },
         onPanResponderTerminate: back,
@@ -77,7 +96,9 @@ export function SwipeConfirm({ label, hint = 'Смахните вправо', on
         >
             <Animated.View style={[styles.fill, { width: fill, backgroundColor: colors.primaryFg }]} />
             <Animated.View style={[styles.labelWrap, { opacity: fade }]} pointerEvents="none">
-                <Text style={[styles.hint, { color: colors.primaryFg }]}>{hint}</Text>
+                <Text style={[styles.hint, { color: colors.primaryFg }, nudged && styles.hintNudged]}>
+                    {nudged ? 'Проведите пальцем вправо →' : hint}
+                </Text>
                 <Text style={[styles.label, { color: colors.primaryFg }]} numberOfLines={1}>{label}</Text>
             </Animated.View>
             <View style={styles.chevrons} pointerEvents="none">
@@ -124,6 +145,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     hint: { fontFamily: FONT.medium, fontSize: 11, opacity: 0.55 },
+    hintNudged: { fontFamily: FONT.semibold, opacity: 1 },
     label: { fontFamily: FONT.semibold, fontSize: 16, letterSpacing: -0.3, marginTop: 1 },
     chevrons: { position: 'absolute', right: 18, flexDirection: 'row' },
     knob: {
