@@ -2,7 +2,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { RADIUS } from '@/lib/theme';
+import { FONT, RADIUS } from '@/lib/theme';
 
 export type SheetOption = {
     label: string;
@@ -42,7 +42,7 @@ export function Sheet({ visible, title, text, options, onClose }: {
                             onPress={() => { onClose(); o.onPress(); }}
                             style={({ pressed }: { pressed: boolean }) => [
                                 styles.option,
-                                { borderColor: colors.border, backgroundColor: pressed ? colors.hover : colors.background },
+                                { borderColor: colors.border, backgroundColor: pressed ? colors.hover : colors.card },
                             ]}
                         >
                             {o.icon && <Ionicons name={o.icon} size={20} color={o.danger ? colors.danger : colors.text} />}
@@ -62,13 +62,13 @@ const styles = StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
     sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 8 },
     grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: 14 },
-    title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3, paddingHorizontal: 4 },
-    text: { fontSize: 13.5, lineHeight: 19, marginTop: 4, paddingHorizontal: 4 },
+    title: { fontFamily: FONT.display, fontSize: 18, letterSpacing: -0.7, paddingHorizontal: 4 },
+    text: { fontFamily: FONT.regular, fontSize: 13.5, lineHeight: 19, marginTop: 5, paddingHorizontal: 4 },
     option: {
         flexDirection: 'row', alignItems: 'center', gap: 12,
         minHeight: 54, paddingHorizontal: 16, borderRadius: RADIUS.button, borderWidth: 1, marginTop: 8,
     },
-    optionText: { fontSize: 16, fontWeight: '600', flex: 1 },
+    optionText: { fontFamily: FONT.semibold, fontSize: 16, flex: 1 },
     cancel: { height: 52, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
-    cancelText: { fontSize: 16, fontWeight: '700' },
+    cancelText: { fontFamily: FONT.semibold, fontSize: 15 },
 });
