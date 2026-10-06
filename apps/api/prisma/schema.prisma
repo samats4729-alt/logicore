@@ -537,6 +537,8 @@ model Company {
   /// водителей без ИП, чтобы перевозка шла законно. Ставит отметку только
   /// владелец платформы в админке.
   isPark          Boolean          @default(false)
+  /// Код приглашения парка: водитель вводит его в анкете или открывает ссылку — и попадает в этот парк.
+  parkInviteCode  String?          @unique
   exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
   /// Отклики компании-перевозчика на заявки других компаний с биржи.
   exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")

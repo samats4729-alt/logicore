@@ -353,6 +353,34 @@ export class ExchangeDriversService {
     // ==================== парк (кабинет) ====================
 
     /** Дальше только парк: чужая компания водителей не видит. */
+    /**
+     * Вступить в парк по коду из приглашения: парк выбран, вид работы —
+     * «через парк». Проверка парком и подпись договора — как обычно.
+     */
+    async joinParkByCode(userId: string, rawCode: string) {
+        const driver = await this.ownDriver(userId);
+        this.assertEditable(driver);
+        const code = rawCode.trim().toUpperCase();
+        const park = await this.prisma.company.findFirst({
+            where: { parkInviteCode: code, isPark: true, isActive: true },
+            select: { id: true },
+        });
+        if (!park) throw new BadRequestException('Такого кода нет — проверьте его или попросите у парка новую ссылку');
+        const updated = await this.prisma.exchangeDriver.update({
+            where: { id: driver.id },
+            data: {
+                kind: 'PARK',
+                ipName: null,
+                ipIin: null,
+                park: { connect: { id: park.id } },
+                // Договор подписывают с конкретным парком: другой парк — другой договор.
+                ...(park.id !== driver.parkCompanyId ? { contractSignedAt: null } : {}),
+            },
+            select: DRIVER_SELECT,
+        });
+        return this.view(updated);
+    }
+
     async assertPark(companyId: string) {
         const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { isPark: true } });
         if (!company?.isPark) throw new ForbiddenException('Ваша компания не парк биржи');

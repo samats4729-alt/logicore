@@ -18,12 +18,13 @@ import { MAX_UPLOAD_SIZE } from '../documents/allowed-files';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeOffersService } from './exchange-offers.service';
+import { ExchangeParkService } from './park.service';
 import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import {
     AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverReasonDto, ParkDriversQueryDto,
-    SetParkDto, UpdateDriverProfileDto,
+    ParkCodeDto, ParkTripsQueryDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -122,6 +123,13 @@ export class ExchangeDriverController {
         return this.drivers.submit(req.user.sub);
     }
 
+    @Post('me/park-code')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Вступить в парк по коду приглашения' })
+    joinPark(@Request() req: any, @Body() dto: ParkCodeDto) {
+        return this.drivers.joinParkByCode(req.user.sub, dto.code);
+    }
+
     @Post('me/reopen')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Вернуть принятую анкету на правку (сменилась машина, телефон)' })
@@ -184,10 +192,24 @@ export class ExchangeDriverController {
 @ApiTags('exchange-drivers')
 @Controller('exchange')
 export class ExchangePublicController {
+    constructor(private readonly park: ExchangeParkService) {}
+
     @Get('public-status')
     @ApiOperation({ summary: 'Включена ли биржа (без входа)' })
     status() {
         return { enabled: exchangeEnabled() };
+    }
+
+    /**
+     * Чьё приглашение — для страницы, которую водитель открывает по ссылке
+     * из WhatsApp, ещё без приложения. Отдаёт только название парка.
+     * Перечислен в auth/open-routes.spec.ts.
+     */
+    @Get('park-invite/:code')
+    @UseGuards(ExchangeEnabledGuard)
+    @ApiOperation({ summary: 'Чьё приглашение (без входа)' })
+    invite(@Param('code') code: string) {
+        return this.park.inviteInfo(code);
     }
 }
 
@@ -204,9 +226,29 @@ export class ExchangePublicController {
 export class ExchangeParkController {
     constructor(
         private readonly drivers: ExchangeDriversService,
+        private readonly park: ExchangeParkService,
         private readonly s3: S3Service,
         private readonly audit: AuditService,
     ) {}
+
+    @Get('overview')
+    @ApiOperation({ summary: 'Кабинет парка: водители, рейсы, заработок за месяц, код приглашения' })
+    overview(@Request() req: any) {
+        return this.park.overview(req.user.companyId);
+    }
+
+    @Get('trips')
+    @ApiOperation({ summary: 'Рейсы водителей парка' })
+    trips(@Request() req: any, @Query() query: ParkTripsQueryDto) {
+        return this.park.trips(req.user.companyId, query.status);
+    }
+
+    @Post('invite/regenerate')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Новый код приглашения — старый перестаёт работать' })
+    async regenerate(@Request() req: any) {
+        return { inviteCode: await this.park.regenerateCode(req.user.companyId) };
+    }
 
     @Get('drivers')
     @ApiOperation({ summary: 'Водители парка' })

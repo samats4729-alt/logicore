@@ -78,6 +78,24 @@ export class DriverFeedQueryDto {
     bodyType?: string;
 }
 
+/** Код приглашения парка — шесть знаков, как в ссылке. */
+export class ParkCodeDto {
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty({ message: 'Впишите код парка' })
+    @MaxLength(12)
+    code: string;
+}
+
+export const PARK_TRIP_FILTERS = ['active', 'done', 'all'] as const;
+
+export class ParkTripsQueryDto {
+    @ApiProperty({ required: false, enum: PARK_TRIP_FILTERS })
+    @IsIn(PARK_TRIP_FILTERS as unknown as string[])
+    @IsOptional()
+    status?: typeof PARK_TRIP_FILTERS[number];
+}
+
 export const PARK_DRIVER_FILTERS = ['pending', 'approved', 'rejected', 'blocked', 'all'] as const;
 export type ParkDriverFilter = typeof PARK_DRIVER_FILTERS[number];
 

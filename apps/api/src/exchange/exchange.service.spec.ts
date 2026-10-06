@@ -49,6 +49,7 @@ function build(state = order()) {
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
         exchangeOffer: { updateMany: jest.fn() },
+        company: { findUnique: jest.fn().mockResolvedValue({ isPark: false }) },
         $transaction: jest.fn(async (ops: any[]) => ops),
     };
     return { service: new ExchangeService(prisma), prisma };
@@ -84,6 +85,12 @@ describe('Биржа: кто выставляет заявку', () => {
             .rejects.toThrow(/уже есть исполнитель/);
         await expect(build(order({ status: 'IN_TRANSIT' })).service.publish(OUR, USER, 'order-1', { price: 1 }))
             .rejects.toThrow(/в работе или закрыта/);
+    });
+
+    it('парк заявки не выставляет — он сам не возит', async () => {
+        const { service, prisma } = build();
+        prisma.company.findUnique.mockResolvedValue({ isPark: true });
+        await expect(service.publish(OUR, USER, 'order-1', { price: 1 })).rejects.toThrow(/Парк не выставляет/);
     });
 
     it('без погрузки и выгрузки — не выставить', async () => {

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { cityKey } from '../cities/city-key';
@@ -113,6 +113,8 @@ export class ExchangeService {
     }
 
     async publish(companyId: string, userId: string, orderId: string, dto: PublishOrderDto) {
+        const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { isPark: true } });
+        if (company?.isPark) throw new ForbiddenException('Парк не выставляет заявки — он сам не возит, через него работают водители');
         const order = await this.participantOrder(companyId, orderId);
         const blocker = this.blocker(order, companyId);
         if (blocker) throw new BadRequestException(blocker);

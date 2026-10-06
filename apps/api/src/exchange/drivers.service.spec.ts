@@ -233,3 +233,25 @@ describe('Биржа: вход водителя через Google', () => {
         expect(prisma.user.create).not.toHaveBeenCalled();
     });
 });
+
+describe('Биржа: вступить в парк по коду', () => {
+    it('код подходит — водитель «через парк» этого парка, договор с новым парком — заново', async () => {
+        const { service, prisma } = build(driverRow({ kind: null, parkCompanyId: null }));
+        prisma.company.findFirst.mockResolvedValue({ id: 'park-2' });
+        await service.joinParkByCode('u-1', ' abc234 ');
+        expect(prisma.company.findFirst.mock.calls[0][0].where).toMatchObject({ parkInviteCode: 'ABC234', isPark: true });
+        const data = prisma.exchangeDriver.update.mock.calls[0][0].data;
+        expect(data).toMatchObject({ kind: 'PARK', park: { connect: { id: 'park-2' } }, contractSignedAt: null });
+    });
+
+    it('неверный код — понятный отказ', async () => {
+        const { service, prisma } = build(driverRow({ kind: null }));
+        prisma.company.findFirst.mockResolvedValue(null);
+        await expect(service.joinParkByCode('u-1', 'XXXXXX')).rejects.toThrow(/Такого кода нет/);
+    });
+
+    it('анкета на проверке — код не сменить', async () => {
+        const { service } = build(driverRow({ status: 'PENDING' }));
+        await expect(service.joinParkByCode('u-1', 'ABC234')).rejects.toThrow(/на проверке/);
+    });
+});

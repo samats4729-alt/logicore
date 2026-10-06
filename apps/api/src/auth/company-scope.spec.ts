@@ -43,6 +43,7 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     'ExchangeDriverController.offer': 'свой отклик на заявку',
     'ExchangeDriverController.withdraw': 'отозвать свой отклик',
     'ExchangeDriverController.myOffers': 'свои отклики',
+    'ExchangeDriverController.joinPark': 'вступить в парк по коду приглашения (своя анкета)',
     // Рейс водителя биржи — те же адреса, что у водителя компании, но без
     // организации пускают только водителя (@AllowDriverWithoutCompany), и
     // каждый отбирает по самому водителю: заявка, где он водитель.
