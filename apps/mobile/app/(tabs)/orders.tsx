@@ -4,8 +4,11 @@ import {
     Text,
     StyleSheet,
     FlatList,
+    Pressable,
     RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useStore, Order } from '@/store';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { FONT, RADIUS, SHADOW } from '@/lib/theme';
@@ -22,7 +25,7 @@ function routeEnds(order: Order): { from: string; to: string } {
 }
 
 export default function OrdersScreen() {
-    const { orders, ordersLoading, fetchOrders } = useStore();
+    const { orders, ordersLoading, fetchOrders, currentOrder } = useStore();
     const { colors, isDark } = useAppTheme();
     const [refreshing, setRefreshing] = useState(false);
 
@@ -42,6 +45,9 @@ export default function OrdersScreen() {
 
     const renderItem = ({ item, index }: { item: Order; index: number }) => {
         const isActive = !['COMPLETED', 'CANCELLED'].includes(item.status);
+        // Нажимается только рейс, который сейчас открыт на вкладке «Рейс»:
+        // у остальных отдельного экрана нет, и карточка не должна казаться кнопкой.
+        const isCurrent = !!currentOrder && currentOrder.id === item.id;
         const { from, to } = routeEnds(item);
         // Подпись группы — над первым рейсом «в работе» и над первым завершённым.
         const groupTitle = index === 0
@@ -53,14 +59,22 @@ export default function OrdersScreen() {
                 {!!groupTitle && (
                     <Text style={[styles.group, { color: colors.textTertiary }, index > 0 && { marginTop: 14 }]}>{groupTitle}</Text>
                 )}
-                <View style={[
-                    styles.card,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                    !isDark && SHADOW,
-                    !isActive && { opacity: 0.92 },
-                ]}>
+                <Pressable
+                    disabled={!isCurrent}
+                    onPress={() => router.navigate('/')}
+                    accessibilityRole={isCurrent ? 'button' : undefined}
+                    accessibilityLabel={isCurrent ? `Открыть текущий рейс № ${item.orderNumber}` : undefined}
+                    style={({ pressed }: { pressed: boolean }) => [
+                        styles.card,
+                        isActive
+                            ? [{ backgroundColor: colors.card, borderColor: isCurrent ? colors.text : colors.border }, !isDark && SHADOW]
+                            : { backgroundColor: 'transparent', borderColor: colors.border },
+                        isCurrent && { borderWidth: 1.5 },
+                        pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },
+                    ]}
+                >
                     <View style={styles.cardTop}>
-                        <Text style={[styles.orderNumber, { color: colors.text }]}>№ {item.orderNumber}</Text>
+                        <Text style={[styles.orderNumber, { color: isActive ? colors.text : colors.textSecondary }]}>№ {item.orderNumber}</Text>
                         <StatusPill status={item.status} />
                     </View>
                     {!!item.customerCompany?.name && (
@@ -74,8 +88,8 @@ export default function OrdersScreen() {
                             <View style={[styles.dot, { borderWidth: 2, borderColor: colors.text }]} />
                         </View>
                         <View style={{ flex: 1, gap: 8 }}>
-                            <Text style={[styles.place, { color: colors.text }]} numberOfLines={1}>{from}</Text>
-                            <Text style={[styles.place, { color: colors.text }]} numberOfLines={1}>{to}</Text>
+                            <Text style={[styles.place, { color: isActive ? colors.text : colors.textSecondary }]} numberOfLines={1}>{from}</Text>
+                            <Text style={[styles.place, { color: isActive ? colors.text : colors.textSecondary }]} numberOfLines={1}>{to}</Text>
                         </View>
                     </View>
 
@@ -90,7 +104,13 @@ export default function OrdersScreen() {
                             </Text>
                         )}
                     </View>
-                </View>
+                    {isCurrent && (
+                        <View style={[styles.openRow, { borderTopColor: colors.border2 }]}>
+                            <Text style={[styles.openText, { color: colors.text }]}>Текущий рейс — открыть</Text>
+                            <Ionicons name="chevron-forward" size={16} color={colors.text} />
+                        </View>
+                    )}
+                </Pressable>
             </View>
         );
     };
@@ -150,6 +170,15 @@ const styles = StyleSheet.create({
     },
     cargo: { fontFamily: FONT.regular, fontSize: 13, flex: 1 },
     date: { fontFamily: FONT.medium, fontSize: 12, fontVariant: ['tabular-nums'] },
+    openRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderTopWidth: 1,
+        paddingVertical: 12,
+        marginTop: -2,
+    },
+    openText: { fontFamily: FONT.semibold, fontSize: 13.5 },
     empty: {
         flex: 1,
         justifyContent: 'center',
