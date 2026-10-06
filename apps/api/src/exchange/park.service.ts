@@ -68,6 +68,7 @@ export class ExchangeParkService {
             monthTrips: monthTrips._count,
             monthSum: Number(monthTrips._sum.driverCost ?? 0),
             inviteCode: await this.inviteCode(companyId),
+            pendingPayouts: await this.payoutsPending(companyId),
         };
     }
 
@@ -102,6 +103,16 @@ export class ExchangeParkService {
                 completedAt: r.completedAt,
             };
         });
+    }
+
+    /** Выплаты, которые ждут парка: запрошены или выгружены в 1С, но не проведены. */
+    private async payoutsPending(companyId: string) {
+        const agg = await this.prisma.driverPayout.aggregate({
+            where: { parkCompanyId: companyId, status: { in: ['REQUESTED', 'EXPORTED'] } },
+            _count: true,
+            _sum: { net: true },
+        });
+        return { count: agg._count, net: Number(agg._sum.net ?? 0) };
     }
 
     /** Код приглашения парка; нет — заводим. */

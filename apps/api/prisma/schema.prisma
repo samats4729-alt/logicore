@@ -539,6 +539,10 @@ model Company {
   isPark          Boolean          @default(false)
   /// Код приглашения парка: водитель вводит его в анкете или открывает ссылку — и попадает в этот парк.
   parkInviteCode  String?          @unique
+  /// Ставки удержаний парка из выплат водителям.
+  parkPayoutRates ParkPayoutRates?
+  /// Выплаты водителям парка.
+  driverPayouts   DriverPayout[]
   exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
   /// Отклики компании-перевозчика на заявки других компаний с биржи.
   exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")
@@ -983,6 +987,8 @@ model Order {
   exchangeCloseReason   String?
   /// Отклики перевозчиков и водителей на заявку с биржи.
   exchangeOffers        ExchangeOffer[]
+  /// Строка выплаты водителю парка за этот рейс — рейс оплачивается один раз.
+  driverPayoutItem      DriverPayoutItem?
 
   // Relations
   routePoints               OrderRoutePoint[]
@@ -3103,6 +3109,11 @@ model ExchangeDriver {
 
   documents ExchangeDriverDocument[]
   offers    ExchangeOffer[]
+  payouts   DriverPayout[]
+
+  /// Счёт для выплат через парк: IBAN и банк. Без счёта выплату не запросить.
+  payoutIban String?
+  payoutBank String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3197,4 +3208,107 @@ model ExchangeOffer {
   @@index([orderId, status])
   @@index([driverId])
   @@index([companyId])
+}
+
+/// Ставки удержаний парка из выплат водителям без ИП.
+///
+/// Задаёт парк вместе со своим бухгалтером: закон меняется, и система ставок
+/// не придумывает. Каждая выплата запоминает ставки, по которым посчитана, —
+/// поменяли ставку, а прошлые выплаты остались как были.
+model ParkPayoutRates {
+  id            String  @id @default(cuid())
+  parkCompanyId String  @unique
+  park          Company @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
+
+  /// Комиссия парка, % от суммы за рейс.
+  commissionPct Decimal @default(5) @db.Decimal(5, 2)
+  /// Пенсионные взносы водителя (ОПВ), % — удерживаются.
+  opvPct        Decimal @default(10) @db.Decimal(5, 2)
+  /// Взносы водителя на медстрахование (ВОСМС), % — удерживаются.
+  vosmsPct      Decimal @default(2) @db.Decimal(5, 2)
+  /// Подоходный налог (ИПН), % от дохода за вычетом ОПВ и ВОСМС — удерживается.
+  ipnPct        Decimal @default(10) @db.Decimal(5, 2)
+  /// Социальные отчисления (СО), % — платит парк сверху, из выплаты не удерживаются.
+  soPct         Decimal @default(5) @db.Decimal(5, 2)
+
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+/// Где выплата водителю.
+enum DriverPayoutStatus {
+  REQUESTED // Водитель запросил — ждёт парка
+  EXPORTED // Выгружена в 1С — бухгалтер платит
+  PAID // Выплачено — бухгалтер отметил
+  REJECTED // Парк отклонил с причиной — рейсы снова доступны к выплате
+}
+
+/// Выплата водителю парка за довезённые рейсы.
+///
+/// Система считает удержания и выгружает реестр для 1С; платит бухгалтер из
+/// 1С и отмечает здесь «выплачено». С банками и госорганами система не
+/// связывается — так решил владелец.
+model DriverPayout {
+  id            String             @id @default(cuid())
+  parkCompanyId String
+  park          Company            @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
+  driverId      String
+  driver        ExchangeDriver     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  status        DriverPayoutStatus @default(REQUESTED)
+
+  /// Суммы по всем рейсам выплаты, ₸.
+  gross      Decimal @db.Decimal(18, 2)
+  commission Decimal @db.Decimal(18, 2)
+  opv        Decimal @db.Decimal(18, 2)
+  vosms      Decimal @db.Decimal(18, 2)
+  ipn        Decimal @db.Decimal(18, 2)
+  net        Decimal @db.Decimal(18, 2)
+  /// СО — платит парк сверху, для сведения бухгалтеру.
+  so         Decimal @db.Decimal(18, 2)
+
+  /// Счёт, на который просили, — на момент запроса.
+  iban String?
+  bank String?
+
+  requestedAt  DateTime  @default(now())
+  exportedAt   DateTime?
+  paidAt       DateTime?
+  decidedById  String?
+  rejectReason String?
+
+  items DriverPayoutItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parkCompanyId, status])
+  @@index([driverId])
+}
+
+/// Строка выплаты — один рейс со своими удержаниями и ставками.
+model DriverPayoutItem {
+  id       String       @id @default(cuid())
+  payoutId String
+  payout   DriverPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  /// Рейс оплачивается один раз: строка на рейс единственная.
+  orderId  String       @unique
+  order    Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  gross      Decimal @db.Decimal(18, 2)
+  commission Decimal @db.Decimal(18, 2)
+  opv        Decimal @db.Decimal(18, 2)
+  vosms      Decimal @db.Decimal(18, 2)
+  ipn        Decimal @db.Decimal(18, 2)
+  net        Decimal @db.Decimal(18, 2)
+  so         Decimal @db.Decimal(18, 2)
+
+  /// Ставки, по которым посчитано, — на момент запроса.
+  commissionPct Decimal @db.Decimal(5, 2)
+  opvPct        Decimal @db.Decimal(5, 2)
+  vosmsPct      Decimal @db.Decimal(5, 2)
+  ipnPct        Decimal @db.Decimal(5, 2)
+  soPct         Decimal @db.Decimal(5, 2)
+
+  @@index([payoutId])
 }

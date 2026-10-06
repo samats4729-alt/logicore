@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ExchangeDriverDocumentKind, ExchangeDriverKind, ExchangeDriverStatus } from '@prisma/client';
 import {
-    IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min,
+    IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min,
 } from 'class-validator';
 
 /** Вход водителя через Google: токен от Google и устройство (одна сессия на человека). */
@@ -85,6 +85,46 @@ export class ParkCodeDto {
     @IsNotEmpty({ message: 'Впишите код парка' })
     @MaxLength(12)
     code: string;
+}
+
+/** Счёт водителя для выплат через парк. */
+export class PayoutAccountDto {
+    @ApiProperty({ description: 'IBAN, KZ… — 20 знаков' })
+    @IsString()
+    @IsNotEmpty({ message: 'Впишите IBAN' })
+    @MaxLength(40)
+    iban: string;
+
+    @ApiProperty({ required: false })
+    @IsString()
+    @IsOptional()
+    @MaxLength(100)
+    bank?: string;
+}
+
+/** Ставки удержаний парка, %. */
+export class PayoutRatesDto {
+    @ApiProperty() @IsNumber({}, { message: 'Комиссия — числом' }) @Min(0) @Max(100) commissionPct: number;
+    @ApiProperty() @IsNumber({}, { message: 'ОПВ — числом' }) @Min(0) @Max(100) opvPct: number;
+    @ApiProperty() @IsNumber({}, { message: 'ВОСМС — числом' }) @Min(0) @Max(100) vosmsPct: number;
+    @ApiProperty() @IsNumber({}, { message: 'ИПН — числом' }) @Min(0) @Max(100) ipnPct: number;
+    @ApiProperty() @IsNumber({}, { message: 'СО — числом' }) @Min(0) @Max(100) soPct: number;
+}
+
+export class ExportPayoutsDto {
+    @ApiProperty({ type: [String] })
+    @IsArray()
+    @IsString({ each: true })
+    ids: string[];
+}
+
+export const PAYOUT_FILTERS = ['REQUESTED', 'EXPORTED', 'PAID', 'REJECTED', 'all'] as const;
+
+export class ParkPayoutsQueryDto {
+    @ApiProperty({ required: false, enum: PAYOUT_FILTERS })
+    @IsIn(PAYOUT_FILTERS as unknown as string[])
+    @IsOptional()
+    status?: typeof PAYOUT_FILTERS[number];
 }
 
 export const PARK_TRIP_FILTERS = ['active', 'done', 'all'] as const;

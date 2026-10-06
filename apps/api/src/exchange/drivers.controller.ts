@@ -19,12 +19,13 @@ import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard'
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeOffersService } from './exchange-offers.service';
 import { ExchangeParkService } from './park.service';
+import { ExchangePayoutsService } from './payouts.service';
 import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import {
     AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverReasonDto, ParkDriversQueryDto,
-    ParkCodeDto, ParkTripsQueryDto, SetParkDto, UpdateDriverProfileDto,
+    ExportPayoutsDto, ParkCodeDto, ParkPayoutsQueryDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -68,6 +69,7 @@ export class ExchangeDriverController {
         private readonly drivers: ExchangeDriversService,
         private readonly loads: ExchangeDriverLoadsService,
         private readonly offers: ExchangeOffersService,
+        private readonly payouts: ExchangePayoutsService,
         private readonly s3: S3Service,
     ) {}
 
@@ -128,6 +130,25 @@ export class ExchangeDriverController {
     @ApiOperation({ summary: 'Вступить в парк по коду приглашения' })
     joinPark(@Request() req: any, @Body() dto: ParkCodeDto) {
         return this.drivers.joinParkByCode(req.user.sub, dto.code);
+    }
+
+    @Get('earnings')
+    @ApiOperation({ summary: 'Заработок: к выплате, удержания, история выплат' })
+    earnings(@Request() req: any) {
+        return this.payouts.earnings(req.user.sub);
+    }
+
+    @Put('me/payout-account')
+    @ApiOperation({ summary: 'Счёт для выплат (IBAN)' })
+    setPayoutAccount(@Request() req: any, @Body() dto: PayoutAccountDto) {
+        return this.payouts.setAccount(req.user.sub, dto);
+    }
+
+    @Post('payouts/request')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Запросить выплату за довезённые рейсы' })
+    requestPayout(@Request() req: any) {
+        return this.payouts.request(req.user.sub);
     }
 
     @Post('me/reopen')
@@ -227,6 +248,7 @@ export class ExchangeParkController {
     constructor(
         private readonly drivers: ExchangeDriversService,
         private readonly park: ExchangeParkService,
+        private readonly payouts: ExchangePayoutsService,
         private readonly s3: S3Service,
         private readonly audit: AuditService,
     ) {}
@@ -241,6 +263,71 @@ export class ExchangeParkController {
     @ApiOperation({ summary: 'Рейсы водителей парка' })
     trips(@Request() req: any, @Query() query: ParkTripsQueryDto) {
         return this.park.trips(req.user.companyId, query.status);
+    }
+
+    @Get('payouts')
+    @ApiOperation({ summary: 'Выплаты водителям парка' })
+    payoutsList(@Request() req: any, @Query() query: ParkPayoutsQueryDto) {
+        return this.payouts.parkPayouts(req.user.companyId, query.status);
+    }
+
+    @Get('payouts/:id')
+    @ApiOperation({ summary: 'Выплата по рейсам' })
+    payout(@Request() req: any, @Param('id') id: string) {
+        return this.payouts.parkPayout(req.user.companyId, id);
+    }
+
+    @Post('payouts/export')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Реестр выплат для 1С (Excel); выгруженные — «в 1С»' })
+    async exportPayouts(@Request() req: any, @Body() dto: ExportPayoutsDto, @Res() res: Response) {
+        const { buffer, count } = await this.payouts.exportFor1C(req.user.companyId, dto.ids);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'STATUS', entity: 'driver_payout',
+            entityLabel: `Реестр выплат водителям для 1С: ${count}`,
+        });
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': `attachment; filename="payouts_${new Date().toISOString().slice(0, 10)}.xlsx"`,
+            'Content-Length': String(buffer.length),
+            'Cache-Control': 'private, no-store',
+        });
+        res.end(buffer);
+    }
+
+    @Post('payouts/:id/paid')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Отметить выплату проведённой' })
+    async markPaid(@Request() req: any, @Param('id') id: string) {
+        const result = await this.payouts.markPaid(req.user.companyId, id, req.user.sub);
+        await this.audit.log({ companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'driver_payout', entityId: id, entityLabel: 'Выплата водителю отмечена выплаченной' });
+        return result;
+    }
+
+    @Post('payouts/:id/reject')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Отклонить выплату с причиной' })
+    async rejectPayout(@Request() req: any, @Param('id') id: string, @Body() dto: DriverReasonDto) {
+        const result = await this.payouts.reject(req.user.companyId, id, req.user.sub, dto.reason);
+        await this.audit.log({ companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'driver_payout', entityId: id, entityLabel: `Выплата водителю отклонена: ${dto.reason}` });
+        return result;
+    }
+
+    @Get('rates')
+    @ApiOperation({ summary: 'Ставки удержаний парка' })
+    rates(@Request() req: any) {
+        return this.payouts.parkRates(req.user.companyId);
+    }
+
+    @Put('rates')
+    @ApiOperation({ summary: 'Изменить ставки удержаний' })
+    async setRates(@Request() req: any, @Body() dto: PayoutRatesDto) {
+        const result = await this.payouts.setRates(req.user.companyId, req.user.sub, dto);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
+            entityLabel: `Ставки выплат: комиссия ${dto.commissionPct}%, ОПВ ${dto.opvPct}%, ВОСМС ${dto.vosmsPct}%, ИПН ${dto.ipnPct}%, СО ${dto.soPct}%`,
+        });
+        return result;
     }
 
     @Post('invite/regenerate')
