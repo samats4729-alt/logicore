@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { DriverProfile, ExchangeOrder, exchangeApi, груз, деньги, когда, ответ } from '@/lib/exchange';
+import { DriverProfile, ExchangeOrder, OfferInput, exchangeApi, груз, деньги, когда, ответ } from '@/lib/exchange';
 import { BRAND } from '@/lib/theme';
 import { Button, Card, Empty, Row } from '@/components/kit';
+import { OfferSheet } from '@/components/OfferSheet';
 
 const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
     PICKUP: 'Погрузка',
@@ -18,7 +19,8 @@ const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
  *
  * Всё, чтобы решить «повезу или нет»: маршрут по точкам с датами, груз,
  * цена и что ещё важно компании. Точные адреса компания откроет тому, кого
- * выберет. Откликнуться с ценой — следующим обновлением.
+ * выберет. Внизу — отклик: «согласен за цену компании» одной кнопкой или
+ * своя цена. Решает компания; пока не решила, отклик можно отозвать.
  */
 export default function OrderScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,6 +29,8 @@ export default function OrderScreen() {
     const [order, setOrder] = useState<ExchangeOrder | null>(null);
     const [me, setMe] = useState<DriverProfile | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [sheet, setSheet] = useState(false);
+    const [busy, setBusy] = useState(false);
 
     const fetch = useCallback(async () => {
         try {
@@ -40,6 +44,49 @@ export default function OrderScreen() {
     }, [id]);
     useEffect(() => { fetch(); }, [fetch]);
 
+    const send = async (input: OfferInput) => {
+        if (!order) return;
+        setBusy(true);
+        try {
+            const myOffer = await exchangeApi.offer(order.id, input);
+            setOrder({ ...order, myOffer });
+            setSheet(false);
+            Alert.alert('Отклик отправлен', 'Компания увидит его вместе с другими и выберет исполнителя. Если выберут вас — рейс появится во вкладке «Мой рейс».');
+        } catch (e) {
+            Alert.alert('Не получилось', ответ(e, 'Попробуйте ещё раз'));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const agree = () => {
+        if (!order || order.price == null) return;
+        Alert.alert(
+            `Согласны за ${деньги(order.price)}?`,
+            'Компания увидит ваш отклик и решит, кто повезёт. Пока не решила — отклик можно отозвать.',
+            [{ text: 'Отмена', style: 'cancel' }, { text: 'Откликнуться', onPress: () => send({ agree: true }) }],
+        );
+    };
+
+    const withdraw = () => {
+        if (!order) return;
+        Alert.alert('Отозвать отклик?', 'Компания больше не увидит его среди откликов.', [
+            { text: 'Отмена', style: 'cancel' },
+            {
+                text: 'Отозвать',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await exchangeApi.withdraw(order.id);
+                        setOrder({ ...order, myOffer: order.myOffer ? { ...order.myOffer, status: 'WITHDRAWN' } : null });
+                    } catch (e) {
+                        Alert.alert('Не получилось', ответ(e, 'Попробуйте ещё раз'));
+                    }
+                },
+            },
+        ]);
+    };
+
     if (error) {
         return <Empty icon="alert-circle-outline" title="Заявка недоступна" text={error} action={<Button title="Назад к грузам" onPress={() => router.back()} />} />;
     }
@@ -47,6 +94,7 @@ export default function OrderScreen() {
         return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator size="large" color={BRAND.primary} /></View>;
     }
 
+    const mine = order.myOffer;
     const temp = order.tempMin != null || order.tempMax != null ? `${order.tempMin ?? '…'}…${order.tempMax ?? '…'} °C` : null;
 
     return (
@@ -105,12 +153,44 @@ export default function OrderScreen() {
             </ScrollView>
 
             <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-                <Text style={[styles.footerNote, { color: colors.textSecondary }]}>
-                    Откликнуться — согласиться на цену или предложить свою — можно будет в следующем обновлении приложения.
-                    Компания сама выберет, кто повезёт.
-                </Text>
-                <Button title="Назад к грузам" variant="secondary" onPress={() => router.back()} />
+                {mine && mine.status === 'ACTIVE' ? (
+                    <>
+                        <Text style={[styles.footerStatus, { color: colors.text }]}>
+                            Вы откликнулись: {деньги(mine.price)}{mine.agreed ? ' — по цене компании' : ''}
+                        </Text>
+                        <Text style={[styles.footerNote, { color: colors.textSecondary }]}>
+                            Ждём решения компании. Если выберут вас — рейс появится во вкладке «Мой рейс».
+                        </Text>
+                        <View style={styles.footerRow}>
+                            <Button title="Отозвать" variant="danger" onPress={withdraw} style={{ flex: 1 }} />
+                            <Button title="Изменить цену" variant="secondary" onPress={() => setSheet(true)} style={{ flex: 1.4 }} />
+                        </View>
+                    </>
+                ) : mine && mine.status === 'ACCEPTED' ? (
+                    <>
+                        <Text style={[styles.footerStatus, { color: colors.text }]}>Вас выбрали исполнителем</Text>
+                        <Button title="Открыть мой рейс" icon="navigate" onPress={() => router.replace('/exchange/(tabs)/trip')} />
+                    </>
+                ) : mine && mine.status === 'REJECTED' ? (
+                    <Text style={[styles.footerNote, { color: colors.textSecondary }]}>
+                        Компания выбрала другого исполнителя или сняла заявку с биржи.
+                    </Text>
+                ) : (
+                    <>
+                        {order.price != null && (
+                            <Button title={`Согласен за ${деньги(order.price)}`} icon="checkmark" loading={busy} onPress={agree} />
+                        )}
+                        <Button
+                            title={order.price != null ? 'Предложить свою цену' : 'Предложить цену'}
+                            variant={order.price != null ? 'secondary' : 'primary'}
+                            onPress={() => setSheet(true)}
+                            style={{ marginTop: order.price != null ? 8 : 0 }}
+                        />
+                    </>
+                )}
             </View>
+
+            <OfferSheet visible={sheet} mine={mine} busy={busy} onSubmit={send} onClose={() => setSheet(false)} />
         </View>
     );
 }
@@ -128,4 +208,6 @@ const styles = StyleSheet.create({
     price: { fontSize: 30, fontWeight: '800', letterSpacing: -0.8, marginTop: 2 },
     footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
     footerNote: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
+    footerStatus: { fontSize: 15, fontWeight: '800', marginBottom: 4 },
+    footerRow: { flexDirection: 'row', gap: 10 },
 });

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
     View,
     Text,
@@ -20,15 +21,21 @@ import { api } from '@/lib/api';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { statusMeta, BRAND, RADIUS } from '@/lib/theme';
 
-export default function TripScreen() {
+/**
+ * Текущий рейс водителя: маршрут с адресами, следующий шаг, проблема, фото
+ * документов, геолокация. Общий для водителя компании и водителя биржи —
+ * у второго рейс появляется, когда компания выбрала его исполнителем.
+ */
+export default function CurrentTrip({ emptyText = 'Как только диспетчер назначит вам рейс, он появится здесь. Потяните вниз, чтобы обновить.' }: { emptyText?: string }) {
     const { currentOrder, fetchCurrentOrder, updateOrderStatus, reportProblem } = useStore();
     const { colors, isDark } = useAppTheme();
     const [refreshing, setRefreshing] = useState(false);
     const [uploading, setUploading] = useState(false);
 
-    useEffect(() => {
+    // При каждом возврате на экран: рейс могли назначить, пока водитель был в ленте.
+    useFocusEffect(useCallback(() => {
         fetchCurrentOrder();
-    }, []);
+    }, []));
 
     // Автозапуск GPS при наличии активного рейса
     useEffect(() => {
@@ -178,7 +185,7 @@ export default function TripScreen() {
                 </View>
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>Нет активных рейсов</Text>
                 <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                    Как только диспетчер назначит вам рейс, он появится здесь. Потяните вниз, чтобы обновить.
+                    {emptyText}
                 </Text>
             </ScrollView>
         );

@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { ExchangeOrder, груз, деньги, когдаПросто, черезТочки } from '@/lib/exchange';
-import { Card, Route } from '@/components/kit';
+import { Badge, Card, Route } from '@/components/kit';
 
 /** Заявка в ленте: маршрут, когда, что везём, цена. Нажатие — карточка. */
 export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: () => void }) {
@@ -22,6 +22,8 @@ export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: ()
                 <Text style={[styles.cargo, { color: colors.textSecondary }]} numberOfLines={1}>
                     {[order.cargoDescription, груз(order)].filter(Boolean).join(' · ') || 'Груз не описан'}
                 </Text>
+                {order.myOfferStatus === 'ACTIVE' && <Badge label="Вы откликнулись" tone="blue" />}
+                {order.myOfferStatus === 'ACCEPTED' && <Badge label="Вас выбрали" tone="green" />}
             </View>
         </Card>
     );

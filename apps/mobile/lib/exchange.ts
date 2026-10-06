@@ -79,6 +79,38 @@ export interface ExchangeOrder {
     price: number | null;
     note: string | null;
     publishedAt: string | null;
+    /** Свой отклик: в ленте — только статус, в карточке — целиком. */
+    myOfferStatus?: OfferStatus | null;
+    myOffer?: OwnOffer | null;
+}
+
+export type OfferStatus = 'ACTIVE' | 'WITHDRAWN' | 'ACCEPTED' | 'REJECTED';
+
+/** Свой отклик на заявку. */
+export interface OwnOffer {
+    id: string;
+    status: OfferStatus;
+    price: number;
+    agreed: boolean;
+    readyDate: string | null;
+    comment: string | null;
+    updatedAt: string;
+}
+
+/** Свой отклик в списке «Мои отклики» — с маршрутом заявки. */
+export interface MyOffer extends OwnOffer {
+    orderId: string;
+    orderNumber: string;
+    from: string;
+    to: string;
+}
+
+/** Что отправляем в отклике. */
+export interface OfferInput {
+    agree?: boolean;
+    price?: number;
+    readyDate?: string;
+    comment?: string;
 }
 
 /**
@@ -183,6 +215,9 @@ export const exchangeApi = {
     feed: (bodyType?: string) =>
         api.get<ExchangeOrder[]>('/exchange/driver/loads', { params: bodyType ? { bodyType } : {} }).then((r) => r.data),
     order: (id: string) => api.get<ExchangeOrder>(`/exchange/driver/loads/${id}`).then((r) => r.data),
+    offer: (id: string, input: OfferInput) => api.post<OwnOffer>(`/exchange/driver/loads/${id}/offer`, input).then((r) => r.data),
+    withdraw: (id: string) => api.post(`/exchange/driver/loads/${id}/offer/withdraw`),
+    myOffers: () => api.get<MyOffer[]>('/exchange/driver/offers').then((r) => r.data),
 };
 
 /** Адрес фото груза — картинка грузится с пропуском (заголовок авторизации). */

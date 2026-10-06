@@ -2,9 +2,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { DriverProfile, ExchangeOrder, exchangeApi, грузов, ответ } from '@/lib/exchange';
+import { DriverProfile, ExchangeOrder, MyOffer, exchangeApi, грузов, ответ } from '@/lib/exchange';
 import { BRAND } from '@/lib/theme';
-import { Button, Chip, Empty } from '@/components/kit';
+import { Button, Card, Chip, Empty } from '@/components/kit';
 import { LoadCard } from '@/components/LoadCard';
 
 /**
@@ -22,13 +22,19 @@ export default function LoadsScreen() {
     const [loads, setLoads] = useState<ExchangeOrder[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [myOffers, setMyOffers] = useState<MyOffer[]>([]);
 
     const load = useCallback(async (mine = onlyMine) => {
         try {
             setError(null);
             const profile = me ?? await exchangeApi.me();
             setMe(profile);
-            setLoads(await exchangeApi.feed(mine && profile.vehicleBodyType ? profile.vehicleBodyType : undefined));
+            const [feed, offers] = await Promise.all([
+                exchangeApi.feed(mine && profile.vehicleBodyType ? profile.vehicleBodyType : undefined),
+                exchangeApi.myOffers().catch(() => [] as MyOffer[]),
+            ]);
+            setLoads(feed);
+            setMyOffers(offers);
         } catch (e) {
             setError(ответ(e, 'Не удалось загрузить заявки — проверьте интернет'));
         }
@@ -72,11 +78,16 @@ export default function LoadsScreen() {
                     keyExtractor={(l: ExchangeOrder) => l.id}
                     contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 120, flexGrow: 1 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                    ListHeaderComponent={shown.length > 0 ? (
-                        <Text style={[styles.count, { color: colors.textTertiary }]}>
-                            {грузов(shown.length)}{from ? ` из ${from}` : ''} · ближайшие сверху
-                        </Text>
-                    ) : null}
+                    ListHeaderComponent={
+                        <>
+                            <OffersStrip offers={myOffers} />
+                            {shown.length > 0 && (
+                                <Text style={[styles.count, { color: colors.textTertiary }]}>
+                                    {грузов(shown.length)}{from ? ` из ${from}` : ''} · ближайшие сверху
+                                </Text>
+                            )}
+                        </>
+                    }
                     renderItem={({ item }: { item: ExchangeOrder }) => (
                         <LoadCard order={item} onPress={() => router.push(`/exchange/load/${item.id}`)} />
                     )}
@@ -92,6 +103,38 @@ export default function LoadsScreen() {
                     }
                 />
             )}
+        </View>
+    );
+}
+
+/**
+ * Мои отклики — над лентой. Главное: выбрали — сразу к рейсу. Иначе —
+ * сколько откликов ждут решения и кого обошли за последние дни, чтобы
+ * водитель не гадал, куда делась заявка из ленты.
+ */
+function OffersStrip({ offers }: { offers: MyOffer[] }) {
+    const { colors } = useAppTheme();
+    const recent = (o: MyOffer) => Date.now() - new Date(o.updatedAt).getTime() < 3 * 86_400_000;
+    const accepted = offers.find((o) => o.status === 'ACCEPTED' && recent(o));
+    const waiting = offers.filter((o) => o.status === 'ACTIVE').length;
+    const rejected = offers.filter((o) => o.status === 'REJECTED' && recent(o));
+    if (!accepted && !waiting && !rejected.length) return null;
+    return (
+        <View style={{ marginBottom: 10 }}>
+            {accepted && (
+                <Card onPress={() => router.push('/exchange/(tabs)/trip')} style={{ backgroundColor: '#e7f8ef', borderColor: '#bbf7d0' }}>
+                    <Text style={{ color: '#14532d', fontWeight: '800', fontSize: 15 }}>Вас выбрали: {accepted.from} → {accepted.to}</Text>
+                    <Text style={{ color: '#166534', fontSize: 13, marginTop: 2 }}>Заявка {accepted.orderNumber}. Откройте «Мой рейс» — там адреса и шаги.</Text>
+                </Card>
+            )}
+            {waiting > 0 && (
+                <Text style={[styles.count, { color: colors.textSecondary, marginBottom: 4 }]}>Ваших откликов ждут решения: {waiting}</Text>
+            )}
+            {rejected.map((o) => (
+                <Text key={o.id} style={[styles.count, { color: colors.textTertiary, marginBottom: 4 }]}>
+                    Выбрали другого: {o.from} → {o.to}
+                </Text>
+            ))}
         </View>
     );
 }
