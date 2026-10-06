@@ -64,3 +64,35 @@ describe('OrdersService.takeOrder', () => {
         expect(tx.orderStatusHistory.create).not.toHaveBeenCalled();
     });
 });
+
+describe('OrdersService.findDriverOrders', () => {
+    it('водитель видит название заказчика, а цену заказчика — нет', async () => {
+        const prisma = {
+            order: {
+                findMany: jest.fn().mockResolvedValue([{
+                    id: 'order-1',
+                    customerPrice: 500000,
+                    driverCost: 380000,
+                    customerCompany: { id: 'company-1', name: 'ТОО «Ромашка»' },
+                    routePoints: [],
+                }]),
+            },
+        };
+        const service = new OrdersService(
+            prisma as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        const [order] = await service.findDriverOrders('driver-1');
+
+        expect(prisma.order.findMany.mock.calls[0][0].include.customerCompany).toEqual({ select: { id: true, name: true } });
+        expect((order as any).customerCompany).toEqual({ id: 'company-1', name: 'ТОО «Ромашка»' });
+        expect((order as any).customerPrice).toBeNull();
+    });
+});

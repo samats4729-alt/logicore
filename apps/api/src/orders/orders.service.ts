@@ -1699,6 +1699,9 @@ export class OrdersService {
             },
             include: {
                 routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                // Чей груз везёт — водитель видит, кто заказчик (имя, не реквизиты
+                // и не цену: цену заказчика убирает maskForDriver ниже).
+                customerCompany: { select: { id: true, name: true } },
             },
             orderBy: { createdAt: 'desc' },
             take: includeHistory ? 50 : undefined,
