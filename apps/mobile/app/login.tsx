@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
     Alert,
     ScrollView,
+    Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -97,9 +98,7 @@ export default function LoginScreen() {
                 {/* Бренд-шапка в редакционном стиле лендинга logicore.kz */}
                 <View style={styles.hero}>
                     <View style={styles.brandRow}>
-                        <View style={styles.brandMark}>
-                            <Ionicons name="navigate" size={15} color="#030712" />
-                        </View>
+                        <Image source={require('../assets/logo-mark-white.png')} style={styles.brandMark} resizeMode="contain" accessibilityLabel="Знак LogiCore" />
                         <Text style={styles.brand}>LogiCore</Text>
                     </View>
                     <Text style={styles.eyebrow}>(01 — Приложение водителя)</Text>
@@ -244,12 +243,8 @@ const styles = StyleSheet.create({
         marginBottom: 40,
     },
     brandMark: {
-        width: 30,
+        width: 32,
         height: 30,
-        borderRadius: 9,
-        backgroundColor: '#ffffff',
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     brand: {
         fontFamily: FONT.display,
