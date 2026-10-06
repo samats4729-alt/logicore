@@ -209,6 +209,10 @@ export default function CurrentTrip({
     const fromPoint = pickups[0]?.location;
     const toPoint = deliveries[deliveries.length - 1]?.location;
     const filledSteps = Math.max(1, Math.round((meta.progress / 100) * STEPS));
+    // Куда ехать сейчас: до погрузки, пока груз не взят, потом — до выгрузки.
+    const loaded = ['IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(currentOrder.status);
+    const target = loaded ? deliveries[0] : pickups[0];
+    const targetHasPoint = typeof target?.location.latitude === 'number' && typeof target?.location.longitude === 'number';
     const onFeature = colors.featureFg;
 
     // Ползунок шага висит над панелью вкладок — под ним оставляем место, чтобы
@@ -270,6 +274,39 @@ export default function CurrentTrip({
                             )}
                         </View>
                     </View>
+
+                    {/* Главное действие водителя в пути — навигатор до нужной точки.
+                        Раньше кнопка была только в списке точек ниже, под ползунком. */}
+                    {!!target && (targetHasPoint || !!target.location.contactPhone) && (
+                        <View style={styles.heroActions}>
+                            {targetHasPoint && (
+                                <Pressable
+                                    accessibilityRole="button"
+                                    onPress={() => showNavigationOptions(
+                                        target.location.latitude,
+                                        target.location.longitude,
+                                        target.location.address,
+                                    )}
+                                    style={({ pressed }: { pressed: boolean }) => [styles.heroNav, { backgroundColor: onFeature, opacity: pressed ? 0.85 : 1 }]}
+                                >
+                                    <Ionicons name="navigate" size={17} color={colors.feature} />
+                                    <Text style={[styles.heroNavText, { color: colors.feature }]}>
+                                        {loaded ? 'Навигатор до выгрузки' : 'Навигатор до погрузки'}
+                                    </Text>
+                                </Pressable>
+                            )}
+                            {!!target.location.contactPhone && (
+                                <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Позвонить: ${target.location.contactName || target.location.name}`}
+                                    onPress={() => Linking.openURL(`tel:${target.location.contactPhone}`)}
+                                    style={({ pressed }: { pressed: boolean }) => [styles.heroCall, { borderColor: 'rgba(255,255,255,0.2)', opacity: pressed ? 0.7 : 1 }]}
+                                >
+                                    <Ionicons name="call" size={17} color={onFeature} />
+                                </Pressable>
+                            )}
+                        </View>
+                    )}
 
                     <View style={styles.steps}>
                         {Array.from({ length: STEPS }).map((_, i) => (
@@ -437,7 +474,19 @@ const styles = StyleSheet.create({
     heroRailLine: { width: 1.5, flex: 1, marginTop: 6, marginBottom: -6, opacity: 0.3 },
     heroPlace: { fontFamily: FONT.display, fontSize: 21, letterSpacing: -0.8, lineHeight: 27 },
     heroAddress: { fontFamily: FONT.regular, fontSize: 13, marginTop: 3, opacity: 0.6 },
-    steps: { flexDirection: 'row', gap: 4, marginTop: 24 },
+    heroActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+    heroNav: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        height: 48,
+        borderRadius: 24,
+    },
+    heroNavText: { fontFamily: FONT.semibold, fontSize: 15, letterSpacing: -0.2 },
+    heroCall: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    steps: { flexDirection: 'row', gap: 4, marginTop: 22 },
     step: { flex: 1, height: 4, borderRadius: 2 },
     heroFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
     heroFootText: { fontFamily: FONT.medium, fontSize: 12.5, opacity: 0.65 },
