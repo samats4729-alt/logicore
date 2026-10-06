@@ -7,7 +7,7 @@ import { Image } from 'react-native';
 import * as Location from 'expo-location';
 import { useStore } from '@/store';
 import { featureCollection, point, lineString } from '@turf/helpers';
-import { statusMeta } from '@/lib/theme';
+import { statusMeta, FONT } from '@/lib/theme';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
 Mapbox.setAccessToken(MAPBOX_TOKEN);
@@ -276,11 +276,11 @@ export default function DriverMap() {
             {/* Controls */}
             <View style={styles.controls}>
                 <TouchableOpacity style={styles.controlButton} onPress={centerOnMyLocation}>
-                    <Ionicons name="locate" size={24} color="#1677ff" />
+                    <Ionicons name="locate-outline" size={22} color="#0b0d12" />
                 </TouchableOpacity>
                 {currentOrder && (
                     <TouchableOpacity style={styles.controlButton} onPress={fitToRoute}>
-                        <Ionicons name="expand" size={24} color="#1677ff" />
+                        <Ionicons name="expand-outline" size={22} color="#0b0d12" />
                     </TouchableOpacity>
                 )}
             </View>
@@ -323,12 +323,14 @@ const styles = StyleSheet.create({
         height: 48,
         backgroundColor: '#fff',
         borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#e6e8ec',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
+        shadowColor: '#101828',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 14,
         elevation: 4,
     },
     infoCard: {
@@ -337,13 +339,15 @@ const styles = StyleSheet.create({
         left: 16,
         right: 16,
         backgroundColor: '#fff',
-        borderRadius: 20,
+        borderRadius: 22,
+        borderWidth: 1,
+        borderColor: '#e6e8ec',
         padding: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowColor: '#101828',
+        shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.14,
-        shadowRadius: 12,
-        elevation: 5,
+        shadowRadius: 24,
+        elevation: 6,
     },
     infoTop: {
         flexDirection: 'row',
@@ -351,10 +355,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     infoTitle: {
-        fontSize: 16,
-        fontWeight: '800',
+        fontFamily: FONT.display,
+        fontSize: 15,
         color: '#0b0d12',
-        letterSpacing: -0.3,
+        letterSpacing: -0.5,
     },
     infoPill: {
         paddingHorizontal: 10,
@@ -362,14 +366,14 @@ const styles = StyleSheet.create({
         borderRadius: 999,
     },
     infoPillText: {
-        fontSize: 11.5,
-        fontWeight: '700',
+        fontFamily: FONT.semibold,
+        fontSize: 12,
     },
     infoText: {
-        fontSize: 13.5,
-        color: '#5f6672',
-        marginTop: 6,
-        fontWeight: '500',
+        fontFamily: FONT.medium,
+        fontSize: 14,
+        color: '#4c5460',
+        marginTop: 8,
     },
     markerWrap: {
         alignItems: 'center',
@@ -390,8 +394,8 @@ const styles = StyleSheet.create({
     },
     markerText: {
         color: '#ffffff',
-        fontSize: 13,
-        fontWeight: '800',
+        fontSize: 12.5,
+        fontFamily: FONT.bold,
     },
     markerTip: {
         width: 0,
