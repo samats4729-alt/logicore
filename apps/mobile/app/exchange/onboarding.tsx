@@ -8,8 +8,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { API_URL, getAuthHeader, getDeviceId } from '@/lib/api';
-import { DOCUMENTS, DocumentKind, DriverProfile, Park, documentPath, exchangeApi, вКавычках, иинВерный, телефонВерный, телефонКрасиво, ответ } from '@/lib/exchange';
+import { DOCUMENTS, DocumentKind, DriverProfile, Park, documentPath, exchangeApi, PARK_INVITE_KEY, вКавычках, иинВерный, телефонВерный, телефонКрасиво, ответ } from '@/lib/exchange';
 import { useStore } from '@/store';
+import * as SecureStore from '@/lib/secure';
 import { BRAND, RADIUS, selectedColors } from '@/lib/theme';
 import { Button, Card, Choice, Field, Title } from '@/components/kit';
 import { BodyTypePicker } from '@/components/BodyTypePicker';
@@ -62,9 +63,41 @@ export default function Onboarding() {
         setErrors((e) => (e[k] ? { ...e, [k]: undefined } : e));
     };
     const logout = useStore((s) => s.logout);
+    /** Вступил в парк по приглашению — название, чтобы сказать об этом. */
+    const [joinedBy, setJoinedBy] = useState<string | null>(null);
+    const [code, setCode] = useState('');
+    const [codeBusy, setCodeBusy] = useState(false);
+
+    /** Код парка вручную — если ссылку не открыли, а код продиктовали. */
+    const joinByCode = async () => {
+        if (code.trim().length < 4) { setStepError('Впишите код парка — шесть знаков'); return; }
+        setCodeBusy(true);
+        setStepError(null);
+        try {
+            const updated = await exchangeApi.joinPark(code);
+            setDriver(updated);
+            setJoinedBy(updated.park?.name ?? null);
+            setCode('');
+        } catch (e) {
+            setStepError(ответ(e, 'Код не подошёл — проверьте его'));
+        } finally {
+            setCodeBusy(false);
+        }
+    };
 
     useEffect(() => {
-        exchangeApi.me().then((d) => {
+        exchangeApi.me().then(async (d) => {
+            // Пришёл по ссылке-приглашению парка — вступаем в этот парк сразу.
+            const invite = await SecureStore.getItemAsync(PARK_INVITE_KEY);
+            if (invite && (d.status === 'DRAFT' || d.status === 'REJECTED')) {
+                try {
+                    d = await exchangeApi.joinPark(invite);
+                    setJoinedBy(d.park?.name ?? null);
+                } catch {
+                    // Код устарел — водитель выберет парк из списка.
+                }
+            }
+            if (invite) await SecureStore.deleteItemAsync(PARK_INVITE_KEY);
             setDriver(d);
             setForm({
                 lastName: d.lastName ?? '', firstName: d.firstName ?? '', middleName: d.middleName ?? '',
@@ -302,6 +335,31 @@ export default function Onboarding() {
                     </>
                 )}
 
+                {step === 'park' && !!joinedBy && (
+                    <Card style={{ backgroundColor: '#e7f8ef', borderColor: '#bbf7d0' }}>
+                        <Text style={{ color: '#14532d', fontWeight: '700' }}>Вы в парке {вКавычках(joinedBy)} по приглашению</Text>
+                        <Text style={{ color: '#166534', fontSize: 13, marginTop: 2 }}>Можно идти дальше — к фото документов.</Text>
+                    </Card>
+                )}
+                {step === 'park' && (
+                    <Card>
+                        <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 6 }}>Есть код от парка?</Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <View style={{ flex: 1 }}>
+                                <Field
+                                    label="Код парка"
+                                    placeholder="Например: K7M2QX"
+                                    value={code}
+                                    onChangeText={(v: string) => setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))}
+                                    autoCapitalize="characters"
+                                    style={{ marginBottom: 0 }}
+                                />
+                            </View>
+                            <Button title="Вступить" loading={codeBusy} onPress={joinByCode} style={{ alignSelf: 'flex-end', paddingHorizontal: 14 }} />
+                        </View>
+                        <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 8 }}>Или выберите парк из списка ниже.</Text>
+                    </Card>
+                )}
                 {step === 'park' && (
                     parks.length === 0
                         ? <Card><Text style={{ color: colors.textSecondary }}>Парков на бирже пока нет. Загляните позже.</Text></Card>

@@ -41,6 +41,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
                 <Stack.Screen name="exchange" options={{ headerShown: false }} />
+                <Stack.Screen name="park-invite/[code]" options={{ headerShown: false }} />
             </Stack>
         </>
     );

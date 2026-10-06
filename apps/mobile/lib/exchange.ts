@@ -189,6 +189,9 @@ export function ответ(error: any, fallback: string): string {
     return fallback;
 }
 
+/** Где приложение помнит код приглашения парка до заполнения анкеты. */
+export const PARK_INVITE_KEY = 'parkInviteCode';
+
 export const exchangeApi = {
     /** Включена ли биржа — до входа. Старый сервер без биржи ответит 404 → «нет». */
     publicStatus: () => api.get('/exchange/public-status').then((r) => !!r.data?.enabled).catch(() => false),
@@ -210,6 +213,8 @@ export const exchangeApi = {
     submit: () => api.post<DriverProfile>('/exchange/driver/me/submit').then((r) => r.data),
     /** Вернуть принятую анкету на правку — после отправки её снова проверят. */
     reopen: () => api.post<DriverProfile>('/exchange/driver/me/reopen').then((r) => r.data),
+    /** Вступить в парк по коду из приглашения. */
+    joinPark: (code: string) => api.post<DriverProfile>('/exchange/driver/me/park-code', { code }).then((r) => r.data),
     deleteAccount: () => api.post('/exchange/driver/me/delete'),
 
     feed: (bodyType?: string) =>
