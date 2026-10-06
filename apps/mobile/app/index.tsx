@@ -1,6 +1,7 @@
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { isExchangeDriver, useStore } from '@/store';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 /**
  * Куда вести после запуска.
@@ -11,11 +12,12 @@ import { isExchangeDriver, useStore } from '@/store';
  */
 export default function IndexScreen() {
     const { isAuthenticated, isLoading, user } = useStore();
+    const { colors } = useAppTheme();
 
     if (isLoading) {
         return (
-            <View style={styles.container}>
-                <ActivityIndicator size="large" color="#1677ff" />
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.text} />
             </View>
         );
     }
@@ -30,6 +32,5 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f5f5f5',
     },
 });

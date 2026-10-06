@@ -2,7 +2,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { Redirect, Stack } from 'expo-router';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
-import { BRAND } from '@/lib/theme';
+import { FONT } from '@/lib/theme';
 
 /** Биржа — раздел водителя, который пришёл сам, через Google. */
 export default function ExchangeLayout() {
@@ -15,7 +15,7 @@ export default function ExchangeLayout() {
     if (isLoading) {
         return (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-                <ActivityIndicator size="large" color={BRAND.primary} />
+                <ActivityIndicator size="large" color={colors.text} />
             </View>
         );
     }
@@ -24,9 +24,9 @@ export default function ExchangeLayout() {
     return (
         <Stack
             screenOptions={{
-                headerStyle: { backgroundColor: colors.card },
+                headerStyle: { backgroundColor: colors.background },
                 headerTintColor: colors.text,
-                headerTitleStyle: { fontWeight: '700' },
+                headerTitleStyle: { fontFamily: FONT.display, fontSize: 16 },
                 headerShadowVisible: false,
                 contentStyle: { backgroundColor: colors.background },
             }}
