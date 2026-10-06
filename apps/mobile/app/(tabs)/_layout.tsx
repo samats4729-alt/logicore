@@ -22,11 +22,13 @@ export default function TabsLayout() {
                     tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="map" focused={focused} />,
                 }}
             />
+            {/* «История», а не «Рейсы»: рядом с вкладкой «Рейс» водитель путал,
+                где текущий рейс, а где прошлые. */}
             <Tabs.Screen
                 name="orders"
                 options={{
-                    title: 'Рейсы',
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="documents" focused={focused} />,
+                    title: 'История',
+                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="time" focused={focused} />,
                 }}
             />
             <Tabs.Screen

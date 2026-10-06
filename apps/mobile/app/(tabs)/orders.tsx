@@ -103,7 +103,7 @@ export default function OrdersScreen() {
             data={sections}
             keyExtractor={(item: Order) => item.id}
             renderItem={renderItem}
-            ListHeaderComponent={<ScreenHeader eyebrow="История" title="Мои рейсы" />}
+            ListHeaderComponent={<ScreenHeader eyebrow="Все рейсы" title="История" />}
             ListHeaderComponentStyle={{ marginHorizontal: -16 }}
             refreshControl={
                 <RefreshControl refreshing={refreshing || ordersLoading} onRefresh={handleRefresh} tintColor={colors.text} />
