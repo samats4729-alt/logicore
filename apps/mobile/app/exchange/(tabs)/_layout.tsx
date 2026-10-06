@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
+import { exchangeApi } from '@/lib/exchange';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +10,9 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 export default function ExchangeTabs() {
     const insets = useSafeAreaInsets();
     const { colors, isDark } = useAppTheme();
+    /* «Заработок» — только у водителя парка: водителю с ИП платит заказчик напрямую. */
+    const [viaPark, setViaPark] = useState(false);
+    useEffect(() => { exchangeApi.me().then((d) => setViaPark(d.kind === 'PARK')).catch(() => undefined); }, []);
     return (
         <Tabs
             screenOptions={{
@@ -49,6 +54,15 @@ export default function ExchangeTabs() {
                     title: 'Мой рейс',
                     headerTitle: 'Мой рейс',
                     tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="navigate" size={size} color={color} />,
+                }}
+            />
+            <Tabs.Screen
+                name="earnings"
+                options={{
+                    title: 'Заработок',
+                    headerTitle: 'Заработок',
+                    href: viaPark ? undefined : null,
+                    tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="wallet" size={size} color={color} />,
                 }}
             />
             <Tabs.Screen

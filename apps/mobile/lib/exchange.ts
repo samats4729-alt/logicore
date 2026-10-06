@@ -105,6 +105,30 @@ export interface MyOffer extends OwnOffer {
     to: string;
 }
 
+/** Суммы выплаты: начислено, удержано, на руки. */
+export interface PayoutAmounts {
+    gross: number;
+    commission: number;
+    opv: number;
+    vosms: number;
+    ipn: number;
+    net: number;
+    so: number;
+}
+
+export type PayoutStatus = 'REQUESTED' | 'EXPORTED' | 'PAID' | 'REJECTED';
+
+/** «Заработок» водителя парка. */
+export interface Earnings {
+    parkName: string | null;
+    rates: { commissionPct: number; opvPct: number; vosmsPct: number; ipnPct: number; soPct: number };
+    iban: string | null;
+    bank: string | null;
+    available: PayoutAmounts;
+    trips: (PayoutAmounts & { orderId: string; orderNumber: string; route: string; completedAt: string | null })[];
+    payouts: (PayoutAmounts & { id: string; status: PayoutStatus; trips: number; requestedAt: string; exportedAt: string | null; paidAt: string | null; rejectReason: string | null })[];
+}
+
 /** Что отправляем в отклике. */
 export interface OfferInput {
     agree?: boolean;
@@ -223,6 +247,9 @@ export const exchangeApi = {
     offer: (id: string, input: OfferInput) => api.post<OwnOffer>(`/exchange/driver/loads/${id}/offer`, input).then((r) => r.data),
     withdraw: (id: string) => api.post(`/exchange/driver/loads/${id}/offer/withdraw`),
     myOffers: () => api.get<MyOffer[]>('/exchange/driver/offers').then((r) => r.data),
+    earnings: () => api.get<Earnings>('/exchange/driver/earnings').then((r) => r.data),
+    setPayoutAccount: (iban: string, bank?: string) => api.put('/exchange/driver/me/payout-account', { iban, bank }).then((r) => r.data),
+    requestPayout: () => api.post<{ id: string; net: number; trips: number }>('/exchange/driver/payouts/request').then((r) => r.data),
 };
 
 /** Адрес фото груза — картинка грузится с пропуском (заголовок авторизации). */
