@@ -1689,9 +1689,13 @@ export class OrdersService {
             OrderStatus.IN_TRANSIT,
             OrderStatus.AT_DELIVERY,
             OrderStatus.UNLOADING,
+            // Водитель нажал «Проблема» — рейс от этого не закончился. Без этого
+            // статуса рейс пропадал с экрана водителя, пока диспетчер его не
+            // разберёт, а геолокация уходила по другому его рейсу.
+            OrderStatus.PROBLEM,
         ];
         const statuses = includeHistory
-            ? [...activeStatuses, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.PROBLEM]
+            ? [...activeStatuses, OrderStatus.COMPLETED, OrderStatus.CANCELLED]
             : activeStatuses;
 
         const orders = await this.prisma.order.findMany({

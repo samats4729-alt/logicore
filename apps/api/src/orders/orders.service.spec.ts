@@ -116,3 +116,25 @@ describe('OrdersService.findDriverOrders', () => {
         expect((order as any).customerPrice).toBeNull();
     });
 });
+
+describe('OrdersService.findDriverOrders — рейс с проблемой', () => {
+    it('после «Проблемы» рейс остаётся у водителя текущим', async () => {
+        const prisma = { order: { findMany: jest.fn().mockResolvedValue([]) } };
+        const service = new OrdersService(
+            prisma as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        await service.findDriverOrders('driver-1');
+
+        const statuses = prisma.order.findMany.mock.calls[0][0].where.status.in;
+        expect(statuses).toContain(OrderStatus.PROBLEM);
+        expect(statuses).not.toContain(OrderStatus.COMPLETED);
+    });
+});
