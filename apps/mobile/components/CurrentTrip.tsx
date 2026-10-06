@@ -196,7 +196,8 @@ export default function CurrentTrip({
 
     // Ползунок шага висит над панелью вкладок — под ним оставляем место, чтобы
     // последняя карточка не пряталась.
-    const dockSpace = meta.next ? SWIPE_HEIGHT + 22 : 0;
+    const isProblem = currentOrder.status === 'PROBLEM';
+    const dockSpace = meta.next ? SWIPE_HEIGHT + 22 : isProblem ? 96 : 0;
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -420,11 +421,24 @@ export default function CurrentTrip({
 
             <ProblemSheet visible={problemOpen} onSubmit={sendProblem} onClose={() => setProblemOpen(false)} />
 
+            {/* Рейс с проблемой: шага нет, пока диспетчер не вернёт рейс в работу —
+                без пояснения водитель искал бы пропавший ползунок. */}
+            {isProblem && (
+                <View style={[styles.dock, { bottom: tabBarSpace + 12 }]}>
+                    <View style={[styles.problemNote, { backgroundColor: colors.dangerSoft, borderColor: colors.danger + '33' }]}>
+                        <Ionicons name="alert-circle" size={22} color={colors.danger} />
+                        <Text style={[styles.problemNoteText, { color: colors.text }]}>
+                            Диспетчер получил сообщение о проблеме. Когда он вернёт рейс в работу, здесь снова появится следующий шаг.
+                        </Text>
+                    </View>
+                </View>
+            )}
+
             {/* ===== Следующий шаг: свайп вправо, внизу над вкладками ===== */}
-            {meta.next && (
+            {(meta.next || isProblem) && (
                 // Подложка цвета фона с мягким краем сверху: прокрученные карточки
                 // уходят под неё, а не просвечивают между ползунком и вкладками.
-                <View pointerEvents="none" style={[styles.dockPlate, { height: tabBarSpace + 12 + SWIPE_HEIGHT + 14 + 24 }]}>
+                <View pointerEvents="none" style={[styles.dockPlate, { height: tabBarSpace + 12 + (isProblem ? 84 : SWIPE_HEIGHT) + 14 + 24 }]}>
                     {[0.25, 0.55, 0.8].map((o) => (
                         <View key={o} style={{ height: 8, backgroundColor: colors.background, opacity: o }} />
                     ))}
@@ -486,6 +500,8 @@ const styles = StyleSheet.create({
     customerName: { flex: 1, fontFamily: FONT.semibold, fontSize: 14, letterSpacing: -0.2 },
 
     dock: { position: 'absolute', left: 16, right: 16 },
+    problemNote: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: RADIUS.card, borderWidth: 1 },
+    problemNoteText: { flex: 1, fontFamily: FONT.medium, fontSize: 13.5, lineHeight: 19 },
     dockPlate: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 
     actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
