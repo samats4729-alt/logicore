@@ -7,7 +7,8 @@ import { Image } from 'react-native';
 import * as Location from 'expo-location';
 import { useStore } from '@/store';
 import { featureCollection, point, lineString } from '@turf/helpers';
-import { statusMeta, FONT } from '@/lib/theme';
+import { FONT } from '@/lib/theme';
+import { StatusPill } from '@/components/kit';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
 Mapbox.setAccessToken(MAPBOX_TOKEN);
@@ -290,11 +291,7 @@ export default function DriverMap() {
                 <View style={styles.infoCard}>
                     <View style={styles.infoTop}>
                         <Text style={styles.infoTitle}>№ {currentOrder.orderNumber}</Text>
-                        <View style={[styles.infoPill, { backgroundColor: statusMeta(currentOrder.status).bg }]}>
-                            <Text style={[styles.infoPillText, { color: statusMeta(currentOrder.status).fg }]}>
-                                {statusMeta(currentOrder.status).label}
-                            </Text>
-                        </View>
+                        <StatusPill status={currentOrder.status} />
                     </View>
                     <Text style={styles.infoText} numberOfLines={1}>
                         {currentOrder.routePoints?.[0]?.location.name || '...'} → {currentOrder.routePoints?.[currentOrder.routePoints.length - 1]?.location.name || '...'}
@@ -359,15 +356,6 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: '#0b0d12',
         letterSpacing: -0.5,
-    },
-    infoPill: {
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 999,
-    },
-    infoPillText: {
-        fontFamily: FONT.semibold,
-        fontSize: 12,
     },
     infoText: {
         fontFamily: FONT.medium,

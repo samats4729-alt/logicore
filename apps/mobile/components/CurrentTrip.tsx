@@ -231,7 +231,7 @@ export default function CurrentTrip({
                         <Text style={[styles.heroEyebrow, { color: onFeature }]}>
                             {showHeader ? 'МАРШРУТ' : `РЕЙС № ${currentOrder.orderNumber}`}
                         </Text>
-                        <StatusPill status={currentOrder.status} onDark />
+                        <StatusPill status={currentOrder.status} />
                     </View>
 
                     {!!currentOrder.customerCompany?.name && (

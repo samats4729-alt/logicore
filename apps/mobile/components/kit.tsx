@@ -5,9 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 /** У react-native в этом проекте нет описаний типов (declarations.d.ts) — стиль описываем сами. */
 type ViewStyle = Record<string, unknown>;
 type TextInputProps = Record<string, any>;
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { FONT, RADIUS, SHADOW, selectedColors, statusColors, statusMeta } from '@/lib/theme';
+import { FONT, RADIUS, SHADOW, selectedColors, statusMeta, statusTone } from '@/lib/theme';
 
 /**
  * Кирпичики экранов приложения — в языке кабинета logicore.kz: Unbounded в
@@ -240,23 +240,43 @@ export function Badge({ label, tone }: { label: string; tone: 'blue' | 'green' |
     );
 }
 
-/** Пилюля статуса рейса — те же цвета, что у статусов в кабинете. */
-export function StatusPill({ status, onDark }: { status: string; onDark?: boolean }) {
-    const { isDark } = useAppTheme();
+/**
+ * Знак в кружке статуса — те же, что в кабинете: статус читается и без цвета
+ * (на солнце, при дальтонизме).
+ */
+const STATUS_GLYPH: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+    DRAFT: 'file-document-outline',
+    PENDING: 'clock-outline',
+    ASSIGNED: 'account',
+    EN_ROUTE_PICKUP: 'arrow-right',
+    AT_PICKUP: 'arrow-down',
+    LOADING: 'arrow-down',
+    IN_TRANSIT: 'truck',
+    AT_DELIVERY: 'arrow-up',
+    UNLOADING: 'arrow-up',
+    COMPLETED: 'check-bold',
+    CANCELLED: 'close-thick',
+    PROBLEM: 'exclamation-thick',
+};
+
+/**
+ * Плашка статуса рейса — как в кабинете (StatusPill): белая плашка с тонкой
+ * рамкой, слева выпуклый цветной кружок со знаком, рядом тёмная подпись.
+ */
+export function StatusPill({ status }: { status: string }) {
+    const { colors, isDark } = useAppTheme();
     const meta = statusMeta(status);
-    const c = statusColors(status, isDark);
-    if (onDark) {
-        return (
-            <View style={[styles.statusPill, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
-                <View style={[styles.statusDot, { backgroundColor: statusColors(status, true).fg }]} />
-                <Text style={[styles.statusText, { color: '#ffffff' }]}>{meta.label}</Text>
-            </View>
-        );
-    }
     return (
-        <View style={[styles.statusPill, { backgroundColor: c.bg }]}>
-            <View style={[styles.statusDot, { backgroundColor: c.fg }]} />
-            <Text style={[styles.statusText, { color: c.fg }]}>{meta.label}</Text>
+        <View style={[styles.statusPill, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusTone(status, isDark) }]}>
+                {/* Блик сверху — кружок выпуклый, как в кабинете. Три полупрозрачных слоя
+                    разной высоты дают плавный переход вместо резкой границы. */}
+                {[11, 7, 4].map((h) => (
+                    <View key={h} style={[styles.statusDotShine, { height: h, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.11)' }]} />
+                ))}
+                <MaterialCommunityIcons name={STATUS_GLYPH[status] || 'file-document-outline'} size={11} color={isDark ? colors.background : '#ffffff'} />
+            </View>
+            <Text style={[styles.statusText, { color: colors.text }]}>{meta.label}</Text>
         </View>
     );
 }
@@ -371,9 +391,16 @@ const styles = StyleSheet.create({
     choiceText: { fontFamily: FONT.regular, fontSize: 13, lineHeight: 18, marginTop: 2 },
     chip: { paddingHorizontal: 15, height: 36, borderRadius: RADIUS.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     badge: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 4, borderRadius: RADIUS.pill },
-    statusPill: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: RADIUS.pill },
-    statusDot: { width: 6, height: 6, borderRadius: 3 },
-    statusText: { fontFamily: FONT.semibold, fontSize: 12 },
+    statusPill: {
+        flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+        height: 28, paddingLeft: 4, paddingRight: 11, borderRadius: RADIUS.pill, borderWidth: 1,
+    },
+    statusDot: {
+        width: 19, height: 19, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+        shadowColor: '#101828', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.22, shadowRadius: 2, elevation: 1,
+    },
+    statusDotShine: { position: 'absolute', top: 0, left: 0, right: 0 },
+    statusText: { fontFamily: FONT.semibold, fontSize: 12.5, letterSpacing: -0.1 },
     row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 7 },
     rowLabel: { width: 112, fontFamily: FONT.regular, fontSize: 13.5 },
     rowValue: { flex: 1, fontFamily: FONT.semibold, fontSize: 14.5 },

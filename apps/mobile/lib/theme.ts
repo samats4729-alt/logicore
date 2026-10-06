@@ -109,7 +109,11 @@ export const SHADOW = {
     elevation: 1,
 };
 
-/** Статусы рейса: подпись, цвета пилюли (как на веб-платформе), следующий шаг и прогресс */
+/**
+ * Статусы рейса: подпись, цвета пилюли (как на веб-платформе), следующий шаг и прогресс.
+ * Подписи — слово в слово из словаря кабинета (apps/web/src/lib/vocabulary.ts):
+ * диспетчер и водитель видят один и тот же «Едет на погрузку».
+ */
 export const STATUS_META: Record<string, {
     label: string;
     fg: string;
@@ -123,7 +127,7 @@ export const STATUS_META: Record<string, {
         next: 'EN_ROUTE_PICKUP', nextLabel: 'Выехал на погрузку', progress: 18,
     },
     EN_ROUTE_PICKUP: {
-        label: 'Еду на погрузку', fg: '#0e7490', bg: '#e6f6fb',
+        label: 'Едет на погрузку', fg: '#0e7490', bg: '#e6f6fb',
         next: 'AT_PICKUP', nextLabel: 'Прибыл на погрузку', progress: 30,
     },
     AT_PICKUP: {
@@ -131,7 +135,7 @@ export const STATUS_META: Record<string, {
         next: 'LOADING', nextLabel: 'Начать погрузку', progress: 42,
     },
     LOADING: {
-        label: 'Загрузка', fg: '#7e22ce', bg: '#f3e8ff',
+        label: 'Погрузка', fg: '#7e22ce', bg: '#f3e8ff',
         next: 'IN_TRANSIT', nextLabel: 'Выехал в рейс', progress: 52,
     },
     IN_TRANSIT: {
@@ -143,7 +147,7 @@ export const STATUS_META: Record<string, {
         next: 'UNLOADING', nextLabel: 'Начать выгрузку', progress: 82,
     },
     UNLOADING: {
-        label: 'Разгрузка', fg: '#a21caf', bg: '#fae8ff',
+        label: 'Выгрузка', fg: '#a21caf', bg: '#fae8ff',
         next: 'COMPLETED', nextLabel: 'Завершить рейс', progress: 92,
     },
     COMPLETED: { label: 'Завершён', fg: '#15803d', bg: '#e7f8ef', progress: 100 },
@@ -155,20 +159,32 @@ export function statusMeta(status: string) {
     return STATUS_META[status] || { label: status, fg: '#5f6672', bg: '#f1f2f4', progress: 0 };
 }
 
-/** Смешать два цвета #rrggbb: доля `t` второго. */
-function mix(a: string, b: string, t: number): string {
-    const p = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
-    const c = [0, 1, 2].map((i) => Math.round(p(a, i) * (1 - t) + p(b, i) * t));
-    return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+/**
+ * Тот же цвет, осветлённый до светлоты 0,68 при насыщенности ×0,9 — правило
+ * кабинета (StatusPill.tsx): на тёмном полотне исходные цвета статусов
+ * становятся почти чёрными пятнами.
+ */
+function lighten(hex: string): string {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.replace('#', '').slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    const d = max - min;
+    let h = 0;
+    let s = 0;
+    if (d !== 0) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        if (max === r) h = ((g - b) / d) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+    }
+    return `hsl(${Math.round(h)}, ${Math.round(Math.min(1, s * 0.9) * 100)}%, 68%)`;
 }
 
-/**
- * Цвета пилюли статуса под тему. В светлой — ровно как на платформе; в
- * тёмной светлая подложка слепит, поэтому подложка — приглушённый тон
- * статуса, надпись — его осветлённый вариант.
- */
-export function statusColors(status: string, isDark: boolean): { fg: string; bg: string } {
+/** Цвет кружка статуса под тему — как у плашки статуса в кабинете. */
+export function statusTone(status: string, isDark: boolean): string {
     const m = statusMeta(status);
-    if (!isDark) return { fg: m.fg, bg: m.bg };
-    return { fg: mix(m.fg, '#ffffff', 0.45), bg: mix(m.fg, darkColors.card, 0.78) };
+    return isDark ? lighten(m.fg) : m.fg;
 }
