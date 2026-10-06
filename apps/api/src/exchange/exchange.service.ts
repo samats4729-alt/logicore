@@ -7,6 +7,8 @@ import {
     EXCHANGE_ORDER_SELECT, FREE_STATUSES, ON_EXCHANGE, byLoadingDate, exchangeView, managerOf, matches, notPast,
 } from './exchange-orders';
 
+const PARK_CANNOT_PUBLISH = 'Парк не выставляет заявки — он сам не возит, через него работают водители';
+
 /** Медиана: одна случайная дорогая перевозка не должна задирать «обычную цену». */
 function median(values: number[]): number | null {
     if (!values.length) return null;
@@ -109,12 +111,21 @@ export class ExchangeService {
 
     /** Биржа в карточке заявки: на бирже ли она и можно ли выставить. */
     async state(companyId: string, orderId: string) {
-        return this.stateView(await this.participantOrder(companyId, orderId), companyId);
+        const view = this.stateView(await this.participantOrder(companyId, orderId), companyId);
+        // Парк сам не возит — и кнопки «Выставить на биржу» у него нет.
+        if (view.canPublish && await this.isPark(companyId)) {
+            return { ...view, canPublish: false, reason: PARK_CANNOT_PUBLISH };
+        }
+        return view;
+    }
+
+    private async isPark(companyId: string): Promise<boolean> {
+        const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { isPark: true } });
+        return !!company?.isPark;
     }
 
     async publish(companyId: string, userId: string, orderId: string, dto: PublishOrderDto) {
-        const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { isPark: true } });
-        if (company?.isPark) throw new ForbiddenException('Парк не выставляет заявки — он сам не возит, через него работают водители');
+        if (await this.isPark(companyId)) throw new ForbiddenException(PARK_CANNOT_PUBLISH);
         const order = await this.participantOrder(companyId, orderId);
         const blocker = this.blocker(order, companyId);
         if (blocker) throw new BadRequestException(blocker);
