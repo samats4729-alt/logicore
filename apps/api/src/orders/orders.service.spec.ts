@@ -64,3 +64,23 @@ describe('OrdersService.takeOrder', () => {
         expect(tx.orderStatusHistory.create).not.toHaveBeenCalled();
     });
 });
+
+describe('OrdersService.reportProblem — только участник заявки', () => {
+    const makeService = (order: any) => {
+        const prisma: any = { order: { findUnique: jest.fn().mockResolvedValue(order), findFirst: jest.fn().mockResolvedValue(order) } };
+        const service = new OrdersService(prisma, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+        jest.spyOn(service as any, 'findById').mockResolvedValue(order);
+        return service;
+    };
+    const order = { id: 'order-1', status: OrderStatus.IN_TRANSIT, driverId: 'driver-1', customerCompanyId: 'c-1', forwarderId: 'f-1', partnerId: null, responsibleManager: null };
+
+    it('чужой водитель не может пометить заявку проблемой', async () => {
+        await expect(makeService(order).reportProblem('order-1', 'сломался', 'driver-2', undefined, 'DRIVER'))
+            .rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('логист чужой компании — тоже нет', async () => {
+        await expect(makeService(order).reportProblem('order-1', 'сломался', 'user-x', 'other-company', 'LOGISTICIAN'))
+            .rejects.toBeInstanceOf(ForbiddenException);
+    });
+});

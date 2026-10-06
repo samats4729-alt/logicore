@@ -538,6 +538,8 @@ model Company {
   /// владелец платформы в админке.
   isPark          Boolean          @default(false)
   exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
+  /// Отклики компании-перевозчика на заявки других компаний с биржи.
+  exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")
 }
 
 // ... existing models ...
@@ -977,6 +979,8 @@ model Order {
   /// Снята с биржи: вручную с причиной или когда выбран исполнитель.
   exchangeClosedAt      DateTime?
   exchangeCloseReason   String?
+  /// Отклики перевозчиков и водителей на заявку с биржи.
+  exchangeOffers        ExchangeOffer[]
 
   // Relations
   routePoints               OrderRoutePoint[]
@@ -3096,6 +3100,7 @@ model ExchangeDriver {
   tripsCompleted Int @default(0)
 
   documents ExchangeDriverDocument[]
+  offers    ExchangeOffer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3145,3 +3150,49 @@ model ExchangeBlocklist {
   @@unique([kind, value])
 }
 
+/// Где отклик на заявку с биржи.
+enum ExchangeOfferStatus {
+  ACTIVE // Ждёт решения компании
+  WITHDRAWN // Отозвал сам откликнувшийся
+  ACCEPTED // Компания выбрала его исполнителем
+  REJECTED // Выбрали другого или заявку сняли с биржи
+}
+
+/// Отклик на заявку с биржи: «согласен за вашу цену» или своя цена.
+///
+/// Откликается либо водитель биржи (с ИП или через парк), либо компания-
+/// перевозчик. Один отклик на заявку от каждого — повторный отклик
+/// обновляет прежний. Выбирает исполнителя компания, выставившая заявку.
+model ExchangeOffer {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Водитель биржи — если откликнулся водитель.
+  driverId  String?
+  driver    ExchangeDriver? @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// Компания-перевозчик — если откликнулась компания.
+  companyId String?
+  company   Company?        @relation("CompanyExchangeOffers", fields: [companyId], references: [id], onDelete: Cascade)
+  /// Кто нажал «откликнуться» — водитель или сотрудник компании.
+  createdById String
+
+  status ExchangeOfferStatus @default(ACTIVE)
+  /// Цена исполнителя, ₸.
+  price  Decimal             @db.Decimal(18, 2)
+  /// Согласился на цену компании, а не назвал свою.
+  agreed Boolean             @default(false)
+  /// Когда подаст машину.
+  readyDate DateTime? @db.Date
+  comment   String?
+
+  decidedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([orderId, driverId])
+  @@unique([orderId, companyId])
+  @@index([orderId, status])
+  @@index([driverId])
+  @@index([companyId])
+}

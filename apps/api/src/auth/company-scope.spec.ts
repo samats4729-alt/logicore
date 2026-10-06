@@ -40,6 +40,18 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     'ExchangeDriverController.deleteAccount': 'удаление своего аккаунта (требование Google Play)',
     'ExchangeDriverController.feed': 'лента заявок биржи для водителя',
     'ExchangeDriverController.load': 'заявка с биржи',
+    'ExchangeDriverController.offer': 'свой отклик на заявку',
+    'ExchangeDriverController.withdraw': 'отозвать свой отклик',
+    'ExchangeDriverController.myOffers': 'свои отклики',
+    // Рейс водителя биржи — те же адреса, что у водителя компании, но без
+    // организации пускают только водителя (@AllowDriverWithoutCompany), и
+    // каждый отбирает по самому водителю: заявка, где он водитель.
+    'OrdersController.myOrders': 'свои рейсы водителя',
+    'OrdersController.updateStatus': 'статус своего рейса (водитель — только свой)',
+    'OrdersController.reportProblem': 'проблема на своём рейсе (водитель — только свой)',
+    'TrackingController.sendGpsPoint': 'своя геолокация (к чужой заявке не привяжется)',
+    'TrackingController.sendGpsPointsBatch': 'своя геолокация пакетом',
+    'DocumentsController.uploadFile': 'фото документов своего рейса (водитель — только свой)',
     'AuthController.getMe': 'кто я — этим живёт весь фронтенд',
     'UsersController.uploadMyAvatar': 'своё фото',
     'UsersController.getMyAvatar': 'своё фото',
@@ -119,6 +131,7 @@ function collectRoutes(): Route[] {
                     key: `${node.name!.text}.${member.name.getText()}`,
                     allowedWithoutCompany:
                         methodDecorators.includes('AllowWithoutCompany')
+                        || methodDecorators.includes('AllowDriverWithoutCompany')
                         || classDecorators.includes('AllowWithoutCompany'),
                 });
             }

@@ -176,3 +176,22 @@ describe('TrackingService.purgeGpsPointsOlderThan', () => {
         );
     });
 });
+
+describe('TrackingService: точка — только к своей заявке', () => {
+    it('точку с чужой заявкой сохраняем без привязки, со своей — с привязкой', async () => {
+        const prisma = {
+            order: { findMany: jest.fn().mockResolvedValue([{ id: 'своя' }]) },
+            gpsPoint: { createMany: jest.fn(), create: jest.fn() },
+        };
+        const service = new TrackingService(prisma as any);
+        const at = new Date();
+        await service.saveGpsPointsBatch([
+            { driverId: 'd-1', orderId: 'своя', latitude: 1, longitude: 1, recordedAt: at },
+            { driverId: 'd-1', orderId: 'чужая', latitude: 2, longitude: 2, recordedAt: at },
+        ]);
+        expect(prisma.order.findMany.mock.calls[0][0].where).toEqual({ id: { in: ['своя', 'чужая'] }, driverId: 'd-1' });
+        const saved = prisma.gpsPoint.createMany.mock.calls[0][0].data;
+        expect(saved[0].orderId).toBe('своя');
+        expect(saved[1].orderId).toBeUndefined();
+    });
+});

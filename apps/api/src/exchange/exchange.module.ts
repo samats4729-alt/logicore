@@ -10,6 +10,7 @@ import {
 } from './drivers.controller';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeDriversService } from './drivers.service';
+import { ExchangeOffersService } from './exchange-offers.service';
 
 /** Биржа грузов. Выключена, пока на сервере нет `EXCHANGE_ENABLED=true`. */
 @Module({
@@ -19,6 +20,6 @@ import { ExchangeDriversService } from './drivers.service';
         ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController, ExchangeAdminController,
         ExchangePublicController,
     ],
-    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService],
+    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService],
 })
 export class ExchangeModule {}

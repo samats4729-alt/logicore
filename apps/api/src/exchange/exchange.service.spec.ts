@@ -16,6 +16,7 @@ function order(overrides: Record<string, any> = {}) {
         driverCost: 400000,
         exchangePublishedAt: null, exchangePrice: null, exchangeNote: null,
         exchangeClosedAt: null, exchangeCloseReason: null,
+        _count: { exchangeOffers: 0 },
         routePoints: [{ pointType: 'PICKUP', location: { city: 'Шымкент', cityRecord: null } }, { pointType: 'DELIVERY', location: { city: 'Алматы', cityRecord: null } }],
         ...overrides,
     };
@@ -47,6 +48,8 @@ function build(state = order()) {
             update: jest.fn(),
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
+        exchangeOffer: { updateMany: jest.fn() },
+        $transaction: jest.fn(async (ops: any[]) => ops),
     };
     return { service: new ExchangeService(prisma), prisma };
 }
@@ -105,6 +108,8 @@ describe('Биржа: кто выставляет заявку', () => {
         const { service, prisma } = build(published);
         await service.unpublish(OUR, 'order-1', ' Нашли машину сами ');
         expect(prisma.order.update.mock.calls[0][0].data).toMatchObject({ exchangeCloseReason: 'Нашли машину сами' });
+        // Ждущим откликам — «не актуально».
+        expect(prisma.exchangeOffer.updateMany.mock.calls[0][0]).toMatchObject({ where: { orderId: 'order-1', status: 'ACTIVE' }, data: { status: 'REJECTED' } });
 
         const closed = build(order({ exchangePublishedAt: new Date(), exchangeClosedAt: new Date() }));
         await expect(closed.service.unpublish(OUR, 'order-1', 'ещё раз')).rejects.toThrow(/уже не на бирже/);

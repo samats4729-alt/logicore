@@ -7,8 +7,9 @@ import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { AuditService } from '../audit/audit.service';
 import { ExchangeService } from './exchange.service';
+import { ExchangeOffersService } from './exchange-offers.service';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
-import { ExchangeBoardQueryDto, PublishOrderDto, RoutePricesQueryDto, UnpublishOrderDto } from './dto/exchange-order.dto';
+import { ExchangeBoardQueryDto, MakeOfferDto, PublishOrderDto, RoutePricesQueryDto, UnpublishOrderDto } from './dto/exchange-order.dto';
 
 /**
  * Включена ли биржа и парк ли компания — кабинет по этому решает, какие
@@ -49,19 +50,39 @@ export class ExchangeStatusController {
 export class ExchangeController {
     constructor(
         private readonly service: ExchangeService,
+        private readonly offers: ExchangeOffersService,
         private readonly audit: AuditService,
     ) {}
 
     @Get('board')
     @ApiOperation({ summary: 'Биржа: заявки других компаний, которые ищут исполнителя' })
-    board(@Request() req: any, @Query() query: ExchangeBoardQueryDto) {
-        return this.service.board(req.user.companyId, query);
+    async board(@Request() req: any, @Query() query: ExchangeBoardQueryDto) {
+        const [list, offered] = await Promise.all([
+            this.service.board(req.user.companyId, query),
+            this.offers.companyOfferedOrderIds(req.user.companyId),
+        ]);
+        return list.map((o) => ({ ...o, myOfferStatus: offered[o.id] ?? null }));
     }
 
     @Get('board/:id')
     @ApiOperation({ summary: 'Заявка с биржи — как её видят другие' })
-    card(@Request() req: any, @Param('id') id: string) {
-        return this.service.card(req.user.companyId, id);
+    async card(@Request() req: any, @Param('id') id: string) {
+        const card = await this.service.card(req.user.companyId, id);
+        return { ...card, myOffer: await this.offers.companyOffer(req.user.companyId, id) };
+    }
+
+    @Post('board/:id/offer')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Откликнуться на заявку с биржи: согласен на цену или своя цена' })
+    offer(@Request() req: any, @Param('id') id: string, @Body() dto: MakeOfferDto) {
+        return this.offers.offerAsCompany(req.user.companyId, req.user.sub, id, dto);
+    }
+
+    @Post('board/:id/offer/withdraw')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Отозвать свой отклик' })
+    withdraw(@Request() req: any, @Param('id') id: string) {
+        return this.offers.withdrawAsCompany(req.user.companyId, id);
     }
 
     @Get('mine')
@@ -74,6 +95,29 @@ export class ExchangeController {
     @ApiOperation({ summary: 'Биржа в карточке заявки: на бирже ли и можно ли выставить' })
     state(@Request() req: any, @Param('id') id: string) {
         return this.service.state(req.user.companyId, id);
+    }
+
+    @Get('orders/:id/offers')
+    @ApiOperation({ summary: 'Отклики на свою заявку' })
+    orderOffers(@Request() req: any, @Param('id') id: string) {
+        return this.offers.offersForOrder(req.user.companyId, id);
+    }
+
+    @Post('orders/:id/offers/:offerId/accept')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Выбрать исполнителя из откликов' })
+    async accept(@Request() req: any, @Param('id') id: string, @Param('offerId') offerId: string) {
+        const result = await this.offers.accept(req.user.companyId, req.user.sub, id, offerId);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order',
+            entityId: id,
+            entityLabel: `Заявка ${result.orderNumber}: с биржи выбран исполнитель ${result.executor} за ${result.price.toLocaleString('ru-RU')} ₸`,
+            orderId: id,
+        });
+        return result;
     }
 
     @Post('orders/:id/publish')

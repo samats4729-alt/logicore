@@ -27,6 +27,7 @@ const STATE_SELECT = {
         select: { pointType: true, location: { select: { city: true, cityRecord: { select: { name: true } } } } },
         orderBy: { sequence: 'asc' as const },
     },
+    _count: { select: { exchangeOffers: { where: { status: 'ACTIVE' } } } },
 } satisfies Prisma.OrderSelect;
 
 type StateRow = Prisma.OrderGetPayload<{ select: typeof STATE_SELECT }>;
@@ -99,6 +100,8 @@ export class ExchangeService {
             /** Откуда и куда — для подсказки «почём возили по направлению». */
             from: cityName(order.routePoints.find((p) => p.pointType !== 'DELIVERY')),
             to: cityName([...order.routePoints].reverse().find((p) => p.pointType === 'DELIVERY')),
+            /** Сколько откликов ждут решения. */
+            offersCount: order._count.exchangeOffers,
             /** Подсказка цены — сколько в заявке заложено перевозчику. */
             suggestedPrice: order.driverCost != null ? Number(order.driverCost) : null,
         };
@@ -135,10 +138,17 @@ export class ExchangeService {
         const order = await this.participantOrder(companyId, orderId);
         if (managerOf(order) !== companyId) throw new BadRequestException('Снять с биржи может компания, которая её выставила');
         if (!order.exchangePublishedAt || order.exchangeClosedAt) throw new BadRequestException('Заявка уже не на бирже');
-        await this.prisma.order.update({
-            where: { id: order.id },
-            data: { exchangeClosedAt: new Date(), exchangeCloseReason: reason.trim() },
-        });
+        await this.prisma.$transaction([
+            this.prisma.order.update({
+                where: { id: order.id },
+                data: { exchangeClosedAt: new Date(), exchangeCloseReason: reason.trim() },
+            }),
+            // Сняли — ждущим откликам честно отвечаем «не актуально».
+            this.prisma.exchangeOffer.updateMany({
+                where: { orderId: order.id, status: 'ACTIVE' },
+                data: { status: 'REJECTED', decidedAt: new Date() },
+            }),
+        ]);
         return this.state(companyId, orderId);
     }
 

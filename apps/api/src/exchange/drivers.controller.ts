@@ -17,6 +17,8 @@ import { S3Service } from '../s3/s3.service';
 import { MAX_UPLOAD_SIZE } from '../documents/allowed-files';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
+import { ExchangeOffersService } from './exchange-offers.service';
+import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import {
@@ -64,6 +66,7 @@ export class ExchangeDriverController {
     constructor(
         private readonly drivers: ExchangeDriversService,
         private readonly loads: ExchangeDriverLoadsService,
+        private readonly offers: ExchangeOffersService,
         private readonly s3: S3Service,
     ) {}
 
@@ -137,14 +140,39 @@ export class ExchangeDriverController {
 
     @Get('loads')
     @ApiOperation({ summary: 'Лента: заявки на бирже' })
-    feed(@Request() req: any, @Query() query: DriverFeedQueryDto) {
-        return this.loads.feed(req.user.sub, query.bodyType);
+    async feed(@Request() req: any, @Query() query: DriverFeedQueryDto) {
+        const [list, offered] = await Promise.all([
+            this.loads.feed(req.user.sub, query.bodyType),
+            this.offers.driverOfferStatuses(req.user.sub),
+        ]);
+        return list.map((o) => ({ ...o, myOfferStatus: offered[o.id] ?? null }));
     }
 
     @Get('loads/:id')
     @ApiOperation({ summary: 'Заявка с биржи' })
-    load(@Request() req: any, @Param('id') id: string) {
-        return this.loads.card(req.user.sub, id);
+    async load(@Request() req: any, @Param('id') id: string) {
+        const card = await this.loads.card(req.user.sub, id);
+        return { ...card, myOffer: await this.offers.driverOffer(req.user.sub, id) };
+    }
+
+    @Post('loads/:id/offer')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Откликнуться: согласен на цену или своя цена' })
+    offer(@Request() req: any, @Param('id') id: string, @Body() dto: MakeOfferDto) {
+        return this.offers.offerAsDriver(req.user.sub, id, dto);
+    }
+
+    @Post('loads/:id/offer/withdraw')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Отозвать свой отклик' })
+    withdraw(@Request() req: any, @Param('id') id: string) {
+        return this.offers.withdrawAsDriver(req.user.sub, id);
+    }
+
+    @Get('offers')
+    @ApiOperation({ summary: 'Мои отклики' })
+    myOffers(@Request() req: any) {
+        return this.offers.driverOffers(req.user.sub);
     }
 }
 

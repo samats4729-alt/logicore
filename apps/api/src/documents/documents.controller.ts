@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DocumentsService } from './documents.service';
 import { S3Service } from '../s3/s3.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AllowDriverWithoutCompany, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { UserRole, DocumentType } from '@prisma/client';
@@ -43,6 +43,7 @@ export class DocumentsController {
     ) { }
 
     @Post('upload/:orderId')
+    @AllowDriverWithoutCompany()
     @UseInterceptors(FileInterceptor('file', {
         limits: { fileSize: MAX_UPLOAD_SIZE },
     }))

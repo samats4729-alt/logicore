@@ -1509,8 +1509,10 @@ export class OrdersService {
     /**
      * Отметка о проблеме
      */
-    async reportProblem(orderId: string, description: string, reportedById: string) {
-        await this.updateStatus(orderId, OrderStatus.PROBLEM, description, reportedById);
+    async reportProblem(orderId: string, description: string, reportedById: string, companyId?: string, role?: string) {
+        // Роль и компания обязательны: без них проверка прав в updateStatus
+        // пропускается, и любой вошедший мог пометить проблемой чужую заявку.
+        await this.updateStatus(orderId, OrderStatus.PROBLEM, description, reportedById, companyId, role ?? 'UNKNOWN');
 
         return this.prisma.orderProblem.create({
             data: {
