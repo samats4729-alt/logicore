@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, FileText, Search, Store, UsersRound, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, FileText, Search, Store, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
 import { VEHICLE_TYPES } from '@/lib/constants';
-import { ExchangeOrder, exchangeStatus, грузКратко, день, черезТочки } from '@/lib/exchange';
+import { ExchangeOrder, грузКратко, день, черезТочки } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -28,14 +28,12 @@ export default function ExchangePage() {
     const [board, setBoard] = useState<ExchangeOrder[] | null>(null);
     const [mine, setMine] = useState<ExchangeOrder[] | null>(null);
     const [failed, setFailed] = useState(false);
-    const [isPark, setIsPark] = useState(false);
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [bodyType, setBodyType] = useState('');
 
     useEffect(() => {
         let alive = true;
-        exchangeStatus().then((s) => { if (alive) setIsPark(s.isPark); });
         setFailed(false);
         Promise.all([api.get('/exchange/board'), api.get('/exchange/mine')])
             .then(([b, m]) => { if (alive) { setBoard(b.data); setMine(m.data); } })
@@ -66,11 +64,6 @@ export default function ExchangePage() {
                     </p>
                 </div>
                 <div className={styles.heroActions}>
-                    {isPark && (
-                        <Button variant="outline" onClick={() => router.push('/company/exchange/drivers')}>
-                            <UsersRound className="h-4 w-4" /> Водители парка
-                        </Button>
-                    )}
                     <Button variant="outline" onClick={() => router.push('/company/orders')}>
                         <FileText className="h-4 w-4" /> К заявкам
                     </Button>

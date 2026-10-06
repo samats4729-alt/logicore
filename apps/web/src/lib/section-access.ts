@@ -41,6 +41,7 @@ const SECTIONS: { prefix: string; permission?: string; roles?: string[]; title: 
     { prefix: '/company/orders', permission: 'orders', title: 'Заявки' },
     { prefix: '/company/requests', permission: 'orders', title: 'Запросы' },
     { prefix: '/company/exchange', permission: 'orders', title: 'Биржа' },
+    { prefix: '/company/park', permission: 'orders', title: 'Кабинет парка' },
     { prefix: '/company/tracking', permission: 'tracking', title: 'GPS-мониторинг' },
     { prefix: '/company/partners', permission: 'partners', title: 'Контрагенты' },
     { prefix: '/company/carriers', permission: 'partners', title: 'Перевозчики' },

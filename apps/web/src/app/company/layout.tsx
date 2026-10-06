@@ -53,7 +53,7 @@ import { BETA_LABEL, betaStateOf, getBetaSection } from '@/lib/beta-sections';
 import Loader from '@/components/ui/Loader';
 import { isNavItemActive } from '@/lib/cabinet-nav';
 import { ROLE_LABELS } from '@/lib/vocabulary';
-import { exchangeEnabled } from '@/lib/exchange';
+import { exchangeStatus } from '@/lib/exchange';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -95,6 +95,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     /* Биржа строится в отдельной ветке и включается на сервере
        выключателем. Выключена — пункта в меню нет вовсе. */
     const [exchangeOn, setExchangeOn] = useState(false);
+    /* Парк — компания-посредник для водителей без ИП. Сам не возит, поэтому
+       у него свой кабинет: водители, их рейсы, приглашение — без заявок,
+       биржи и денег перевозчика. Парк подтверждает владелец платформы. */
+    const [isPark, setIsPark] = useState(false);
     const { theme, setTheme } = useTheme();
 
     useEffect(() => {
@@ -107,7 +111,11 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     useEffect(() => {
         if (!user?.companyId) return;
         let alive = true;
-        exchangeEnabled().then((on) => { if (alive) setExchangeOn(on); });
+        exchangeStatus().then((st) => {
+            if (!alive) return;
+            setExchangeOn(st.enabled);
+            setIsPark(st.enabled && st.isPark);
+        });
         return () => { alive = false; };
     }, [user?.companyId]);
 
@@ -198,6 +206,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         });
     }, [hydrated, checkAuth, router, logout, pathname]);
 
+    useEffect(() => {
+        if (isPark && pathname === '/company') router.replace('/company/park');
+    }, [isPark, pathname, router]);
+
     if (!hydrated || isLoading || !user) {
         return (
             <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -221,6 +233,16 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     // Меню в зависимости от роли
     const getMenuItems = () => {
         const hasPerm = (perm: string) => ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role) || user.permissions?.includes(perm);
+
+        // У парка своё меню: он сам не возит, заявки и деньги перевозчика ему не нужны.
+        if (isPark) {
+            return [
+                { key: '/company/park', icon: <DashboardOutlined />, label: 'Парк' },
+                { key: '/company/park/drivers', icon: <TeamOutlined />, label: 'Водители' },
+                { key: '/company/park/trips', icon: <CarOutlined />, label: 'Рейсы' },
+                { key: '/company/cabinet', icon: <ApartmentOutlined />, label: 'Кабинет' },
+            ];
+        }
 
         const items: any[] = [
             {

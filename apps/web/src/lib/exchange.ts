@@ -272,3 +272,38 @@ export function вКавычках(name: string | null | undefined): string {
     return /[«"]/.test(name) ? name : `«${name}»`;
 }
 
+
+// ==================== кабинет парка ====================
+
+export interface ParkOverview {
+    pendingDrivers: number;
+    approvedDrivers: number;
+    activeTrips: number;
+    monthTrips: number;
+    monthSum: number;
+    inviteCode: string;
+}
+
+export type ParkTripFilter = 'active' | 'done' | 'all';
+
+/** Рейс водителя парка — как его видит парк (без цены заказчика). */
+export interface ParkTrip {
+    id: string;
+    orderNumber: string;
+    status: string;
+    price: number | null;
+    driverName: string | null;
+    vehiclePlate: string | null;
+    from: string;
+    to: string;
+    loadingDate: string | null;
+    customerName: string | null;
+    createdAt: string;
+    completedAt: string | null;
+}
+
+/** Ссылка-приглашение парка: её отправляют водителю в WhatsApp. */
+export function ссылкаПриглашения(code: string): string {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://logicore.kz';
+    return `${origin}/park-invite/${code}`;
+}
