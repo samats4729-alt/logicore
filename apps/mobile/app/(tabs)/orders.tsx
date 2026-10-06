@@ -63,6 +63,9 @@ export default function OrdersScreen() {
                         <Text style={[styles.orderNumber, { color: colors.text }]}>№ {item.orderNumber}</Text>
                         <StatusPill status={item.status} />
                     </View>
+                    {!!item.customerCompany?.name && (
+                        <Text style={[styles.customer, { color: colors.textTertiary }]} numberOfLines={1}>{item.customerCompany.name}</Text>
+                    )}
 
                     <View style={styles.route}>
                         <View style={styles.rail}>
@@ -130,6 +133,7 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     orderNumber: { fontFamily: FONT.semibold, fontSize: 15, letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
+    customer: { fontFamily: FONT.regular, fontSize: 13, marginTop: 3 },
     route: { flexDirection: 'row', gap: 12, marginTop: 14 },
     rail: { alignItems: 'center', paddingTop: 6, paddingBottom: 6 },
     dot: { width: 9, height: 9, borderRadius: 5 },
