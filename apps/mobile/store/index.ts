@@ -33,6 +33,8 @@ export interface Order {
     cargoDescription: string;
     cargoWeight?: number;
     createdAt?: string;
+    /** Компания-заказчик. Старый сервер её не присылает — тогда поля нет. */
+    customerCompany?: { id: string; name: string } | null;
     routePoints: Array<{
         pointType: string;
         sequence: number;

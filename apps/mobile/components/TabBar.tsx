@@ -7,6 +7,15 @@ import { FONT, type AppColors } from '@/lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
+const TAB_BAR_HEIGHT = 76;
+const tabBarBottom = (bottomInset: number) => (Platform.OS === 'android' ? 16 : bottomInset + 6);
+
+/** Сколько места снизу занимает плавающая панель вкладок: от края экрана до её верха. */
+export function useTabBarSpace() {
+    const insets = useSafeAreaInsets();
+    return tabBarBottom(insets.bottom) + TAB_BAR_HEIGHT;
+}
+
 /**
  * Значок вкладки. Выбранная — графитовая пилюля с белым значком, как
  * активный пункт верхнего меню кабинета; остальные — контурные, серые.
@@ -43,9 +52,9 @@ function tabScreenOptions(colors: AppColors, isDark: boolean, bottomInset: numbe
         tabBarInactiveTintColor: colors.textTertiary,
         tabBarStyle: {
             position: 'absolute' as const,
-            bottom: Platform.OS === 'android' ? 16 : bottomInset + 6,
+            bottom: tabBarBottom(bottomInset),
             marginHorizontal: 16,
-            height: 76,
+            height: TAB_BAR_HEIGHT,
             backgroundColor: colors.card,
             borderRadius: 26,
             borderTopWidth: 1,

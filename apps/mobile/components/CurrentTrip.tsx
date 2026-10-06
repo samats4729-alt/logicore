@@ -21,9 +21,13 @@ import { api } from '@/lib/api';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { statusMeta, FONT, RADIUS, SHADOW } from '@/lib/theme';
 import { Empty, IconTile, ScreenHeader, Section, StatusPill } from '@/components/kit';
+import { SwipeConfirm } from '@/components/SwipeConfirm';
+import { useTabBarSpace } from '@/components/TabBar';
 
 /** Шагов у рейса от «Назначен» до «Завершён» — столько делений у полосы прогресса. */
 const STEPS = 8;
+/** Высота ползунка «смахните вправо» (кружок 54 + поля). */
+const SWIPE_HEIGHT = 64;
 
 const точек = (n: number) => {
     const d = n % 10;
@@ -46,6 +50,7 @@ export default function CurrentTrip({
     const { colors, isDark } = useAppTheme();
     const [refreshing, setRefreshing] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const tabBarSpace = useTabBarSpace();
 
     // При каждом возврате на экран: рейс могли назначить, пока водитель был в ленте.
     useFocusEffect(useCallback(() => {
@@ -89,24 +94,17 @@ export default function CurrentTrip({
         setRefreshing(false);
     };
 
-    const handleUpdateStatus = () => {
+    // Шаг меняется свайпом до конца — это и есть подтверждение, второго
+    // вопроса «Вы уверены?» не нужно (решение владельца).
+    const confirmNextStep = async () => {
         if (!currentOrder) return;
         const meta = statusMeta(currentOrder.status);
         if (!meta.next) return;
-
-        Alert.alert('Подтверждение', `Изменить статус на «${meta.nextLabel}»?`, [
-            { text: 'Отмена', style: 'cancel' },
-            {
-                text: 'Подтвердить',
-                onPress: async () => {
-                    try {
-                        await updateOrderStatus(currentOrder.id, meta.next!);
-                    } catch (error: any) {
-                        Alert.alert('Ошибка', error.response?.data?.message || 'Не удалось обновить статус');
-                    }
-                },
-            },
-        ]);
+        try {
+            await updateOrderStatus(currentOrder.id, meta.next);
+        } catch (error: any) {
+            Alert.alert('Ошибка', error.response?.data?.message || 'Не удалось обновить статус');
+        }
     };
 
     const sendProblem = async (text: string) => {
@@ -194,7 +192,7 @@ export default function CurrentTrip({
         return (
             <ScrollView
                 style={[styles.container, { backgroundColor: colors.background }]}
-                contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: tabBarSpace + 28 }}
                 refreshControl={refreshControl}
             >
                 {showHeader && <ScreenHeader eyebrow="Водитель" title="Рейс" />}
@@ -213,10 +211,15 @@ export default function CurrentTrip({
     const filledSteps = Math.max(1, Math.round((meta.progress / 100) * STEPS));
     const onFeature = colors.featureFg;
 
+    // Ползунок шага висит над панелью вкладок — под ним оставляем место, чтобы
+    // последняя карточка не пряталась.
+    const dockSpace = meta.next ? SWIPE_HEIGHT + 22 : 0;
+
     return (
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ScrollView
-            style={[styles.container, { backgroundColor: colors.background }]}
-            contentContainerStyle={{ paddingBottom: 124 }}
+            style={styles.container}
+            contentContainerStyle={{ paddingBottom: tabBarSpace + dockSpace + 28 }}
             refreshControl={refreshControl}
         >
             {showHeader && <ScreenHeader eyebrow="Активный рейс" title={`№ ${currentOrder.orderNumber}`} />}
@@ -230,6 +233,14 @@ export default function CurrentTrip({
                         </Text>
                         <StatusPill status={currentOrder.status} onDark />
                     </View>
+
+                    {!!currentOrder.customerCompany?.name && (
+                        <View style={[styles.customer, { borderColor: 'rgba(255,255,255,0.12)' }]}>
+                            <Ionicons name="business-outline" size={15} color={onFeature} style={{ opacity: 0.6 }} />
+                            <Text style={[styles.customerLabel, { color: onFeature }]}>Заказчик</Text>
+                            <Text style={[styles.customerName, { color: onFeature }]} numberOfLines={1}>{currentOrder.customerCompany.name}</Text>
+                        </View>
+                    )}
 
                     {/* Откуда — куда: погрузка — закрашенная точка, выгрузка — полая */}
                     <View style={styles.heroRow}>
@@ -273,27 +284,6 @@ export default function CurrentTrip({
                         <Text style={[styles.heroFootValue, { color: onFeature }]}>{meta.progress}%</Text>
                     </View>
                 </View>
-
-                {/* ===== Следующий шаг ===== */}
-                {meta.next && (
-                    <Pressable
-                        onPress={handleUpdateStatus}
-                        accessibilityRole="button"
-                        accessibilityLabel={meta.nextLabel}
-                        style={({ pressed }: { pressed: boolean }) => [
-                            styles.cta,
-                            { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] },
-                        ]}
-                    >
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.ctaHint, { color: colors.primaryFg }]}>Следующий шаг</Text>
-                            <Text style={[styles.ctaText, { color: colors.primaryFg }]}>{meta.nextLabel}</Text>
-                        </View>
-                        <View style={[styles.ctaArrow, { backgroundColor: colors.primaryFg }]}>
-                            <Ionicons name="arrow-forward" size={20} color={colors.primary} />
-                        </View>
-                    </Pressable>
-                )}
 
                 {/* ===== Документ и проблема ===== */}
                 <View style={styles.actionsRow}>
@@ -411,6 +401,24 @@ export default function CurrentTrip({
                 </Section>
             </View>
         </ScrollView>
+
+            {/* ===== Следующий шаг: свайп вправо, внизу над вкладками ===== */}
+            {meta.next && (
+                // Подложка цвета фона с мягким краем сверху: прокрученные карточки
+                // уходят под неё, а не просвечивают между ползунком и вкладками.
+                <View pointerEvents="none" style={[styles.dockPlate, { height: tabBarSpace + 12 + SWIPE_HEIGHT + 14 + 24 }]}>
+                    {[0.25, 0.55, 0.8].map((o) => (
+                        <View key={o} style={{ height: 8, backgroundColor: colors.background, opacity: o }} />
+                    ))}
+                    <View style={{ flex: 1, backgroundColor: colors.background }} />
+                </View>
+            )}
+            {meta.next && (
+                <View style={[styles.dock, { bottom: tabBarSpace + 12 }]} pointerEvents="box-none">
+                    <SwipeConfirm key={currentOrder.status} label={meta.nextLabel!} onConfirm={confirmNextStep} />
+                </View>
+            )}
+        </View>
     );
 }
 
@@ -435,19 +443,20 @@ const styles = StyleSheet.create({
     heroFootText: { fontFamily: FONT.medium, fontSize: 12.5, opacity: 0.65 },
     heroFootValue: { fontFamily: FONT.semibold, fontSize: 12.5, fontVariant: ['tabular-nums'] },
 
-    cta: {
+    customer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        borderRadius: 20,
-        paddingVertical: 14,
-        paddingLeft: 20,
-        paddingRight: 12,
-        marginBottom: 12,
+        gap: 8,
+        marginTop: -6,
+        marginBottom: 18,
+        paddingBottom: 14,
+        borderBottomWidth: 1,
     },
-    ctaHint: { fontFamily: FONT.medium, fontSize: 11.5, opacity: 0.6 },
-    ctaText: { fontFamily: FONT.semibold, fontSize: 17, letterSpacing: -0.3, marginTop: 2 },
-    ctaArrow: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    customerLabel: { fontFamily: FONT.medium, fontSize: 12.5, opacity: 0.55 },
+    customerName: { flex: 1, fontFamily: FONT.semibold, fontSize: 14, letterSpacing: -0.2 },
+
+    dock: { position: 'absolute', left: 16, right: 16 },
+    dockPlate: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 
     actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
     action: { flex: 1, borderRadius: RADIUS.card, borderWidth: 1, padding: 14 },
