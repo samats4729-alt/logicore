@@ -1,14 +1,16 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { useStore } from '@/store';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { api } from '@/lib/api';
+import { FONT, RADIUS, SHADOW } from '@/lib/theme';
+import { ListRow, ScreenHeader } from '@/components/kit';
 
 export default function SettingsScreen() {
     const { mapTheme, setMapTheme, currentOrder } = useStore();
-    const { colors } = useAppTheme();
+    const { colors, isDark } = useAppTheme();
 
     // Диагностика GPS: права → сервисы → координаты → отправка на сервер
     const checkGps = async () => {
@@ -40,58 +42,39 @@ export default function SettingsScreen() {
     };
 
     const options = [
-        { label: 'Автоматически (по времени)', value: 'auto', icon: 'time-outline' },
-        { label: 'Светлая', value: 'light', icon: 'sunny-outline' },
-        { label: 'Темная', value: 'dark', icon: 'moon-outline' },
+        { label: 'Автоматически', desc: 'Тёмная с 20:00 до 6:00', value: 'auto', icon: 'time-outline' },
+        { label: 'Светлая', desc: 'Всегда светлая', value: 'light', icon: 'sunny-outline' },
+        { label: 'Тёмная', desc: 'Всегда тёмная — меньше слепит ночью', value: 'dark', icon: 'moon-outline' },
     ] as const;
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={[styles.title, { color: colors.text }]}>Настройки</Text>
-            </View>
+        <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScreenHeader eyebrow="Профиль" title="Настройки" onBack={() => router.back()} />
 
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Тема карты</Text>
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.body}>
+                <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Оформление и карта</Text>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, !isDark && SHADOW]}>
                     {options.map((option, index) => (
-                        <View key={option.value}>
-                            <TouchableOpacity
-                                style={styles.option}
-                                onPress={() => setMapTheme(option.value)}
-                            >
-                                <View style={styles.optionLeft}>
-                                    <Ionicons name={option.icon} size={24} color={colors.text} />
-                                    <Text style={[styles.optionText, { color: colors.text }]}>{option.label}</Text>
-                                </View>
-                                {mapTheme === option.value && (
-                                    <Ionicons name="checkmark" size={24} color={colors.primary} />
-                                )}
-                            </TouchableOpacity>
-                            {index !== options.length - 1 && (
-                                <View style={{ height: 1, backgroundColor: colors.border, marginLeft: 52 }} />
-                            )}
-                        </View>
+                        <ListRow
+                            key={option.value}
+                            icon={option.icon}
+                            label={option.label}
+                            desc={option.desc}
+                            onPress={() => setMapTheme(option.value)}
+                            last={index === options.length - 1}
+                            right={mapTheme === option.value
+                                ? <Ionicons name="checkmark-circle" size={22} color={colors.text} />
+                                : <Ionicons name="ellipse-outline" size={22} color={colors.border} />}
+                        />
                     ))}
                 </View>
-            </View>
 
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Диагностика</Text>
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <TouchableOpacity style={styles.option} onPress={checkGps}>
-                        <View style={styles.optionLeft}>
-                            <Ionicons name="navigate-circle-outline" size={24} color={colors.text} />
-                            <Text style={[styles.optionText, { color: colors.text }]}>Проверить GPS</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
+                <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Диагностика</Text>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, !isDark && SHADOW]}>
+                    <ListRow icon="navigate-circle-outline" label="Проверить GPS" desc="Получить координаты и отправить диспетчеру" onPress={checkGps} last />
                 </View>
             </View>
-        </View>
+        </ScrollView>
     );
 }
 
@@ -99,45 +82,22 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        borderBottomWidth: 1,
-        paddingTop: 60,
-    },
-    backButton: {
-        marginRight: 16,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    section: {
-        marginTop: 24,
+    body: {
+        paddingHorizontal: 16,
     },
     sectionTitle: {
-        fontSize: 14,
-        marginLeft: 16,
-        marginBottom: 8,
+        fontFamily: FONT.displayMedium,
+        fontSize: 10,
+        letterSpacing: 0.7,
         textTransform: 'uppercase',
+        marginLeft: 4,
+        marginBottom: 10,
+        marginTop: 8,
     },
     card: {
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-    },
-    option: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 16,
-    },
-    optionLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    optionText: {
-        fontSize: 16,
+        borderRadius: RADIUS.card,
+        borderWidth: 1,
+        overflow: 'hidden',
+        marginBottom: 18,
     },
 });
