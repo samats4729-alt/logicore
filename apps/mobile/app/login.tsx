@@ -13,11 +13,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import * as SecureStore from '@/lib/secure';
 import { GOOGLE_WEB_CLIENT_ID, isExchangeDriver, useStore } from '@/store';
 import { api, setAuthToken } from '@/lib/api';
 import { exchangeApi, ответ } from '@/lib/exchange';
-import { BRAND, RADIUS } from '@/lib/theme';
+import { FONT, RADIUS } from '@/lib/theme';
 
 export default function LoginScreen() {
     const { login, loginWithGoogle } = useStore();
@@ -90,14 +91,19 @@ export default function LoginScreen() {
             style={styles.root}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+            {/* Фон экрана тёмный — значки часов и батареи светлые, иначе их не видно. */}
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-                {/* Бренд-шапка в редакционном стиле лендинга */}
+                {/* Бренд-шапка в редакционном стиле лендинга logicore.kz */}
                 <View style={styles.hero}>
-                    <Text style={styles.brand}>
-                        Logi<Text style={styles.brandAccent}>Core</Text>
-                    </Text>
-                    <Text style={styles.eyebrow}>(ПРИЛОЖЕНИЕ ВОДИТЕЛЯ)</Text>
-                    <Text style={styles.title}>Рейс под {'\n'}контролем.</Text>
+                    <View style={styles.brandRow}>
+                        <View style={styles.brandMark}>
+                            <Ionicons name="navigate" size={15} color="#030712" />
+                        </View>
+                        <Text style={styles.brand}>LogiCore</Text>
+                    </View>
+                    <Text style={styles.eyebrow}>(01 — Приложение водителя)</Text>
+                    <Text style={styles.title}>Рейс{'\n'}под контролем.</Text>
                     <Text style={styles.subtitle}>
                         Маршрут, статусы и документы вашего рейса — в одном приложении.
                     </Text>
@@ -108,8 +114,9 @@ export default function LoginScreen() {
                     <Text style={styles.cardTitle}>Вход для водителя</Text>
                     <Text style={styles.cardSub}>Телефон и пароль выдаёт ваша компания</Text>
 
+                    <Text style={styles.fieldLabel}>Телефон</Text>
                     <View style={styles.inputWrap}>
-                        <Ionicons name="call-outline" size={18} color="#8a91a0" />
+                        <Ionicons name="call-outline" size={18} color="#868e9c" />
                         <TextInput
                             style={styles.input}
                             placeholder="+7 700 123 45 67"
@@ -122,8 +129,9 @@ export default function LoginScreen() {
                         />
                     </View>
 
+                    <Text style={styles.fieldLabel}>Пароль</Text>
                     <View style={styles.inputWrap}>
-                        <Ionicons name="lock-closed-outline" size={18} color="#8a91a0" />
+                        <Ionicons name="lock-closed-outline" size={18} color="#868e9c" />
                         <TextInput
                             style={styles.input}
                             placeholder="Пароль"
@@ -135,8 +143,8 @@ export default function LoginScreen() {
                             editable={!loading}
                             onSubmitEditing={handleLogin}
                         />
-                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
-                            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color="#8a91a0" />
+                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8} accessibilityLabel={showPassword ? 'Скрыть пароль' : 'Показать пароль'}>
+                            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color="#868e9c" />
                         </TouchableOpacity>
                     </View>
 
@@ -144,25 +152,31 @@ export default function LoginScreen() {
                         style={[styles.button, loading && { opacity: 0.7 }]}
                         onPress={handleLogin}
                         disabled={loading}
+                        activeOpacity={0.88}
                     >
                         {loading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
                             <>
                                 <Text style={styles.buttonText}>Войти</Text>
-                                <Ionicons name="arrow-forward" size={18} color="#fff" />
+                                <View style={styles.buttonArrow}>
+                                    <Ionicons name="arrow-forward" size={16} color="#0b0d12" />
+                                </View>
                             </>
                         )}
                     </TouchableOpacity>
 
-                    <Text style={styles.hint}>
-                        Нет доступа? Обратитесь к диспетчеру вашей компании — он выдаст пароль в карточке водителя.
-                    </Text>
+                    <View style={styles.hintRow}>
+                        <Ionicons name="information-circle-outline" size={16} color="#868e9c" />
+                        <Text style={styles.hint}>
+                            Нет доступа? Обратитесь к диспетчеру вашей компании — он выдаст пароль в карточке водителя.
+                        </Text>
+                    </View>
                 </View>
 
                 {exchangeOn && !!GOOGLE_WEB_CLIENT_ID && (
                     <View style={styles.exchangeCard}>
-                        <Text style={styles.exchangeEyebrow}>БИРЖА ГРУЗОВ</Text>
+                        <Text style={styles.exchangeEyebrow}>(02 — Биржа грузов)</Text>
                         <Text style={styles.exchangeTitle}>Работаете сами?</Text>
                         <Text style={styles.exchangeText}>
                             Со своим ИП или через парк — берите грузы с биржи. Регистрация займёт 5 минут.
@@ -172,6 +186,7 @@ export default function LoginScreen() {
                             onPress={handleGoogle}
                             disabled={googleBusy}
                             accessibilityLabel="Войти через Google"
+                            activeOpacity={0.88}
                         >
                             {googleBusy ? <ActivityIndicator color="#0b0d12" /> : (
                                 <>
@@ -199,6 +214,8 @@ export default function LoginScreen() {
                         </TouchableOpacity>
                     </View>
                 )}
+
+                <Text style={styles.footer}>© LogiCore · logicore.kz</Text>
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -213,78 +230,99 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         justifyContent: 'center',
         padding: 20,
-        paddingTop: 72,
+        paddingTop: 64,
+        paddingBottom: 28,
     },
     hero: {
         marginBottom: 28,
+        paddingHorizontal: 4,
+    },
+    brandRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 40,
+    },
+    brandMark: {
+        width: 30,
+        height: 30,
+        borderRadius: 9,
+        backgroundColor: '#ffffff',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     brand: {
-        fontSize: 20,
-        fontWeight: '800',
+        fontFamily: FONT.display,
+        fontSize: 18,
         color: '#ffffff',
-        letterSpacing: -0.5,
-        marginBottom: 26,
-    },
-    brandAccent: {
-        color: BRAND.primary,
+        letterSpacing: -0.6,
     },
     eyebrow: {
-        fontSize: 10,
-        fontWeight: '700',
-        letterSpacing: 4,
+        fontFamily: FONT.displayMedium,
+        fontSize: 10.5,
+        letterSpacing: 0.6,
         color: 'rgba(255,255,255,0.45)',
-        marginBottom: 12,
+        marginBottom: 14,
     },
     title: {
+        fontFamily: FONT.display,
         fontSize: 34,
-        fontWeight: '800',
         color: '#ffffff',
-        letterSpacing: -1,
-        lineHeight: 38,
-        marginBottom: 12,
+        letterSpacing: -1.6,
+        lineHeight: 40,
+        marginBottom: 14,
     },
     subtitle: {
-        fontSize: 14,
-        lineHeight: 21,
-        color: 'rgba(255,255,255,0.55)',
-        maxWidth: 300,
+        fontFamily: FONT.regular,
+        fontSize: 15,
+        lineHeight: 22,
+        color: 'rgba(255,255,255,0.58)',
+        maxWidth: 310,
     },
     card: {
         backgroundColor: '#ffffff',
-        borderRadius: RADIUS.card + 4,
-        padding: 24,
+        borderRadius: 26,
+        padding: 22,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 16 },
-        shadowOpacity: 0.45,
+        shadowOffset: { width: 0, height: 18 },
+        shadowOpacity: 0.5,
         shadowRadius: 40,
         elevation: 12,
     },
     cardTitle: {
-        fontSize: 19,
-        fontWeight: '800',
+        fontFamily: FONT.display,
+        fontSize: 18,
         color: '#0b0d12',
-        letterSpacing: -0.3,
+        letterSpacing: -0.7,
     },
     cardSub: {
-        fontSize: 12.5,
-        color: '#6b7280',
-        marginTop: 4,
+        fontFamily: FONT.regular,
+        fontSize: 13,
+        color: '#868e9c',
+        marginTop: 5,
         marginBottom: 18,
+    },
+    fieldLabel: {
+        fontFamily: FONT.medium,
+        fontSize: 12.5,
+        color: '#4c5460',
+        marginBottom: 7,
     },
     inputWrap: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
-        borderRadius: RADIUS.button,
+        borderColor: '#e6e8ec',
+        borderRadius: RADIUS.input,
         paddingHorizontal: 14,
-        height: 52,
-        marginBottom: 12,
-        backgroundColor: '#fafbfc',
+        height: 54,
+        marginBottom: 14,
+        backgroundColor: '#f7f8fa',
     },
     input: {
         flex: 1,
+        fontFamily: FONT.regular,
         fontSize: 16,
         color: '#0b0d12',
     },
@@ -292,48 +330,66 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        backgroundColor: BRAND.primary,
+        gap: 12,
+        backgroundColor: '#0b0d12',
         borderRadius: RADIUS.button,
-        height: 52,
-        marginTop: 4,
+        height: 56,
+        marginTop: 6,
     },
     buttonText: {
+        fontFamily: FONT.semibold,
         color: '#ffffff',
         fontSize: 16,
-        fontWeight: '700',
+        letterSpacing: -0.2,
+    },
+    buttonArrow: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: '#ffffff',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    hintRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 16,
+        padding: 12,
+        borderRadius: 12,
+        backgroundColor: '#f7f8fa',
     },
     hint: {
-        fontSize: 12,
-        lineHeight: 17,
-        color: '#8a91a0',
-        marginTop: 16,
-        textAlign: 'center',
+        flex: 1,
+        fontFamily: FONT.regular,
+        fontSize: 12.5,
+        lineHeight: 18,
+        color: '#4c5460',
     },
     exchangeCard: {
         marginTop: 14,
-        borderRadius: RADIUS.card + 4,
+        borderRadius: 26,
         padding: 22,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.12)',
     },
-    exchangeEyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 3, color: 'rgba(255,255,255,0.45)' },
-    exchangeTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginTop: 8, letterSpacing: -0.4 },
-    exchangeText: { fontSize: 13.5, lineHeight: 19, color: 'rgba(255,255,255,0.6)', marginTop: 6, marginBottom: 16 },
+    exchangeEyebrow: { fontFamily: FONT.displayMedium, fontSize: 10.5, letterSpacing: 0.6, color: 'rgba(255,255,255,0.45)' },
+    exchangeTitle: { fontFamily: FONT.display, fontSize: 20, color: '#ffffff', marginTop: 10, letterSpacing: -0.8 },
+    exchangeText: { fontFamily: FONT.regular, fontSize: 14, lineHeight: 20, color: 'rgba(255,255,255,0.6)', marginTop: 6, marginBottom: 16 },
     googleButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 10,
-        height: 52,
+        height: 54,
         borderRadius: RADIUS.button,
         backgroundColor: '#ffffff',
     },
-    googleText: { color: '#0b0d12', fontSize: 16, fontWeight: '700' },
-    devBox: { marginTop: 14, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#374151', borderStyle: 'dashed' },
-    devTitle: { color: '#9ca3af', fontSize: 12, marginBottom: 8 },
+    googleText: { fontFamily: FONT.semibold, color: '#0b0d12', fontSize: 16 },
+    devBox: { marginTop: 14, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#374151', borderStyle: 'dashed' },
+    devTitle: { fontFamily: FONT.regular, color: '#9ca3af', fontSize: 12, marginBottom: 8 },
     devInput: { height: 44, borderRadius: 10, borderWidth: 1, borderColor: '#374151', color: '#fff', paddingHorizontal: 10, fontSize: 12 },
     devButton: { marginTop: 8, height: 40, borderRadius: 10, backgroundColor: '#374151', alignItems: 'center', justifyContent: 'center' },
-    devButtonText: { color: '#fff', fontWeight: '700' },
+    devButtonText: { fontFamily: FONT.semibold, color: '#fff' },
+    footer: { fontFamily: FONT.regular, fontSize: 11.5, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 24 },
 });
