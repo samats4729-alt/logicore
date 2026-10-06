@@ -10,7 +10,6 @@ import {
     Alert,
     ActivityIndicator,
     Linking,
-    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -22,6 +21,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { statusMeta, FONT, RADIUS, SHADOW } from '@/lib/theme';
 import { Empty, IconTile, ScreenHeader, Section, StatusPill } from '@/components/kit';
 import { SwipeConfirm } from '@/components/SwipeConfirm';
+import { ProblemSheet } from '@/components/ProblemSheet';
 import { useTabBarSpace } from '@/components/TabBar';
 
 /** Шагов у рейса от «Назначен» до «Завершён» — столько делений у полосы прогресса. */
@@ -51,6 +51,7 @@ export default function CurrentTrip({
     const [refreshing, setRefreshing] = useState(false);
     const [uploading, setUploading] = useState(false);
     const tabBarSpace = useTabBarSpace();
+    const [problemOpen, setProblemOpen] = useState(false);
 
     // При каждом возврате на экран: рейс могли назначить, пока водитель был в ленте.
     useFocusEffect(useCallback(() => {
@@ -117,34 +118,12 @@ export default function CurrentTrip({
         }
     };
 
+    // Раньше на Android уходило только «водитель сообщил о проблеме» —
+    // системное окно не умеет поле ввода. Теперь панель с причинами и полем
+    // одна для Android и iPhone.
     const handleReportProblem = () => {
         if (!currentOrder) return;
-        if (Platform.OS === 'ios') {
-            Alert.prompt(
-                'Сообщить о проблеме',
-                'Опишите, что случилось — диспетчер сразу увидит сообщение.',
-                [
-                    { text: 'Отмена', style: 'cancel' },
-                    {
-                        text: 'Отправить',
-                        onPress: (text?: string) => {
-                            if (text?.trim()) sendProblem(text.trim());
-                        },
-                    },
-                ],
-                'plain-text',
-            );
-        } else {
-            // Android: Alert.prompt недоступен — подтверждение с типовым текстом
-            Alert.alert('Сообщить о проблеме', 'Отправить диспетчеру сигнал о проблеме с рейсом?', [
-                { text: 'Отмена', style: 'cancel' },
-                {
-                    text: 'Отправить',
-                    style: 'destructive',
-                    onPress: () => sendProblem('Водитель сообщил о проблеме через приложение'),
-                },
-            ]);
-        }
+        setProblemOpen(true);
     };
 
     const uploadPhoto = async (fromCamera: boolean) => {
@@ -438,6 +417,8 @@ export default function CurrentTrip({
                 </Section>
             </View>
         </ScrollView>
+
+            <ProblemSheet visible={problemOpen} onSubmit={sendProblem} onClose={() => setProblemOpen(false)} />
 
             {/* ===== Следующий шаг: свайп вправо, внизу над вкладками ===== */}
             {meta.next && (
