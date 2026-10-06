@@ -7,6 +7,6 @@ import CurrentTrip from '@/components/CurrentTrip';
  */
 export default function TripScreen() {
     return (
-        <CurrentTrip emptyText="Когда компания выберет вас исполнителем, рейс появится здесь: маршрут с адресами, шаги и документы. Потяните вниз, чтобы обновить." />
+        <CurrentTrip showHeader={false} emptyText="Когда компания выберет вас исполнителем, рейс появится здесь: маршрут с адресами, шаги и документы. Потяните вниз, чтобы обновить." />
     );
 }
