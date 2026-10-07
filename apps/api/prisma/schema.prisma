@@ -220,6 +220,10 @@ model User {
   // Комиссия менеджера (% от маржи)
   commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
 
+  /// Грузы, которые человек поставил на биржу.
+  /// Анкета водителя биржи — если человек пришёл через приложение.
+  exchangeDriver ExchangeDriver? @relation("UserExchangeDriver")
+
   @@index([phone])
   @@index([role])
   @@index([departmentId])
@@ -526,6 +530,25 @@ model Company {
   /// которые подставлялись вслепую.
   carrierPaymentDays Int?
   carrierPaymentFrom String?
+
+  /// Грузы компании на бирже.
+
+  /// Парк — компания-посредник на бирже: арендует машину с экипажем у
+  /// водителей без ИП, чтобы перевозка шла законно. Ставит отметку только
+  /// владелец платформы в админке.
+  isPark          Boolean          @default(false)
+  /// Доступ к бирже. Пока биржу проверяют, её видят только отмеченные
+  /// компании и водители их парков. Ставит владелец платформы в админке.
+  exchangeAccess  Boolean          @default(false)
+  /// Код приглашения парка: водитель вводит его в анкете или открывает ссылку — и попадает в этот парк.
+  parkInviteCode  String?          @unique
+  /// Ставки удержаний парка из выплат водителям.
+  parkPayoutRates ParkPayoutRates?
+  /// Выплаты водителям парка.
+  driverPayouts   DriverPayout[]
+  exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
+  /// Отклики компании-перевозчика на заявки других компаний с биржи.
+  exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")
 }
 
 // ... existing models ...
@@ -680,6 +703,7 @@ model City {
 
   originQuoteRequests      QuoteRequest[] @relation("OriginQuoteRequests")
   destinationQuoteRequests QuoteRequest[] @relation("DestinationQuoteRequests")
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -949,6 +973,26 @@ model Order {
   completionReviewedById String?
   completionReviewedBy   User?     @relation("ReviewedCompletions", fields: [completionReviewedById], references: [id], onDelete: SetNull)
 
+  // ─── Биржа ───
+  //
+  // Заявку без исполнителя компания выставляет на биржу: её видят
+  // перевозчики, водители с ИП и водители парков, и предлагают цену.
+  // На бирже сейчас — выставлена и не снята.
+  /// Когда и кто выставил заявку на биржу.
+  exchangePublishedAt   DateTime?
+  exchangePublishedById String?
+  /// Цена, которую компания предлагает исполнителю, ₸. Видна всем на бирже.
+  exchangePrice         Decimal?  @db.Decimal(18, 2)
+  /// Что ещё важно исполнителю — видно всем на бирже.
+  exchangeNote          String?
+  /// Снята с биржи: вручную с причиной или когда выбран исполнитель.
+  exchangeClosedAt      DateTime?
+  exchangeCloseReason   String?
+  /// Отклики перевозчиков и водителей на заявку с биржи.
+  exchangeOffers        ExchangeOffer[]
+  /// Строка выплаты водителю парка за этот рейс — рейс оплачивается один раз.
+  driverPayoutItem      DriverPayoutItem?
+
   // Relations
   routePoints               OrderRoutePoint[]
   documents                 Document[]
@@ -984,6 +1028,7 @@ model Order {
   @@index([subForwarderId])
   /// Журнал спрашивает «что ещё не проверено» на каждой отрисовке списка.
   @@index([driverCompletedAt, completionReviewedAt])
+  @@index([exchangePublishedAt, exchangeClosedAt])
 }
 
 model OrderRoutePoint {
@@ -2996,4 +3041,277 @@ model CurrencyRevaluationLine {
   /// считается от неё, а не от курса документа.
   @@index([documentId])
   @@index([accountId])
+}
+
+// ============================================================
+// БИРЖА
+// ============================================================
+
+/// Кем водитель работает на бирже.
+enum ExchangeDriverKind {
+  IP // Свой ИП — сам перевозчик, проверки нет
+  PARK // Без ИП — через парк, который арендует машину с экипажем
+}
+
+/// Путь анкеты водителя.
+enum ExchangeDriverStatus {
+  DRAFT // Заполняет анкету
+  PENDING // Отправил, парк проверяет
+  APPROVED // Допущен — видит грузы
+  REJECTED // Парк отказал, можно исправить и отправить снова
+  BLOCKED // Заблокирован за обман — вернуться нельзя
+}
+
+/// Водитель биржи — пришёл сам, через приложение, входом Google.
+///
+/// Не путать с водителем компании (User с ролью DRIVER и companyId): того
+/// заводит компания. Здесь человек регистрируется сам, а допускает его парк.
+model ExchangeDriver {
+  id     String               @id @default(cuid())
+  userId String               @unique
+  user   User                 @relation("UserExchangeDriver", fields: [userId], references: [id], onDelete: Cascade)
+  kind   ExchangeDriverKind?
+  status ExchangeDriverStatus @default(DRAFT)
+
+  /// Парк, через который работает водитель без ИП.
+  parkCompanyId String?
+  park          Company? @relation("ParkExchangeDrivers", fields: [parkCompanyId], references: [id], onDelete: SetNull)
+
+  lastName   String?
+  firstName  String?
+  middleName String?
+  /// Один ИИН — один водитель на всей бирже.
+  iin        String? @unique
+  /// Вписан водителем; парк при проверке звонит на него.
+  phone      String?
+
+  /// Данные ИП — у водителя-перевозчика.
+  ipName String?
+  ipIin  String?
+
+  vehiclePlate      String?
+  vehicleBodyType   String?
+  vehicleCapacityKg Int?
+  /// Машина записана на водителя. Нет — нужна доверенность от владельца.
+  vehicleIsOwn      Boolean @default(true)
+
+  /// Договор с парком подписан в приложении. Подпись через eGov — позже.
+  contractSignedAt     DateTime?
+  contractSignedDevice String?
+  contractSignedIp     String?
+
+  submittedAt   DateTime?
+  reviewedAt    DateTime?
+  reviewedById  String?
+  rejectReason  String?
+  blockedAt     DateTime?
+  blockedReason String?
+
+  /// Сколько рейсов довёз — от этого растёт доверие (аванс, дорогие грузы).
+  tripsCompleted Int @default(0)
+
+  documents ExchangeDriverDocument[]
+  offers    ExchangeOffer[]
+  payouts   DriverPayout[]
+
+  /// Счёт для выплат через парк: IBAN и банк. Без счёта выплату не запросить.
+  payoutIban String?
+  payoutBank String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parkCompanyId, status])
+  @@index([status])
+}
+
+/// Какой документ сфотографирован.
+enum ExchangeDriverDocumentKind {
+  ID_FRONT // Удостоверение, лицевая сторона
+  ID_BACK // Удостоверение, обратная сторона
+  SELFIE_WITH_ID // Водитель с удостоверением в руке
+  LICENSE // Водительское удостоверение
+  VEHICLE_REGISTRATION // Техпаспорт
+  POWER_OF_ATTORNEY // Доверенность от владельца машины
+  IP_CERTIFICATE // Документ о регистрации ИП
+}
+
+model ExchangeDriverDocument {
+  id       String                     @id @default(cuid())
+  driverId String
+  driver   ExchangeDriver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  kind     ExchangeDriverDocumentKind
+  fileKey  String
+  fileName String
+  mimeType String
+  size     Int
+
+  createdAt DateTime @default(now())
+
+  @@index([driverId])
+}
+
+/// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с
+/// тем же ИИН, ни с тем же телефоном, ни с той же машиной.
+model ExchangeBlocklist {
+  id          String   @id @default(cuid())
+  /// IIN, PHONE или PLATE.
+  kind        String
+  /// Приведённое значение: только цифры у ИИН и телефона, номер — без пробелов, заглавными.
+  value       String
+  reason      String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([kind, value])
+}
+
+/// Где отклик на заявку с биржи.
+enum ExchangeOfferStatus {
+  ACTIVE // Ждёт решения компании
+  WITHDRAWN // Отозвал сам откликнувшийся
+  ACCEPTED // Компания выбрала его исполнителем
+  REJECTED // Выбрали другого или заявку сняли с биржи
+}
+
+/// Отклик на заявку с биржи: «согласен за вашу цену» или своя цена.
+///
+/// Откликается либо водитель биржи (с ИП или через парк), либо компания-
+/// перевозчик. Один отклик на заявку от каждого — повторный отклик
+/// обновляет прежний. Выбирает исполнителя компания, выставившая заявку.
+model ExchangeOffer {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Водитель биржи — если откликнулся водитель.
+  driverId  String?
+  driver    ExchangeDriver? @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// Компания-перевозчик — если откликнулась компания.
+  companyId String?
+  company   Company?        @relation("CompanyExchangeOffers", fields: [companyId], references: [id], onDelete: Cascade)
+  /// Кто нажал «откликнуться» — водитель или сотрудник компании.
+  createdById String
+
+  status ExchangeOfferStatus @default(ACTIVE)
+  /// Цена исполнителя, ₸.
+  price  Decimal             @db.Decimal(18, 2)
+  /// Согласился на цену компании, а не назвал свою.
+  agreed Boolean             @default(false)
+  /// Когда подаст машину.
+  readyDate DateTime? @db.Date
+  comment   String?
+
+  decidedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([orderId, driverId])
+  @@unique([orderId, companyId])
+  @@index([orderId, status])
+  @@index([driverId])
+  @@index([companyId])
+}
+
+/// Ставки удержаний парка из выплат водителям без ИП.
+///
+/// Задаёт парк вместе со своим бухгалтером: закон меняется, и система ставок
+/// не придумывает. Каждая выплата запоминает ставки, по которым посчитана, —
+/// поменяли ставку, а прошлые выплаты остались как были.
+model ParkPayoutRates {
+  id            String  @id @default(cuid())
+  parkCompanyId String  @unique
+  park          Company @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
+
+  /// Комиссия парка, % от суммы за рейс.
+  commissionPct Decimal @default(5) @db.Decimal(5, 2)
+  /// Пенсионные взносы водителя (ОПВ), % — удерживаются.
+  opvPct        Decimal @default(10) @db.Decimal(5, 2)
+  /// Взносы водителя на медстрахование (ВОСМС), % — удерживаются.
+  vosmsPct      Decimal @default(2) @db.Decimal(5, 2)
+  /// Подоходный налог (ИПН), % от дохода за вычетом ОПВ и ВОСМС — удерживается.
+  ipnPct        Decimal @default(10) @db.Decimal(5, 2)
+  /// Социальные отчисления (СО), % — платит парк сверху, из выплаты не удерживаются.
+  soPct         Decimal @default(5) @db.Decimal(5, 2)
+
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+/// Где выплата водителю.
+enum DriverPayoutStatus {
+  REQUESTED // Водитель запросил — ждёт парка
+  EXPORTED // Выгружена в 1С — бухгалтер платит
+  PAID // Выплачено — бухгалтер отметил
+  REJECTED // Парк отклонил с причиной — рейсы снова доступны к выплате
+}
+
+/// Выплата водителю парка за довезённые рейсы.
+///
+/// Система считает удержания и выгружает реестр для 1С; платит бухгалтер из
+/// 1С и отмечает здесь «выплачено». С банками и госорганами система не
+/// связывается — так решил владелец.
+model DriverPayout {
+  id            String             @id @default(cuid())
+  parkCompanyId String
+  park          Company            @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
+  driverId      String
+  driver        ExchangeDriver     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  status        DriverPayoutStatus @default(REQUESTED)
+
+  /// Суммы по всем рейсам выплаты, ₸.
+  gross      Decimal @db.Decimal(18, 2)
+  commission Decimal @db.Decimal(18, 2)
+  opv        Decimal @db.Decimal(18, 2)
+  vosms      Decimal @db.Decimal(18, 2)
+  ipn        Decimal @db.Decimal(18, 2)
+  net        Decimal @db.Decimal(18, 2)
+  /// СО — платит парк сверху, для сведения бухгалтеру.
+  so         Decimal @db.Decimal(18, 2)
+
+  /// Счёт, на который просили, — на момент запроса.
+  iban String?
+  bank String?
+
+  requestedAt  DateTime  @default(now())
+  exportedAt   DateTime?
+  paidAt       DateTime?
+  decidedById  String?
+  rejectReason String?
+
+  items DriverPayoutItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parkCompanyId, status])
+  @@index([driverId])
+}
+
+/// Строка выплаты — один рейс со своими удержаниями и ставками.
+model DriverPayoutItem {
+  id       String       @id @default(cuid())
+  payoutId String
+  payout   DriverPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  /// Рейс оплачивается один раз: строка на рейс единственная.
+  orderId  String       @unique
+  order    Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  gross      Decimal @db.Decimal(18, 2)
+  commission Decimal @db.Decimal(18, 2)
+  opv        Decimal @db.Decimal(18, 2)
+  vosms      Decimal @db.Decimal(18, 2)
+  ipn        Decimal @db.Decimal(18, 2)
+  net        Decimal @db.Decimal(18, 2)
+  so         Decimal @db.Decimal(18, 2)
+
+  /// Ставки, по которым посчитано, — на момент запроса.
+  commissionPct Decimal @db.Decimal(5, 2)
+  opvPct        Decimal @db.Decimal(5, 2)
+  vosmsPct      Decimal @db.Decimal(5, 2)
+  ipnPct        Decimal @db.Decimal(5, 2)
+  soPct         Decimal @db.Decimal(5, 2)
+
+  @@index([payoutId])
 }

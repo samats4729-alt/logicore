@@ -1,6 +1,15 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/lib/secure';
+import Constants from 'expo-constants';
+import { GoogleSignin, isSuccessResponse } from '@/lib/google';
 import { api, setAuthToken, clearAuthToken, getDeviceId } from '@/lib/api';
+
+/** «Веб-клиент» Google из настроек сборки. Пусто — вход через Google не настроен. */
+export const GOOGLE_WEB_CLIENT_ID: string = (Constants.expoConfig?.extra?.googleWebClientId as string | undefined) || '';
+
+/** Водитель биржи — пришёл сам, через Google; у водителя компании есть компания. */
+export const isExchangeDriver = (user: { role?: string; companyId?: string | null; company?: unknown } | null) =>
+    !!user && user.role === 'DRIVER' && !user.companyId && !user.company;
 
 interface User {
     id: string;
@@ -8,6 +17,7 @@ interface User {
     firstName: string;
     lastName: string;
     role: string;
+    companyId?: string | null;
     vehiclePlate?: string;
     vehicleModel?: string;
     vehicleType?: string;
@@ -23,6 +33,8 @@ export interface Order {
     cargoDescription: string;
     cargoWeight?: number;
     createdAt?: string;
+    /** Компания-заказчик. Старый сервер её не присылает — тогда поля нет. */
+    customerCompany?: { id: string; name: string } | null;
     routePoints: Array<{
         pointType: string;
         sequence: number;
@@ -50,6 +62,8 @@ interface AppState {
 
     // Auth actions
     login: (phone: string, password: string) => Promise<void>;
+    /** Вход водителя биржи через Google. Отменил выбор аккаунта — false. */
+    loginWithGoogle: () => Promise<boolean>;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
 
@@ -81,9 +95,29 @@ export const useStore = create<AppState>((set, get) => ({
         set({ user, isAuthenticated: true });
     },
 
+    loginWithGoogle: async () => {
+        GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        const result = await GoogleSignin.signIn();
+        if (!isSuccessResponse(result)) return false;
+        const token = result.data.idToken;
+        if (!token) throw new Error('Google не выдал пропуск. Попробуйте ещё раз.');
+        const deviceId = await getDeviceId();
+        const response = await api.post('/exchange/driver/auth/google', { token, deviceId });
+        const { accessToken, user } = response.data;
+        await setAuthToken(accessToken);
+        await SecureStore.setItemAsync('user', JSON.stringify(user));
+        set({ user, isAuthenticated: true });
+        return true;
+    },
+
     logout: async () => {
         try {
             await api.post('/auth/logout');
+        } catch { }
+        // Чтобы в следующий раз можно было выбрать другой аккаунт Google.
+        try {
+            if (GOOGLE_WEB_CLIENT_ID) await GoogleSignin.signOut();
         } catch { }
         await clearAuthToken();
         set({ user: null, isAuthenticated: false, currentOrder: null, orders: [] });

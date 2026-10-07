@@ -32,6 +32,7 @@ import { CurrencyModule } from './currency/currency.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { TelegramAdminModule } from './telegram/telegram-admin.module';
 import { QuoteRequestsModule } from './quote-requests/quote-requests.module';
+import { ExchangeModule } from './exchange/exchange.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
 import { AdminStatsModule } from './admin-stats/admin-stats.module';
@@ -89,6 +90,7 @@ import { ReportsModule } from './reports/reports.module';
         TelegramModule,
         TelegramAdminModule,
         QuoteRequestsModule,
+        ExchangeModule,
         MonitoringModule,
         GeoModule,
         AdminStatsModule,

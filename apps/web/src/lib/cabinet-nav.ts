@@ -72,6 +72,9 @@ export function isNavItemActive(item: any, pathname: string): boolean {
     // «Дашборд» живёт ровно по своему адресу: он корень кабинета, и любая
     // внутренняя страница начинается с него.
     if (key === '/company') return pathname === '/company';
+    // Главная кабинета парка — тоже корень своих разделов: «Водители» и
+    // «Рейсы» лежат под ней, но подсвечиваться должны сами по себе.
+    if (key === '/company/park') return pathname === '/company/park';
     if (HUB_ROUTES[key]) return within(HUB_ROUTES[key], pathname);
     if (key.startsWith('/')) return pathname === key || pathname.startsWith(key + '/');
     return within(childKeysOf(item), pathname);

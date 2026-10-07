@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, ParseArrayPipe, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TrackingService } from './tracking.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AllowDriverWithoutCompany, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { PurgeGpsPointsDto, SendGpsPointDto } from './dto/gps-point.dto';
@@ -20,6 +20,7 @@ export class TrackingController {
     constructor(private trackingService: TrackingService) { }
 
     @Post('gps')
+    @AllowDriverWithoutCompany()
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Отправить GPS точку' })
     async sendGpsPoint(@Body() dto: SendGpsPointDto, @Request() req: any) {
@@ -38,6 +39,7 @@ export class TrackingController {
     }
 
     @Post('gps/batch')
+    @AllowDriverWithoutCompany()
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Отправить пакет GPS точек (после offline)' })
     async sendGpsPointsBatch(

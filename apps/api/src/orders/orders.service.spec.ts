@@ -65,25 +65,23 @@ describe('OrdersService.takeOrder', () => {
     });
 });
 
-describe('OrdersService.findDriverOrders — рейс с проблемой', () => {
-    it('после «Проблемы» рейс остаётся у водителя текущим', async () => {
-        const prisma = { order: { findMany: jest.fn().mockResolvedValue([]) } };
-        const service = new OrdersService(
-            prisma as any,
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-        );
+describe('OrdersService.reportProblem — только участник заявки', () => {
+    const makeService = (order: any) => {
+        const prisma: any = { order: { findUnique: jest.fn().mockResolvedValue(order), findFirst: jest.fn().mockResolvedValue(order) } };
+        const service = new OrdersService(prisma, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+        jest.spyOn(service as any, 'findById').mockResolvedValue(order);
+        return service;
+    };
+    const order = { id: 'order-1', status: OrderStatus.IN_TRANSIT, driverId: 'driver-1', customerCompanyId: 'c-1', forwarderId: 'f-1', partnerId: null, responsibleManager: null };
 
-        await service.findDriverOrders('driver-1');
+    it('чужой водитель не может пометить заявку проблемой', async () => {
+        await expect(makeService(order).reportProblem('order-1', 'сломался', 'driver-2', undefined, 'DRIVER'))
+            .rejects.toBeInstanceOf(ForbiddenException);
+    });
 
-        const statuses = prisma.order.findMany.mock.calls[0][0].where.status.in;
-        expect(statuses).toContain(OrderStatus.PROBLEM);
-        expect(statuses).not.toContain(OrderStatus.COMPLETED);
+    it('логист чужой компании — тоже нет', async () => {
+        await expect(makeService(order).reportProblem('order-1', 'сломался', 'user-x', 'other-company', 'LOGISTICIAN'))
+            .rejects.toBeInstanceOf(ForbiddenException);
     });
 });
 
@@ -116,5 +114,27 @@ describe('OrdersService.findDriverOrders', () => {
         expect(prisma.order.findMany.mock.calls[0][0].include.customerCompany).toEqual({ select: { id: true, name: true } });
         expect((order as any).customerCompany).toEqual({ id: 'company-1', name: 'ТОО «Ромашка»' });
         expect((order as any).customerPrice).toBeNull();
+    });
+});
+
+describe('OrdersService.findDriverOrders — рейс с проблемой', () => {
+    it('после «Проблемы» рейс остаётся у водителя текущим', async () => {
+        const prisma = { order: { findMany: jest.fn().mockResolvedValue([]) } };
+        const service = new OrdersService(
+            prisma as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        await service.findDriverOrders('driver-1');
+
+        const statuses = prisma.order.findMany.mock.calls[0][0].where.status.in;
+        expect(statuses).toContain(OrderStatus.PROBLEM);
+        expect(statuses).not.toContain(OrderStatus.COMPLETED);
     });
 });

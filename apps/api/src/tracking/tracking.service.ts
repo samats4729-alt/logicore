@@ -53,7 +53,23 @@ export class TrackingService {
         heading?: number;
         recordedAt: Date;
     }) {
-        return this.prisma.gpsPoint.create({ data });
+        const [point] = await this.ownOrdersOnly([data]);
+        return this.prisma.gpsPoint.create({ data: point });
+    }
+
+    /**
+     * Точку можно привязать только к своей заявке. Номер заявки приходит из
+     * приложения, и раньше его не сверяли: водитель мог приписать свои точки
+     * к чужой заявке и испортить её трек на карте у другой компании. Точка с
+     * чужим номером сохраняется без привязки — сам путь водителя не теряем.
+     */
+    private async ownOrdersOnly<T extends { driverId: string; orderId?: string }>(points: T[]): Promise<T[]> {
+        const ids = [...new Set(points.map((p) => p.orderId).filter((id): id is string => !!id))];
+        if (!ids.length) return points;
+        const driverId = points[0].driverId;
+        const own = await this.prisma.order.findMany({ where: { id: { in: ids }, driverId }, select: { id: true } });
+        const allowed = new Set(own.map((o) => o.id));
+        return points.map((p) => (p.orderId && !allowed.has(p.orderId) ? { ...p, orderId: undefined } : p));
     }
 
     /**
@@ -69,7 +85,7 @@ export class TrackingService {
         heading?: number;
         recordedAt: Date;
     }[]) {
-        return this.prisma.gpsPoint.createMany({ data: points });
+        return this.prisma.gpsPoint.createMany({ data: await this.ownOrdersOnly(points) });
     }
 
     /**

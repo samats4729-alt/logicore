@@ -53,6 +53,27 @@ export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
  * подтвердил», и в списке это должно читаться так же, как он произносит
  * это вслух.
  */
+/**
+ * Где груз на бирже. «В пути» и «Снят» — те же слова, что у рейса; «Ищем
+ * машину» — то, что заказчик хочет знать в первую очередь, а не «открыт».
+ */
+export const EXCHANGE_LOAD_STATUS_LABELS: Record<string, string> = {
+    OPEN: 'Ищем машину',
+    TAKEN: 'Водитель найден',
+    IN_TRANSIT: ORDER_STATUS_LABELS.IN_TRANSIT,
+    DELIVERED: 'Доставлен',
+    CANCELLED: 'Снят',
+};
+
+/** Анкета водителя биржи — где она сейчас. */
+export const EXCHANGE_DRIVER_STATUS_LABELS: Record<string, string> = {
+    DRAFT: 'Заполняет',
+    PENDING: 'На проверке',
+    APPROVED: 'Допущен',
+    REJECTED: 'Отказ',
+    BLOCKED: 'Заблокирован',
+};
+
 export const QUOTE_REQUEST_STATUS_LABELS: Record<string, string> = {
     NEW: 'Новый',
     IN_PROGRESS: 'В работе',

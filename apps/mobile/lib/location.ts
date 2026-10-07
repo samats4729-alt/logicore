@@ -1,7 +1,34 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { Platform, Alert } from 'react-native';
+import * as SecureStore from '@/lib/secure';
 import { api } from '@/lib/api';
+
+/**
+ * Заметное предупреждение перед запросом геолокации в фоне — требование
+ * Google Play: человек должен узнать, зачем приложению его место, когда
+ * оно закрыто, до системного вопроса. Показываем один раз.
+ */
+async function confirmBackgroundDisclosure(): Promise<boolean> {
+    if ((await SecureStore.getItemAsync('bgLocationDisclosure')) === 'yes') return true;
+    return new Promise((resolve) => {
+        Alert.alert(
+            'Геолокация в фоне',
+            'LogiCore Водитель передаёт ваше местоположение во время рейса, чтобы диспетчер и заказчик видели машину на карте, '
+            + 'в том числе когда приложение закрыто или не используется. После завершения рейса передача останавливается.',
+            [
+                { text: 'Не сейчас', style: 'cancel', onPress: () => resolve(false) },
+                {
+                    text: 'Продолжить',
+                    onPress: async () => {
+                        await SecureStore.setItemAsync('bgLocationDisclosure', 'yes');
+                        resolve(true);
+                    },
+                },
+            ],
+        );
+    });
+}
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
@@ -48,6 +75,7 @@ export const startBackgroundTracking = async (): Promise<boolean> => {
         // На iOS в Expo Go фоновая геолокация может не работать
         // Пробуем запросить background permissions только если это не Expo Go
         try {
+            if (!(await confirmBackgroundDisclosure())) throw new Error('Отказался от фоновой геолокации');
             const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
             if (backgroundStatus !== 'granted') {
                 console.warn('Background location permission not granted, using foreground only');

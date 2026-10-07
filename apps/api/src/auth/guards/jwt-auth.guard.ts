@@ -12,6 +12,15 @@ export const ALLOW_WITHOUT_COMPANY_KEY = 'allow_without_company';
 export const AllowWithoutCompany = () => SetMetadata(ALLOW_WITHOUT_COMPANY_KEY, true);
 
 /**
+ * Без организации — только водителю. Водитель биржи приходит сам, через
+ * приложение, и компании у него нет, а рейс он ведёт через те же адреса,
+ * что и водитель компании: свои заявки, статус, геолокация, фото документов.
+ * Всем остальным без организации туда нельзя: у пустой компании проверка
+ * «участвует ли компания в заявке» отвечает неправильно.
+ */
+export const AllowDriverWithoutCompany = () => SetMetadata(ALLOW_WITHOUT_COMPANY_KEY, 'DRIVER');
+
+/**
  * Кроме проверки токена гвард отвечает на второй вопрос: состоит ли этот
  * человек хоть в какой-нибудь организации.
  *
@@ -50,11 +59,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
             return true;
         }
 
-        const allowedWithoutCompany = this.reflector.getAllAndOverride<boolean>(
+        const allowedWithoutCompany = this.reflector.getAllAndOverride<boolean | 'DRIVER'>(
             ALLOW_WITHOUT_COMPANY_KEY,
             [context.getHandler(), context.getClass()],
         );
-        if (allowedWithoutCompany) {
+        if (allowedWithoutCompany === true) {
+            return true;
+        }
+        if (allowedWithoutCompany === 'DRIVER' && user.role === UserRole.DRIVER) {
             return true;
         }
 

@@ -31,4 +31,14 @@ config.resolver.extraNodeModules = {
 
 config.resolver.assetExts.push('glb', 'gltf');
 
+// 5. Предпросмотр в браузере: ESM-сборка zustand использует import.meta,
+// а веб-бандл Metro — не модуль. Для браузера берём её обычную сборку.
+// На сборку для телефона это не влияет.
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+    if (platform === 'web' && (moduleName === 'zustand' || moduleName.startsWith('zustand/'))) {
+        return { type: 'sourceFile', filePath: require.resolve(moduleName, { paths: [workspaceRoot] }) };
+    }
+    return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;

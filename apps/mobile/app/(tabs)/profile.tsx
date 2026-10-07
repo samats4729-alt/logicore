@@ -6,7 +6,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useStore } from '@/store';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { api, API_URL, getAuthHeader } from '@/lib/api';
-import { BRAND, RADIUS } from '@/lib/theme';
+import { FONT, RADIUS, SHADOW } from '@/lib/theme';
+import { Button, ListRow, ScreenHeader, Section } from '@/components/kit';
 
 export default function ProfileScreen() {
     const { user, logout } = useStore();
@@ -62,187 +63,151 @@ export default function ProfileScreen() {
     const initials = ((user?.lastName?.[0] || '') + (user?.firstName?.[0] || '')).toUpperCase() || '?';
 
     return (
-        <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 120 }}>
-            {/* Шапка профиля */}
-            <View style={[styles.headerCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <TouchableOpacity onPress={pickAvatar} disabled={uploading} style={styles.avatarWrap}>
-                    {!avatarFailed ? (
-                        <Image
-                            source={{
-                                uri: `${API_URL}/users/me/avatar?v=${avatarVersion}`,
-                                headers: getAuthHeader(),
-                            }}
-                            style={styles.avatarImage}
-                            onError={() => setAvatarFailed(true)}
-                        />
-                    ) : (
-                        <View style={[styles.avatarFallback, { backgroundColor: BRAND.primary }]}>
-                            <Text style={styles.avatarInitials}>{initials}</Text>
-                        </View>
-                    )}
-                    <View style={[styles.avatarBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        {uploading
-                            ? <ActivityIndicator size="small" color={BRAND.primary} />
-                            : <Ionicons name="camera" size={14} color={BRAND.primary} />}
-                    </View>
-                </TouchableOpacity>
-                <Text style={[styles.name, { color: colors.text }]}>
-                    {user?.lastName} {user?.firstName}
-                </Text>
-                <Text style={[styles.phone, { color: colors.textSecondary }]}>{user?.phone}</Text>
-                <View style={[styles.rolePill, { backgroundColor: isDark ? colors.hover : '#e8f0fe' }]}>
-                    <Text style={styles.rolePillText}>Водитель</Text>
-                </View>
-            </View>
+        <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 124 }}>
+            <ScreenHeader eyebrow="Аккаунт" title="Профиль" />
 
-            {/* Транспорт */}
-            {!!user?.vehiclePlate && (
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <View style={styles.cardRow}>
-                        <View style={[styles.cardIcon, { backgroundColor: isDark ? colors.hover : '#e6f4ff' }]}>
-                            <Ionicons name="car" size={20} color={BRAND.primary} />
+            <View style={styles.body}>
+                {/* Кто вы: фото, имя, телефон, компания */}
+                <View style={[styles.identity, { backgroundColor: colors.card, borderColor: colors.border }, !isDark && SHADOW]}>
+                    <TouchableOpacity onPress={pickAvatar} disabled={uploading} style={styles.avatarWrap} accessibilityLabel="Сменить фото профиля">
+                        {!avatarFailed ? (
+                            <Image
+                                source={{
+                                    uri: `${API_URL}/users/me/avatar?v=${avatarVersion}`,
+                                    headers: getAuthHeader(),
+                                }}
+                                style={[styles.avatarImage, { backgroundColor: colors.hover }]}
+                                onError={() => setAvatarFailed(true)}
+                            />
+                        ) : (
+                            <View style={[styles.avatarFallback, { backgroundColor: colors.feature }]}>
+                                <Text style={[styles.avatarInitials, { color: colors.featureFg }]}>{initials}</Text>
+                            </View>
+                        )}
+                        <View style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
+                            {uploading
+                                ? <ActivityIndicator size="small" color={colors.primaryFg} />
+                                : <Ionicons name="camera" size={12} color={colors.primaryFg} />}
                         </View>
-                        <View style={styles.cardContent}>
-                            <Text style={[styles.cardLabel, { color: colors.textTertiary }]}>ТРАНСПОРТ</Text>
-                            <Text style={[styles.cardValue, { color: colors.text }]}>
-                                {[user.vehicleModel, user.vehiclePlate].filter(Boolean).join(' · ')}
-                            </Text>
-                            {!!user.trailerNumber && (
-                                <Text style={[styles.cardSub, { color: colors.textSecondary }]}>Прицеп: {user.trailerNumber}</Text>
+                    </TouchableOpacity>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
+                            {user?.lastName} {user?.firstName}
+                        </Text>
+                        <Text style={[styles.phone, { color: colors.textSecondary }]}>{user?.phone}</Text>
+                        <View style={styles.tags}>
+                            <View style={[styles.rolePill, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                                <Ionicons name="id-card-outline" size={12} color={colors.textSecondary} />
+                                <Text style={[styles.rolePillText, { color: colors.textSecondary }]}>Водитель</Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                {!!user?.company?.name && (
+                    <Section title="Компания" icon="business-outline">
+                        <Text style={[styles.companyName, { color: colors.text }]}>{user.company.name}</Text>
+                        <Text style={[styles.companyHint, { color: colors.textTertiary }]}>Рейсы назначает диспетчер этой компании</Text>
+                    </Section>
+                )}
+
+                {/* Транспорт */}
+                {!!user?.vehiclePlate && (
+                    <Section title="Транспорт" icon="car-outline">
+                        <View style={styles.vehicleRow}>
+                            <View style={[styles.plate, { borderColor: colors.text }]}>
+                                <Text style={[styles.plateText, { color: colors.text }]}>{user.vehiclePlate}</Text>
+                            </View>
+                            {!!user.vehicleModel && (
+                                <Text style={[styles.vehicleModel, { color: colors.textSecondary }]} numberOfLines={1}>{user.vehicleModel}</Text>
                             )}
                         </View>
-                    </View>
+                        {!!user.trailerNumber && (
+                            <Text style={[styles.trailer, { color: colors.textSecondary }]}>Прицеп: {user.trailerNumber}</Text>
+                        )}
+                    </Section>
+                )}
+
+                {/* Меню */}
+                <View style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.border }, !isDark && SHADOW]}>
+                    <ListRow icon="documents-outline" label="История рейсов" desc="Все ваши рейсы и их статусы" onPress={() => router.push('/(tabs)/orders')} />
+                    <ListRow icon="settings-outline" label="Настройки" desc="Тема оформления, проверка GPS" onPress={() => router.push('/settings')} last />
                 </View>
-            )}
 
-            {/* Меню */}
-            <View style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <TouchableOpacity
-                    style={[styles.menuItem, { borderBottomColor: colors.border }]}
-                    onPress={() => router.push('/(tabs)/orders')}
-                >
-                    <Ionicons name="documents-outline" size={22} color={colors.text} />
-                    <Text style={[styles.menuText, { color: colors.text }]}>История рейсов</Text>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-                </TouchableOpacity>
+                {/* Выход */}
+                <Button title="Выйти из аккаунта" icon="log-out-outline" variant="danger" onPress={handleLogout} style={{ marginTop: 4 }} />
 
-                <TouchableOpacity
-                    style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
-                    onPress={() => router.push('/settings')}
-                >
-                    <Ionicons name="settings-outline" size={22} color={colors.text} />
-                    <Text style={[styles.menuText, { color: colors.text }]}>Настройки</Text>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-                </TouchableOpacity>
+                <Text style={[styles.version, { color: colors.textTertiary }]}>LogiCore Driver · версия 1.1.0</Text>
             </View>
-
-            {/* Выход */}
-            <TouchableOpacity
-                style={[styles.logoutButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={handleLogout}
-            >
-                <Ionicons name="log-out-outline" size={20} color={colors.danger} />
-                <Text style={[styles.logoutText, { color: colors.danger }]}>Выйти из аккаунта</Text>
-            </TouchableOpacity>
-
-            <Text style={[styles.version, { color: colors.textTertiary }]}>LogiCore Driver · версия 1.1.0</Text>
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    headerCard: {
+    body: { paddingHorizontal: 16 },
+    identity: {
+        flexDirection: 'row',
         alignItems: 'center',
-        margin: 14,
-        marginBottom: 0,
-        paddingVertical: 26,
-        borderRadius: RADIUS.card,
+        gap: 16,
+        padding: 18,
+        borderRadius: 22,
         borderWidth: 1,
+        marginBottom: 12,
     },
-    avatarWrap: { position: 'relative', marginBottom: 12 },
+    avatarWrap: { position: 'relative' },
     avatarImage: {
-        width: 96,
-        height: 96,
-        borderRadius: 48,
-        backgroundColor: '#e5e7eb',
+        width: 76,
+        height: 76,
+        borderRadius: 38,
     },
     avatarFallback: {
-        width: 96,
-        height: 96,
-        borderRadius: 48,
+        width: 76,
+        height: 76,
+        borderRadius: 38,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    avatarInitials: { color: '#fff', fontSize: 32, fontWeight: '800' },
+    avatarInitials: { fontFamily: FONT.display, fontSize: 24, letterSpacing: -0.5 },
     avatarBadge: {
         position: 'absolute',
-        right: -2,
-        bottom: -2,
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        borderWidth: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    name: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
-    phone: { fontSize: 13.5, marginTop: 3 },
-    rolePill: {
-        marginTop: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 5,
-        borderRadius: RADIUS.pill,
-    },
-    rolePillText: { color: '#1d4ed8', fontSize: 12, fontWeight: '700' },
-
-    card: {
-        margin: 14,
-        marginBottom: 0,
-        padding: 14,
-        borderRadius: RADIUS.card,
-        borderWidth: 1,
-    },
-    cardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    cardIcon: {
-        width: 42,
-        height: 42,
+        right: -1,
+        bottom: -1,
+        width: 26,
+        height: 26,
         borderRadius: 13,
+        borderWidth: 2,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    cardContent: { flex: 1 },
-    cardLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
-    cardValue: { fontSize: 15.5, fontWeight: '700', marginTop: 3 },
-    cardSub: { fontSize: 12.5, marginTop: 2 },
+    name: { fontFamily: FONT.display, fontSize: 18, letterSpacing: -0.7, lineHeight: 23 },
+    phone: { fontFamily: FONT.regular, fontSize: 14, marginTop: 4, fontVariant: ['tabular-nums'] },
+    tags: { flexDirection: 'row', marginTop: 10 },
+    rolePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: RADIUS.pill,
+        borderWidth: 1,
+    },
+    rolePillText: { fontFamily: FONT.semibold, fontSize: 11.5 },
+
+    companyName: { fontFamily: FONT.semibold, fontSize: 16, letterSpacing: -0.2 },
+    companyHint: { fontFamily: FONT.regular, fontSize: 12.5, marginTop: 4 },
+
+    vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    plate: { borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+    plateText: { fontFamily: FONT.bold, fontSize: 15, letterSpacing: 1, fontVariant: ['tabular-nums'] },
+    vehicleModel: { flex: 1, fontFamily: FONT.medium, fontSize: 14.5 },
+    trailer: { fontFamily: FONT.regular, fontSize: 13, marginTop: 10 },
 
     menu: {
-        margin: 14,
-        marginBottom: 0,
         borderRadius: RADIUS.card,
         borderWidth: 1,
         overflow: 'hidden',
+        marginBottom: 12,
     },
-    menuItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 15,
-        gap: 12,
-        borderBottomWidth: 1,
-    },
-    menuText: { flex: 1, fontSize: 15, fontWeight: '500' },
-
-    logoutButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        margin: 14,
-        marginBottom: 8,
-        padding: 15,
-        borderRadius: RADIUS.card,
-        borderWidth: 1,
-    },
-    logoutText: { fontSize: 15, fontWeight: '700' },
-    version: { textAlign: 'center', fontSize: 11.5, marginTop: 4 },
+    version: { fontFamily: FONT.regular, textAlign: 'center', fontSize: 11.5, marginTop: 16 },
 });

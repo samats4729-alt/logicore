@@ -9,7 +9,7 @@ import { OrderSettlementsService } from './order-settlements.service';
 import { ACCOUNTING_ORDER_FIELDS, canTouchAccounting } from '../auth/accounting-access';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
 import { Response } from 'express';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AllowDriverWithoutCompany, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/guards/permissions.guard';
 import { CreateOrderDto, UpdateStatusDto, AssignDriverDto, OrdersQueryDto } from './dto/order.dto';
@@ -167,6 +167,7 @@ export class OrdersController {
     }
 
     @Get('my')
+    @AllowDriverWithoutCompany()
     @Roles(UserRole.DRIVER)
     @ApiOperation({ summary: 'Мои заявки (для водителя); history=1 — включая завершённые' })
     async myOrders(@Request() req: any, @Query('history') history?: string) {
@@ -651,6 +652,7 @@ export class OrdersController {
     }
 
     @Put(':id/status')
+    @AllowDriverWithoutCompany()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Обновить статус заявки' })
     async updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Request() req: any) {
@@ -699,6 +701,7 @@ export class OrdersController {
     }
 
     @Post(':id/problem')
+    @AllowDriverWithoutCompany()
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.DRIVER)
     @ApiOperation({ summary: 'Сообщить о проблеме' })
     async reportProblem(
@@ -706,7 +709,7 @@ export class OrdersController {
         @Body() dto: { description: string },
         @Request() req: any
     ) {
-        return this.ordersService.reportProblem(id, dto.description, req.user.sub);
+        return this.ordersService.reportProblem(id, dto.description, req.user.sub, req.user.companyId, req.user.role);
     }
 
     @Post(':id/delivery-point')

@@ -22,6 +22,7 @@ import {
     HistoryOutlined,
     CheckCircleOutlined,
     FolderOpenOutlined,
+    ShopOutlined,
 } from '@ant-design/icons';
 import { Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -30,6 +31,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
 import { ROLE_LABELS } from '@/lib/vocabulary';
+import { exchangeEnabled } from '@/lib/exchange';
 import shell from './admin-shell.module.css';
 
 /**
@@ -57,6 +59,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [isMobile, setIsMobile] = useState(false);
     const [draftCount, setDraftCount] = useState(0);
     const [pendingCompanies, setPendingCompanies] = useState(0);
+    /* Биржа строится отдельно и включается выключателем на сервере. */
+    const [exchangeOn, setExchangeOn] = useState(false);
+
+    // Спрашиваем после входа: до него сервер ответил бы отказом, и пункт не
+    // появился бы до перезагрузки страницы.
+    useEffect(() => {
+        if (!user?.id) return;
+        let alive = true;
+        exchangeEnabled().then((on) => { if (alive) setExchangeOn(on); });
+        return () => { alive = false; };
+    }, [user?.id]);
 
     // Разделы платформы: страницы были на месте и работали, но ссылок на них
     // в меню не было — попасть можно было только по прямому адресу, который
@@ -70,6 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             label: 'Проверка организаций',
             count: pendingCompanies,
         },
+        ...(exchangeOn ? [{ key: '/admin/parks', icon: <ShopOutlined />, label: 'Биржа: доступ и парки' }] : []),
         { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
         { key: '/admin/orders', icon: <FileTextOutlined />, label: 'Заявки' },
         { key: '/admin/tracking', icon: <AimOutlined />, label: 'Мониторинг' },
