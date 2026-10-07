@@ -126,12 +126,13 @@ test.describe('Раскладка дашборда', () => {
         expect(влезает, 'строка активности не помещается в карточку').toBe(true);
     });
 
-    test('«Настроить» сворачивает блок и помнит выбор', async ({ page }) => {
+    test('«Блоки» сворачивает блок и помнит выбор', async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
         await page.goto('/company');
         await карточки(page);
 
-        await page.getByRole('button', { name: 'Настроить' }).click();
+        // Кнопка по макету «shadcn Nova» — «Блоки» с числом блоков на экране.
+        await page.getByRole('button', { name: /^Блоки/ }).click();
         const галочка = page.getByRole('checkbox', { name: 'Последние события' });
         await expect(галочка).toBeVisible();
 

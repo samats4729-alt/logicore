@@ -2,6 +2,42 @@
    Общие блоки — шапка, плитка — приходят из `nova.module.css`, рамка
    карточки блока — из `components/dashboard/DashboardCard`. */
 
+/* ===== Шапка =====
+
+   По макету «shadcn Nova» (07.10.2026): заголовок обычным шрифтом, а не
+   крупным рубленым — на мониторе 1920 тот занимал полосу, а говорил одно
+   слово. Шкала — из docs/guides/ui-craft.md: заголовок 20, подпись 13. */
+.head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.headTitle {
+    margin: 0;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 28px;
+    letter-spacing: -0.015em;
+    color: var(--nova-fg);
+}
+
+.headSub {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.headActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 /* ===== Плитки показателей =====
 
    Все в один ряд, сколько бы их ни было: у руководителя их пять или шесть
@@ -12,8 +48,8 @@
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
-    gap: 10px;
-    margin-bottom: 14px;
+    gap: 12px;
+    margin-bottom: 16px;
 }
 
 .tiles:empty {
@@ -28,10 +64,12 @@
     }
 }
 
-/* Планшет: пять-шесть плиток в ряд уже тесно — по три в ряд, а хвост
+/* До 1680 по ширине окна (а это и ноутбук 1440, и 1280 — слева ещё меню)
+   пять-шесть плашек в ряд уже тесно: подписи обрезались до «Сейчас в р…».
+   Поэтому по три в ряд, а хвост
    делит свою строку поровну, без пустого места справа. Сетка на шесть
    дорожек нужна ради хвоста из двух: они встают пополам. */
-@media (min-width: 720px) and (max-width: 1179px) {
+@media (min-width: 720px) and (max-width: 1679px) {
     .tiles:has(> :nth-child(5)) {
         grid-auto-flow: row;
         grid-template-columns: repeat(6, minmax(0, 1fr));

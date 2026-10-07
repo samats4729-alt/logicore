@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, ArrowDown, ArrowUp, Bell, Plus, Settings } from 'lucide-react';
+import { Activity, ArrowDown, ArrowUp, Bell, Clock, FileText, LayoutGrid, Plus, TriangleAlert, Truck, Wallet, type LucideIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import kpi from '@/components/dashboard/kpi.module.css';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { STATUS_LABELS } from '@/components/ui/StatusPill';
@@ -254,52 +256,66 @@ export default function CompanyDashboard() {
         }));
     }, [cur, prev, tdy]);
 
-    /** Плитка показателя: одинаковая для владельца и сотрудника. */
-    const Tile = ({ label, value, sub, tone, onClick }: {
+    /**
+     * Показатель: одинаковый для владельца и сотрудника.
+     *
+     * Плашка в одну строку, по макету. Пояснение под числом («требуют
+     * внимания», «активные перевозки») — в подсказке при наведении.
+     */
+    const Tile = ({ label, value, sub, tone, onClick, icon }: {
         label: string;
         value: React.ReactNode;
         sub?: string;
         tone?: 'neg' | 'warn';
         onClick?: () => void;
-    }) => (
-        <div
-            className={`${styles.tile} ${onClick ? styles.tileClickable : ''}`}
-            onClick={onClick}
-            role={onClick ? 'button' : undefined}
-        >
-            <div className={styles.tileHead}>
-                <span className={styles.tileLabel}>{label}</span>
-            </div>
-            <div className={`${styles.tileValue} ${tone === 'neg' ? styles.valueNeg : tone === 'warn' ? styles.valueWarn : ''}`}>
-                {value}
-            </div>
-            {sub && <div className={styles.tileSub}>{sub}</div>}
-        </div>
-    );
+        icon: LucideIcon;
+    }) => {
+        const Icon = icon;
+        const className = [kpi.kpi, tone === 'neg' ? kpi.neg : tone === 'warn' ? kpi.warn : ''].filter(Boolean).join(' ');
+        const body = (
+            <>
+                <Icon size={15} className={kpi.icon} />
+                <span className={kpi.label}>{label}</span>
+                <span className={kpi.value}>{value}</span>
+            </>
+        );
+        return onClick ? (
+            <button type="button" className={className} title={sub} onClick={onClick}>{body}</button>
+        ) : (
+            <div className={className} title={sub}>{body}</div>
+        );
+    };
+
+    /** Сколько блоков сейчас на экране — подпись у кнопки «Блоки», как в макете. */
+    const блоковНаЭкране = ALL_BLOCKS.filter(b => блок(b.key)).length;
+
+    /** «Среда, 8 октября» — день недели с большой буквы. */
+    const сегодня = (() => {
+        const s = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+        return s.charAt(0).toUpperCase() + s.slice(1);
+    })();
 
     return (
         <div className={`${styles.page} ${styles.pageWide}`}>
-            {/* ===== ШАПКА ===== */}
-            <div className={styles.hero}>
-                <div>
-                    <div className={styles.eyebrow}>LogiCore · обзор</div>
-                    <h1 className={styles.title}>{greeting()}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
-                    <p className={styles.subtitle}>
-                        {dayjs().format('DD.MM.YYYY')} · {isOwner ? 'сводка по компании за месяц' : isManager ? 'ваши заявки и заработок' : 'ваша сводка'}
+            {/* ===== ШАПКА =====
+                По макету «shadcn Nova»: заголовок «Дашборд» обычным шрифтом,
+                под ним день и что это за сводка; справа — настройка блоков и
+                главное действие. */}
+            <div className={dash.head}>
+                <div className="min-w-0">
+                    <h1 className={dash.headTitle}>Дашборд</h1>
+                    <p className={dash.headSub}>
+                        {greeting()}{user?.firstName ? `, ${user.firstName}` : ''} · {сегодня} · {isOwner ? 'сводка по компании за месяц' : isManager ? 'ваши заявки и заработок' : 'ваша сводка'}
                     </p>
                 </div>
-                <div className={styles.heroActions}>
-                    {(isOwner || isManager) && (
-                        <button type="button" className={`${styles.action} ${styles.actionPrimary}`} onClick={() => router.push('/company/orders/create')}>
-                            <Plus size={14} /> Создать заявку
-                        </button>
-                    )}
+                <div className={dash.headActions}>
                     {isOwner && (
                         <Popover>
                             <PopoverTrigger asChild>
-                                <button type="button" className={styles.action}>
-                                    <Settings size={14} /> Настроить
-                                </button>
+                                <Button type="button" variant="outline" size="sm" className="rounded-lg text-[13px]">
+                                    <LayoutGrid className="h-4 w-4" /> Блоки
+                                    <span className="rounded-md bg-muted px-1.5 text-[11px] tabular-nums text-muted-foreground">{блоковНаЭкране}</span>
+                                </Button>
                             </PopoverTrigger>
                             <PopoverContent align="end" className={dash.settings}>
                                 <div className={dash.settingsTitle}>Блоки дашборда</div>
@@ -318,6 +334,11 @@ export default function CompanyDashboard() {
                             </PopoverContent>
                         </Popover>
                     )}
+                    {(isOwner || isManager) && (
+                        <Button type="button" size="sm" className="rounded-lg text-[13px]" onClick={() => router.push('/company/orders/create')}>
+                            <Plus className="h-4 w-4" /> Создать заявку
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -332,25 +353,28 @@ export default function CompanyDashboard() {
             <div className={dash.tiles}>
                 {isOwner ? (
                     <>
-                        <Tile label="Сейчас в работе" value={activity?.inWorkNow ?? '—'} sub="активные перевозки" />
+                        <Tile icon={Truck} label="Сейчас в работе" value={activity?.inWorkNow ?? '—'} sub="активные перевозки" />
                         <Tile
+                            icon={Clock}
                             label="Ожидают"
                             value={activity?.pendingNow ?? '—'}
                             sub={(activity?.pendingNow || 0) > 0 ? 'требуют внимания' : 'всё назначено'}
                             tone={(activity?.pendingNow || 0) > 0 ? 'warn' : undefined}
                         />
                         <Tile
+                            icon={TriangleAlert}
                             label="Проблемы"
                             value={activity?.problemNow ?? '—'}
                             sub={(activity?.problemNow || 0) > 0 ? 'требуют решения' : 'нет проблемных рейсов'}
                             tone={(activity?.problemNow || 0) > 0 ? 'neg' : undefined}
                         />
-                        <Tile label="Заявок за месяц" value={cur?.created ?? '—'} sub="создано с начала месяца" />
+                        <Tile icon={FileText} label="Заявок за месяц" value={cur?.created ?? '—'} sub="создано с начала месяца" />
                         {payrollSummary?.hasScheme && (
                             <Tile
-                                label="Заработано за месяц"
+                                icon={Wallet}
+                                label="Заработано"
                                 value={`${fmt(payrollSummary.total)} ₸`}
-                                sub="перейти к деталям"
+                                sub="за месяц — перейти к деталям"
                                 onClick={() => router.push('/company/my-salary')}
                             />
                         )}
@@ -362,9 +386,10 @@ export default function CompanyDashboard() {
                     <>
                         {!statsDenied && (
                             <>
-                                <Tile label={isManager ? 'Мои заявки' : 'Заявки'} value={myStats?.total ?? '—'} sub="за всё время" />
-                                <Tile label="В работе" value={myStats?.inWork ?? '—'} sub="активные перевозки" />
+                                <Tile icon={FileText} label={isManager ? 'Мои заявки' : 'Заявки'} value={myStats?.total ?? '—'} sub="за всё время" />
+                                <Tile icon={Truck} label="В работе" value={myStats?.inWork ?? '—'} sub="активные перевозки" />
                                 <Tile
+                                    icon={Clock}
                                     label="Ожидают"
                                     value={myStats?.pending ?? '—'}
                                     sub={(myStats?.pending || 0) > 0 ? 'требуют внимания' : 'всё назначено'}
@@ -374,9 +399,10 @@ export default function CompanyDashboard() {
                         )}
                         {payrollSummary?.hasScheme && (
                             <Tile
-                                label="Заработано за месяц"
+                                icon={Wallet}
+                                label="Заработано"
                                 value={`${fmt(payrollSummary.total)} ₸`}
-                                sub="перейти к деталям"
+                                sub="за месяц — перейти к деталям"
                                 onClick={() => router.push('/company/my-salary')}
                             />
                         )}

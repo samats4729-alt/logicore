@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import SubscriptionBuyModal from '@/components/billing/SubscriptionBuyModal';
 import { BillingStatus, subscriptionView } from '@/lib/subscription-state';
-import nova from '@/components/nova/nova.module.css';
-import styles from './subscription-card.module.css';
+import { CreditCard } from 'lucide-react';
+import kpi from './kpi.module.css';
 
 /**
  * Тариф компании на главной кабинета.
@@ -36,23 +36,22 @@ export default function SubscriptionCard() {
 
     return (
         <>
-            <div className={`${nova.tile}${urgent ? ` ${styles.urgent}` : ''}`}>
-                <div className={nova.tileHead}>
-                    <span className={nova.tileLabel}>Тариф</span>
-                    {action && (
-                        <button
-                            type="button"
-                            className={styles.action}
-                            onClick={() => setBuyOpen(true)}
-                        >
-                            {action}
-                        </button>
-                    )}
-                </div>
-                {/* Срочность несёт рамка, а не цвет текста: «Осталось 3 дня»
-                    читается как факт, и красить сам факт незачем. */}
-                <div className={`${nova.tileValue} ${styles.value}`}>{value}</div>
-                <div className={styles.sub}>{sub}</div>
+            {/* Плашка в ряду показателей. Пояснение («до 14 октября»,
+                «после 16 августа доступ закроется») — в подсказке при
+                наведении, а срочность несёт рамка, а не цвет текста. */}
+            <div className={`${kpi.kpi}${urgent ? ` ${kpi.urgent}` : ''}`} title={sub || undefined}>
+                <CreditCard size={15} className={kpi.icon} />
+                <span className={kpi.label}>Тариф</span>
+                <span className={kpi.value}>{value}</span>
+                {action && (
+                    <button
+                        type="button"
+                        className={kpi.action}
+                        onClick={() => setBuyOpen(true)}
+                    >
+                        {action}
+                    </button>
+                )}
             </div>
 
             <SubscriptionBuyModal
