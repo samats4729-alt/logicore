@@ -170,12 +170,11 @@ test.describe('Дашборд-конструктор', () => {
         const первыйРяд = () => page.locator('[data-row]').first().evaluate((r) =>
             Array.from(r.querySelectorAll('[data-drop-area]')).map((x) => x.getAttribute('data-drop-area')).join(','));
         expect(await первыйРяд()).toBe('inWork,pending,problems,ordersMonth,revenue');
+        // Ждём результат, а не таймер: на нагруженной машине ряды перестраиваются не сразу.
         await page.setViewportSize({ width: 1100, height: 900 });
-        await page.waitForTimeout(500);
-        expect(await первыйРяд()).not.toBe('inWork,pending,problems,ordersMonth,revenue');
+        await expect.poll(первыйРяд, { timeout: 10_000 }).not.toBe('inWork,pending,problems,ordersMonth,revenue');
         await page.setViewportSize({ width: 1920, height: 1080 });
-        await page.waitForTimeout(500);
-        expect(await первыйРяд()).toBe('inWork,pending,problems,ordersMonth,revenue');
+        await expect.poll(первыйРяд, { timeout: 10_000 }).toBe('inWork,pending,problems,ordersMonth,revenue');
     });
 
     test('«Убрать» — с кнопкой «Вернуть», и расстановка запоминается', async ({ page }) => {

@@ -4,11 +4,11 @@ import { login } from './helpers';
 /**
  * Окно блока на дашборде (владелец, 08.10.2026): «Открыть крупно» —
  * блок посередине экрана, фон размыт; «Настройки» — вид графика, цвета,
- * что показывать, своё название.
+ * что показывать.
  *
  * Ломается молча: кнопка есть, окно не открывается, или настройка
  * сохраняется, а блок её не слушает. Поэтому проверяем то, что видно:
- * окно, вид графика, цвет линии, название в шапке.
+ * окно, вид графика, цвет линии.
  */
 
 const LAYOUT_KEY = 'lc_dashboard_layout_v5';
@@ -92,20 +92,23 @@ test.describe('Окно блока: открыть крупно и настро�
         await expect(page.locator('[data-widget="chart"] .recharts-bar-rectangle').first()).toBeVisible();
     });
 
-    test('своё название блока — в шапке, пустое — прежнее', async ({ page }) => {
+    /** Своё название блоку не даётся (владелец, 08.10): настройки — только там, где они что-то меняют. */
+    test('у блока из прежних разделов «Настроек» нет, у графика — есть', async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
         await открыть(page);
-        await меню(page, 'attention').click();
-        await page.getByRole('menuitem', { name: 'Настройки…' }).click();
-        await page.getByLabel('Своё название блока').fill('Хвосты и долги');
-        await page.getByRole('button', { name: 'Готово' }).click();
-        await expect(page.locator('[data-widget="attention"]').getByRole('heading', { name: 'Хвосты и долги' })).toBeVisible();
+        await меню(page, 'earnings').click();
+        await expect(page.getByRole('menuitem', { name: 'Открыть крупно' })).toBeVisible();
+        await expect(page.getByRole('menuitem', { name: 'Настройки…' })).toHaveCount(0);
+        await page.getByRole('menuitem', { name: 'Открыть крупно' }).click();
+        const окно = page.locator('[data-block-dialog="earnings"]');
+        await expect(окно).toBeVisible();
+        await expect(окно.getByRole('button', { name: 'Настройки' })).toHaveCount(0);
+        await page.keyboard.press('Escape');
 
-        await меню(page, 'attention').click();
+        await меню(page, 'chart').click();
         await page.getByRole('menuitem', { name: 'Настройки…' }).click();
-        await page.getByLabel('Своё название блока').fill('');
-        await page.getByRole('button', { name: 'Готово' }).click();
-        await expect(page.locator('[data-widget="attention"]').getByRole('heading', { name: 'Требуют внимания' })).toBeVisible();
+        await expect(page.locator('[data-settings-panel]')).toBeVisible();
+        await expect(page.getByLabel('Своё название блока')).toHaveCount(0);
     });
 
     test('показатель открывается крупно — с числом и графиком', async ({ page }) => {

@@ -25,7 +25,7 @@ import { subscriptionView } from '@/lib/subscription-state';
 import { AreaSpark, BarSpark, CHART_COLORS, DaysLeft, Parts, colorOf } from './charts';
 import { PREV_LABEL, useBoardData, type Period } from './data';
 import type { BlockId, KpiId, WidgetId } from './layout';
-import { customTitle, hasSettings, settingsFor, useSettingsStore, type SparkKind } from './settings';
+import { hasSettings, settingsFor, useSettingsStore, type SparkKind } from './settings';
 
 /**
  * Что за блоки и показатели есть на дашборде — по коду макета «shadcn Nova».
@@ -50,10 +50,7 @@ export function widgetMeta(id: WidgetId, period: Period = 'month'): WidgetMeta {
     return META[id](period);
 }
 
-/**
- * Название и пояснение блока — с учётом настроек: своё название, если
- * задано, и «Последние 8 недель», если у графика выбрано восемь.
- */
+/** Название и пояснение блока — с учётом настроек: «Последние 8 недель», если у графика выбрано восемь. */
 export function useMeta() {
     const { period } = useBoardData();
     const { all } = useSettingsStore();
@@ -64,8 +61,7 @@ export function useMeta() {
             const w = Number(settingsFor('chart', all.chart).weeks);
             description = `Последние ${w} ${plural(w, 'неделя', 'недели', 'недель')}, ₸`;
         }
-        const own = customTitle(all, id);
-        return own ? { ...m, title: own, short: own, description } : { ...m, description };
+        return { ...m, description };
     }, [period, all]);
 }
 

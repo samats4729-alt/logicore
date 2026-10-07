@@ -36,7 +36,7 @@ import { BoardSlotContext } from '../DashboardCard';
 import { Delta } from './charts';
 import { useDrag, useSize } from './dnd';
 import type { Placement, WidgetId } from './layout';
-import { useOpenBlock } from './settings';
+import { hasSettings, useOpenBlock } from './settings';
 import { useKpi, useMeta, type KpiId } from './widgets';
 import styles from './board.module.css';
 
@@ -128,9 +128,14 @@ function WidgetMenuItems({ id, others, rows, onMove, onHide }: {
     );
 }
 
-/** «Открыть крупно» (если кнопки в шапке нет) и «Настройки…» — верх меню «…». */
+/**
+ * «Открыть крупно» (если кнопки в шапке нет) и «Настройки…» (если блоку
+ * есть что настраивать) — верх меню «…».
+ */
 function OpenItems({ id, expand }: { id: WidgetId; expand: boolean }) {
     const open = useOpenBlock();
+    const settings = hasSettings(id);
+    if (!expand && !settings) return null;
     return (
         <>
             {expand && (
@@ -138,9 +143,11 @@ function OpenItems({ id, expand }: { id: WidgetId; expand: boolean }) {
                     <Maximize2 className="size-4" /> Открыть крупно
                 </DropdownMenuItem>
             )}
-            <DropdownMenuItem onSelect={() => open(id, 'settings')} className="text-[13px]">
-                <SlidersHorizontal className="size-4" /> Настройки…
-            </DropdownMenuItem>
+            {settings && (
+                <DropdownMenuItem onSelect={() => open(id, 'settings')} className="text-[13px]">
+                    <SlidersHorizontal className="size-4" /> Настройки…
+                </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
         </>
     );

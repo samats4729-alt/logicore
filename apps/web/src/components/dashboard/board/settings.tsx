@@ -7,8 +7,12 @@ import type { WidgetId } from './layout';
 
 /**
  * Настройки блоков дашборда (владелец, 08.10.2026): вид графика, цвета,
- * что показывать, своё название. Открываются из «…» → «Настройки» или
- * кнопкой в окне «Открыть крупно».
+ * что показывать. Открываются из «…» → «Настройки» или кнопкой в окне
+ * «Открыть крупно». Только там, где они что-то меняют по делу: у блоков,
+ * пришедших из прежних разделов, настроек нет.
+ *
+ * Своё название блоку сознательно не даётся (владелец, 08.10): оно было бы
+ * только в одном браузере, и один блок у разных людей звался бы по-разному.
  *
  * Хранятся в браузере отдельно от расстановки: «Как было» в «Блоках»
  * возвращает места блоков, а выбранные цвета и виды графиков не трогает.
@@ -186,16 +190,14 @@ export function settingsFor<K extends SettingsId>(id: K, raw: Record<string, unk
 
 // ==================== Хранилище ====================
 
-/** Что можно задать любому блоку: своё название. */
-export interface Common { title?: string }
-export type Stored = Partial<Record<WidgetId, Record<string, unknown> & Common>>;
+export type Stored = Partial<Record<WidgetId, Record<string, unknown>>>;
 
 const STORAGE_KEY = 'lc_dashboard_blocks_v1';
 
 interface Store {
     all: Stored;
     set: (id: WidgetId, patch: Record<string, unknown>) => void;
-    replace: (id: WidgetId, value: (Record<string, unknown> & Common) | undefined) => void;
+    replace: (id: WidgetId, value: Record<string, unknown> | undefined) => void;
 }
 
 const SettingsCtx = createContext<Store>({ all: {}, set: () => undefined, replace: () => undefined });
@@ -215,7 +217,7 @@ export function BlockSettingsProvider({ children }: { children: React.ReactNode 
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(all)); } catch { /* приватное окно — не запомнится */ }
     }, [all, loaded]);
     const set = useCallback((id: WidgetId, patch: Record<string, unknown>) => setAll((a) => ({ ...a, [id]: { ...a[id], ...patch } })), []);
-    const replace = useCallback((id: WidgetId, value: (Record<string, unknown> & Common) | undefined) => setAll((a) => {
+    const replace = useCallback((id: WidgetId, value: Record<string, unknown> | undefined) => setAll((a) => {
         const next = { ...a };
         if (value && Object.keys(value).length) next[id] = value; else delete next[id];
         return next;
@@ -231,12 +233,6 @@ export function useBlockSettings<K extends SettingsId>(id: K): BlockSettingsMap[
     const { all } = useContext(SettingsCtx);
     const raw = all[id];
     return useMemo(() => settingsFor(id, raw), [id, raw]);
-}
-
-/** Своё название блока, если задано. */
-export function customTitle(all: Stored, id: WidgetId): string | null {
-    const t = all[id]?.title;
-    return typeof t === 'string' && t.trim() ? t.trim() : null;
 }
 
 // ==================== Блок открыт крупно ====================

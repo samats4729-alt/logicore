@@ -8,12 +8,10 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { BoardSlotContext } from '../DashboardCard';
 import { BlockNote } from './blocks';
 import { Delta, PALETTE } from './charts';
-import { useBoardData } from './data';
 import { TONE } from './frame';
 import { isKpi, type KpiId, type WidgetId } from './layout';
 import {
@@ -21,14 +19,14 @@ import {
     DEFAULTS,
     FIELDS,
     OpenBlockContext,
-    customTitle,
     hasSettings,
     settingsFor,
     useSettingsStore,
     type BlockDialogMode,
     type Field,
+    type SettingsId,
 } from './settings';
-import { useKpi, useMeta, widgetMeta } from './widgets';
+import { useKpi, useMeta } from './widgets';
 import styles from './board.module.css';
 
 /**
@@ -110,7 +108,9 @@ function DialogInner({ id, mode, setMode, onDone, onClose, renderBody, onBuy }: 
     const [slotAction, setSlotAction] = useState<{ label: string; onClick: () => void } | null>(null);
     const slot = useRef({ setAction: setSlotAction }).current;
     const action = meta.action ? { label: meta.action.label, onClick: () => { onClose(); router.push(meta.action!.href); } } : slotAction;
-    const withSettings = mode === 'settings';
+    // Настройки — только у тех блоков, где они есть.
+    const configurable = hasSettings(id);
+    const withSettings = configurable && mode === 'settings';
 
     return (
         <>
@@ -127,6 +127,7 @@ function DialogInner({ id, mode, setMode, onDone, onClose, renderBody, onBuy }: 
                         {action.label} <ArrowRight className="size-3.5" />
                     </Button>
                 )}
+                {configurable && (
                 <Button
                     variant={withSettings ? 'secondary' : 'outline'}
                     size="sm"
@@ -137,6 +138,7 @@ function DialogInner({ id, mode, setMode, onDone, onClose, renderBody, onBuy }: 
                 >
                     <SlidersHorizontal className="size-4" /> <span className="hidden sm:inline">Настройки</span>
                 </Button>
+                )}
                 <DialogPrimitive.Close asChild>
                     <Button variant="ghost" size="icon" className="size-8 shrink-0 rounded-lg text-muted-foreground hover:text-foreground" aria-label="Закрыть">
                         <X className="size-4" />
@@ -151,7 +153,7 @@ function DialogInner({ id, mode, setMode, onDone, onClose, renderBody, onBuy }: 
                         </BoardSlotContext.Provider>
                     </BlockViewContext.Provider>
                 </div>
-                {withSettings && <SettingsPanel id={id} onDone={onDone} />}
+                {withSettings && <SettingsPanel id={id as SettingsId} onDone={onDone} />}
             </div>
         </>
     );
@@ -181,19 +183,12 @@ function KpiDetail({ id, onBuy }: { id: KpiId; onBuy: () => void }) {
 
 // ==================== Панель настроек ====================
 
-/** Отличаются ли настройки блока от исходных — тогда есть что сбрасывать. */
-function isChanged(id: WidgetId, raw: Record<string, unknown> | undefined, all: Parameters<typeof customTitle>[0]) {
-    if (customTitle(all, id)) return true;
-    return hasSettings(id) && JSON.stringify(settingsFor(id, raw)) !== JSON.stringify(DEFAULTS[id]);
-}
-
-function SettingsPanel({ id, onDone }: { id: WidgetId; onDone: () => void }) {
-    const { period } = useBoardData();
+function SettingsPanel({ id, onDone }: { id: SettingsId; onDone: () => void }) {
     const store = useSettingsStore();
     const raw = store.all[id];
-    const values: Record<string, unknown> = hasSettings(id) ? settingsFor(id, raw) : {};
-    const fields = hasSettings(id) ? FIELDS[id] : [];
-    const base = widgetMeta(id, period).title;
+    const values = settingsFor(id, raw) as unknown as Record<string, unknown>;
+    // Отличается от исходного — есть что сбрасывать.
+    const changed = JSON.stringify(values) !== JSON.stringify(DEFAULTS[id]);
     const set = (patch: Record<string, unknown>) => store.set(id, patch);
     const reset = () => {
         const before = store.all[id];
@@ -209,29 +204,13 @@ function SettingsPanel({ id, onDone }: { id: WidgetId; onDone: () => void }) {
         >
             <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
                 <div className="grid gap-5">
-                    <Section label="Название">
-                        <Input
-                            value={typeof raw?.title === 'string' ? raw.title : ''}
-                            placeholder={base}
-                            maxLength={60}
-                            onChange={(e) => set({ title: e.target.value })}
-                            className="h-8 rounded-lg text-[13px] md:text-[13px]"
-                            aria-label="Своё название блока"
-                        />
-                        <p className="m-0 text-xs text-muted-foreground">Пусто — «{base}»</p>
-                    </Section>
-                    {fields.filter((f) => !f.when || f.when(values)).map((f) => (
+                    {FIELDS[id].filter((f) => !f.when || f.when(values)).map((f) => (
                         <FieldControl key={f.key} field={f} value={values[f.key]} onChange={(v) => set({ [f.key]: v })} />
                     ))}
-                    {!fields.length && (
-                        <p className="m-0 text-xs text-muted-foreground">
-                            Другого здесь не настроить: блок показывает то же, что раздел, из которого он пришёл.
-                        </p>
-                    )}
                 </div>
             </div>
             <div className="flex shrink-0 items-center justify-between gap-2 border-0 border-t border-solid border-border px-4 py-3">
-                <Button variant="ghost" size="sm" disabled={!isChanged(id, raw, store.all)} onClick={reset} className="h-8 gap-1.5 rounded-lg px-2.5 text-[13px] font-normal">
+                <Button variant="ghost" size="sm" disabled={!changed} onClick={reset} className="h-8 gap-1.5 rounded-lg px-2.5 text-[13px] font-normal">
                     <RotateCcw className="size-3.5" /> Как было
                 </Button>
                 <Button size="sm" onClick={onDone} className="h-8 rounded-lg px-4 text-[13px]">Готово</Button>
