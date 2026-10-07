@@ -20,11 +20,12 @@ import {
     Wallet,
     type LucideIcon,
 } from 'lucide-react';
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { subscriptionView } from '@/lib/subscription-state';
-import { AreaSpark, BarSpark, CHART_COLORS, DaysLeft, Parts } from './charts';
+import { AreaSpark, BarSpark, CHART_COLORS, DaysLeft, Parts, colorOf } from './charts';
 import { PREV_LABEL, useBoardData, type Period } from './data';
 import type { BlockId, KpiId, WidgetId } from './layout';
+import { customTitle, hasSettings, settingsFor, useSettingsStore, type SparkKind } from './settings';
 
 /**
  * Что за блоки и показатели есть на дашборде — по коду макета «shadcn Nova».
@@ -47,6 +48,25 @@ const PERIOD_WORD: Record<Period, string> = { week: 'неделю', month: 'ме
 
 export function widgetMeta(id: WidgetId, period: Period = 'month'): WidgetMeta {
     return META[id](period);
+}
+
+/**
+ * Название и пояснение блока — с учётом настроек: своё название, если
+ * задано, и «Последние 8 недель», если у графика выбрано восемь.
+ */
+export function useMeta() {
+    const { period } = useBoardData();
+    const { all } = useSettingsStore();
+    return useCallback((id: WidgetId): WidgetMeta => {
+        const m = widgetMeta(id, period);
+        let description = m.description;
+        if (id === 'chart') {
+            const w = Number(settingsFor('chart', all.chart).weeks);
+            description = `Последние ${w} ${plural(w, 'неделя', 'недели', 'недель')}, ₸`;
+        }
+        const own = customTitle(all, id);
+        return own ? { ...m, title: own, short: own, description } : { ...m, description };
+    }, [period, all]);
 }
 
 const META: Record<WidgetId, (p: Period) => WidgetMeta> = {
@@ -117,6 +137,9 @@ export function plural(n: number, one: string, few: string, many: string) {
 /** Плашка: число, подсказка, рост и график — по живым данным. */
 export function useKpi(id: KpiId, onBuy?: () => void): KpiView {
     const data = useBoardData();
+    // Цвет и вид мини-графика — из настроек плашки.
+    const raw = useSettingsStore().all[id];
+    const look = useMemo(() => (hasSettings(id) ? settingsFor(id, raw) as Look : {}), [id, raw]);
     // Кнопка «Продлить» — через ссылку: её обработчик новый на каждой
     // отрисовке и не должен пересобирать график.
     const buy = useRef(onBuy);
@@ -125,14 +148,25 @@ export function useKpi(id: KpiId, onBuy?: () => void): KpiView {
     // Тот же объект, пока данные те же: React тогда не перерисовывает
     // мини-график, когда дашборд перерисовывается из-за перетаскивания.
     return useMemo(
-        () => kpiView(id, data, buy.current ? () => buy.current?.() : undefined),
+        () => kpiView(id, data, look, buy.current ? () => buy.current?.() : undefined),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [id, orders, revenue, planned, payroll, mySalary, billing, period, !!onBuy],
+        [id, orders, revenue, planned, payroll, mySalary, billing, period, look, !!onBuy],
     );
 }
 
-function kpiView(id: KpiId, d: ReturnType<typeof useBoardData>, onBuy?: () => void): KpiView {
+/** Как нарисовать плашку: цвет и вид мини-графика из настроек. */
+interface Look { color?: string; spark?: SparkKind; compare?: boolean }
+
+/** Мини-график плашки: линия с заливкой или столбики — как выбрано в настройках. */
+function spark(look: Look, fallback: string, data: number[], o: { mini?: boolean; label?: string; prev?: number[]; prevLabel?: string; format?: (v: number) => string } = {}) {
+    const color = look.color ? colorOf(look.color) : fallback;
+    if (look.spark === 'bars') return <BarSpark data={data} color={color} mini={o.mini} label={o.label} />;
+    return <AreaSpark data={data} prev={o.prev} color={color} mini={o.mini} label={o.label} prevLabel={o.prevLabel} format={o.format} />;
+}
+
+function kpiView(id: KpiId, d: ReturnType<typeof useBoardData>, look: Look, onBuy?: () => void): KpiView {
     const { orders, revenue, planned, payroll, mySalary, billing, period } = d;
+    const tint = (fallback: string) => (look.color ? colorOf(look.color) : fallback);
     const k = orders.data?.kpi;
     const s = orders.data?.series;
     const ordersState = orders.loading && !orders.data ? 'loading' : orders.failed || orders.denied ? 'failed' : undefined;
@@ -146,12 +180,12 @@ function kpiView(id: KpiId, d: ReturnType<typeof useBoardData>, onBuy?: () => vo
                 value: k.inWork,
                 hint: `${k.inWorkParts.inTransit} в пути · ${k.inWorkParts.atPoints} на точках · ${k.inWorkParts.toPickup} едут`,
                 delta: { text: `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)} ко вчера`, tone: 'flat' },
-                mini: <AreaSpark data={s.inWork} color={CHART_COLORS.sky} mini />,
+                mini: spark(look, CHART_COLORS.sky, s.inWork, { mini: true }),
                 chart: (
                     <div className="flex h-full min-h-0 flex-col gap-2">
-                        <div className="min-h-0 flex-1"><AreaSpark data={s.inWork} color={CHART_COLORS.sky} label="Рейсов в работе" /></div>
+                        <div className="min-h-0 flex-1">{spark(look, CHART_COLORS.sky, s.inWork, { label: 'Рейсов в работе' })}</div>
                         <Parts parts={[
-                            { label: 'В пути', value: k.inWorkParts.inTransit, color: CHART_COLORS.sky },
+                            { label: 'В пути', value: k.inWorkParts.inTransit, color: tint(CHART_COLORS.sky) },
                             { label: 'На точках', value: k.inWorkParts.atPoints, color: CHART_COLORS.violet },
                             { label: 'Едут на погрузку', value: k.inWorkParts.toPickup, color: CHART_COLORS.slate },
                         ]} />
@@ -167,8 +201,8 @@ function kpiView(id: KpiId, d: ReturnType<typeof useBoardData>, onBuy?: () => vo
                 hint: k.pendingSoon ? `${k.pendingSoon} — погрузка сегодня или завтра` : k.pending ? 'погрузка не скоро' : 'всё назначено',
                 tone: k.pending > 0 ? 'warn' : undefined,
                 delta: { text: `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)} ко вчера`, tone: d > 0 ? 'bad' : d < 0 ? 'good' : 'flat' },
-                mini: <BarSpark data={s.pending} color={CHART_COLORS.amber} mini />,
-                chart: <BarSpark data={s.pending} color={CHART_COLORS.amber} label="Ждут исполнителя" />,
+                mini: spark(look, CHART_COLORS.amber, s.pending, { mini: true }),
+                chart: spark(look, CHART_COLORS.amber, s.pending, { label: 'Ждут исполнителя' }),
             };
         }
         case 'problems': {
@@ -180,8 +214,8 @@ function kpiView(id: KpiId, d: ReturnType<typeof useBoardData>, onBuy?: () => vo
                 hint: first ? `${first.orderNumber}${first.comment ? ` — ${first.comment}` : ''}` : 'нет проблемных рейсов',
                 tone: k.problems > 0 ? 'neg' : undefined,
                 delta: { text: `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)} ко вчера`, tone: d > 0 ? 'bad' : d < 0 ? 'good' : 'flat' },
-                mini: <BarSpark data={s.problems} color={CHART_COLORS.red} mini />,
-                chart: <BarSpark data={s.problems} color={CHART_COLORS.red} label="Проблемных рейсов" />,
+                mini: spark(look, CHART_COLORS.red, s.problems, { mini: true }),
+                chart: spark(look, CHART_COLORS.red, s.problems, { label: 'Проблемных рейсов' }),
             };
         }
         case 'ordersMonth': {
@@ -192,8 +226,8 @@ function kpiView(id: KpiId, d: ReturnType<typeof useBoardData>, onBuy?: () => vo
                 value: k.ordersPeriod,
                 hint: `с ${since}`,
                 delta: { text: `${d >= 0 ? '+' : '−'}${Math.abs(d)} ${PREV_LABEL[period]}`, tone: d > 0 ? 'good' : d < 0 ? 'bad' : 'flat' },
-                mini: <AreaSpark data={s.orders} prev={s.ordersPrev} color={CHART_COLORS.violet} mini />,
-                chart: <AreaSpark data={s.orders} prev={s.ordersPrev} color={CHART_COLORS.violet} label="Этот период" prevLabel="Прошлый период" />,
+                mini: spark(look, CHART_COLORS.violet, s.orders, { mini: true, prev: look.compare === false ? undefined : s.ordersPrev }),
+                chart: spark(look, CHART_COLORS.violet, s.orders, { label: 'Этот период', prev: look.compare === false ? undefined : s.ordersPrev, prevLabel: 'Прошлый период' }),
             };
         }
         case 'revenue': {
@@ -205,8 +239,8 @@ function kpiView(id: KpiId, d: ReturnType<typeof useBoardData>, onBuy?: () => vo
                 value: `${short(r.current.revenue)} ₸`,
                 hint: `маржа ${short(r.current.margin)} ₸${p != null ? ` · ${p >= 0 ? '+' : '−'}${Math.abs(p)}% ${PREV_LABEL[period]}` : ''}`,
                 delta: p != null ? { text: `${p >= 0 ? '+' : '−'}${Math.abs(p)}%`, tone: p > 0 ? 'good' : p < 0 ? 'bad' : 'flat' } : undefined,
-                mini: <AreaSpark data={weekly} color={CHART_COLORS.emerald} mini />,
-                chart: <AreaSpark data={weekly} color={CHART_COLORS.emerald} label="Выручка за неделю" format={(v) => `${fmt(v)} ₸`} />,
+                mini: spark(look, CHART_COLORS.emerald, weekly, { mini: true }),
+                chart: spark(look, CHART_COLORS.emerald, weekly, { label: 'Выручка за неделю', format: (v) => `${fmt(v)} ₸` }),
             };
         }
         case 'receivables': {
@@ -263,7 +297,7 @@ function kpiView(id: KpiId, d: ReturnType<typeof useBoardData>, onBuy?: () => vo
                 hint: v.sub,
                 urgent: v.urgent,
                 action: v.action && onBuy ? { label: v.action, onClick: onBuy } : undefined,
-                chart: left != null && left >= 0 ? <DaysLeft left={left} total={Math.max(30, left)} color={CHART_COLORS.sky} /> : undefined,
+                chart: left != null && left >= 0 ? <DaysLeft left={left} total={Math.max(30, left)} color={tint(CHART_COLORS.sky)} /> : undefined,
             };
         }
     }

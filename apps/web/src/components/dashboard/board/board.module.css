@@ -56,7 +56,8 @@
 
 /* Пустое тело блока: старые карточки при пустой очереди не рисуют ничего —
    внутри конструктора на этом месте говорим словами, что пусто. */
-.card [data-block-body]:empty::before {
+.card [data-block-body]:empty::before,
+.dialog [data-block-body]:empty::before {
     content: 'Сейчас здесь пусто';
     margin: auto;
     padding: 24px 16px;
@@ -67,6 +68,45 @@
 /* Кнопки внутри блоков (клетки календаря, строки списков) — цветом текста
    карточки, а не системным цветом кнопок браузера: в тёмной теме они
    выходили чёрными на тёмном. :where — чтобы любой класс цвета сильнее. */
-:where(.card) :where(button) {
+:where(.card, .dialog) :where(button) {
     color: inherit;
+}
+
+/* Окно «Открыть крупно» и настроек: фон за ним размыт, окно всплывает. */
+.overlay {
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    animation: lcFadeIn 160ms ease-out;
+}
+
+.dialog {
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    box-shadow:
+        0 0 0 1px hsl(var(--foreground) / 0.08),
+        0 24px 64px -12px rgb(15 23 42 / 0.35);
+    animation: lcPopIn 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:global([data-theme='dark']) .dialog {
+    box-shadow:
+        0 0 0 1px hsl(var(--foreground) / 0.12),
+        0 24px 64px -12px rgb(0 0 0 / 0.6);
+}
+
+@keyframes lcFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes lcPopIn {
+    from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .overlay,
+    .dialog {
+        animation: none;
+    }
 }

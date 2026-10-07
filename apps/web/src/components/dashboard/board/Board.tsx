@@ -13,6 +13,7 @@ import PaymentProofsCard from '@/components/dashboard/PaymentProofsCard';
 import PendingWorkCard from '@/components/dashboard/PendingWorkCard';
 import { subscriptionView } from '@/lib/subscription-state';
 import { cn } from '@/lib/utils';
+import { BlockDialogHost } from './BlockDialog';
 import BlocksMenu from './BlocksMenu';
 import {
     ActivityBlock,
@@ -42,7 +43,8 @@ import {
     type Row,
     type WidgetId,
 } from './layout';
-import { widgetMeta } from './widgets';
+import { BlockSettingsProvider } from './settings';
+import { useMeta } from './widgets';
 
 /**
  * Тело блока по его имени.
@@ -141,7 +143,8 @@ function WidthHandle({ id, handle, board }: { id: WidgetId; handle: NonNullable<
     // С клавиатуры: шаги копятся от одного снимка, ряд выравнивается, когда ручку отпустили.
     const keys = useRef<{ d: number; start: ResizeStart } | null>(null);
     const [active, setActive] = useState(false);
-    const title = widgetMeta(id).title;
+    const meta = useMeta();
+    const title = meta(id).title;
     const apply = (g: { start: ResizeStart; handle: NonNullable<Handle> }, d: number) => {
         if (g.handle.kind === 'divider') board.resizeDivider(g.start, id, g.handle.partner, d);
         else board.resizeEdge(g.start, g.handle.row, d);
@@ -156,7 +159,7 @@ function WidthHandle({ id, handle, board }: { id: WidgetId; handle: NonNullable<
         <div
             role="separator"
             aria-orientation="vertical"
-            aria-label={handle.kind === 'edge' ? `Ширина ряда — край «${title}»` : `Граница «${title}» и «${widgetMeta(handle.partner).title}»`}
+            aria-label={handle.kind === 'edge' ? `Ширина ряда — край «${title}»` : `Граница «${title}» и «${meta(handle.partner).title}»`}
             tabIndex={0}
             data-slot="width-handle"
             data-handle-for={id}
@@ -230,6 +233,9 @@ function Slot({ id, span, handle, board, others, onHide, onBuy }: {
         </div>
     );
 }
+
+/** Тело блока для окна «Открыть крупно» — то же, что на дашборде. */
+const renderBody = (id: WidgetId) => <BlockBody id={id} />;
 
 /** Уже этого поле дашборда — режим телефона. */
 const NARROW_FIELD = 640;
@@ -309,13 +315,27 @@ function useUpdatedAgo(stamp: number) {
  * (владелец, 07.10.2026). Ряды блоков и показателей: переставляются,
  * тянутся по ширине и высоте, сворачиваются, убираются и возвращаются.
  */
-export default function Board({ board, allowed, actions }: {
+export default function Board(props: {
     board: BoardApi;
     allowed: Set<WidgetId>;
     /** Кнопки справа в шапке («Создать заявку»). */
     actions?: React.ReactNode;
 }) {
+    // Настройки блоков (цвета, вид графиков, свои названия) — на весь дашборд.
+    return (
+        <BlockSettingsProvider>
+            <BoardInner {...props} />
+        </BlockSettingsProvider>
+    );
+}
+
+function BoardInner({ board, allowed, actions }: {
+    board: BoardApi;
+    allowed: Set<WidgetId>;
+    actions?: React.ReactNode;
+}) {
     const { period, setPeriod, billing, reloadBilling } = useBoardData();
+    const meta = useMeta();
     const [dragId, setDragId] = useState<WidgetId | null>(null);
     const [hover, setHover] = useState<Hover | null>(null);
     const [fieldRef, fieldSize] = useSize<HTMLDivElement>();
@@ -371,7 +391,7 @@ export default function Board({ board, allowed, actions }: {
         const prev = board.visible[i - 1];
         const back: Placement = next ? { kind: 'before', anchor: next } : prev ? { kind: 'after', anchor: prev } : { kind: 'bottom' };
         board.hide(id);
-        toast(`${isKpi(id) ? 'Показатель' : 'Блок'} «${widgetMeta(id, period).title}» убран`, {
+        toast(`${isKpi(id) ? 'Показатель' : 'Блок'} «${meta(id).title}» убран`, {
             action: { label: 'Вернуть', onClick: () => board.show(id, back) },
         });
     };
@@ -381,6 +401,7 @@ export default function Board({ board, allowed, actions }: {
 
     return (
         <DragContext.Provider value={dragValue}>
+            <BlockDialogHost renderBody={renderBody} onBuy={() => setBuyOpen(true)}>
             <div className="flex min-h-[calc(100svh-48px)] flex-col px-4 py-4 sm:px-6 sm:py-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
@@ -447,6 +468,7 @@ export default function Board({ board, allowed, actions }: {
                     onSent={reloadBilling}
                 />
             )}
+            </BlockDialogHost>
         </DragContext.Provider>
     );
 }

@@ -4,10 +4,9 @@ import { ChevronDown, LayoutGrid, Plus, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useBoardData } from './data';
 import { MovePicker } from './frame';
 import { BLOCK_IDS, KPI_IDS, type Placement, type WidgetId } from './layout';
-import { widgetMeta } from './widgets';
+import { useMeta } from './widgets';
 
 /**
  * «Блоки»: что показывать на дашборде. Показатели и блоки ставятся куда
@@ -21,13 +20,13 @@ export default function BlocksMenu({ rows, allowed, onShow, onHide, onReset }: {
     onHide: (id: WidgetId) => void;
     onReset: () => void;
 }) {
-    const { period } = useBoardData();
+    const metaOf = useMeta();
     const onBoard = rows.flat();
     const kpis = KPI_IDS.filter((id) => allowed.has(id));
     const blocks = BLOCK_IDS.filter((id) => allowed.has(id));
 
     const item = (id: WidgetId) => {
-        const meta = widgetMeta(id, period);
+        const meta = metaOf(id);
         const Icon = meta.icon;
         const shown = onBoard.includes(id);
         return (

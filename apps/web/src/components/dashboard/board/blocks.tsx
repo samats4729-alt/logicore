@@ -9,9 +9,10 @@ import { cn } from '@/lib/utils';
 import { monthLabel } from '@/lib/ru-date';
 import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 import { Button } from '@/components/ui/button';
-import { RevenueBars, StatusBars } from './charts';
+import { RevenueChart, StatusChart, colorOf } from './charts';
 import { useSize } from './dnd';
 import { useBoardData, type OrderBrief, type OrdersOverview } from './data';
+import { useBlockSettings, useExpanded } from './settings';
 import { agingOf, fmt, plural, short } from './widgets';
 
 /**
@@ -65,29 +66,87 @@ const Td = ({ children, className }: { children?: React.ReactNode; className?: s
 
 // ==================== Выручка и маржа по неделям ====================
 
+/** «6–12 окт», «29 сен – 5 окт» — неделя словами для таблицы. */
+function weekRange(weekStart: string) {
+    const a = new Date(weekStart + 'T00:00:00');
+    const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + 6);
+    return a.getMonth() === b.getMonth()
+        ? `${a.getDate()}–${b.getDate()} ${MONTHS_SHORT[b.getMonth()]}`
+        : `${a.getDate()} ${MONTHS_SHORT[a.getMonth()]} – ${b.getDate()} ${MONTHS_SHORT[b.getMonth()]}`;
+}
+
+const SERIES_NAME = { revenue: 'Выручка', margin: 'Маржа' } as const;
+
 export function ChartBlock() {
     const { revenue } = useBoardData();
-    const data = useMemo(() => {
+    const st = useBlockSettings('chart');
+    const expanded = useExpanded();
+    const weeks = useMemo(() => {
         let prevMonth = -1;
         return (revenue.data?.weeks ?? []).map((w) => {
             const d = new Date(w.weekStart + 'T00:00:00');
             const n = Math.floor((d.getDate() - 1) / 7) + 1;
             const label = d.getMonth() !== prevMonth ? `${n} нед. ${MONTHS_SHORT[d.getMonth()]}` : `${n} нед.`;
             prevMonth = d.getMonth();
-            return { label, revenue: w.revenue, margin: w.margin };
+            return { label, weekStart: w.weekStart, revenue: w.revenue, margin: w.margin };
         });
     }, [revenue.data]);
+    const n = Number(st.weeks);
+    const data = weeks.slice(-n);
+    const colors = { revenue: colorOf(st.revenueColor), margin: colorOf(st.marginColor) };
     if (revenue.loading && !revenue.data) return <Loading />;
     if (revenue.denied) return <BlockNote>Этот блок вам не открыт — его выдаёт руководитель в «Сотрудниках»</BlockNote>;
     if (!revenue.data) return <BlockNote>Не удалось загрузить выручку. Обновите страницу.</BlockNote>;
-    if (data.every((w) => !w.revenue)) return <BlockNote>За последние 12 недель выручки нет</BlockNote>;
+    if (data.every((w) => !w.revenue)) return <BlockNote>За последние {n} {plural(n, 'неделю', 'недели', 'недель')} выручки нет</BlockNote>;
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-            <div className="min-h-0 flex-1"><RevenueBars data={data} /></div>
-            <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1.5"><i className="size-2 rounded-[2px] bg-primary" /> Выручка, млн ₸</span>
-                <span className="flex items-center gap-1.5"><i className="size-2 rounded-[2px]" style={{ background: 'hsl(var(--chart-1))' }} /> Маржа, млн ₸</span>
+            <div className="min-h-0 flex-1" style={expanded ? { minHeight: 240 } : undefined}>
+                <RevenueChart data={data} kind={st.kind} series={st.series} colors={colors} values={st.values} />
             </div>
+            <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+                {st.series.map((k) => (
+                    <span key={k} className="flex items-center gap-1.5">
+                        <i className="size-2 rounded-[2px]" style={{ background: colors[k] }} /> {SERIES_NAME[k]}, млн ₸
+                    </span>
+                ))}
+            </div>
+            {/* Открыли крупно — под графиком те же недели цифрами. */}
+            {expanded && <WeeksTable data={data} />}
+        </div>
+    );
+}
+
+function WeeksTable({ data }: { data: { weekStart: string; revenue: number; margin: number }[] }) {
+    const total = data.reduce((s, w) => ({ revenue: s.revenue + w.revenue, margin: s.margin + w.margin }), { revenue: 0, margin: 0 });
+    const share = (m: number, r: number) => (r ? `${Math.round((m / r) * 100)}%` : '—');
+    return (
+        <div className="max-h-[42%] shrink-0 overflow-auto" data-weeks-table>
+            <Table>
+                <thead className="sticky top-0 z-[1] bg-card">
+                    <tr>
+                        <Th>Неделя</Th>
+                        <Th className="text-right">Выручка, ₸</Th>
+                        <Th className="text-right">Маржа, ₸</Th>
+                        <Th className="text-right">Маржа, %</Th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {[...data].reverse().map((w) => (
+                        <tr key={w.weekStart} className="transition-colors hover:bg-muted/50">
+                            <Td>{weekRange(w.weekStart)}</Td>
+                            <Td className="text-right tabular-nums">{fmt(w.revenue)}</Td>
+                            <Td className="text-right tabular-nums">{fmt(w.margin)}</Td>
+                            <Td className="text-right tabular-nums text-muted-foreground">{share(w.margin, w.revenue)}</Td>
+                        </tr>
+                    ))}
+                    <tr className="bg-muted/50 font-semibold">
+                        <Td>Итого за {data.length} {plural(data.length, 'неделю', 'недели', 'недель')}</Td>
+                        <Td className="text-right tabular-nums">{fmt(total.revenue)}</Td>
+                        <Td className="text-right tabular-nums">{fmt(total.margin)}</Td>
+                        <Td className="text-right tabular-nums">{share(total.margin, total.revenue)}</Td>
+                    </tr>
+                </tbody>
+            </Table>
         </div>
     );
 }
@@ -191,6 +250,10 @@ function MonthCalendar({ month, onMonth, selected, onSelect, renderCell, extra }
 export function LoadingCalendarBlock() {
     const router = useRouter();
     const { orders } = useBoardData();
+    const st = useBlockSettings('calendar');
+    const dot = colorOf(st.color);
+    // «Без исполнителя» — только те погрузки, на которые ещё никого не назначили.
+    const pick = (list: OrderBrief[] | undefined) => (list ?? []).filter((o) => st.only === 'all' || o.status === 'PENDING');
     const now = new Date();
     const [month, setMonth] = useState(new Date(now.getFullYear(), now.getMonth(), 1));
     const [selected, setSelected] = useState<Date | null>(now);
@@ -210,7 +273,7 @@ export function LoadingCalendarBlock() {
     if (orders.loading && !orders.data) return <Loading />;
     if (orders.denied) return <BlockNote>Раздел «Заявки» вам не открыт</BlockNote>;
 
-    const dayList = selected && cal ? cal.days[dayKey(selected)] ?? [] : [];
+    const dayList = selected && cal ? pick(cal.days[dayKey(selected)]) : [];
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <MonthCalendar
@@ -219,13 +282,13 @@ export function LoadingCalendarBlock() {
                 selected={selected}
                 onSelect={setSelected}
                 renderCell={({ key, selected: sel, layout, big }) => {
-                    const n = cal?.days[key]?.length ?? 0;
+                    const n = pick(cal?.days[key]).length;
                     if (!n) return null;
                     const dots = Math.min(n, big ? 5 : 3);
                     return (
                         <span className={cn('flex items-center justify-center gap-[3px]', layout === 'col' && 'mb-2 mt-auto', layout === 'compact' && '-mt-0.5', layout === 'row' && 'pr-1')} title={`${n} ${plural(n, 'погрузка', 'погрузки', 'погрузок')}`}>
                             {Array.from({ length: dots }, (_, i) => (
-                                <span key={i} className={cn('rounded-full', big ? 'size-1.5' : 'size-1', sel ? 'bg-primary-foreground' : 'bg-primary')} />
+                                <span key={i} className={cn('rounded-full', big ? 'size-1.5' : 'size-1', sel && 'bg-primary-foreground')} style={sel ? undefined : { background: dot }} />
                             ))}
                         </span>
                     );
@@ -254,40 +317,57 @@ export function LoadingCalendarBlock() {
 export function UpcomingBlock() {
     const router = useRouter();
     const { data, fallback } = useOrders();
+    const st = useBlockSettings('upcoming');
     if (fallback) return fallback;
-    const rows = data!.upcoming;
-    if (!rows.length) return <BlockNote>Ближайших погрузок нет — все рейсы уже в пути или завершены</BlockNote>;
+    const all = data!.upcoming.filter((o) => st.only === 'all' || o.status === 'PENDING');
+    const rows = st.limit === 'all' ? all : all.slice(0, Number(st.limit));
+    const col = (c: 'date' | 'status' | 'price') => st.columns.includes(c);
+    if (!rows.length) {
+        return (
+            <BlockNote>
+                {st.only === 'pending' ? 'Все ближайшие погрузки назначены — без исполнителя ничего нет' : 'Ближайших погрузок нет — все рейсы уже в пути или завершены'}
+            </BlockNote>
+        );
+    }
     return (
-        <div className="min-h-0 flex-1 overflow-auto px-3 pb-2">
-            <Table>
-                <thead className="sticky top-0 z-[1] bg-card">
-                    <tr>
-                        <Th>Заявка</Th>
-                        <Th>Маршрут</Th>
-                        <Th>Погрузка</Th>
-                        <Th>Статус</Th>
-                        <Th className="text-right">Ставка</Th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((o) => (
-                        <tr key={o.id} className="cursor-pointer transition-colors hover:bg-muted/50" onClick={() => router.push(`/company/orders/${o.id}`)}>
-                            <Td className="font-medium tabular-nums">{o.orderNumber}</Td>
-                            <Td>{o.from} → {o.to}</Td>
-                            <Td className="tabular-nums">{shortDate(o.loadingDate)}</Td>
-                            <Td><StatusPill status={o.status} /></Td>
-                            <Td className="text-right tabular-nums">{o.price != null ? `${fmt(o.price)} ₸` : '—'}</Td>
+        <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-auto px-3 pb-2">
+                <Table>
+                    <thead className="sticky top-0 z-[1] bg-card">
+                        <tr>
+                            <Th>Заявка</Th>
+                            <Th>Маршрут</Th>
+                            {col('date') && <Th>Погрузка</Th>}
+                            {col('status') && <Th>Статус</Th>}
+                            {col('price') && <Th className="text-right">Ставка</Th>}
                         </tr>
-                    ))}
-                </tbody>
-            </Table>
+                    </thead>
+                    <tbody>
+                        {rows.map((o) => (
+                            <tr key={o.id} className="cursor-pointer transition-colors hover:bg-muted/50" onClick={() => router.push(`/company/orders/${o.id}`)}>
+                                <Td className="font-medium tabular-nums">{o.orderNumber}</Td>
+                                <Td>{o.from} → {o.to}</Td>
+                                {col('date') && <Td className="tabular-nums">{shortDate(o.loadingDate)}</Td>}
+                                {col('status') && <Td><StatusPill status={o.status} /></Td>}
+                                {col('price') && <Td className="text-right tabular-nums">{o.price != null ? `${fmt(o.price)} ₸` : '—'}</Td>}
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </div>
+            {all.length > rows.length && (
+                <Link href="/company/orders" className="shrink-0 border-0 border-t border-solid border-border px-4 py-2 text-xs text-muted-foreground no-underline hover:bg-muted/50 hover:text-foreground">
+                    Ещё {all.length - rows.length} {plural(all.length - rows.length, 'заявка', 'заявки', 'заявок')} — в журнале заявок
+                </Link>
+            )}
         </div>
     );
 }
 
 // ==================== Требуют внимания ====================
 
-interface AttentionItem { key: string; title: string; text: string; badge: string; tone: 'neg' | 'muted'; href: string }
+type AttentionKind = 'problems' | 'overdueIn' | 'overdueOut' | 'pendingSoon' | 'noTtn';
+interface AttentionItem { kind: AttentionKind; key: string; title: string; text: string; badge: string; tone: 'neg' | 'muted'; href: string }
 
 /**
  * Что требует внимания — сначала то, что стоит денег.
@@ -298,11 +378,13 @@ interface AttentionItem { key: string; title: string; text: string; badge: strin
  */
 export function AttentionBlock() {
     const { orders, planned } = useBoardData();
-    const items: AttentionItem[] = [];
+    const st = useBlockSettings('attention');
+    let items: AttentionItem[] = [];
     const a = orders.data?.attention;
     for (const p of a?.problems ?? []) {
         const hours = Math.max(0, Math.round((Date.now() - new Date(p.since).getTime()) / 3_600_000));
         items.push({
+            kind: 'problems',
             key: `p-${p.id}`,
             title: `${p.orderNumber}: проблема в пути`,
             text: [p.comment, hours < 24 ? `стоит ${hours} ч` : `с ${shortDate(p.since)}`].filter(Boolean).join(' · '),
@@ -316,6 +398,7 @@ export function AttentionBlock() {
         const sum = overdueIn.reduce((s, r) => s + r.amount, 0);
         const top = [...overdueIn].sort((x, y) => y.amount - x.amount)[0];
         items.push({
+            kind: 'overdueIn',
             key: 'overdue-in',
             title: `${overdueIn.length} ${plural(overdueIn.length, 'счёт просрочен', 'счёта просрочены', 'счетов просрочены')}`,
             text: `${top.party} — ${fmt(top.amount)} ₸${overdueIn.length > 1 ? ` · всего ${fmt(sum)} ₸` : ''}`,
@@ -328,6 +411,7 @@ export function AttentionBlock() {
     if (overdueOut.length) {
         const sum = overdueOut.reduce((s, r) => s + r.amount, 0);
         items.push({
+            kind: 'overdueOut',
             key: 'overdue-out',
             title: `Мы просрочили ${overdueOut.length} ${plural(overdueOut.length, 'оплату', 'оплаты', 'оплат')}`,
             text: `перевозчикам и поставщикам — ${fmt(sum)} ₸`,
@@ -339,6 +423,7 @@ export function AttentionBlock() {
     if (a?.pendingSoon.length) {
         const first = a.pendingSoon[0];
         items.push({
+            kind: 'pendingSoon',
             key: 'pending-soon',
             title: `${a.pendingSoon.length} ${plural(a.pendingSoon.length, 'заявка', 'заявки', 'заявок')} без исполнителя`,
             text: `погрузка сегодня или завтра · ${first.orderNumber}, ${first.from} → ${first.to}`,
@@ -349,6 +434,7 @@ export function AttentionBlock() {
     }
     if (a?.noTtn.length) {
         items.push({
+            kind: 'noTtn',
             key: 'no-ttn',
             title: `Нет ТТН по ${a.noTtn.length} ${plural(a.noTtn.length, 'рейсу', 'рейсам', 'рейсам')}`,
             text: `завершены больше 2 дней назад · ${a.noTtn.slice(0, 3).map((o) => o.orderNumber).join(', ')}${a.noTtn.length > 3 ? '…' : ''}`,
@@ -358,6 +444,8 @@ export function AttentionBlock() {
         });
     }
 
+    // Что показывать — выбрано в настройках блока.
+    items = items.filter((it) => st.kinds.includes(it.kind));
     if (orders.loading && !orders.data) return <Loading />;
     if (!items.length) {
         return <BlockNote>{orders.failed ? 'Не удалось загрузить. Обновите страницу.' : 'Всё в порядке: проблем, просрочек и хвостов нет'}</BlockNote>;
@@ -388,12 +476,24 @@ export function AttentionBlock() {
 
 // ==================== Сейчас в пути ====================
 
+/** Сетка строки «В пути» на широком блоке — по тому, какие колонки включены. */
+const TRANSIT_GRID = {
+    both: '@lg:grid-cols-[84px_1fr_120px_auto]',
+    progress: '@lg:grid-cols-[84px_1fr_120px]',
+    status: '@lg:grid-cols-[84px_1fr_auto]',
+    none: '',
+} as const;
+
 export function InTransitBlock() {
     const router = useRouter();
     const { data, fallback } = useOrders();
+    const st = useBlockSettings('inTransit');
     if (fallback) return fallback;
     const rows = data!.inTransit;
     if (!rows.length) return <BlockNote>Сейчас в пути никого нет</BlockNote>;
+    const col = (c: 'driver' | 'progress' | 'status') => st.columns.includes(c);
+    const grid = TRANSIT_GRID[col('progress') && col('status') ? 'both' : col('progress') ? 'progress' : col('status') ? 'status' : 'none'];
+    const bar = colorOf(st.color);
     return (
         <div className="grid min-h-0 flex-1 content-start overflow-auto px-3 pb-2">
             {rows.map((o) => (
@@ -401,20 +501,22 @@ export function InTransitBlock() {
                     key={o.id}
                     type="button"
                     onClick={() => router.push(`/company/orders/${o.id}`)}
-                    className="grid grid-cols-[84px_1fr] items-center gap-3 border-0 border-b border-solid border-border py-2 text-left text-[13px] last:border-b-0 hover:bg-muted/50 @lg:grid-cols-[84px_1fr_120px_auto]"
+                    className={cn('grid grid-cols-[84px_1fr] items-center gap-3 border-0 border-b border-solid border-border py-2 text-left text-[13px] last:border-b-0 hover:bg-muted/50', grid)}
                 >
                     <span className="font-medium tabular-nums">{o.orderNumber}</span>
                     <span className="min-w-0 truncate">
                         {o.from} → {o.to}
-                        <span className="block truncate text-[11px] text-muted-foreground">{[o.driver, o.plate].filter(Boolean).join(' · ') || 'водитель не указан'}</span>
+                        {col('driver') && <span className="block truncate text-[11px] text-muted-foreground">{[o.driver, o.plate].filter(Boolean).join(' · ') || 'водитель не указан'}</span>}
                     </span>
-                    <span className="hidden items-center gap-2 @lg:flex" title="Насколько пройден рейс — по этапу">
-                        <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                            <span className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${o.progress}%` }} />
+                    {col('progress') && (
+                        <span className="hidden items-center gap-2 @lg:flex" title="Насколько пройден рейс — по этапу">
+                            <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${o.progress}%`, background: bar }} />
+                            </span>
+                            <span className="text-[11px] tabular-nums text-muted-foreground">{o.progress}%</span>
                         </span>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">{o.progress}%</span>
-                    </span>
-                    <span className="hidden @lg:block"><StatusPill status={o.status} /></span>
+                    )}
+                    {col('status') && <span className="hidden @lg:block"><StatusPill status={o.status} /></span>}
                 </button>
             ))}
         </div>
@@ -425,6 +527,7 @@ export function InTransitBlock() {
 
 export function DebtorsBlock() {
     const { planned } = useBoardData();
+    const st = useBlockSettings('debtors');
     const list = useMemo(() => {
         const by = new Map<string, { party: string; sum: number; maxDays: number }>();
         const today = Date.now();
@@ -440,11 +543,13 @@ export function DebtorsBlock() {
     if (planned.loading && !planned.data) return <Loading />;
     if (!planned.data) return <BlockNote>Должники видны с правом «Бухгалтерия»</BlockNote>;
     const aging = agingOf(planned.data.rows, planned.data.withoutInvoice?.totalIn ?? 0);
+    const shown = st.only === 'overdue' ? list.filter((d) => d.maxDays > 0) : list;
     if (!list.length) return <BlockNote>Выставленных и неоплаченных счетов нет</BlockNote>;
+    if (!shown.length) return <BlockNote>Просроченных долгов нет — все платят в срок</BlockNote>;
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <div className="grid min-h-0 flex-1 content-start overflow-auto px-3 pb-2">
-                {list.map((d) => (
+                {shown.map((d) => (
                     <Link key={d.party} href="/company/accounting/counterparty-report" className="flex items-center justify-between gap-3 border-0 border-b border-solid border-border py-2 text-[13px] text-foreground no-underline last:border-b-0 hover:bg-muted/50 hover:text-foreground">
                         <div className="min-w-0">
                             <div className="truncate font-medium">{d.party}</div>
@@ -454,7 +559,7 @@ export function DebtorsBlock() {
                     </Link>
                 ))}
             </div>
-            {aging.noInvoice > 0 && (
+            {st.noInvoice && aging.noInvoice > 0 && (
                 <Link href="/company/accounting/invoices" className="mx-3 mb-3 rounded-md border border-solid border-border px-2.5 py-2 text-xs text-muted-foreground no-underline hover:bg-muted/50 hover:text-muted-foreground">
                     Счёт не выставлен: {fmt(aging.noInvoice)} ₸ по {planned.data.withoutInvoice?.count ?? 0} {plural(planned.data.withoutInvoice?.count ?? 0, 'сделке', 'сделкам', 'сделкам')} — оформить
                 </Link>
@@ -469,6 +574,7 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2)
 
 export function DriversBlock() {
     const { drivers } = useBoardData();
+    const st = useBlockSettings('drivers');
     if (drivers.loading && !drivers.data) return <Loading />;
     if (drivers.denied) return <BlockNote>Этот блок вам не открыт — его выдаёт руководитель в «Сотрудниках»</BlockNote>;
     if (!drivers.data) return <BlockNote>Не удалось загрузить водителей. Обновите страницу.</BlockNote>;
@@ -489,17 +595,17 @@ export function DriversBlock() {
                     </div>
                 ))}
             </div>
-            {[['Свободны сейчас', free], ['В рейсе', trip]].map(([title, list]) => (list as typeof free).length > 0 && (
-                <div key={title as string} className="grid gap-1.5">
-                    <div className="text-xs font-medium text-muted-foreground">{title as string}</div>
-                    {(list as typeof free).slice(0, 8).map((x) => (
+            {([['free', 'Свободны сейчас', free], ['trip', 'В рейсе', trip]] as const).filter(([k]) => st.lists.includes(k)).map(([, title, list]) => list.length > 0 && (
+                <div key={title} className="grid gap-1.5">
+                    <div className="text-xs font-medium text-muted-foreground">{title}</div>
+                    {list.slice(0, 8).map((x) => (
                         <div key={x.id} className="flex items-center gap-2.5 text-[13px]">
                             <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium">{initials(x.name)}</span>
                             <span className="min-w-0 flex-1 truncate">
                                 {x.name}
                                 {x.trip && <span className="block truncate text-[11px] text-muted-foreground">{x.trip.orderNumber} · {x.trip.from} → {x.trip.to}</span>}
                             </span>
-                            <span className="text-[11px] tabular-nums text-muted-foreground">{x.plate}</span>
+                            {st.plate && <span className="text-[11px] tabular-nums text-muted-foreground">{x.plate}</span>}
                         </div>
                     ))}
                 </div>
@@ -514,12 +620,47 @@ const STATUS_ORDER = ['PENDING', 'ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LO
 
 export function ByStatusBlock() {
     const { data, fallback } = useOrders();
+    const st = useBlockSettings('byStatus');
+    const expanded = useExpanded();
     if (fallback) return fallback;
     const rows = STATUS_ORDER
-        .map((s) => ({ s: s === 'COMPLETED' ? 'Завершено в месяце' : STATUS_LABELS[s] || s, n: data!.byStatus[s] ?? 0 }))
+        .filter((s) => st.completed || s !== 'COMPLETED')
+        .map((s) => ({ key: s, s: s === 'COMPLETED' ? 'Завершено в месяце' : STATUS_LABELS[s] || s, n: data!.byStatus[s] ?? 0 }))
         .filter((r) => r.n > 0);
     if (!rows.length) return <BlockNote>Заявок в работе нет</BlockNote>;
-    return <div className="min-h-0 flex-1 p-3"><StatusBars data={rows} /></div>;
+    // Один цвет на всех или свой у каждого статуса; в кольце один цвет — оттенками.
+    const fills = rows.map((r, i) => (st.color === 'status'
+        ? { color: STATUS_DOT[r.key] ?? '#9ca3af', opacity: 1 }
+        : { color: colorOf(st.color), opacity: st.kind === 'donut' ? Math.max(0.25, 1 - i * 0.11) : 1 }));
+    const total = rows.reduce((s, r) => s + r.n, 0);
+    return (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+            <div className="min-h-0 flex-1" style={expanded ? { minHeight: 240 } : undefined}><StatusChart data={rows} kind={st.kind} fills={fills} /></div>
+            {expanded && (
+                <div className="max-h-[42%] shrink-0 overflow-auto">
+                    <Table>
+                        <thead className="sticky top-0 z-[1] bg-card">
+                            <tr><Th>Этап</Th><Th className="text-right">Заявок</Th><Th className="text-right">Доля</Th></tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((r, i) => (
+                                <tr key={r.key} className="transition-colors hover:bg-muted/50">
+                                    <Td>
+                                        <span className="flex items-center gap-2">
+                                            <span className="size-2 shrink-0 rounded-[3px]" style={{ background: fills[i].color, opacity: fills[i].opacity }} />
+                                            {r.s}
+                                        </span>
+                                    </Td>
+                                    <Td className="text-right tabular-nums">{r.n}</Td>
+                                    <Td className="text-right tabular-nums text-muted-foreground">{Math.round((r.n / total) * 100)}%</Td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </Table>
+                </div>
+            )}
+        </div>
+    );
 }
 
 // ==================== Активность ====================
@@ -538,7 +679,15 @@ const ACTIVITY_ROWS = [
  * Динамика — к тому же куску прошлого месяца («к 1–7 сентября»), а не ко
  * всему прошлому месяцу: седьмого числа минус был бы всегда.
  */
-function Dynamics({ cur, base, money, neutral }: { cur: number; base: number; money?: boolean; neutral?: boolean }) {
+/** Сумма в ячейке: полностью, кратко («3,2 млн») или как влезет по ширине блока. */
+function Money({ n, mode }: { n: number; mode: 'auto' | 'full' | 'short' }) {
+    if (mode === 'full') return <>{fmt(n)}</>;
+    if (mode === 'short') return <>{short(n)}</>;
+    // В узком блоке сумма сокращается — «3,2 млн», иначе столбец обрезается.
+    return <><span className="@xl:hidden">{short(n)}</span><span className="hidden @xl:inline">{fmt(n)}</span></>;
+}
+
+function Dynamics({ cur, base, money, neutral, mode }: { cur: number; base: number; money?: boolean; neutral?: boolean; mode: 'auto' | 'full' | 'short' }) {
     const diff = cur - base;
     if (diff === 0) return <span className="text-muted-foreground">без изменений</span>;
     const up = diff > 0;
@@ -548,13 +697,7 @@ function Dynamics({ cur, base, money, neutral }: { cur: number; base: number; mo
         <span className={cn('inline-flex items-center justify-end gap-0.5 tabular-nums', neutral ? 'text-muted-foreground' : up ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
             <Icon className="size-3" />
             {up ? '+' : '−'}
-            {money ? (
-                <>
-                    {/* В узком блоке сумма сокращается — «3,2 млн», иначе столбец обрезается. */}
-                    <span className="@xl:hidden">{short(Math.abs(diff))}</span>
-                    <span className="hidden @xl:inline">{fmt(Math.abs(diff))}</span>
-                </>
-            ) : Math.abs(diff)}
+            {money ? <Money n={Math.abs(diff)} mode={mode} /> : Math.abs(diff)}
             {p != null && <span className="hidden text-[11px] opacity-70 @2xl:inline"> · {p}%</span>}
         </span>
     );
@@ -562,6 +705,7 @@ function Dynamics({ cur, base, money, neutral }: { cur: number; base: number; mo
 
 export function ActivityBlock() {
     const { activity } = useBoardData();
+    const st = useBlockSettings('activity');
     if (activity.loading && !activity.data) return <Loading />;
     if (activity.denied) return <BlockNote>Этот блок вам не открыт — его выдаёт руководитель в «Сотрудниках»</BlockNote>;
     const a = activity.data;
@@ -588,13 +732,13 @@ export function ActivityBlock() {
                     </tr>
                 </thead>
                 <tbody>
-                    {ACTIVITY_ROWS.map((r) => (
+                    {ACTIVITY_ROWS.filter((r) => st.rows.includes(r.key)).map((r) => (
                         <tr key={r.key} className="transition-colors hover:bg-muted/50">
                             <Td>{r.label}</Td>
-                            <Td className="text-right tabular-nums">{r.money ? <><span className="@xl:hidden">{short(a.today[r.key])}</span><span className="hidden @xl:inline">{fmt(a.today[r.key])}</span></> : a.today[r.key]}</Td>
-                            <Td className="hidden text-right tabular-nums text-muted-foreground @xl:table-cell">{r.money ? fmt(a.previous[r.key]) : a.previous[r.key]}</Td>
-                            <Td className="text-right font-medium tabular-nums">{r.money ? <><span className="@xl:hidden">{short(a.current[r.key])}</span><span className="hidden @xl:inline">{fmt(a.current[r.key])}</span></> : a.current[r.key]}</Td>
-                            <Td className="text-right"><Dynamics cur={a.current[r.key]} base={base[r.key]} money={r.money} neutral={r.neutral} /></Td>
+                            <Td className="text-right tabular-nums">{r.money ? <Money n={a.today[r.key]} mode={st.amounts} /> : a.today[r.key]}</Td>
+                            <Td className="hidden text-right tabular-nums text-muted-foreground @xl:table-cell">{r.money ? <Money n={a.previous[r.key]} mode={st.amounts === 'short' ? 'short' : 'full'} /> : a.previous[r.key]}</Td>
+                            <Td className="text-right font-medium tabular-nums">{r.money ? <Money n={a.current[r.key]} mode={st.amounts} /> : a.current[r.key]}</Td>
+                            <Td className="text-right"><Dynamics cur={a.current[r.key]} base={base[r.key]} money={r.money} neutral={r.neutral} mode={st.amounts} /></Td>
                         </tr>
                     ))}
                 </tbody>
@@ -614,12 +758,15 @@ const STATUS_DOT: Record<string, string> = {
 
 export function EventsBlock() {
     const router = useRouter();
+    const { limit } = useBlockSettings('events');
     const [events, setEvents] = useState<OrderEvent[] | null>(null);
     useEffect(() => {
-        api.get('/company/orders/events', { params: { limit: 12 } })
-            .then((r) => setEvents(r.data || []))
-            .catch(() => setEvents([]));
-    }, []);
+        let alive = true;
+        api.get('/company/orders/events', { params: { limit: Number(limit) } })
+            .then((r) => { if (alive) setEvents(r.data || []); })
+            .catch(() => { if (alive) setEvents([]); });
+        return () => { alive = false; };
+    }, [limit]);
     if (!events) return <Loading />;
     if (!events.length) return <BlockNote>Пока тихо — событий нет</BlockNote>;
     return (

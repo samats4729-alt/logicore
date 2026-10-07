@@ -9,7 +9,11 @@ import {
     BarChart,
     CartesianGrid,
     Cell,
+    ComposedChart,
+    LabelList,
     Line,
+    Pie,
+    PieChart,
     ReferenceDot,
     ResponsiveContainer,
     Tooltip,
@@ -33,6 +37,23 @@ export const CHART_COLORS = {
     violet: '#8b5cf6',
     slate: '#64748b',
 } as const;
+
+/**
+ * Цвета, из которых выбирают в настройках блока. Первые два — цвета темы
+ * (в тёмной теме они сами светлеют), остальные — из макета.
+ */
+export const PALETTE = [
+    { key: 'graphite', label: 'Графит', color: 'hsl(var(--primary))' },
+    { key: 'silver', label: 'Серебристый', color: 'hsl(var(--chart-1))' },
+    { key: 'sky', label: 'Голубой', color: CHART_COLORS.sky },
+    { key: 'emerald', label: 'Зелёный', color: CHART_COLORS.emerald },
+    { key: 'violet', label: 'Фиолетовый', color: CHART_COLORS.violet },
+    { key: 'amber', label: 'Янтарный', color: CHART_COLORS.amber },
+    { key: 'red', label: 'Красный', color: CHART_COLORS.red },
+    { key: 'slate', label: 'Сланцевый', color: CHART_COLORS.slate },
+] as const;
+export type ColorKey = (typeof PALETTE)[number]['key'];
+export const colorOf = (key: string) => (PALETTE.find((p) => p.key === key) ?? PALETTE[0]).color;
 
 const fmtInt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
@@ -192,28 +213,129 @@ export function DaysLeft({ left, total, color }: { left: number; total: number; 
     );
 }
 
-/** Столбики выручки и маржи по неделям. */
-export function RevenueBars({ data }: { data: { label: string; revenue: number; margin: number }[] }) {
-    const mln = (v: number) => (v / 1_000_000).toFixed(1).replace('.', ',');
+const mln = (v: number) => (v / 1_000_000).toFixed(1).replace('.', ',');
+const REVENUE_NAMES = { revenue: 'Выручка', margin: 'Маржа' } as const;
+
+/**
+ * Выручка и маржа по неделям — столбцами, линиями или областями, в цветах
+ * из настроек блока. Суммы над столбцами — по желанию, в миллионах.
+ */
+export function RevenueChart({ data, kind, series, colors, values }: {
+    data: { label: string; revenue: number; margin: number }[];
+    kind: 'bars' | 'lines' | 'areas';
+    series: ('revenue' | 'margin')[];
+    colors: Record<'revenue' | 'margin', string>;
+    values: boolean;
+}) {
+    const gid = useId().replace(/:/g, '');
+    const labels = (k: string) => values && (
+        <LabelList
+            dataKey={k}
+            position="top"
+            offset={6}
+            fontSize={10}
+            fill="hsl(var(--muted-foreground))"
+            formatter={(v) => (Number(v) ? mln(Number(v)) : '')}
+        />
+    );
     return (
         <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ left: 0, right: 8, top: 8 }}>
+            <ComposedChart data={data} margin={{ left: 0, right: 8, top: values ? 20 : 8 }} barGap={2}>
+                <defs>
+                    {series.map((k) => (
+                        <linearGradient key={k} id={`${gid}-${k}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={colors[k]} stopOpacity={0.32} />
+                            <stop offset="100%" stopColor={colors[k]} stopOpacity={0.02} />
+                        </linearGradient>
+                    ))}
+                </defs>
                 <CartesianGrid vertical={false} strokeOpacity={0.6} />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
                 <YAxis tickLine={false} axisLine={false} width={36} fontSize={11} tickFormatter={(v) => mln(Number(v))} />
                 <Tooltip
-                    cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.6 }}
-                    content={<TipBox format={(v) => `${fmtInt(v)} ₸`} labels={{ revenue: 'Выручка', margin: 'Маржа' }} />}
+                    cursor={kind === 'bars' ? { fill: 'hsl(var(--muted))', fillOpacity: 0.6 } : { stroke: 'hsl(var(--muted-foreground))', strokeOpacity: 0.3 }}
+                    content={<TipBox format={(v) => `${fmtInt(v)} ₸`} labels={REVENUE_NAMES} />}
                 />
-                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                <Bar dataKey="margin" fill="hsl(var(--chart-1))" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-            </BarChart>
+                {series.map((k) => (kind === 'bars' ? (
+                    <Bar key={k} dataKey={k} fill={colors[k]} radius={[3, 3, 0, 0]} isAnimationActive={false}>{labels(k)}</Bar>
+                ) : kind === 'lines' ? (
+                    <Line
+                        key={k}
+                        dataKey={k}
+                        type="monotone"
+                        stroke={colors[k]}
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: colors[k], strokeWidth: 0 }}
+                        activeDot={{ r: 4, stroke: 'hsl(var(--card))', strokeWidth: 2 }}
+                        isAnimationActive={false}
+                    >
+                        {labels(k)}
+                    </Line>
+                ) : (
+                    <Area key={k} dataKey={k} type="monotone" stroke={colors[k]} strokeWidth={2} fill={`url(#${gid}-${k})`} isAnimationActive={false}>
+                        {labels(k)}
+                    </Area>
+                )))}
+            </ComposedChart>
         </ResponsiveContainer>
     );
 }
 
-/** Горизонтальные столбики: сколько заявок на каждом этапе. */
-export function StatusBars({ data }: { data: { s: string; n: number }[] }) {
+/**
+ * Заявки по этапам — полосами, столбцами или кольцом. `fills` — цвет
+ * каждого этапа (один на всех или свой у каждого статуса).
+ */
+export function StatusChart({ data, kind, fills }: {
+    data: { key: string; s: string; n: number }[];
+    kind: 'hbars' | 'vbars' | 'donut';
+    fills: { color: string; opacity: number }[];
+}) {
+    const cells = data.map((r, i) => <Cell key={r.key} fill={fills[i].color} fillOpacity={fills[i].opacity} />);
+    if (kind === 'donut') {
+        const total = data.reduce((s, r) => s + r.n, 0);
+        return (
+            <div className="flex h-full min-h-0 items-center gap-4">
+                <div className="relative h-full min-h-0 min-w-0 flex-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Tooltip content={<TipBox />} />
+                            <Pie data={data} dataKey="n" nameKey="s" innerRadius="58%" outerRadius="90%" paddingAngle={1.5} stroke="hsl(var(--card))" strokeWidth={2} isAnimationActive={false}>
+                                {cells}
+                            </Pie>
+                        </PieChart>
+                    </ResponsiveContainer>
+                    <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+                        <div>
+                            <div className="text-lg font-semibold tabular-nums">{total}</div>
+                            <div className="text-[11px] text-muted-foreground">всего</div>
+                        </div>
+                    </div>
+                </div>
+                <ul className="m-0 hidden shrink-0 list-none gap-1.5 p-0 text-xs @md:grid">
+                    {data.map((r, i) => (
+                        <li key={r.key} className="flex items-center gap-2">
+                            <span className="size-2 shrink-0 rounded-[3px]" style={{ background: fills[i].color, opacity: fills[i].opacity }} />
+                            <span className="text-muted-foreground">{r.s}</span>
+                            <span className="ml-auto pl-3 font-medium tabular-nums">{r.n}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        );
+    }
+    if (kind === 'vbars') {
+        return (
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data} margin={{ left: 0, right: 8, top: 8 }} barCategoryGap="24%">
+                    <CartesianGrid vertical={false} strokeOpacity={0.6} />
+                    <XAxis dataKey="s" tickLine={false} axisLine={false} interval={0} fontSize={10} angle={-30} textAnchor="end" height={64} />
+                    <YAxis tickLine={false} axisLine={false} width={28} fontSize={11} allowDecimals={false} />
+                    <Tooltip cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.6 }} content={<TipBox labels={{ n: 'Заявок' }} />} />
+                    <Bar dataKey="n" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false}>{cells}</Bar>
+                </BarChart>
+            </ResponsiveContainer>
+        );
+    }
     return (
         <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }} barCategoryGap="28%">
@@ -221,7 +343,7 @@ export function StatusBars({ data }: { data: { s: string; n: number }[] }) {
                 <YAxis dataKey="s" type="category" tickLine={false} axisLine={false} width={120} fontSize={11} interval={0} />
                 <XAxis type="number" hide allowDecimals={false} />
                 <Tooltip cursor={false} content={<TipBox labels={{ n: 'Заявок' }} />} />
-                <Bar dataKey="n" fill="hsl(var(--primary))" radius={3} maxBarSize={14} isAnimationActive={false} />
+                <Bar dataKey="n" radius={3} maxBarSize={14} isAnimationActive={false}>{cells}</Bar>
             </BarChart>
         </ResponsiveContainer>
     );
