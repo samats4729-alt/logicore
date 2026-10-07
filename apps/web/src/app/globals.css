@@ -22,6 +22,24 @@
  * а голые <button> и <input> сброс по-прежнему получают: стили браузера
  * лежат в origin ниже авторских, вес там ни при чём.
  */
+/*
+ * Списки левого меню кабинета. Без preflight у <ul> остаются браузерные
+ * точки и отступ слева — подпункты меню шли «маркированным списком».
+ * :where() — чтобы отступы-утилиты Tailwind у подменю выигрывали.
+ */
+@layer base {
+  :where([data-sidebar='menu'], [data-sidebar='menu-sub']) {
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+  }
+  /* Кнопки меню («Мониторинг», «Помощь», профиль) — цвет панели, а не
+     системный цвет кнопок браузера: в тёмной теме они выходили бледными. */
+  :where([data-sidebar='sidebar'] button) {
+    color: inherit;
+  }
+}
+
 @layer base {
   :where(button:not([class*='ant-'])),
   :where(input:not([class*='ant-'])),
@@ -72,6 +90,16 @@
      главной кнопки. */
   --ring: 223 24% 6%;
   --radius: 0.75rem;
+  /* Боковая панель кабинета (макет «shadcn Nova», 07.10.2026): чуть
+     темнее страницы, выделенный пункт — серой подложкой, без цвета. */
+  --sidebar-background: 220 20% 98%;  /* #f9fafb */
+  --sidebar-foreground: 223 24% 6%;
+  --sidebar-primary: 223 24% 6%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 14% 94%;
+  --sidebar-accent-foreground: 223 24% 6%;
+  --sidebar-border: 228 12% 92%;
+  --sidebar-ring: 223 24% 6%;
 }
 
 [data-theme='dark'] {
@@ -97,6 +125,14 @@
   --border: 60 3% 20%;              /* #343430 */
   --input: 60 3% 16%;
   --ring: 40 16% 93%;
+  --sidebar-background: 60 2% 10%;    /* #1a1a19 — как карточка */
+  --sidebar-foreground: 40 16% 93%;
+  --sidebar-primary: 48 15% 94%;
+  --sidebar-primary-foreground: 223 24% 6%;
+  --sidebar-accent: 60 3% 16%;
+  --sidebar-accent-foreground: 40 16% 93%;
+  --sidebar-border: 60 3% 20%;
+  --sidebar-ring: 40 16% 93%;
 }
 
 :root {

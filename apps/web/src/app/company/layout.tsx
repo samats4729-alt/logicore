@@ -2,42 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Layout, Button, Avatar, Dropdown, Typography, Drawer } from 'antd';
 import {
-    DashboardOutlined,
-    FileTextOutlined,
-    TeamOutlined,
-    EnvironmentOutlined,
-    LogoutOutlined,
-    UserOutlined,
-    InboxOutlined,
-    PushpinOutlined,
-    MenuOutlined,
-    FileOutlined,
-    SettingOutlined,
-    DollarOutlined,
-    CarOutlined,
-    ApartmentOutlined,
-    CompassOutlined,
-    HomeOutlined,
-    ArrowUpOutlined,
-    ArrowDownOutlined,
-    FileExcelOutlined,
-    RiseOutlined,
-    FileProtectOutlined,
-    CalculatorOutlined,
-    ShopOutlined,
-    BarChartOutlined,
-    NotificationOutlined,
-    CustomerServiceOutlined,
-    CreditCardOutlined,
-    WalletOutlined,
-} from '@ant-design/icons';
+    Banknote,
+    Building2,
+    Calculator,
+    ChartColumn,
+    Compass,
+    CreditCard,
+    FileText,
+    LayoutDashboard,
+    Settings,
+    Truck,
+    User as UserIcon,
+    Users,
+    Wallet,
+} from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import dynamic from 'next/dynamic';
-import { Moon, Sun } from 'lucide-react';
 import { api } from '@/lib/api';
-import { shortenCompanyName } from '@/lib/company-helper';
+import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
+import CompanySidebar, { type NavItem, type ProfileLink } from '@/components/company/CompanySidebar';
+import CompanyTopbar, { type Crumb } from '@/components/company/CompanyTopbar';
 import NotificationBell from '@/components/ui/NotificationBell';
 import { VerificationStrip, VerificationBadge } from '@/components/company/VerificationStrip';
 import { useTheme } from '@/components/ThemeProvider';
@@ -54,9 +39,6 @@ import Loader from '@/components/ui/Loader';
 import { isNavItemActive } from '@/lib/cabinet-nav';
 import { ROLE_LABELS } from '@/lib/vocabulary';
 import { exchangeStatus } from '@/lib/exchange';
-
-const { Header, Content } = Layout;
-const { Text } = Typography;
 
 /**
  * Название пункта меню с подписью «бета-тестирование».
@@ -78,13 +60,47 @@ function MenuLabel({ label, href }: { label: string; href: string }) {
 
 const AssistantWidget = dynamic(() => import('@/components/ui/AssistantWidget'), { ssr: false });
 
+/** Иконка пункта меню — один размер на всё меню. */
+const ic = (Icon: React.ComponentType<{ className?: string }>) => <Icon className="size-4" />;
+
+/**
+ * ИИ-гид просит открыть меню на телефоне (шаг тура ссылается на пункт меню).
+ * Живёт внутри панели: открыть её можно только изнутри.
+ */
+function MobileMenuOpener() {
+    const { setOpenMobile } = useSidebar();
+    useEffect(() => {
+        const open = () => setOpenMobile(true);
+        window.addEventListener('logicore:open-mobile-menu', open);
+        return () => window.removeEventListener('logicore:open-mobile-menu', open);
+    }, [setOpenMobile]);
+    return null;
+}
+
+/** Где я: раздел и, если открыт его пункт, сам пункт. */
+function crumbsFor(items: NavItem[], pathname: string): Crumb[] {
+    for (const item of items) {
+        const sub = item.children?.find((c) => {
+            const path = c.key.split('?')[0];
+            return pathname === path || pathname.startsWith(path + '/');
+        });
+        const label = typeof item.label === 'string' ? item.label : '';
+        if (sub) {
+            const subLabel = typeof sub.label === 'string' ? sub.label : '';
+            // Пункт, совпадающий с самим разделом («Обзор» у «Денег»), второй раз не пишем.
+            if (sub.key === item.key) return [{ label }];
+            return [{ label, href: item.key.startsWith('/') ? item.key : undefined }, { label: subLabel }];
+        }
+        if (isNavItemActive(item, pathname)) return [{ label }];
+    }
+    return [{ label: 'Кабинет' }];
+}
+
 export default function CompanyLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const { user, logout, checkAuth, isLoading } = useAuthStore();
 
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
     const [hydrated, setHydrated] = useState(false);
     const [hasNewUpdates, setHasNewUpdates] = useState(false);
     const [billingStatus, setBillingStatus] = useState<any>(null);
@@ -143,23 +159,6 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         };
         window.addEventListener('logicore:updates-read', handleUpdatesRead);
         return () => window.removeEventListener('logicore:updates-read', handleUpdatesRead);
-    }, []);
-
-    // Определяем мобильное устройство
-    useEffect(() => {
-        const checkMobile = () => {
-            setIsMobile(window.innerWidth < 1024);
-        };
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
-
-    // ИИ-гид просит открыть мобильное меню (шаг тура ссылается на пункт в Drawer)
-    useEffect(() => {
-        const openMenu = () => setMobileMenuOpen(true);
-        window.addEventListener('logicore:open-mobile-menu', openMenu);
-        return () => window.removeEventListener('logicore:open-mobile-menu', openMenu);
     }, []);
 
     // Статус подписки компании (пока биллинг выключен — ответ {enabled: false})
@@ -223,130 +222,138 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         router.replace('/login');
     };
 
-    const handleMenuClick = (key: string) => {
-        if (key.startsWith('/')) {
-            router.push(key);
-            setMobileMenuOpen(false);
-        }
-    };
+    const isAdmin = ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role);
+    const hasPerm = (perm: string) => isAdmin || !!user.permissions?.includes(perm);
 
-    // Меню в зависимости от роли
-    const getMenuItems = () => {
-        const hasPerm = (perm: string) => ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role) || user.permissions?.includes(perm);
+    /**
+     * Меню в зависимости от роли.
+     *
+     * Права те же, что были у верхних пилюль, — менялся только вид. Подпункты
+     * разделов — ровно те страницы, что лежат на страницах-оглавлениях
+     * («Деньги», «Отчёты», «Кабинет»), с теми же условиями показа.
+     */
+    const getMenuItems = (): NavItem[] => {
+        const acc = hasPerm('accounting');
 
         // У парка своё меню: он сам не возит, заявки и деньги перевозчика ему не нужны.
         if (isPark) {
             return [
-                { key: '/company/park', icon: <DashboardOutlined />, label: 'Парк' },
-                { key: '/company/park/drivers', icon: <TeamOutlined />, label: 'Водители' },
-                { key: '/company/park/trips', icon: <CarOutlined />, label: 'Рейсы' },
-                { key: '/company/park/payouts', icon: <DollarOutlined />, label: 'Выплаты' },
-                { key: '/company/cabinet', icon: <ApartmentOutlined />, label: 'Кабинет' },
+                { key: '/company/park', icon: ic(LayoutDashboard), label: 'Парк' },
+                { key: '/company/park/drivers', icon: ic(Users), label: 'Водители' },
+                { key: '/company/park/trips', icon: ic(Truck), label: 'Рейсы' },
+                { key: '/company/park/payouts', icon: ic(Wallet), label: 'Выплаты' },
+                { key: '/company/cabinet', icon: ic(Building2), label: 'Кабинет' },
             ];
         }
 
-        const items: any[] = [
-            {
-                key: '/company',
-                icon: <DashboardOutlined />,
-                label: 'Дашборд',
-            },
+        const items: NavItem[] = [
+            { key: '/company', icon: ic(LayoutDashboard), label: 'Дашборд' },
         ];
 
-        // --- ЗАЯВКИ (standalone по референсу) ---
+        // --- ЗАЯВКИ ---
         if (hasPerm('orders')) {
             items.push({
                 key: '/company/orders',
-                icon: <FileTextOutlined />,
+                icon: ic(FileText),
                 label: 'Заявки',
+                children: [
+                    { key: '/company/orders', label: 'Все заявки' },
+                    { key: '/company/orders/create', label: 'Новая заявка' },
+                    // Биржа — только если открыта на сервере и этой компании.
+                    ...(exchangeOn ? [{ key: '/company/exchange', label: 'Биржа' }] : []),
+                ],
             });
         }
 
         // --- ЗАПРОСЫ (этап до заявки: клиент спросил цену) ---
-        // Сразу после «Заявок»: это предыдущий шаг той же работы, и в
-        // повседневном порядке он идёт перед ней, а не в стороне.
         if (hasPerm('orders')) {
             items.push({
                 key: '/company/requests',
-                icon: <CalculatorOutlined />,
+                icon: ic(Calculator),
                 label: 'Запросы',
-            });
-        }
-
-        // --- БИРЖА (груз ставится, водители берут его в приложении) ---
-        // Права — как у заявок: кто ведёт заявки, тот ставит и грузы.
-        if (exchangeOn && hasPerm('orders')) {
-            items.push({
-                key: '/company/exchange',
-                icon: <ShopOutlined />,
-                label: 'Биржа',
+                children: [
+                    { key: '/company/requests', label: 'Запросы на расчёт' },
+                    { key: '/company/calculator', label: 'Калькулятор рейса' },
+                ],
             });
         }
 
         // --- МОНИТОРИНГ ---
         // «Склад» переименован в «Очередь на погрузку»: учёта товара здесь
         // нет и не будет, а прежнее название его обещало.
-        const monitoringChildren: any[] = [];
+        const monitoringChildren: NonNullable<NavItem['children']> = [];
         if (hasPerm('tracking')) {
-            monitoringChildren.push({
-                key: '/company/tracking',
-                icon: <EnvironmentOutlined />,
-                label: 'Карта и GPS',
-            });
+            monitoringChildren.push({ key: '/company/tracking', label: 'Карта и GPS' });
         }
-        if (user.role === 'WAREHOUSE_MANAGER' || ['COMPANY_ADMIN', 'FORWARDER'].includes(user.role)) {
-            monitoringChildren.push({
-                key: '/company/warehouse',
-                icon: <HomeOutlined />,
-                label: <MenuLabel label="Очередь на погрузку" href="/company/warehouse" />,
-            });
+        if (user.role === 'WAREHOUSE_MANAGER' || isAdmin) {
+            monitoringChildren.push({ key: '/company/warehouse', label: <MenuLabel label="Очередь на погрузку" href="/company/warehouse" /> });
         }
         if (monitoringChildren.length > 0) {
-            items.push({
-                key: 'monitoring_group',
-                popupClassName: 'lc-nav-pop',
-                icon: <CompassOutlined />,
-                label: 'Мониторинг',
-                children: monitoringChildren,
-            });
+            items.push({ key: 'monitoring_group', icon: ic(Compass), label: 'Мониторинг', children: monitoringChildren });
         }
 
         // --- ДЕНЬГИ (ежедневная работа: документы, платежи, долги) ---
-        // Прежние «Финансы» держали на одном экране 38 ссылок: ежедневное
-        // вперемешку с отчётами и справочниками, которые заводят один раз.
-        // Адрес остался прежним — старые ссылки и закладки работают.
-        //
-        // Оба пункта раньше показывались всем подряд: право у них не
-        // спрашивалось вовсе. Руководитель снимал галочку «Бухгалтерия», а
-        // «Деньги» в меню оставались.
-        if (hasPerm('accounting')) {
+        // Право «Бухгалтерия»: руководитель снял галочку — раздела в меню нет.
+        if (acc) {
             items.push({
                 key: '/company/finance',
-                icon: <DollarOutlined />,
+                icon: ic(Banknote),
                 label: 'Деньги',
+                children: [
+                    { key: '/company/finance', label: 'Обзор' },
+                    { key: '/company/accounting/invoices', label: 'Счета' },
+                    { key: '/company/accounting/acts', label: 'Акты' },
+                    { key: '/company/accounting/incoming', label: 'Входящие документы' },
+                    { key: '/company/accounting/operations', label: 'Платежи' },
+                    { key: '/company/accounting/calendar', label: 'Платёжный календарь' },
+                    { key: '/company/accounting/counterparty-report', label: 'Долги и остатки' },
+                    { key: '/company/inventory/balances', label: 'Материалы' },
+                    ...(isAdmin ? [{ key: '/company/payroll', label: 'Зарплата' }] : []),
+                ],
             });
         }
 
         // --- ОТЧЁТЫ (то, что смотрят раз в месяц) ---
-        // Своё право, отдельно от «Бухгалтерии»: в финансовом отделе один
-        // человек проводит оплаты, а другой смотрит заработок компании.
+        // Своё право, отдельно от «Бухгалтерии».
         if (hasPerm('reports')) {
             items.push({
                 key: '/company/reports',
-                icon: <BarChartOutlined />,
+                icon: ic(ChartColumn),
                 label: 'Отчёты',
+                children: [
+                    { key: '/company/accounting/pnl', label: 'Отчёт по прибыли' },
+                    { key: '/company/accounting/carrier-profit', label: 'Прибыль по перевозчику' },
+                    { key: '/company/accounting/registry', label: 'Реестр заявок' },
+                    { key: '/company/accounting/cashflow', label: 'Движение денег' },
+                    { key: '/company/accounting/expenses-by-category', label: 'Расходы по статьям' },
+                ],
             });
         }
 
         // --- КАБИНЕТ (справочники, организация, сотрудники) ---
+        // Пункты — с теми же условиями, что на странице «Кабинет»; остальные
+        // справочники (банки, валюты, нумерация) — на самой странице.
         items.push({
             key: '/company/cabinet',
-            icon: <ApartmentOutlined />,
+            icon: ic(Building2),
             label: 'Кабинет',
+            children: [
+                { key: '/company/cabinet', label: 'Все справочники' },
+                ...(hasPerm('partners') ? [{ key: '/company/partners', label: 'Контрагенты' }] : []),
+                ...(hasPerm('drivers') ? [{ key: '/company/drivers', label: 'Водители' }] : []),
+                ...(isAdmin ? [{ key: '/company/vehicles', label: 'Автопарк' }] : []),
+                { key: '/company/locations', label: 'Адреса и склады' },
+                ...(hasPerm('partners') ? [{ key: '/company/contracts', label: 'Договоры' }] : []),
+                ...(isAdmin ? [{ key: '/company/users', label: 'Сотрудники' }] : []),
+                ...(hasPerm('documents') ? [{ key: '/company/documents', label: 'Документы' }] : []),
+                ...(isAdmin && auditEnabled ? [{ key: '/company/audit', label: 'Журнал действий' }] : []),
+            ],
         });
 
         return items;
     };
+
+    const menuItems = getMenuItems();
 
     // Доступен ли текущий раздел этому человеку. Правило то же, что у меню.
     const sectionAccess = checkSectionAccess(pathname, user);
@@ -355,340 +362,88 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     // ссылке и из закладок человек приходит мимо меню.
     const beta = getBetaSection(pathname);
 
-    const userMenu = {
-        items: [
-            {
-                key: 'updates',
-                icon: <NotificationOutlined style={{ color: hasNewUpdates ? '#ff4d4f' : undefined }} />,
-                label: (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 12 }}>
-                        <span>Что нового?</span>
-                        {hasNewUpdates && (
-                            <span style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                background: '#ff4d4f',
-                                display: 'inline-block'
-                            }} />
-                        )}
-                    </div>
-                ),
-                // Своя страница, а не окно помощника: список нововведений
-                // читают целиком и возвращаются к нему.
-                onClick: () => router.push('/company/updates')
-            },
-            {
-                key: 'support',
-                icon: <CustomerServiceOutlined />,
-                label: 'Поддержка',
-                onClick: () => router.push('/company/support'),
-            },
-            {
-                type: 'divider' as const,
-            },
-            {
-                key: 'profile',
-                icon: <UserOutlined />,
-                label: 'Профиль',
-                onClick: () => router.push('/company/profile'),
-            },
-            // «Моя зарплата» — личное, как профиль, и открыта каждому. Раньше
-            // ссылка жила только в разделе «Деньги», а менеджеру без доступа к
-            // бухгалтерии он не виден: свою зарплату он находил лишь по
-            // плитке на главной (владелец, 30.09.2026).
-            {
-                key: '/company/my-salary',
-                icon: <WalletOutlined />,
-                label: 'Моя зарплата',
-                onClick: () => router.push('/company/my-salary'),
-            },
-            // «Подписка» — там, где её ищут. Про тариф было написано только
-            // плиткой на главной, среди рабочих цифр: кто продлевает, заходит
-            // на главную не каждый день, и вопрос «где у вас продлевать»
-            // звучал снова и снова. Показываем тем, кто платит, — остальным
-            // это страница, на которой нечего нажать.
-            ...(checkSectionAccess('/company/billing', user).allowed ? [{
-                key: '/company/billing',
-                icon: <CreditCardOutlined />,
-                label: 'Подписка',
-                onClick: () => router.push('/company/billing'),
-            }] : []),
-            // «Настройки» — реквизиты, печать и организации компании: их
-            // меняет руководитель. Пункт показывали всем, и бухгалтер с
-            // завскладом попадали на экран, где каждая кнопка отвечает
-            // отказом. Свои данные и пароль — в «Профиле», он остаётся.
-            ...(checkSectionAccess('/company/settings', user).allowed ? [{
-                key: '/company/settings',
-                icon: <SettingOutlined />,
-                label: 'Настройки',
-                onClick: () => router.push('/company/settings'),
-            }] : []),
-            {
-                type: 'divider' as const,
-            },
-            {
-                key: 'logout',
-                icon: <LogoutOutlined />,
-                label: 'Выйти',
-                onClick: handleLogout,
-            },
-        ],
-    };
-
     /**
-     * Мобильное меню.
+     * Меню профиля — внизу левой панели.
      *
-     * Список свой, а не `Menu` из Ant Design. Тот красил текущий пункт синим
-     * — цветом, который в кабинете означает ссылку, а не выделение, — и на
-     * телефоне навигация выглядела из другого продукта. Здесь тот же вид,
-     * что у пилюль наверху: тёмная заливка и текст фоном страницы.
-     *
-     * «Мониторинг» на телефоне разложен сразу: выпадающий список внутри
-     * выдвижного ящика — лишнее нажатие ради двух строк.
+     * «Что нового» и «Помощь» вынесены отдельными строками над профилем:
+     * их ищут чаще, чем открывают профиль.
      */
-    const MobileMenu = () => (
-        <Drawer
-            title={user.company?.name || 'Меню'}
-            placement="left"
-            onClose={() => setMobileMenuOpen(false)}
-            open={mobileMenuOpen}
-            width={286}
-            className="lc-nova"
-            styles={{ body: { padding: 12 }, header: { background: 'var(--nova-surface-2)' } }}
-        >
-            <nav className="lc-mnav">
-                {getMenuItems().map((item: any) => {
-                    if (item.children) {
-                        return (
-                            <div className="lc-mnav-group" key={item.key}>
-                                <div className="lc-mnav-cap">{item.label}</div>
-                                {item.children.map((child: any) => (
-                                    <button
-                                        type="button"
-                                        key={child.key}
-                                        className={`lc-mnav-item${isNavItemActive(child, pathname) ? ' is-on' : ''}`}
-                                        onClick={() => handleMenuClick(child.key)}
-                                    >
-                                        <i>{child.icon}</i>
-                                        <span>{child.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        );
-                    }
-                    return (
-                        <button
-                            type="button"
-                            key={item.key}
-                            className={`lc-mnav-item${isNavItemActive(item, pathname) ? ' is-on' : ''}`}
-                            onClick={() => handleMenuClick(item.key)}
-                        >
-                            <i>{item.icon}</i>
-                            <span>{item.label}</span>
-                        </button>
-                    );
-                })}
-            </nav>
+    const profileLinks: ProfileLink[] = [
+        { key: '/company/profile', label: 'Профиль', icon: <UserIcon />, onClick: () => router.push('/company/profile') },
+        // «Моя зарплата» — личное, как профиль, и открыта каждому (владелец, 30.09.2026).
+        { key: '/company/my-salary', label: 'Моя зарплата', icon: <Wallet />, onClick: () => router.push('/company/my-salary') },
+        // «Подписка» — тем, кто платит; остальным там нечего нажать.
+        ...(checkSectionAccess('/company/billing', user).allowed ? [{
+            key: '/company/billing', label: 'Подписка', icon: <CreditCard />, onClick: () => router.push('/company/billing'),
+        }] : []),
+        // «Настройки» — реквизиты, печать и организации компании: их меняет руководитель.
+        ...(checkSectionAccess('/company/settings', user).allowed ? [{
+            key: '/company/settings', label: 'Настройки', icon: <Settings />, onClick: () => router.push('/company/settings'),
+        }] : []),
+    ];
 
-            <div className="lc-mnav-foot">
-                <button type="button" className="lc-mnav-out" onClick={handleLogout}>
-                    <LogoutOutlined /> Выйти
-                </button>
-            </div>
-        </Drawer>
-    );
+    const initials = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase();
 
     return (
-        <Layout className="lc-nova" style={{ minHeight: '100vh', background: 'var(--nova-bg)' }}>
-            {/* Mobile Drawer */}
-            {isMobile && <MobileMenu />}
-
-            {/* Top Header Navigation */}
-            <Header
-                className="app-header-2026"
-                style={{
-                    // Шапка белая, холст страницы серый — так верхняя полоса
-                    // читается как отдельный слой, а не как продолжение фона.
-                    // Раньше здесь стоял --lc-bg, то есть тот же серый.
-                    background: 'var(--lc-card)',
-                    backdropFilter: 'saturate(1.9) blur(20px)',
-                    WebkitBackdropFilter: 'saturate(1.9) blur(20px)',
-                    padding: '0 24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    height: 60,
-                    borderBottom: '1px solid var(--lc-border)',
-                    position: 'sticky',
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    zIndex: 100,
-                }}
-            >
-                {/* Дорожка шапки: та же ширина и те же поля, что у страницы —
-                    вертикали обязаны совпадать по всей высоте экрана. */}
-                <div className="nova-bar">
-                {/* Mobile: burger button */}
-                {isMobile && (
-                    <Button
-                        type="text"
-                        icon={<MenuOutlined />}
-                        onClick={() => setMobileMenuOpen(true)}
-                        style={{ marginRight: 8, color: 'var(--lc-text)' }}
-                    />
-                )}
-
-                {/* Logo: словомарка LogiCore */}
-                <div
-                    style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginRight: 18, flexShrink: 0 }}
-                    onClick={() => router.push('/company')}
-                >
-                    <span className="nova-brand">Logi<span>Core</span></span>
-                </div>
-
-                {/* Desktop: пилюльная навигация */}
-                {!isMobile && (
-                    <nav className="lc2-nav">
-                        {getMenuItems().map((item: any) => {
-                            const active = isNavItemActive(item, pathname);
-
-                            if (item.children) {
-                                return (
-                                    <Dropdown
-                                        key={item.key}
-                                        trigger={['hover', 'click']}
-                                        overlayClassName="lc2-nav-drop"
-                                        transitionName=""
-                                        menu={{
-                                            items: item.children,
-                                            onClick: ({ key }) => { if (key.startsWith('/')) router.push(key); },
-                                        }}
-                                    >
-                                        <button
-                                            type="button"
-                                            className={`lc2-nav-item${active ? ' active' : ''}`}
-                                            data-menu-id={`lc2-${item.key}`}
-                                        >
-                                            {item.label}
-                                        </button>
-                                    </Dropdown>
-                                );
+        <SidebarProvider
+            className="lc-nova"
+            style={{ '--sidebar-width': '15rem', background: 'var(--nova-bg)' } as React.CSSProperties}
+        >
+            <MobileMenuOpener />
+            <CompanySidebar
+                items={menuItems}
+                pathname={pathname}
+                company={user.company?.name || 'LogiCore'}
+                companyCaption={ROLE_LABELS[user.role] || user.role}
+                companyBadge={<VerificationBadge data={verification} />}
+                user={{
+                    name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '',
+                    caption: user.email || '',
+                    avatar: (
+                        <UserAvatar
+                            userId={user.id}
+                            hasAvatar={!!(user as any).avatarPath}
+                            size={32}
+                            fallback={
+                                <span className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent text-[12px] font-semibold">
+                                    {initials || <UserIcon className="size-4" />}
+                                </span>
                             }
-                            return (
-                                <button
-                                    key={item.key}
-                                    type="button"
-                                    className={`lc2-nav-item${active ? ' active' : ''}`}
-                                    data-menu-id={`lc2-${item.key}`}
-                                    onClick={() => router.push(item.key)}
-                                >
-                                    {item.label}
-                                </button>
-                            );
-                        })}
-                    </nav>
-                )}
+                        />
+                    ),
+                }}
+                profileLinks={profileLinks}
+                hasNewUpdates={hasNewUpdates}
+                // Своя страница, а не окно помощника: список нововведений читают целиком.
+                onUpdates={() => router.push('/company/updates')}
+                onSupport={() => router.push('/company/support')}
+                onLogout={handleLogout}
+            />
 
-                {/* Spacer */}
-                <div style={{ flex: 1 }} />
+            <SidebarInset className="min-w-0" style={{ background: 'var(--nova-bg)' }}>
+                <CompanyTopbar
+                    crumbs={crumbsFor(menuItems, pathname)}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    onToggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                    tools={
+                        <>
+                            <AiButton />
+                            <GlobalSearch />
+                            <NotificationBell hasNewUpdates={hasNewUpdates} />
+                        </>
+                    }
+                />
 
-                {/* Right section */}
-                <div className="lc2-header-right">
-                    {/* AI-ассистент */}
-                    <AiButton />
+                {/* Тикер живых событий (глобальный) */}
+                <LiveEventTicker />
 
-                    {/* Глобальный поиск */}
-                    <GlobalSearch />
-
-                    {/* Центр уведомлений (Этап 7) */}
-                    <NotificationBell hasNewUpdates={hasNewUpdates} />
-
-                    {/* Тема — один круглый значок, как на главной. Капсула из
-                        двух половин занимала вдвое больше места и выбивалась
-                        из ряда одинаковых круглых кнопок рядом. */}
-                    <button
-                        type="button"
-                        className="nova-iconbtn"
-                        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                        title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
-                        aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
-                    >
-                        {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-                    </button>
-
-                    <div className="lc2-header-divider" />
-
-                    {/* User Profile */}
-                    <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']} overlayClassName="lc2-nav-drop" transitionName="">
-                        <div
-                            className="lc2-profile user-profile-trigger"
-                            data-guide="profile"
-                            style={{
-                                boxShadow: hasNewUpdates ? '0 0 0 2px rgba(255, 77, 79, 0.35), 0 0 12px rgba(255, 77, 79, 0.25)' : undefined,
-                                animation: hasNewUpdates ? 'profileGlow 2s infinite' : undefined,
-                            }}
-                        >
-                            <UserAvatar
-                                userId={user.id}
-                                hasAvatar={!!(user as any).avatarPath}
-                                size={32}
-                                fallback={
-                                    <span className="lc2-profile-av">
-                                        {((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase() || <UserOutlined />}
-                                    </span>
-                                }
-                            />
-                            {/* Имя с должностью — самая широкая часть правого
-                                угла. На узком экране её убирает CSS
-                                (`lc2-profile-who`), а не второй порог в коде:
-                                два порога в разных местах разъезжаются. */}
-                            {!isMobile && (
-                                <div className="lc2-profile-who" style={{ lineHeight: 1.25 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-text)', whiteSpace: 'nowrap' }}>
-                                        {user.firstName} {user.lastName}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: '#8a91a0', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {ROLE_LABELS[user.role] || user.role}{user.company?.name ? ` · ${shortenCompanyName(user.company.name)}` : ''}
-                                        <VerificationBadge data={verification} />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </Dropdown>
-                </div>
-                </div>
-            </Header>
-
-            {/* Тикер живых событий (глобальный) */}
-            <LiveEventTicker />
-
-            {/* Content */}
-            <Layout style={{ background: 'var(--nova-bg)', padding: 0 }}>
-                <Content
-                    data-guide="content"
-                    className="page-content-anim"
-                    style={{
-                        margin: 0,
-                        padding: 0,
-                        background: 'transparent',
-                        borderRadius: 0,
-                        border: 'none',
-                        minHeight: 'calc(100vh - 60px - 40px)',
-                        boxShadow: 'none',
-                        overflow: 'auto',
-                    }}
-                >
+                <main data-guide="content" className="page-content-anim min-w-0 flex-1">
                     {billingStatus?.enabled && billingStatus?.blocked ? (
                         <PaywallScreen status={billingStatus} />
                     ) : (
                         <>
                             {/* Полоска про бесплатные дни. Показывается всем
-                                сотрудникам, а не только руководителю: плитка
-                                «Тариф» есть лишь у него, а закроется кабинет
-                                у всех сразу. Слова разные — «пробный период»
-                                у новой компании и «дни на оплату» у той, что
-                                уже работала, когда назначили цену. */}
+                                сотрудникам: закроется кабинет у всех сразу. */}
                             {billingStatus?.enabled && !billingStatus?.blocked && billingStatus?.trialEndsAt
                                 && ['TRIAL', 'GRACE'].includes(billingStatus?.status) && (
                                     <div className="lc-trial-banner">
@@ -697,11 +452,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                                         {Math.max(0, Math.ceil((new Date(billingStatus.trialEndsAt).getTime() - Date.now()) / 86400000))} дн.
                                     </div>
                                 )}
-                            {/* Прямая ссылка в чужой раздел раньше открывала
-                                страницу: она грузилась, запросы получали отказ,
-                                и человек видел пустой экран без объяснений.
-                                Теперь — понятная причина. Главным остаётся
-                                сервер, здесь только объяснение. */}
+                            {/* Прямая ссылка в чужой раздел — понятная причина
+                                вместо пустого экрана. Главным остаётся сервер. */}
                             {!sectionAccess.allowed ? (
                                 <NoSectionAccess title={sectionAccess.title} roleLabel={ROLE_LABELS[user.role] || user.role} />
                             ) : beta?.state === 'closed' ? (
@@ -709,20 +461,17 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             ) : (
                                 <>
                                     {beta?.state === 'beta' && <BetaStrip section={beta} />}
-                                    {/* Где компания в проверке и что делать
-                                        дальше — первым же экраном, а не
-                                        когда человек сам дойдёт до
-                                        «Подключения организации». */}
+                                    {/* Где компания в проверке и что делать дальше — первым же экраном. */}
                                     <VerificationStrip data={verification} />
                                     {children}
                                 </>
                             )}
                         </>
                     )}
-                </Content>
-            </Layout>
+                </main>
+            </SidebarInset>
 
             <AssistantWidget />
-        </Layout >
+        </SidebarProvider>
     );
 }
