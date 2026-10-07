@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { kzToday } from '../common/utils/business-date';
 import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ON_EXCHANGE, managerOf } from './exchange-orders';
+import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 
 /** Что о водителе видит компания в отклике — чтобы решить, кого выбрать. */
@@ -90,7 +91,8 @@ export class ExchangeOffersService {
     ) {}
 
     private async openOrder(orderId: string) {
-        const order = await this.prisma.order.findFirst({ where: { id: orderId, ...ON_EXCHANGE }, select: ORDER_FOR_OFFER });
+        // Отклик — только на заявку компании, которой открыта биржа.
+        const order = await this.prisma.order.findFirst({ where: { id: orderId, ...ON_EXCHANGE, AND: [PUBLISHER_HAS_ACCESS] }, select: ORDER_FOR_OFFER });
         if (!order) throw new NotFoundException('Заявка уже снята с биржи или у неё появился исполнитель');
         return order;
     }

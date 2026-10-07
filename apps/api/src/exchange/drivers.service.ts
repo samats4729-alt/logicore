@@ -167,7 +167,7 @@ export class ExchangeDriversService {
         if (dto.parkCompanyId !== undefined) {
             if (dto.parkCompanyId) {
                 const park = await this.prisma.company.findFirst({
-                    where: { id: dto.parkCompanyId, isPark: true, isActive: true },
+                    where: { id: dto.parkCompanyId, isPark: true, isActive: true, exchangeAccess: true },
                     select: { id: true },
                 });
                 if (!park) throw new BadRequestException('Такого парка на бирже нет');
@@ -214,7 +214,8 @@ export class ExchangeDriversService {
     /** Парки биржи — для выбора в анкете. */
     async parks() {
         return this.prisma.company.findMany({
-            where: { isPark: true, isActive: true },
+            // Только парки, которым открыта биржа: в другой парк вступать пока незачем.
+            where: { isPark: true, isActive: true, exchangeAccess: true },
             select: { id: true, name: true, bin: true },
             orderBy: { name: 'asc' },
         });
@@ -362,7 +363,7 @@ export class ExchangeDriversService {
         this.assertEditable(driver);
         const code = rawCode.trim().toUpperCase();
         const park = await this.prisma.company.findFirst({
-            where: { parkInviteCode: code, isPark: true, isActive: true },
+            where: { parkInviteCode: code, isPark: true, isActive: true, exchangeAccess: true },
             select: { id: true },
         });
         if (!park) throw new BadRequestException('Такого кода нет — проверьте его или попросите у парка новую ссылку');
@@ -496,8 +497,8 @@ export class ExchangeDriversService {
                 isExternal: false,
                 ...(query ? { OR: [{ name: { contains: query, mode: 'insensitive' } }, { bin: { contains: query } }] } : {}),
             },
-            select: { id: true, name: true, bin: true, isPark: true, isActive: true, _count: { select: { exchangeDrivers: true } } },
-            orderBy: [{ isPark: 'desc' }, { name: 'asc' }],
+            select: { id: true, name: true, bin: true, isPark: true, exchangeAccess: true, isActive: true, _count: { select: { exchangeDrivers: true } } },
+            orderBy: [{ exchangeAccess: 'desc' }, { isPark: 'desc' }, { name: 'asc' }],
             take: 100,
         });
     }
@@ -508,7 +509,23 @@ export class ExchangeDriversService {
         return this.prisma.company.update({
             where: { id: companyId },
             data: { isPark },
-            select: { id: true, name: true, bin: true, isPark: true },
+            select: { id: true, name: true, bin: true, isPark: true, exchangeAccess: true },
+        });
+    }
+
+    /**
+     * Открыть компании биржу или закрыть. Пока биржу проверяют, её видят
+     * только отмеченные компании и водители их парков. Закрыли — заявки
+     * компании пропадают с ленты сами (лента смотрит на эту отметку), а
+     * выставленными они остаются: вернули доступ — вернулись и они.
+     */
+    async setExchangeAccess(companyId: string, exchangeAccess: boolean) {
+        const company = await this.prisma.company.findFirst({ where: { id: companyId, isExternal: false }, select: { id: true } });
+        if (!company) throw new NotFoundException('Компания не найдена');
+        return this.prisma.company.update({
+            where: { id: companyId },
+            data: { exchangeAccess },
+            select: { id: true, name: true, bin: true, isPark: true, exchangeAccess: true },
         });
     }
 }

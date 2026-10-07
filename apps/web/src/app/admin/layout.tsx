@@ -83,7 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             label: 'Проверка организаций',
             count: pendingCompanies,
         },
-        ...(exchangeOn ? [{ key: '/admin/parks', icon: <ShopOutlined />, label: 'Парки биржи' }] : []),
+        ...(exchangeOn ? [{ key: '/admin/parks', icon: <ShopOutlined />, label: 'Биржа: доступ и парки' }] : []),
         { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
         { key: '/admin/orders', icon: <FileTextOutlined />, label: 'Заявки' },
         { key: '/admin/tracking', icon: <AimOutlined />, label: 'Мониторинг' },

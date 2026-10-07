@@ -141,7 +141,7 @@ export class ExchangeParkService {
     /** Чей это код — для страницы приглашения, без входа. */
     async inviteInfo(code: string) {
         const park = await this.prisma.company.findFirst({
-            where: { parkInviteCode: code.trim().toUpperCase(), isPark: true, isActive: true },
+            where: { parkInviteCode: code.trim().toUpperCase(), isPark: true, isActive: true, exchangeAccess: true },
             select: { name: true },
         });
         if (!park) throw new NotFoundException('Приглашение не найдено — попросите у парка новую ссылку');

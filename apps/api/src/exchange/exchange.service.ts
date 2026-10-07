@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { cityKey } from '../cities/city-key';
 import { ExchangeBoardQueryDto, PublishOrderDto, RoutePricesQueryDto } from './dto/exchange-order.dto';
 import {
@@ -177,7 +178,7 @@ export class ExchangeService {
                 // «Не своя»: поле пустое или другая компания. Простое NOT здесь не
                 // годится — пустое поле в базе превращает его в «неизвестно», и
                 // такая заявка молча пропадала с биржи.
-                AND: notMine(companyId),
+                AND: [...notMine(companyId), PUBLISHER_HAS_ACCESS],
             },
             select: EXCHANGE_ORDER_SELECT,
             orderBy: { exchangePublishedAt: 'desc' },
@@ -188,7 +189,7 @@ export class ExchangeService {
 
     /** Заявка с биржи — как её видят другие. */
     async card(companyId: string, orderId: string) {
-        const row = await this.prisma.order.findFirst({ where: { id: orderId, ...ON_EXCHANGE }, select: EXCHANGE_ORDER_SELECT });
+        const row = await this.prisma.order.findFirst({ where: { id: orderId, ...ON_EXCHANGE, AND: [PUBLISHER_HAS_ACCESS] }, select: EXCHANGE_ORDER_SELECT });
         if (!row) throw new NotFoundException('Заявка уже снята с биржи или у неё появился исполнитель');
         const own = await this.prisma.order.count({
             where: { id: orderId, OR: [{ customerCompanyId: companyId }, { forwarderId: companyId }, { subForwarderId: companyId }] },

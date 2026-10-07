@@ -15,12 +15,17 @@ interface Row {
     name: string;
     bin: string | null;
     isPark: boolean;
+    exchangeAccess: boolean;
     isActive: boolean;
     _count: { exchangeDrivers: number };
 }
 
 /**
- * Парки биржи — кто из компаний платформы работает посредником.
+ * Биржа в админке: кому она открыта и кто из компаний работает парком.
+ *
+ * Доступ: пока биржу проверяют, её видят только отмеченные здесь компании и
+ * водители их парков (решение владельца от 07.10.2026). Остальные не видят
+ * ни раздела, ни кнопки «Выставить на биржу».
  *
  * Парк арендует машину с экипажем у водителей без ИП, чтобы перевозка шла
  * законно. Отметку ставит только владелец платформы (решение от 04.10.2026):
@@ -47,12 +52,25 @@ export default function AdminParksPage() {
         return () => { alive = false; clearTimeout(timer); };
     }, [q]);
 
+    const toggleAccess = async (row: Row) => {
+        setBusy(`${row.id}:access`);
+        try {
+            const { data } = await api.put(`/exchange/admin/companies/${row.id}/access`, { exchangeAccess: !row.exchangeAccess });
+            setRows((list) => list?.map((r) => (r.id === row.id ? { ...r, exchangeAccess: data.exchangeAccess } : r)) ?? null);
+            toast.success(data.exchangeAccess ? `${row.name} видит биржу` : `${row.name} больше не видит биржу`);
+        } catch (e) {
+            toast.error(ответСервера(e, 'Не удалось сохранить'));
+        } finally {
+            setBusy(null);
+        }
+    };
+
     const toggle = async (row: Row) => {
-        setBusy(row.id);
+        setBusy(`${row.id}:park`);
         try {
             const { data } = await api.put(`/exchange/admin/companies/${row.id}/park`, { isPark: !row.isPark });
             setRows((list) => list?.map((r) => (r.id === row.id ? { ...r, isPark: data.isPark } : r)) ?? null);
-            toast.success(data.isPark ? `«${row.name}» теперь парк` : `«${row.name}» больше не парк`);
+            toast.success(data.isPark ? `${row.name} теперь парк` : `${row.name} больше не парк`);
         } catch (e) {
             toast.error(ответСервера(e, 'Не удалось сохранить'));
         } finally {
@@ -65,9 +83,13 @@ export default function AdminParksPage() {
             <div className={styles.hero}>
                 <div>
                     <div className={styles.eyebrow}>Биржа</div>
-                    <h1 className={styles.title}>Парки биржи</h1>
+                    <h1 className={styles.title}>Доступ и парки</h1>
                     <p className={styles.subtitle}>
-                        Компании-посредники: через них работают водители без ИП. Парк регистрируется на платформе как организация, а здесь вы
+                        Пока биржу проверяют, её видят только компании с отметкой «Биржа открыта» и водители их парков. Остальные не видят ни
+                        раздела, ни кнопки «Выставить на биржу». Сняли отметку — заявки компании сразу пропадают с ленты.
+                    </p>
+                    <p className={styles.subtitle}>
+                        Парки — компании-посредники: через них работают водители без ИП. Парк регистрируется на платформе как организация, а здесь вы
                         подтверждаете его как парк. После этого у него свой кабинет — водители, их рейсы и приглашение; заявок, биржи и денег
                         перевозчика у парка нет: он сам не возит.
                     </p>
@@ -96,6 +118,7 @@ export default function AdminParksPage() {
                                 <TableHead className="h-9 text-[11px] uppercase tracking-wide">Компания</TableHead>
                                 <TableHead className="h-9 text-[11px] uppercase tracking-wide">БИН</TableHead>
                                 <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Водителей</TableHead>
+                                <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Биржа</TableHead>
                                 <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Парк</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -111,12 +134,24 @@ export default function AdminParksPage() {
                                     <TableCell className="text-right">
                                         <Button
                                             size="sm"
+                                            variant={r.exchangeAccess ? 'default' : 'outline'}
+                                            onClick={() => toggleAccess(r)}
+                                            disabled={busy === `${r.id}:access`}
+                                            aria-label={r.exchangeAccess ? `Закрыть биржу: ${r.name}` : `Открыть биржу: ${r.name}`}
+                                        >
+                                            {busy === `${r.id}:access` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                            {r.exchangeAccess ? 'Биржа открыта' : 'Открыть биржу'}
+                                        </Button>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button
+                                            size="sm"
                                             variant={r.isPark ? 'default' : 'outline'}
                                             onClick={() => toggle(r)}
-                                            disabled={busy === r.id}
+                                            disabled={busy === `${r.id}:park`}
                                             aria-label={r.isPark ? `Снять отметку «парк»: ${r.name}` : `Сделать парком: ${r.name}`}
                                         >
-                                            {busy === r.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                            {busy === `${r.id}:park` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                                             {r.isPark ? 'Парк' : 'Сделать парком'}
                                         </Button>
                                     </TableCell>

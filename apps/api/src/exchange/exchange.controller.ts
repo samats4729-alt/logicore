@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { ExchangeService } from './exchange.service';
 import { ExchangeOffersService } from './exchange-offers.service';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
+import { companyHasExchange, ExchangeCompanyAccessGuard } from './exchange-access';
 import { ExchangeBoardQueryDto, MakeOfferDto, PublishOrderDto, RoutePricesQueryDto, UnpublishOrderDto } from './dto/exchange-order.dto';
 
 /**
@@ -27,9 +28,13 @@ export class ExchangeStatusController {
     @ApiOperation({ summary: 'Включена ли биржа на этом сервере' })
     async status(@Request() req: any) {
         if (!exchangeEnabled()) return { enabled: false, isPark: false };
-        const company = req.user.companyId
-            ? await this.prisma.company.findUnique({ where: { id: req.user.companyId }, select: { isPark: true } })
-            : null;
+        // Владельцу платформы биржа видна всегда — иначе в админке пропал бы
+        // и сам раздел, где ставят доступ. У администратора бывает своя
+        // компания, поэтому смотрим на роль, а не на её отсутствие.
+        if (req.user.role === UserRole.ADMIN || !req.user.companyId) return { enabled: true, isPark: false };
+        // Компании — только если её отметили в админке.
+        if (!(await companyHasExchange(this.prisma, req.user.companyId))) return { enabled: false, isPark: false };
+        const company = await this.prisma.company.findUnique({ where: { id: req.user.companyId }, select: { isPark: true } });
         return { enabled: true, isPark: !!company?.isPark };
     }
 }
@@ -43,7 +48,7 @@ export class ExchangeStatusController {
  */
 @ApiTags('exchange')
 @Controller('exchange')
-@UseGuards(JwtAuthGuard, ExchangeEnabledGuard, RolesGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, ExchangeEnabledGuard, ExchangeCompanyAccessGuard, RolesGuard, PermissionsGuard)
 @RequirePermissions('orders')
 @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
 @ApiBearerAuth()

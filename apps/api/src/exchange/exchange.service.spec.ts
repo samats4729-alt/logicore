@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { ExchangeService } from './exchange.service';
 import { EXCHANGE_ORDER_SELECT, exchangeView, managerOf, notPast } from './exchange-orders';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
@@ -139,6 +140,8 @@ describe('Биржа: что видят другие', () => {
             { OR: [{ customerCompanyId: null }, { customerCompanyId: { not: OUR } }] },
             { OR: [{ forwarderId: null }, { forwarderId: { not: OUR } }] },
             { OR: [{ subForwarderId: null }, { subForwarderId: { not: OUR } }] },
+            // Только заявки компаний, которым открыта биржа.
+            PUBLISHER_HAS_ACCESS,
         ]);
         expect(where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
     });

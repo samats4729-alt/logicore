@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { removeExchangeFile } from './exchange-files';
 import { EXCHANGE_ORDER_SELECT, ON_EXCHANGE, byLoadingDate, exchangeView, matches, notPast } from './exchange-orders';
+import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 
 /** Рейс идёт: водитель назначен и ещё не довёз. */
 const ACTIVE_ORDER: OrderStatus[] = [
@@ -28,7 +29,7 @@ export class ExchangeDriverLoadsService {
     async approvedDriver(userId: string) {
         const driver = await this.prisma.exchangeDriver.findUnique({
             where: { userId },
-            select: { id: true, status: true, kind: true, tripsCompleted: true },
+            select: { id: true, status: true, kind: true, tripsCompleted: true, park: { select: { exchangeAccess: true } } },
         });
         if (!driver) throw new ForbiddenException('Сначала заполните анкету водителя');
         if (driver.status === 'BLOCKED') throw new ForbiddenException('Вы заблокированы на бирже');
@@ -38,6 +39,11 @@ export class ExchangeDriverLoadsService {
                     : 'Отправьте анкету — заявки откроются после допуска',
             );
         }
+        // Пока биржу проверяют, грузы видят только водители парков, которым
+        // её открыли. Водитель со своим ИП парка не имеет — ему тоже рано.
+        if (driver.kind !== 'PARK' || !driver.park?.exchangeAccess) {
+            throw new ForbiddenException('Биржа пока работает в тестовом режиме — заявки видят водители подключённых парков');
+        }
         return driver;
     }
 
@@ -45,7 +51,7 @@ export class ExchangeDriverLoadsService {
     async feed(userId: string, bodyType?: string) {
         await this.approvedDriver(userId);
         const rows = await this.prisma.order.findMany({
-            where: ON_EXCHANGE,
+            where: { ...ON_EXCHANGE, AND: [PUBLISHER_HAS_ACCESS] },
             select: EXCHANGE_ORDER_SELECT,
             orderBy: { exchangePublishedAt: 'desc' },
             take: 300,
@@ -56,7 +62,7 @@ export class ExchangeDriverLoadsService {
     /** Заявка с биржи. Сняли или нашли исполнителя — говорим прямо. */
     async card(userId: string, orderId: string) {
         await this.approvedDriver(userId);
-        const row = await this.prisma.order.findFirst({ where: { id: orderId, ...ON_EXCHANGE }, select: EXCHANGE_ORDER_SELECT });
+        const row = await this.prisma.order.findFirst({ where: { id: orderId, ...ON_EXCHANGE, AND: [PUBLISHER_HAS_ACCESS] }, select: EXCHANGE_ORDER_SELECT });
         if (!row) throw new NotFoundException('Заявка уже снята с биржи или у неё появился исполнитель');
         return exchangeView(row);
     }

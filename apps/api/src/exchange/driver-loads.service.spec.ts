@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
+import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 
 function boardRow(overrides: Record<string, any> = {}) {
     return {
@@ -16,7 +17,7 @@ function boardRow(overrides: Record<string, any> = {}) {
     };
 }
 
-function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', tripsCompleted: 0 }) {
+function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', tripsCompleted: 0, park: { exchangeAccess: true } }) {
     const prisma: any = {
         exchangeDriver: {
             findUnique: jest.fn().mockResolvedValue(driver),
@@ -44,6 +45,22 @@ describe('Биржа · водитель: допуск', () => {
     it('заблокированный заявок не видит', async () => {
         const { service } = build({ id: 'd-1', status: 'BLOCKED' });
         await expect(service.feed('u-1')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('биржа на проверке: водитель парка без доступа заявок не видит', async () => {
+        const { service } = build({ id: 'd-1', status: 'APPROVED', kind: 'PARK', park: { exchangeAccess: false } });
+        await expect(service.feed('u-1')).rejects.toThrow(/тестовом режиме/);
+    });
+
+    it('биржа на проверке: водитель со своим ИП (без парка) — тоже нет', async () => {
+        const { service } = build({ id: 'd-1', status: 'APPROVED', kind: 'IP', park: null });
+        await expect(service.feed('u-1')).rejects.toThrow(/тестовом режиме/);
+    });
+
+    it('лента — только заявки компаний, которым открыта биржа', async () => {
+        const { service, prisma } = build();
+        await service.feed('u-1');
+        expect(prisma.order.findMany.mock.calls[0][0].where.AND).toEqual([PUBLISHER_HAS_ACCESS]);
     });
 });
 

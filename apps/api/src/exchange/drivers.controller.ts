@@ -16,6 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import { S3Service } from '../s3/s3.service';
 import { MAX_UPLOAD_SIZE } from '../documents/allowed-files';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
+import { ExchangeCompanyAccessGuard } from './exchange-access';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeOffersService } from './exchange-offers.service';
 import { ExchangeParkService } from './park.service';
@@ -25,7 +26,7 @@ import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import {
     AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverReasonDto, ParkDriversQueryDto,
-    ExportPayoutsDto, ParkCodeDto, ParkPayoutsQueryDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetParkDto, UpdateDriverProfileDto,
+    ExportPayoutsDto, ParkCodeDto, ParkPayoutsQueryDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -240,7 +241,7 @@ export class ExchangePublicController {
  */
 @ApiTags('exchange-drivers')
 @Controller('exchange/park')
-@UseGuards(JwtAuthGuard, ExchangeEnabledGuard, RolesGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, ExchangeEnabledGuard, ExchangeCompanyAccessGuard, RolesGuard, PermissionsGuard)
 @RequirePermissions('orders')
 @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
 @ApiBearerAuth()
@@ -410,5 +411,11 @@ export class ExchangeAdminController {
     @ApiOperation({ summary: 'Сделать компанию парком или снять отметку' })
     setPark(@Param('id') id: string, @Body() dto: SetParkDto) {
         return this.drivers.setPark(id, dto.isPark);
+    }
+
+    @Put('companies/:id/access')
+    @ApiOperation({ summary: 'Открыть компании биржу или закрыть (пока биржу проверяют)' })
+    setAccess(@Param('id') id: string, @Body() dto: SetExchangeAccessDto) {
+        return this.drivers.setExchangeAccess(id, dto.exchangeAccess);
     }
 }

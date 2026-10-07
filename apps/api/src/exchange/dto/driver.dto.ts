@@ -160,6 +160,12 @@ export class SetParkDto {
     isPark: boolean;
 }
 
+export class SetExchangeAccessDto {
+    @ApiProperty()
+    @IsBoolean()
+    exchangeAccess: boolean;
+}
+
 export const PARK_FILTER_STATUSES: Record<ParkDriverFilter, ExchangeDriverStatus[] | undefined> = {
     pending: ['PENDING'],
     approved: ['APPROVED'],
