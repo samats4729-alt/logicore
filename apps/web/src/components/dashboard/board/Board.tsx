@@ -38,6 +38,7 @@ import {
     minRowH,
     type BoardApi,
     type Placement,
+    type ResizeStart,
     type Row,
     type WidgetId,
 } from './layout';
@@ -75,11 +76,12 @@ const BlockBody = memo(function BlockBody({ id }: { id: WidgetId }) {
 });
 
 /**
- * Ряд дашборда — сетка на всю ширину поля (`COLS` колонок). Каждый блок
- * занимает свои колонки; хвост ряда, куда следующий блок не влез, пустой.
+ * Ряд дашборда — во всю ширину поля. Каждый блок занимает свою долю
+ * (`span` из `COLS`); доли дробные, поэтому ряд — строка, а не сетка.
  */
-function BoardRow({ row, board, onHide, onBuy }: {
+function BoardRow({ row, index, board, onHide, onBuy }: {
     row: Row;
+    index: number;
     board: BoardApi;
     onHide: (id: WidgetId) => void;
     onBuy: () => void;
@@ -87,14 +89,20 @@ function BoardRow({ row, board, onHide, onBuy }: {
     const others = (id: WidgetId) => board.visible.filter((x) => x !== id);
     const { hover } = useDrag();
     const edge = hover?.kind === 'block' && (hover.zone === 'above' || hover.zone === 'below') && row.items.includes(hover.anchor) ? hover : null;
-    let before = 0;
     return (
-        <div data-row={row.id} className="relative grid" style={{ height: row.h, gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`, gridTemplateRows: 'minmax(0, 1fr)' }}>
-            {row.items.map((id, i) => {
-                const start = before;
-                before += row.spans[i];
-                return <Slot key={id} id={id} span={row.spans[i]} start={start} board={board} others={others(id)} onHide={onHide} onBuy={onBuy} />;
-            })}
+        <div data-row={row.id} className="relative flex" style={{ height: row.h }}>
+            {row.items.map((id, i) => (
+                <Slot
+                    key={id}
+                    id={id}
+                    span={row.spans[i]}
+                    handle={handleFor(board, row, index, i)}
+                    board={board}
+                    others={others(id)}
+                    onHide={onHide}
+                    onBuy={onBuy}
+                />
+            ))}
             {edge && (
                 <DropMarker ok className={cn('left-3 right-3 h-[3px]', edge.zone === 'above' ? '-top-3 -translate-y-1/2' : '-bottom-3 translate-y-1/2')} />
             )}
@@ -103,52 +111,82 @@ function BoardRow({ row, board, onHide, onBuy }: {
 }
 
 /**
- * Правый край блока — за него тянут ширину (просьба владельца от 08.10.2026).
+ * Какая ручка у правого края блока.
  *
- * Ширина шагает по колонкам сетки. Сузил — в освободившееся место сам
- * поднимается блок из ряда ниже, если влезает; расширил — последний блок
- * ряда, которому не хватило места, уходит вниз. Дальше ряда блок не растёт:
- * правее него места в этом ряду нет.
+ * - Последний в ряду — край ряда: ряд ужимается целиком, снизу поднимаются блоки.
+ * - В середине — граница с соседом справа: меняются только эти двое.
+ *   Свёрнутые полоски по ширине не меняются, поэтому сосед — первый
+ *   развёрнутый правее; нет такого — ручка работает как край ряда.
  */
-function WidthHandle({ id, span, start, board }: { id: WidgetId; span: number; start: number; board: BoardApi }) {
-    const drag = useRef<{ x: number; span: number; col: number; min: number; max: number } | null>(null);
+type Handle = { kind: 'edge'; row: number } | { kind: 'divider'; partner: WidgetId } | null;
+
+function handleFor(board: BoardApi, row: Row, rowIndex: number, i: number): Handle {
+    const id = row.items[i];
+    const strip = (x: WidgetId) => !isKpi(x) && board.isCollapsed(x);
+    if (i === row.items.length - 1) return { kind: 'edge', row: rowIndex };
+    if (strip(id)) return null;
+    const partner = row.items.slice(i + 1).find((x) => !strip(x));
+    return partner ? { kind: 'divider', partner } : { kind: 'edge', row: rowIndex };
+}
+
+/**
+ * Правый край блока — за него тянут ширину (владелец, 08.10.2026).
+ *
+ * Граница между блоками меняет только двух соседей. Край ряда ужимает весь
+ * ряд пропорционально, и в освободившееся место поднимаются блоки из ряда
+ * ниже; потянул обратно — их выталкивает вниз. Отпустил — ряд снова до края.
+ */
+function WidthHandle({ id, handle, board }: { id: WidgetId; handle: NonNullable<Handle>; board: BoardApi }) {
+    const drag = useRef<{ x: number; col: number; start: ResizeStart; handle: NonNullable<Handle> } | null>(null);
+    // С клавиатуры: шаги копятся от одного снимка, ряд выравнивается, когда ручку отпустили.
+    const keys = useRef<{ d: number; start: ResizeStart } | null>(null);
     const [active, setActive] = useState(false);
     const title = widgetMeta(id).title;
-    const set = (next: number) => board.setSpan(id, next);
+    const apply = (g: { start: ResizeStart; handle: NonNullable<Handle> }, d: number) => {
+        if (g.handle.kind === 'divider') board.resizeDivider(g.start, id, g.handle.partner, d);
+        else board.resizeEdge(g.start, g.handle.row, d);
+    };
+    const end = () => {
+        if (!drag.current) return;
+        drag.current = null;
+        setActive(false);
+        board.resizeEnd();
+    };
     return (
         <div
             role="separator"
             aria-orientation="vertical"
-            aria-label={`Ширина «${title}»`}
-            aria-valuenow={span}
-            aria-valuemin={board.minSpan(id)}
-            aria-valuemax={COLS - start}
+            aria-label={handle.kind === 'edge' ? `Ширина ряда — край «${title}»` : `Граница «${title}» и «${widgetMeta(handle.partner).title}»`}
             tabIndex={0}
             data-slot="width-handle"
             data-handle-for={id}
+            data-handle-kind={handle.kind}
             data-active={active || undefined}
             className="group/handle absolute -right-1.5 bottom-0 top-0 z-20 flex w-3 cursor-col-resize touch-none select-none items-center justify-center outline-none"
             onPointerDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 e.currentTarget.setPointerCapture(e.pointerId);
-                drag.current = { x: e.clientX, span, col: board.field / COLS, min: board.minSpan(id), max: COLS - start };
-                // Ширина «как сейчас на экране» становится своей: блок, который добирал
-                // остаток ряда, не прыгает, когда его взяли за край.
-                set(span);
+                drag.current = { x: e.clientX, col: board.field / COLS, start: board.resizeStart(), handle };
                 setActive(true);
             }}
             onPointerMove={(e) => {
                 const g = drag.current;
-                if (!g) return;
-                const next = Math.min(g.max, Math.max(g.min, Math.round(g.span + (e.clientX - g.x) / g.col)));
-                if (next !== span) set(next);
+                if (g) apply(g, (e.clientX - g.x) / g.col);
             }}
-            onPointerUp={() => { drag.current = null; setActive(false); }}
-            onPointerCancel={() => { drag.current = null; setActive(false); }}
+            onPointerUp={end}
+            onPointerCancel={end}
             onKeyDown={(e) => {
-                if (e.key === 'ArrowLeft') { e.preventDefault(); set(Math.max(board.minSpan(id), span - 1)); }
-                else if (e.key === 'ArrowRight') { e.preventDefault(); set(Math.min(COLS - start, span + 1)); }
+                if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                e.preventDefault();
+                const k = keys.current ?? (keys.current = { d: 0, start: board.resizeStart() });
+                k.d += (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 6 : 2);
+                apply({ start: k.start, handle }, k.d);
+            }}
+            onBlur={() => {
+                if (!keys.current) return;
+                keys.current = null;
+                board.resizeEnd();
             }}
         >
             <div className="h-5 w-[3px] rounded-full bg-muted-foreground/35 transition-colors group-hover/handle:bg-muted-foreground/70 group-focus-visible/handle:bg-ring group-data-[active]/handle:bg-primary" />
@@ -156,10 +194,10 @@ function WidthHandle({ id, span, start, board }: { id: WidgetId; span: number; s
     );
 }
 
-function Slot({ id, span, start, board, others, onHide, onBuy }: {
+function Slot({ id, span, handle, board, others, onHide, onBuy }: {
     id: WidgetId;
     span: number;
-    start: number;
+    handle: Handle;
     board: BoardApi;
     others: WidgetId[];
     onHide: (id: WidgetId) => void;
@@ -168,7 +206,7 @@ function Slot({ id, span, start, board, others, onHide, onBuy }: {
     const kpi = isKpi(id);
     const collapsed = !kpi && board.isCollapsed(id);
     return (
-        <div className="relative min-h-0 min-w-0" style={{ gridColumn: `span ${span} / span ${span}` }}>
+        <div className="relative h-full min-h-0 min-w-0 shrink-0 grow-0" style={{ width: `${(span / COLS) * 100}%` }}>
             <DropArea id={id}>
                 {kpi ? (
                     <KpiTile id={id} others={others} rows={board.layout} onHide={() => onHide(id)} onMove={(p) => board.move(id, p)} onBuy={onBuy} />
@@ -188,7 +226,7 @@ function Slot({ id, span, start, board, others, onHide, onBuy }: {
                     </BlockFrame>
                 )}
             </DropArea>
-            {!collapsed && <WidthHandle id={id} span={span} start={start} board={board} />}
+            {handle && <WidthHandle id={id} handle={handle} board={board} />}
         </div>
     );
 }
@@ -370,7 +408,7 @@ export default function Board({ board, allowed, actions }: {
                     {board.loaded && narrow && <NarrowBoard board={board} onHide={hide} onBuy={() => setBuyOpen(true)} />}
                     {board.loaded && !narrow && board.rows.map((row, i) => (
                         <div key={row.id}>
-                            <BoardRow row={row} board={board} onHide={hide} onBuy={() => setBuyOpen(true)} />
+                            <BoardRow row={row} index={i} board={board} onHide={hide} onBuy={() => setBuyOpen(true)} />
                             <DropGap index={i + 1} height={24}>
                                 <RowHeightHandle
                                     height={row.h}
