@@ -326,3 +326,60 @@ describe('OrderContractService — договор-заявка', () => {
         });
     });
 });
+
+
+/**
+ * Договор-заявка не должен расползаться на пустые листы.
+ *
+ * Так было в проде: длинные адреса в реквизитах переносились узкой
+ * полоской, блок реквизитов вылезал за край листа, и каждое слово подписи
+ * («Руководитель:», «подпись», «М.П.») уезжало на свою страницу — перевозчик
+ * получил договор на 12 листов.
+ */
+describe('OrderContractService — печатная форма', () => {
+    const service: any = new OrderContractService({} as any, {} as any);
+
+    const longAddress = 'Республика Казахстан, город Астана, Алматинский район, ж.м Юго-Восток (Правая Сторона), ул. Сырымбет, д.35';
+    const party = (name: string, director: string) => ({
+        id: name,
+        name,
+        bin: '100340000596',
+        bankAccount: 'KZ13722S000013131565',
+        bankName: 'АО «Kaspi Bank»',
+        bankBic: 'CASPKZKA',
+        address: longAddress,
+        actualAddress: 'РК, г. Алматы, Алмалинский район, ул. Нұрлы Жол, дом 16, корпус 1, 2-этаж',
+        phone: '87029814729',
+        email: 'office@example.kz',
+        directorName: director,
+    });
+    const point = (pointType: string, city: string) => ({
+        pointType,
+        expectedDate: new Date('2026-10-01'),
+        notes: 'Позвонить за час до приезда',
+        location: { city, address: `${city}, ${longAddress}`, contactName: 'Контакт А., 87020000000' },
+    });
+    const order = (points: number) => ({
+        orderNumber: '000000074',
+        createdAt: new Date('2026-10-02'),
+        cargoDescription: 'Продукты питания',
+        cargoWeight: 20000,
+        cargoVolume: 82,
+        driverCost: 160000,
+        assignedDriverName: 'Водитель А.',
+        assignedDriverPlate: '788ARU13',
+        routePoints: Array.from({ length: points }, (_, i) => point(i ? 'DELIVERY' : 'PICKUP', `Город ${i + 1}`)),
+    });
+
+    const pageCount = (pdf: Buffer) => (pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length;
+
+    it.each([1, 2, 3, 4, 5, 6])('%i точек маршрута — не больше двух листов', async (points) => {
+        const pdf: Buffer = await service.render(
+            order(points),
+            party('ТОО "Заказчик А"', 'Нысанов А.Е'),
+            party('ТОО "Перевозчик Б"', 'Кураков Максат Укашаұлы'),
+            { stamp: null, signature: null },
+        );
+        expect(pageCount(pdf)).toBeLessThanOrEqual(2);
+    });
+});
