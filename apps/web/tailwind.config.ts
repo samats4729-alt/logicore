@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import containerQueries from '@tailwindcss/container-queries';
 
 /**
  * Tailwind включён ради компонентов shadcn/ui — на них переезжает интерфейс.
@@ -107,7 +108,12 @@ const config: Config = {
             },
         },
     },
-    plugins: [],
+    /**
+     * Контейнерные правила (`@container`, `@md:block`): блок дашборда
+     * перестраивается по своей ширине, а не по ширине окна — его тянут
+     * мышкой, и узкий блок на широком мониторе обычное дело.
+     */
+    plugins: [containerQueries],
 };
 
 export default config;

@@ -140,3 +140,13 @@ section.card .head > svg {
         scrollbar-width: thin;
     }
 }
+
+/* Содержимое внутри дашборда-конструктора: рамку и шапку даёт конструктор,
+   высоту — ряд, а длинный список прокручивается внутри блока. */
+.slotBody {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding: 8px 12px 12px;
+}

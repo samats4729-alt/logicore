@@ -1,5 +1,6 @@
 'use client';
 
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { ArrowRight } from 'lucide-react';
 import nova from '@/components/nova/nova.module.css';
 import styles from './dashboard-card.module.css';
@@ -15,6 +16,15 @@ import styles from './dashboard-card.module.css';
  * Пустоту и загрузку блок рисует через `DashboardCard.Center` — посередине
  * карточки, а не у верхнего края.
  */
+/**
+ * Карточка внутри дашборда-конструктора.
+ *
+ * Там рамку, шапку и меню блоку даёт конструктор (макет «shadcn Nova»), а
+ * карточка рисует только содержимое. Переход «Журнал счетов →» из своей
+ * шапки она отдаёт в шапку конструктора — через `setAction`.
+ */
+export const BoardSlotContext = createContext<{ setAction: (a: { label: string; onClick: () => void } | null) => void } | null>(null);
+
 export default function DashboardCard({
     icon,
     title,
@@ -40,6 +50,28 @@ export default function DashboardCard({
     bodyClassName?: string;
     children: React.ReactNode;
 }) {
+    const slot = useContext(BoardSlotContext);
+    // Обработчик перехода меняется на каждой отрисовке — держим последний,
+    // а в шапку конструктора отдаём один раз, пока подпись та же.
+    const onClick = useRef(link?.onClick);
+    onClick.current = link?.onClick;
+    useEffect(() => {
+        if (!slot) return;
+        slot.setAction(link ? { label: link.label, onClick: () => onClick.current?.() } : null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [slot, link?.label]);
+
+    if (slot) {
+        return (
+            <div className="flex min-h-0 flex-1 flex-col">
+                {hint && <div className={styles.hint}>{hint}</div>}
+                <div className={[styles.body, styles.slotBody, flush ? styles.flush : '', bodyClassName].filter(Boolean).join(' ')}>
+                    {children}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <section className={[nova.card, styles.card, className].filter(Boolean).join(' ')}>
             <div className={`${nova.cardHead} ${styles.head}`}>
