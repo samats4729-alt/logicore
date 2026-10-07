@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -11,6 +11,8 @@ import {
     Alert,
     ScrollView,
     Image,
+    Animated,
+    Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -20,9 +22,35 @@ import { GOOGLE_WEB_CLIENT_ID, isExchangeDriver, useStore } from '@/store';
 import { api, setAuthToken } from '@/lib/api';
 import { exchangeApi, ответ } from '@/lib/exchange';
 import { FONT, RADIUS } from '@/lib/theme';
+import { useIntro, type Measurable } from '@/lib/intro';
 
 export default function LoginScreen() {
     const { login, loginWithGoogle } = useStore();
+
+    // Заставка при запуске: пока она идёт, экран скрыт под ней. На передаче экран проявляется сверху вниз,
+    // а знак из заставки прилетает на место знака в шапке — поэтому свой знак показываем только после неё.
+    const introState = useIntro((s) => s.state);
+    const enter = useRef(new Animated.Value(introState === 'done' ? 1 : 0)).current;
+    const markRef = useRef<Measurable>(null);
+    useEffect(() => {
+        if (introState !== 'handoff') return;
+        Animated.timing(enter, { toValue: 1, duration: 950, delay: 120, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [introState]);
+    /** Элемент проявляется на своём отрезке общей анимации и чуть поднимается снизу. */
+    const rise = (from: number, to: number, dy = 16) => ({
+        opacity: enter.interpolate({ inputRange: [from, to], outputRange: [0, 1], extrapolate: 'clamp' }),
+        transform: [{ translateY: enter.interpolate({ inputRange: [from, to], outputRange: [dy, 0], extrapolate: 'clamp' }) }],
+    });
+    /** Где на экране стоит знак — туда заставка доведёт свой. Меряем ещё раз чуть позже: экран мог досчитать раскладку. */
+    const measureMark = () => {
+        const measure = () =>
+            markRef.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
+                if (width > 0) useIntro.getState().setTarget({ x, y, width, height });
+            });
+        measure();
+        setTimeout(measure, 300);
+    };
     const [phone, setPhone] = useState('+7');
     /* Биржа включена на сервере — показываем вход водителя биржи. Старый
        сервер без биржи ответит «нет», и раздела не будет вовсе. */
@@ -98,18 +126,20 @@ export default function LoginScreen() {
                 {/* Бренд-шапка в редакционном стиле лендинга logicore.kz */}
                 <View style={styles.hero}>
                     <View style={styles.brandRow}>
-                        <Image source={require('../assets/logo-mark-white.png')} style={styles.brandMark} resizeMode="contain" accessibilityLabel="Знак LogiCore" />
-                        <Text style={styles.brand}>LogiCore</Text>
+                        <View ref={markRef} collapsable={false} onLayout={measureMark} style={{ opacity: introState === 'done' ? 1 : 0 }}>
+                            <Image source={require('../assets/logo-mark-white.png')} style={styles.brandMark} resizeMode="contain" accessibilityLabel="Знак LogiCore" />
+                        </View>
+                        <Animated.Text style={[styles.brand, rise(0.3, 0.7, 0)]}>LogiCore</Animated.Text>
                     </View>
-                    <Text style={styles.eyebrow}>(01 — Приложение водителя)</Text>
-                    <Text style={styles.title}>Рейс{'\n'}под контролем.</Text>
-                    <Text style={styles.subtitle}>
+                    <Animated.Text style={[styles.eyebrow, rise(0.12, 0.5)]}>(01 — Приложение водителя)</Animated.Text>
+                    <Animated.Text style={[styles.title, rise(0.18, 0.6, 22)]}>Рейс{'\n'}под контролем.</Animated.Text>
+                    <Animated.Text style={[styles.subtitle, rise(0.26, 0.68)]}>
                         Маршрут, статусы и документы вашего рейса — в одном приложении.
-                    </Text>
+                    </Animated.Text>
                 </View>
 
                 {/* Карточка входа */}
-                <View style={styles.card}>
+                <Animated.View style={[styles.card, rise(0.32, 0.9, 56)]}>
                     <Text style={styles.cardTitle}>Вход для водителя</Text>
                     <Text style={styles.cardSub}>Телефон и пароль выдаёт ваша компания</Text>
 
@@ -171,10 +201,10 @@ export default function LoginScreen() {
                             Нет доступа? Обратитесь к диспетчеру вашей компании — он выдаст пароль в карточке водителя.
                         </Text>
                     </View>
-                </View>
+                </Animated.View>
 
                 {exchangeOn && !!GOOGLE_WEB_CLIENT_ID && (
-                    <View style={styles.exchangeCard}>
+                    <Animated.View style={[styles.exchangeCard, rise(0.45, 0.95, 28)]}>
                         <Text style={styles.exchangeEyebrow}>(02 — Биржа грузов)</Text>
                         <Text style={styles.exchangeTitle}>Работаете сами?</Text>
                         <Text style={styles.exchangeText}>
@@ -194,7 +224,7 @@ export default function LoginScreen() {
                                 </>
                             )}
                         </TouchableOpacity>
-                    </View>
+                    </Animated.View>
                 )}
 
                 {__DEV__ && (
@@ -214,7 +244,7 @@ export default function LoginScreen() {
                     </View>
                 )}
 
-                <Text style={styles.footer}>© LogiCore · logicore.kz</Text>
+                <Animated.Text style={[styles.footer, rise(0.55, 1, 0)]}>© LogiCore · logicore.kz</Animated.Text>
             </ScrollView>
         </KeyboardAvoidingView>
     );

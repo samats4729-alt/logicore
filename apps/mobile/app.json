@@ -8,9 +8,9 @@
     "scheme": "logcomp",
     "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash-blank.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F0F2F4"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -56,6 +56,7 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "expo-video",
       [
         "expo-location",
         {
