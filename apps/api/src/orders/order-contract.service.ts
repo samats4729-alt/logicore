@@ -299,11 +299,11 @@ export class OrderContractService {
             doc.font('Roboto-Bold').fontSize(8).text(title, left, doc.y, { continued: Boolean(when) });
             if (when) doc.font('Roboto-Bold').text(`      ${when}`);
 
-            this.field(doc, isPickup ? 'Адрес погрузки:' : 'Адрес разгрузки:', point.location?.address || '', left);
-            this.field(doc, 'Контактное лицо:', point.location?.contactName || '', left);
-            this.field(doc, isPickup ? 'Способ погрузки:' : 'Способ разгрузки:', 'Задняя', left);
-            this.field(doc, 'Груз/параметры:', this.cargo(order), left);
-            this.field(doc, 'Дополнительно:', point.notes || '', left);
+            this.field(doc, isPickup ? 'Адрес погрузки:' : 'Адрес разгрузки:', point.location?.address || '', left, width);
+            this.field(doc, 'Контактное лицо:', point.location?.contactName || '', left, width);
+            this.field(doc, isPickup ? 'Способ погрузки:' : 'Способ разгрузки:', 'Задняя', left, width);
+            this.field(doc, 'Груз/параметры:', this.cargo(order), left, width);
+            this.field(doc, 'Дополнительно:', point.notes || '', left, width);
             doc.moveDown(0.3);
         });
     }
@@ -391,46 +391,62 @@ export class OrderContractService {
         width: number,
         images: { stamp: Buffer | null; signature: Buffer | null },
     ) {
-        this.ensureSpace(doc, 170);
-        this.sectionTitle(doc, '5. Реквизиты сторон:', left, width);
-
         const gap = 16;
         const half = (width - gap) / 2;
-        const startY = doc.y;
+        const labelWidth = 70;
+        const valueWidth = half - labelWidth;
 
-        const column = (party: ContractParty | null, role: string, x: number) => {
+        const rowsOf = (party: ContractParty | null, role: string): [string, string, number][] => [
+            [`${role}:`, party?.name || '—', 7.5],
+            ['ИИН/БИН:', party?.bin || '—', 7],
+            ['р/счет', party?.bankAccount || '—', 7],
+            ['в банке', party?.bankName || '—', 7],
+            ['БИК', party?.bankBic || '—', 7],
+            ['Юр. адрес:', party?.address || '—', 7],
+            ['Почт. адрес:', party?.actualAddress || party?.address || '—', 7],
+            ['Контактное лицо:', [party?.directorName, party?.phone].filter(Boolean).join(', ') || '—', 7],
+        ];
+        const customerRows = rowsOf(customer, 'Заказчик');
+        const carrierRows = rowsOf(carrier, 'Перевозчик');
+        const columnHeight = (rows: [string, string, number][]) => rows.reduce(
+            (sum, [label, value, size]) => sum + this.pairHeight(doc, label, value, labelWidth, valueWidth, size), 0,
+        );
+
+        // Реквизиты и подписи обязаны встать на один лист целиком. Раньше
+        // запас был угадан (170), а значения переносились узкой полоской:
+        // длинный адрес выталкивал реквизиты за край, и каждое слово подписи
+        // уезжало на свою отдельную пустую страницу — договор выходил на 12
+        // листов. Теперь высота блока считается заранее.
+        const blockHeight = 14
+            + Math.max(columnHeight(customerRows), columnHeight(carrierRows))
+            + 14
+            + (images.stamp ? 92 : 32);
+        this.ensureSpace(doc, blockHeight);
+        this.sectionTitle(doc, '5. Реквизиты сторон:', left, width);
+
+        const startY = doc.y;
+        const column = (rows: [string, string, number][], x: number) => {
             doc.y = startY;
-            doc.font('Roboto-Bold').fontSize(7.5).text(`${role}:`, x, doc.y, { continued: true });
-            doc.font('Roboto').text(`  ${party?.name || '—'}`, { width: half });
-            doc.moveDown(0.2);
-            const rows: [string, string][] = [
-                ['ИИН/БИН:', party?.bin || '—'],
-                ['р/счет', party?.bankAccount || '—'],
-                ['в банке', party?.bankName || '—'],
-                ['БИК', party?.bankBic || '—'],
-                ['Юр. адрес:', party?.address || '—'],
-                ['Почт. адрес:', party?.actualAddress || party?.address || '—'],
-                ['Контактное лицо:', [party?.directorName, party?.phone].filter(Boolean).join(', ') || '—'],
-            ];
-            for (const [label, value] of rows) {
-                doc.font('Roboto-Bold').fontSize(7).text(label, x, doc.y, { width: 70, continued: true });
-                doc.font('Roboto').text(`  ${value}`, { width: half - 70 });
+            for (const [label, value, size] of rows) {
+                this.pair(doc, label, value, x, labelWidth, valueWidth, size, 'Roboto-Bold');
             }
             return doc.y;
         };
 
-        const leftEnd = column(customer, 'Заказчик', left);
-        const rightEnd = column(carrier, 'Перевозчик', left + half + gap);
+        const leftEnd = column(customerRows, left);
+        const rightEnd = column(carrierRows, left + half + gap);
 
-        // Подписи на одной линии у обеих сторон.
+        // Подписи на одной линии у обеих сторон. Без переноса строк: подпись
+        // не должна сама открывать новую страницу.
         const signY = Math.max(leftEnd, rightEnd) + 14;
+        const once = { lineBreak: false };
         const signLine = (x: number, name: string) => {
-            doc.font('Roboto-Bold').fontSize(7.5).text('Руководитель:', x, signY);
+            doc.font('Roboto-Bold').fontSize(7.5).text('Руководитель:', x, signY, once);
             doc.font('Roboto').fontSize(7)
-                .text('________________', x + 74, signY)
-                .text(`/ ${name}`, x + 150, signY);
-            doc.fontSize(6).text('подпись', x + 84, signY + 10);
-            doc.font('Roboto-Bold').fontSize(7).text('М.П.', x, signY + 12);
+                .text('________________', x + 74, signY, once)
+                .text(`/ ${name}`, x + 150, signY, once);
+            doc.fontSize(6).text('подпись', x + 84, signY + 10, once);
+            doc.font('Roboto-Bold').fontSize(7).text('М.П.', x, signY + 12, once);
         };
         signLine(left, customer.directorName || '');
         signLine(left + half + gap, carrier?.directorName || '');
@@ -459,9 +475,37 @@ export class OrderContractService {
         doc.moveDown(0.25);
     }
 
-    private field(doc: any, label: string, value: string, left: number) {
-        doc.font('Roboto').fontSize(7.5).text(label, left, doc.y, { width: 110, continued: true });
-        doc.text(`     ${value}`);
+    private field(doc: any, label: string, value: string, left: number, width: number) {
+        const labelWidth = 100;
+        this.ensureSpace(doc, this.pairHeight(doc, label, value, labelWidth, width - labelWidth, 7.5, 'Roboto'));
+        this.pair(doc, label, value, left, labelWidth, width - labelWidth, 7.5, 'Roboto');
+    }
+
+    /**
+     * Подпись и значение в две колонки.
+     *
+     * Раньше значение дописывалось к подписи «продолжением» текста, и тогда
+     * pdfkit переносит его по ширине подписи (70–110 пт): адрес печатался
+     * столбиком по два слова и раздувал документ на лишние листы.
+     */
+    private pair(
+        doc: any, label: string, value: string, x: number,
+        labelWidth: number, valueWidth: number, size: number, labelFont: string,
+    ) {
+        const y = doc.y;
+        const height = this.pairHeight(doc, label, value, labelWidth, valueWidth, size, labelFont);
+        doc.font(labelFont).fontSize(size).text(label, x, y, { width: labelWidth - 4 });
+        doc.font('Roboto').fontSize(size).text(value, x + labelWidth, y, { width: valueWidth });
+        doc.y = y + height;
+    }
+
+    private pairHeight(
+        doc: any, label: string, value: string,
+        labelWidth: number, valueWidth: number, size: number, labelFont = 'Roboto-Bold',
+    ): number {
+        const labelHeight = doc.font(labelFont).fontSize(size).heightOfString(label, { width: labelWidth - 4 });
+        const valueHeight = doc.font('Roboto').fontSize(size).heightOfString(value || ' ', { width: valueWidth });
+        return Math.max(labelHeight, valueHeight);
     }
 
     /**
