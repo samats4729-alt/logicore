@@ -16,6 +16,9 @@ export default function AiButton() {
 
     const handleClick = useCallback(() => {
         setActive((v) => !v);
+        // Отметка на случай, если окно помощника ещё не загрузилось: оно
+        // заберёт её при загрузке и откроется само (см. AssistantWidget).
+        (window as Window & { __lcAssistantPending?: boolean }).__lcAssistantPending = true;
         window.dispatchEvent(new Event('logicore:open-assistant'));
     }, []);
 

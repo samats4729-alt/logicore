@@ -285,8 +285,17 @@ export default function AssistantWidget() {
     const handleOpen = () => setOpen(true);
 
     useEffect(() => {
-        const onOpenAssistant = () => handleOpen();
+        const w = window as Window & { __lcAssistantPending?: boolean };
+        // Событие дошло — отметка «ждёт открытия» больше не нужна.
+        const onOpenAssistant = () => { w.__lcAssistantPending = false; handleOpen(); };
         window.addEventListener('logicore:open-assistant', onOpenAssistant);
+        // Помощник подгружается отдельно от страницы. Нажали кнопку раньше,
+        // чем он загрузился, — событие ушло в пустоту, и окно не открывалось.
+        // Кнопка оставляет отметку — забираем её при загрузке.
+        if (w.__lcAssistantPending) {
+            w.__lcAssistantPending = false;
+            handleOpen();
+        }
         return () => window.removeEventListener('logicore:open-assistant', onOpenAssistant);
     }, []);
 
