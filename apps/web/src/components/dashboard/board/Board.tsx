@@ -89,7 +89,7 @@ function BoardRow({ row, board, onHide, onBuy }: {
     const edge = hover?.kind === 'block' && (hover.zone === 'above' || hover.zone === 'below') && row.items.includes(hover.anchor) ? hover : null;
     let before = 0;
     return (
-        <div data-row={row.id} className="relative grid" style={{ height: row.h, gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` }}>
+        <div data-row={row.id} className="relative grid" style={{ height: row.h, gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`, gridTemplateRows: 'minmax(0, 1fr)' }}>
             {row.items.map((id, i) => {
                 const start = before;
                 before += row.spans[i];
@@ -133,6 +133,9 @@ function WidthHandle({ id, span, start, board }: { id: WidgetId; span: number; s
                 e.stopPropagation();
                 e.currentTarget.setPointerCapture(e.pointerId);
                 drag.current = { x: e.clientX, span, col: board.field / COLS, min: board.minSpan(id), max: COLS - start };
+                // Ширина «как сейчас на экране» становится своей: блок, который добирал
+                // остаток ряда, не прыгает, когда его взяли за край.
+                set(span);
                 setActive(true);
             }}
             onPointerMove={(e) => {
@@ -165,7 +168,7 @@ function Slot({ id, span, start, board, others, onHide, onBuy }: {
     const kpi = isKpi(id);
     const collapsed = !kpi && board.isCollapsed(id);
     return (
-        <div className="relative min-w-0" style={{ gridColumn: `span ${span} / span ${span}` }}>
+        <div className="relative min-h-0 min-w-0" style={{ gridColumn: `span ${span} / span ${span}` }}>
             <DropArea id={id}>
                 {kpi ? (
                     <KpiTile id={id} others={others} rows={board.layout} onHide={() => onHide(id)} onMove={(p) => board.move(id, p)} onBuy={onBuy} />

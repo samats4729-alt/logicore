@@ -10,7 +10,7 @@ import { login } from './helpers';
  * содержимое: данные на стенде бывают любыми.
  */
 
-const LAYOUT_KEY = 'lc_dashboard_layout_v2';
+const LAYOUT_KEY = 'lc_dashboard_layout_v3';
 
 async function открыть(page: Page) {
     await page.goto('/company');
@@ -56,6 +56,33 @@ test.describe('Дашборд-конструктор', () => {
         for (const d of разброс) expect(d, 'в ряду блоки стоят лесенкой').toBeLessThanOrEqual(1);
     });
 
+    /** Карточка не вылезает за свой ряд и не налезает на соседний (владелец, 08.10.2026). */
+    test('блоки не налезают друг на друга — и после растягивания ряда', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const налезают = () => page.locator('[data-row]').evaluateAll((rows) => {
+            const bad: string[] = [];
+            for (const r of rows) {
+                const rb = r.getBoundingClientRect();
+                for (const card of Array.from(r.querySelectorAll('[data-widget]'))) {
+                    const cb = card.getBoundingClientRect();
+                    if (cb.bottom > rb.bottom + 1 || cb.top < rb.top - 1) bad.push(card.getAttribute('data-widget')!);
+                }
+            }
+            return bad;
+        });
+        expect(await налезают()).toEqual([]);
+        // Ряд с показателями тянем вниз и обратно вверх: плашки меняют вид, но из ряда не вылезают.
+        const ручка = (await page.locator('[data-slot="row-handle"]').first().boundingBox())!;
+        await page.mouse.move(ручка.x + ручка.width / 2, ручка.y + ручка.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(ручка.x + ручка.width / 2, ручка.y + 260, { steps: 10 });
+        await page.mouse.move(ручка.x + ручка.width / 2, ручка.y + 20, { steps: 10 });
+        await page.mouse.up();
+        await page.waitForTimeout(300);
+        expect(await налезают()).toEqual([]);
+    });
+
     test('ширину блока тянут мышкой за правый край', async ({ page }) => {
         await page.setViewportSize({ width: 1920, height: 1080 });
         await открыть(page);
@@ -81,7 +108,7 @@ test.describe('Дашборд-конструктор', () => {
         expect(await ряд('upcoming')).toEqual(['upcoming', 'attention']);
 
         const поле = (await page.locator('[data-dashboard-field]').boundingBox())!;
-        const колонка = поле.width / 60;
+        const колонка = поле.width / 120;
         const тянуть = async (dx: number) => {
             const к = (await page.locator('[data-handle-for="upcoming"]').boundingBox())!;
             await page.mouse.move(к.x + к.width / 2, к.y + к.height / 2);
@@ -90,10 +117,17 @@ test.describe('Дашборд-конструктор', () => {
             await page.mouse.up();
         };
 
-        await тянуть(-18 * колонка);
+        await тянуть(-36 * колонка);
         expect(await ряд('upcoming')).toEqual(['upcoming', 'attention', 'activity']);
 
-        await тянуть(18 * колонка);
+        // Ряды — до правого края: ни пустоты справа, ни «выступов».
+        const правыеКрая = await page.locator('[data-row]').evaluateAll((rows) => rows.map((r) => {
+            const items = Array.from(r.querySelectorAll('[data-drop-area]'));
+            return items[items.length - 1].getBoundingClientRect().right;
+        }));
+        for (const x of правыеКрая) expect(Math.abs(x - (поле.x + поле.width)), 'ряд не доходит до правого края').toBeLessThanOrEqual(2);
+
+        await тянуть(36 * колонка);
         expect(await ряд('upcoming')).toEqual(['upcoming', 'attention']);
         expect((await ряд('activity'))[0]).toBe('activity');
     });

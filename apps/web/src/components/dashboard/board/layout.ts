@@ -54,8 +54,12 @@ export type WidgetId = KpiId | BlockId;
 
 export const isKpi = (id: string): id is KpiId => (KPI_IDS as readonly string[]).includes(id);
 
-/** Колонок в сетке. 60 делится на 2, 3, 4, 5, 6 и 12 — любые ровные доли. */
-export const COLS = 60;
+/**
+ * Колонок в сетке. 120 делится на 2, 3, 4, 5, 6, 8 и 12 — любые ровные
+ * доли, а шаг мелкий (около 14 точек на мониторе): блок идёт за мышкой без
+ * заметных ступенек.
+ */
+export const COLS = 120;
 /** Минимальная ширина: плашка и блок уже этого не читаются. */
 export const MIN_WIDTH = { tile: 190, block: 250 } as const;
 /** Отступы по бокам каждого места в ряду (по 12 с каждой стороны). */
@@ -84,6 +88,11 @@ export interface BoardState {
     /** Высота. Высота ряда — по самому высокому в нём. */
     h: Partial<Record<WidgetId, number>>;
     collapsed: WidgetId[];
+    /**
+     * Блок, ширину которого задали последним. Он держит ровно свою ширину,
+     * а остаток ряда забирает сосед — иначе ряд «откатывал» бы его обратно.
+     */
+    focus?: WidgetId | null;
 }
 
 /** Куда поставить блок. «Своим рядом» — значит во всю ширину: ряд он займёт сам. */
@@ -104,20 +113,20 @@ export const DEFAULT_STATE: BoardState = {
         'activity', 'earnings', 'paymentCalendar', 'pendingWork',
     ],
     w: {
-        inWork: 12, pending: 12, problems: 12, ordersMonth: 12, revenue: 12,
-        chart: 42, calendar: 18,
-        upcoming: 36, attention: 24,
-        activity: 18, earnings: 14, paymentCalendar: 14, pendingWork: 14,
+        inWork: 24, pending: 24, problems: 24, ordersMonth: 24, revenue: 24,
+        chart: 84, calendar: 36,
+        upcoming: 72, attention: 48,
+        activity: 36, earnings: 28, paymentCalendar: 28, pendingWork: 28,
     },
     h: { chart: 400, calendar: 400, upcoming: 380, attention: 380, activity: 440, earnings: 440, paymentCalendar: 440, pendingWork: 440 },
     collapsed: [],
 };
 
 /** Ширина и высота нового блока, пока его не трогали. */
-const defaultW = (id: WidgetId) => (isKpi(id) ? 12 : 30);
+const defaultW = (id: WidgetId) => (isKpi(id) ? 24 : 60);
 const defaultH = (id: WidgetId) => (isKpi(id) ? KPI_ROW_H : 380);
 
-const STORAGE_KEY = 'lc_dashboard_layout_v2';
+const STORAGE_KEY = 'lc_dashboard_layout_v3';
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(v)));
 
@@ -147,6 +156,20 @@ export function flow(s: BoardState, ids: WidgetId[], field: number): Row[] {
         const h = open.length
             ? Math.max(...open.map((id) => (open.some((x) => !isKpi(x)) && isKpi(id) ? 0 : s.h[id] ?? defaultH(id))))
             : 200; // ряд из одних свёрнутых полосок — по высоте названия
+        // Ряд — всегда до правого края: без пустоты справа и «выступов».
+        // Остаток забирает последний блок ряда, кроме того, которому ширину
+        // только что задали: тот держит ровно свою, и мышка не «отскакивает».
+        const leftover = COLS - used;
+        if (leftover > 0) {
+            // Свёрнутая полоска остаток не берёт — иначе она бы раздулась.
+            let t = -1;
+            for (let k = items.length - 1; k >= 0; k--) {
+                const x = items[k];
+                if (x !== s.focus && (isKpi(x) || !s.collapsed.includes(x))) { t = k; break; }
+            }
+            if (t < 0) t = items.length - 1;
+            spans[t] += leftover;
+        }
         rows.push({ id: `${items[0]}-${rows.length}`, items, spans, h: clamp(h, minRowH(items), MAX_ROW_H) });
         items = []; spans = []; used = 0;
     };
@@ -220,6 +243,7 @@ function parse(raw: unknown): BoardState | null {
         order: st.order,
         w: st.w ?? {},
         h: st.h ?? {},
+        focus: st.focus && st.order.includes(st.focus) ? st.focus : null,
         collapsed: st.collapsed.filter((id) => st.order.includes(id) && !isKpi(id)),
     };
 }
@@ -286,7 +310,7 @@ export function useBoardLayout(allowed: Set<WidgetId>) {
         minSpan: (id: WidgetId) => minSpan(id, field),
         /** Новая ширина блока — ряды тут же сложатся заново. */
         setSpan: useCallback((id: WidgetId, span: number) => {
-            setState((s) => (s.w[id] === span ? s : { ...s, w: { ...s.w, [id]: clamp(span, 1, COLS) } }));
+            setState((s) => (s.w[id] === span && s.focus === id ? s : { ...s, focus: id, w: { ...s.w, [id]: clamp(span, 1, COLS) } }));
         }, []),
         /** Поменять местами — вместе с размерами: места остаются те же. */
         swap: useCallback((a: WidgetId, b: WidgetId) => {

@@ -281,7 +281,7 @@ export function KpiTile({ id, others, rows, onHide, onMove, onBuy }: {
             onDragEnd={() => { drag.setDragId(null); drag.setHover(null); }}
             title={k.hint}
         >
-            <div className={cn(styles.card, '@container flex h-full flex-col', k.urgent && styles.urgent, mode === 'compact' ? 'justify-center' : 'gap-2 py-3')}>
+            <div className={cn(styles.card, '@container flex h-full flex-col overflow-hidden', k.urgent && styles.urgent, mode === 'compact' ? 'justify-center' : 'gap-2 py-3')}>
                 {mode === 'compact' ? (
                     <div className="flex items-center gap-2.5 px-4">
                         <Icon className={iconCls} />
