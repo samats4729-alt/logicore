@@ -128,7 +128,7 @@ export default function CompanySidebar({
     const closeOnMobile = () => { if (isMobile) setOpenMobile(false); };
 
     return (
-        <Sidebar collapsible="icon">
+        <Sidebar collapsible="offcanvas">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
@@ -184,7 +184,8 @@ export default function CompanySidebar({
                                 <SidebarMenuButton
                                     size="lg"
                                     data-guide="profile"
-                                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                                    // Класс — якорь браузерных проверок «меню профиля» (my-salary и др.).
+                                    className="user-profile-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                 >
                                     <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg">{user.avatar}</span>
                                     <div className="grid min-w-0 flex-1 text-left leading-tight">
