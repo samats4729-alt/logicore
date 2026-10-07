@@ -1,55 +1,60 @@
-/* Плашка статуса журнала заявок — эталон `design/orders-list`. */
+/* Плашка статуса — как в таблице блока dashboard-01 из shadcn (владелец,
+   08.10.2026): тонкая рамка, приглушённая подпись, маленький знак слева. */
 
 .pill {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    height: 25px;
-    padding: 0 10px 0 4px;
+    gap: 4px;
+    height: 22px;
+    padding: 0 8px 0 6px;
     border-radius: 999px;
-    border: 1px solid var(--nova-border);
-    background: var(--nova-surface);
-    color: var(--nova-fg);
-    font-size: 11.5px;
-    font-weight: 550;
+    border: 1px solid hsl(var(--border));
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
     line-height: 1;
     white-space: nowrap;
+    vertical-align: middle;
 }
 
-/* Единственное «украшение» в таблице: кружок выпуклый, чтобы взгляд цеплялся
-   за него на прокрутке в 1400 точек. Блик сверху, тень снизу. */
-.dot {
-    width: 17px;
-    height: 17px;
+.icon {
+    width: 13px;
+    height: 13px;
     flex-shrink: 0;
-    border-radius: 999px;
-    display: grid;
-    place-items: center;
-    color: #ffffff;
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, 0) 62%),
-        var(--sp);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, .5),
-        inset 0 -1px 0 rgba(0, 0, 0, .12),
-        0 1px 2px rgba(16, 24, 40, .22);
 }
 
-.glyph {
-    width: 10px;
-    height: 10px;
-    stroke-width: 3;
+/* Готово — зелёный, как fill-green-500 в образце; в тёмной теме светлее. */
+.ok {
+    fill: #22c55e;
 }
 
-/* На тёмном полотне исходные цвета статусов почти чёрные, а белый знак в
-   светлом кружке слепит — знак берёт цвет фона страницы. */
-[data-theme='dark'] .dot {
-    color: var(--nova-bg);
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 62%),
-        var(--sp-dark);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, .22),
-        inset 0 -1px 0 rgba(0, 0, 0, .2),
-        0 1px 2px rgba(0, 0, 0, .3);
+.bad {
+    fill: #ef4444;
+}
+
+.off {
+    fill: #a1a1aa;
+}
+
+/* Ждёт исполнителя — единственный статус, который просит действия. */
+.wait {
+    color: #f59e0b;
+}
+
+[data-theme='dark'] .ok {
+    fill: #4ade80;
+}
+
+[data-theme='dark'] .bad {
+    fill: #f87171;
+}
+
+[data-theme='dark'] .off {
+    fill: #71717a;
+}
+
+[data-theme='dark'] .wait {
+    color: #fbbf24;
 }

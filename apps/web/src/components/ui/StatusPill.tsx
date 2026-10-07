@@ -1,27 +1,27 @@
 'use client';
 
-import { ArrowDown, ArrowRight, ArrowUp, Check, Clock, FileText, Truck, UserRound, X } from 'lucide-react';
+import { CircleDashed, Clock, Loader } from 'lucide-react';
 import { STATUS_LABELS } from '@/lib/vocabulary';
 import styles from './StatusPill.module.css';
 
 /**
  * Плашка статуса — одна на весь кабинет.
  *
- * Раньше их было две: залитая целиком (карточка рейса, поиск, уведомления,
- * журналы бухгалтерии) и по эталону `design/orders-list` — цветной кружок и
- * обычная подпись. Один и тот же «Завершён» выглядел в двух местах
- * по-разному, и владелец находил это первым.
+ * Вид — как в таблице блока dashboard-01 из shadcn (владелец, 08.10.2026,
+ * сменил прежнюю пилюлю с выпуклым цветным кружком): тонкая рамка,
+ * приглушённая подпись и маленький знак слева. Цветом говорит только
+ * то, что требует взгляда: зелёная галочка — готово, красный — проблема,
+ * янтарные часы — ждёт исполнителя. Всё, что в работе, — серый «в
+ * процессе»: какой именно этап, говорит подпись.
  *
- * Остался вид эталона: десяток целиком залитых плашек превращает таблицу в
- * светофор, а кружок читается и в плотной строке. Подписи и цвета живут
- * здесь же — их импортируют больше десятка экранов.
- *
- * Знак внутри кружка выбран так, чтобы статус читался и без цвета: на
- * чёрно-белой печати и при дальтонизме подпись остаётся единственной
- * подсказкой, а знак возвращает вторую.
+ * Знак выбран так, чтобы статус читался и без цвета: на чёрно-белой печати
+ * и при дальтонизме галочка, крестик, часы и «в процессе» различимы формой.
  */
 
-/** Цвета статусов: заливка кружка и подложка на прежних экранах. */
+/**
+ * Цвета статусов. В самой плашке больше не используются, но их берут
+ * полоски хода рейса и отметки на других экранах (`statusTone`).
+ */
 export const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
     DRAFT: { bg: '#f1f2f4', fg: '#5f6672' },
     PENDING: { bg: '#fff4e5', fg: '#b45309' },
@@ -50,47 +50,15 @@ export const STATUS_PILL: Record<string, { bg: string; fg: string }> = {
 // STATUS_LABELS импортируют из этого файла больше десятка экранов.
 export { STATUS_LABELS };
 
-const GLYPHS: Record<string, React.ComponentType<{ className?: string }>> = {
-    DRAFT: FileText,
-    PENDING: Clock,
-    ASSIGNED: UserRound,
-    EN_ROUTE_PICKUP: ArrowRight,
-    AT_PICKUP: ArrowDown,
-    LOADING: ArrowDown,
-    IN_TRANSIT: Truck,
-    AT_DELIVERY: ArrowUp,
-    UNLOADING: ArrowUp,
-    COMPLETED: Check,
-    POSTED: Check,
-    CANCELLED: X,
-    OPEN: Clock,
-    TAKEN: UserRound,
-    DELIVERED: Check,
-    APPROVED: Check,
-    REJECTED: X,
-    BLOCKED: X,
-};
-
-/** Восклицательный знак: в наборе иконок он есть только внутри кружка, а
- *  кружок здесь уже свой — вложенные кольца читались как помарка. */
-function Bang({ className }: { className?: string }) {
-    return (
-        <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-            <rect x="10.6" y="4.6" width="2.8" height="9.4" rx="1.4" />
-            <circle cx="12" cy="18" r="1.7" />
-        </svg>
-    );
-}
-
 function hexToRgb(hex: string) {
     const v = hex.replace('#', '');
     return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16));
 }
 
 /**
- * Тот же цвет, осветлённый до светлоты 0,68 при насыщенности ×0,9 —
- * правило из эталона. На тёмном полотне исходные цвета статусов становятся
- * почти чёрными пятнами: #15803d на #20201f не читается.
+ * Тот же цвет, осветлённый до светлоты 0,68 при насыщенности ×0,9.
+ * На тёмном полотне исходные цвета статусов становятся почти чёрными
+ * пятнами: #15803d на #20201f не читается.
  */
 function lighten(hex: string) {
     const [r, g, b] = hexToRgb(hex).map((c) => c / 255);
@@ -116,31 +84,75 @@ function lighten(hex: string) {
  *
  * Возвращает пару переменных: `--sp` для светлой темы и `--sp-dark` для
  * тёмной. Нужен всем, кто красит статус не плашкой, — например полоске
- * готовности в карточке заявки на телефоне. Раньше такие места брали
- * `STATUS_PILL[...].fg` напрямую и в тёмной теме показывали почти чёрное
- * пятно: #15803d на #20201f не читается.
+ * готовности в карточке заявки на телефоне.
  */
 export function statusTone(status: string): React.CSSProperties {
     const meta = STATUS_PILL[status] || STATUS_PILL.DRAFT;
     return { ['--sp' as string]: meta.fg, ['--sp-dark' as string]: lighten(meta.fg) };
 }
 
+/** Что за статус по смыслу — от этого знак и его цвет. */
+type Kind = 'done' | 'problem' | 'stopped' | 'blocked' | 'waiting' | 'draft' | 'progress';
+
+const KIND: Record<string, Kind> = {
+    COMPLETED: 'done',
+    POSTED: 'done',
+    DELIVERED: 'done',
+    APPROVED: 'done',
+    PROBLEM: 'problem',
+    BLOCKED: 'blocked',
+    CANCELLED: 'stopped',
+    REJECTED: 'stopped',
+    PENDING: 'waiting',
+    OPEN: 'waiting',
+    DRAFT: 'draft',
+    ASSIGNED: 'progress',
+    EN_ROUTE_PICKUP: 'progress',
+    AT_PICKUP: 'progress',
+    LOADING: 'progress',
+    IN_TRANSIT: 'progress',
+    AT_DELIVERY: 'progress',
+    UNLOADING: 'progress',
+    TAKEN: 'progress',
+};
+
+/** Залитый кружок со знаком — как «готово» в образце shadcn. */
+function Filled({ tone, children }: { tone: 'ok' | 'bad' | 'off'; children: React.ReactNode }) {
+    return (
+        <svg viewBox="0 0 16 16" className={styles.icon} aria-hidden>
+            <circle cx="8" cy="8" r="7" className={styles[tone]} />
+            <g fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{children}</g>
+        </svg>
+    );
+}
+
+function Glyph({ kind }: { kind: Kind }) {
+    switch (kind) {
+        case 'done':
+            return <Filled tone="ok"><path d="M5 8.3l2.1 2.1L11 6.3" /></Filled>;
+        case 'problem':
+            return <Filled tone="bad"><path d="M8 4.6v4" /><path d="M8 11.4v.01" strokeWidth="2.2" /></Filled>;
+        case 'blocked':
+            return <Filled tone="bad"><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2" /></Filled>;
+        case 'stopped':
+            return <Filled tone="off"><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2" /></Filled>;
+        case 'waiting':
+            return <Clock className={`${styles.icon} ${styles.wait}`} aria-hidden />;
+        case 'draft':
+            return <CircleDashed className={styles.icon} aria-hidden />;
+        default:
+            return <Loader className={styles.icon} aria-hidden />;
+    }
+}
+
 /**
- * `label` — для сущностей со своими словами при тех же красках: груз на
+ * `label` — для сущностей со своими словами при тех же знаках: груз на
  * бирже «Ищем машину», а не «Ожидает». Плашка одна на всё приложение.
  */
 export default function StatusPill({ status, label }: { status: string; label?: string }) {
-    const meta = STATUS_PILL[status] || STATUS_PILL.DRAFT;
-    const Glyph = status === 'PROBLEM' ? Bang : GLYPHS[status] || FileText;
-
     return (
-        <span
-            className={styles.pill}
-            style={statusTone(status)}
-        >
-            <i className={styles.dot}>
-                <Glyph className={styles.glyph} />
-            </i>
+        <span className={styles.pill} data-status={status}>
+            <Glyph kind={KIND[status] ?? 'draft'} />
             {label || STATUS_LABELS[status] || status}
         </span>
     );
