@@ -14,10 +14,13 @@ const prisma = new PrismaClient();
 const D = (v) => new Prisma.Decimal(v);
 
 async function main() {
+    // Компаниям стенда биржа открыта: на рабочем сервере её открывает
+    // владелец платформы по одной, а на стенде её экраны должны проверяться
+    // вместе с остальными.
     const company = (id, name, bin) => prisma.company.upsert({
         where: { id },
-        update: {},
-        create: { id, name, bin, type: 'FORWARDER' },
+        update: { exchangeAccess: true },
+        create: { id, name, bin, type: 'FORWARDER', exchangeAccess: true },
     });
 
     const us = await company('p3-us', 'ТОО «ЛогиКор Экспедиция»', '123456789012');
