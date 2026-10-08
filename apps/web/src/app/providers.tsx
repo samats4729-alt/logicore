@@ -114,6 +114,10 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                         List: TEXT,
                         Upload: TEXT,
                         Alert: TEXT,
+                        // Корень бейджа держит то, что он обнимает: подпись вкладки со
+                        // счётчиком иначе выходила 10-точечной рядом с 13-точечными.
+                        Badge: TEXT,
+                        Typography: TEXT,
                         Menu: {
                             itemBorderRadius: 8,
                         },
