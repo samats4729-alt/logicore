@@ -465,29 +465,32 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 {/* Тикер живых событий (глобальный) */}
                 <LiveEventTicker />
 
-                <main data-guide="content" className="page-content-anim min-w-0 flex-1">
-                    {billingStatus?.enabled && billingStatus?.blocked ? (
-                        <PaywallScreen status={billingStatus} />
-                    ) : (
-                        <>
-                            {/* Прямая ссылка в чужой раздел — понятная причина
-                                вместо пустого экрана. Главным остаётся сервер. */}
-                            {!sectionAccess.allowed ? (
-                                <NoSectionAccess title={sectionAccess.title} roleLabel={ROLE_LABELS[user.role] || user.role} />
-                            ) : beta?.state === 'closed' ? (
-                                <BetaClosed section={beta} />
-                            ) : (
-                                <>
-                                    {beta?.state === 'beta' && <BetaStrip section={beta} />}
-                                    {children}
-                                </>
-                            )}
-                        </>
-                    )}
-                </main>
+                {/* Страница и ИИ-помощник рядом: открытая панель встаёт справа под
+                    бегущей строкой и сдвигает страницу, а не ложится поверх. */}
+                <div className="flex min-w-0 flex-1">
+                    <main data-guide="content" className="page-content-anim min-w-0 flex-1">
+                        {billingStatus?.enabled && billingStatus?.blocked ? (
+                            <PaywallScreen status={billingStatus} />
+                        ) : (
+                            <>
+                                {/* Прямая ссылка в чужой раздел — понятная причина
+                                    вместо пустого экрана. Главным остаётся сервер. */}
+                                {!sectionAccess.allowed ? (
+                                    <NoSectionAccess title={sectionAccess.title} roleLabel={ROLE_LABELS[user.role] || user.role} />
+                                ) : beta?.state === 'closed' ? (
+                                    <BetaClosed section={beta} />
+                                ) : (
+                                    <>
+                                        {beta?.state === 'beta' && <BetaStrip section={beta} />}
+                                        {children}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </main>
+                    <AssistantWidget />
+                </div>
             </SidebarInset>
-
-            <AssistantWidget />
         </SidebarProvider>
     );
 }

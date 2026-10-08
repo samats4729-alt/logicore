@@ -2407,143 +2407,7 @@ a.mapboxgl-ctrl-logo,
   background: rgba(0, 0, 0, 0.06) !important;
 }
 
-/* ==========================================
-   AI ASSISTANT — PREMIUM PANEL
-   ========================================== */
-.ai-glass-panel {
-  background: var(--lc-card) !important;
-  border: 1px solid var(--lc-border) !important;
-  border-radius: 20px !important;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.16) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-.ai-glass-header {
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--lc-border-soft) !important;
-  background: var(--lc-hover) !important;
-  position: relative;
-  z-index: 2;
-}
-
-/* iOS-сегменты */
-.ai-seg {
-  display: flex;
-  gap: 4px;
-  background: var(--lc-bg) !important;
-  padding: 3px;
-  border-radius: 11px;
-  border: 1px solid var(--lc-border-soft) !important;
-}
-
-.ai-seg-btn {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 7px 0;
-  border-radius: 9px;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--lc-text-sec);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.ai-seg-btn.active {
-  background: var(--lc-card) !important;
-  color: var(--lc-text) !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
-}
-
-/* Message bubbles */
-.ai-msg-user {
-  max-width: 85%;
-  padding: 10px 14px;
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  border-radius: 14px;
-  background: var(--nova-primary) !important;
-  color: var(--nova-primary-fg) !important;
-  border: none !important;
-}
-
-.ai-msg-assistant {
-  max-width: 85%;
-  padding: 10px 14px;
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  border-radius: 14px;
-  background: var(--lc-card) !important;
-  color: var(--lc-text) !important;
-  border: 1px solid var(--lc-border) !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
-}
-
-/* Prompt Quick Actions */
-.ai-prompt-btn {
-  background: var(--lc-card) !important;
-  border: 1px solid var(--lc-border) !important;
-  color: var(--lc-text-sec) !important;
-  padding: 6px 14px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-  transition: all 0.2s;
-}
-
-.ai-prompt-btn:hover {
-  background: var(--lc-hover) !important;
-  color: var(--lc-text) !important;
-  border-color: var(--lc-text-ter) !important;
-}
-
-/* Footer & Inputs */
-.ai-footer {
-  display: flex;
-  gap: 8px;
-  padding: 12px;
-  border-top: 1px solid var(--lc-border-soft) !important;
-  background: var(--lc-hover) !important;
-  align-items: flex-end;
-  position: relative;
-  z-index: 2;
-}
-
-.ai-input {
-  flex: 1;
-  resize: none;
-  background: var(--lc-card) !important;
-  color: var(--lc-text) !important;
-  border: 1px solid var(--lc-border) !important;
-  border-radius: 12px;
-  padding: 8px 14px;
-  font-size: 13px;
-  transition: all 0.2s ease;
-}
-
-.ai-input:focus {
-  border-color: var(--nova-fg-3) !important;
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15) !important;
-}
-
-.ai-send-btn {
-  background: var(--nova-primary) !important;
-  border: none !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.3) !important;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-}
-
-.ai-send-btn:hover {
-  background: #4096ff !important;
-  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.45) !important;
-}
+/* Панель ИИ-помощника — на shadcn в самом компоненте (AssistantWidget). */
 
 /* ==========================================
    AI GUIDE — SPOTLIGHT HIGHLIGHT
@@ -3720,6 +3584,25 @@ a.mapboxgl-ctrl-logo,
 .lc-nova .lc2-header-right button .anticon,
 .lc-nova .lc2-header-right .ai-btn svg {
     color: currentColor !important;
+}
+
+/* Помощник открыт — кнопка становится пилюлей «✕ Помощник»: видно, что
+   панель справа — это он и что этой же кнопкой её закрыть. */
+.lc-nova .ai-btn.ai-btn-open {
+    width: auto !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid var(--nova-border);
+    box-shadow: none;
+    padding: 0 12px 0 10px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--nova-hover) !important;
+    color: var(--nova-fg) !important;
 }
 
 .lc-nova .lc2-header-divider {
