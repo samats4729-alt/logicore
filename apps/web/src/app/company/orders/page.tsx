@@ -1171,45 +1171,68 @@ export default function CompanyOrdersPage() {
                 </div>
             </div>
 
-            {/* Рейсы, закрытые водителем и никем не просмотренные. Полоса над
-                списком, а не меткой в строке: строку надо ещё найти глазами, а
-                водитель стоит на выгрузке считаные минуты. */}
-            {awaitingReview.length > 0 && (
-                <button
-                    type="button"
-                    data-review-banner
-                    className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-solid border-amber-300 bg-amber-50 px-3 py-2 text-left text-[13px] font-medium text-amber-900 [font-family:inherit] dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
-                    onClick={() => { setQuery(''); setActiveTab('all'); setReviewOnly((v) => !v); }}
-                >
-                    <span className="size-2 shrink-0 rounded-full bg-amber-500" />
-                    {awaitingReview.length === 1
-                        ? `Водитель закрыл рейс ${awaitingReview[0].orderNumber} — проверьте фото накладной`
-                        : `Водители закрыли рейсов: ${awaitingReview.length}. Проверьте фото накладных`}
-                    <span className="ml-auto shrink-0 text-xs font-normal underline underline-offset-2">
-                        {reviewOnly ? 'показать все' : 'показать их'}
-                    </span>
-                </button>
-            )}
-
             {/* ===== Вкладки и полоса управления ===== */}
             <div className="flex flex-col gap-3">
-                <div role="tablist" aria-label="Какие заявки" className="inline-flex h-8 w-fit items-center rounded-lg bg-muted p-[3px] text-muted-foreground">
-                    {([['all', 'Все заявки', totalOrders], ['archive', 'Архив', totalArchiveOrders]] as const).map(([id, label, n]) => (
-                        <button
-                            key={id}
-                            type="button"
-                            role="tab"
-                            aria-selected={activeTab === id}
-                            onClick={() => setActiveTab(id)}
-                            className={cn(
-                                'inline-flex h-full cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 text-[13px] font-medium [font-family:inherit] transition-colors',
-                                activeTab === id ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-foreground/60 hover:text-foreground',
-                            )}
-                        >
-                            {label}
-                            <span className="rounded bg-background/60 px-1 text-[10.5px] tabular-nums text-muted-foreground">{n}</span>
-                        </button>
-                    ))}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div role="tablist" aria-label="Какие заявки" className="inline-flex h-8 w-fit items-center rounded-lg bg-muted p-[3px] text-muted-foreground">
+                        {([['all', 'Все заявки', totalOrders], ['archive', 'Архив', totalArchiveOrders]] as const).map(([id, label, n]) => (
+                            <button
+                                key={id}
+                                type="button"
+                                role="tab"
+                                aria-selected={activeTab === id}
+                                onClick={() => setActiveTab(id)}
+                                className={cn(
+                                    'inline-flex h-full cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 text-[13px] font-medium [font-family:inherit] transition-colors',
+                                    activeTab === id ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-foreground/60 hover:text-foreground',
+                                )}
+                            >
+                                {label}
+                                <span className="rounded bg-background/60 px-1 text-[10.5px] tabular-nums text-muted-foreground">{n}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Рейсы, закрытые водителем и никем не просмотренные. Раньше —
+                        полоса во всю ширину над списком; владелец (08.10.2026)
+                        попросил компактнее: кнопка рядом со вкладками. Нажал — в
+                        списке только эти рейсы, нажал ещё раз — все. Точка пульсирует:
+                        водитель стоит на выгрузке считаные минуты. */}
+                    {awaitingReview.length > 0 && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <button
+                                    type="button"
+                                    data-review-chip
+                                    aria-pressed={reviewOnly}
+                                    onClick={() => { setQuery(''); setActiveTab('all'); setReviewOnly((v) => !v); }}
+                                    className={cn(
+                                        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-solid px-2.5 text-[13px] font-medium [font-family:inherit] transition-colors',
+                                        reviewOnly
+                                            ? 'border-amber-500 bg-amber-500 text-white hover:bg-amber-500/90'
+                                            : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-800/70 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/70',
+                                    )}
+                                >
+                                    <span className="relative flex size-2 shrink-0">
+                                        {!reviewOnly && <span className="absolute inline-flex size-full rounded-full bg-amber-400 opacity-70 motion-safe:animate-ping" />}
+                                        <span className={cn('relative inline-flex size-2 rounded-full', reviewOnly ? 'bg-white' : 'bg-amber-500')} />
+                                    </span>
+                                    {awaitingReview.length === 1 ? 'Накладная на проверку' : 'Накладные на проверку'}
+                                    <span className={cn('rounded px-1 text-[11.5px] font-semibold tabular-nums', reviewOnly ? 'bg-white/25' : 'bg-amber-500/15')}>
+                                        {awaitingReview.length}
+                                    </span>
+                                    {reviewOnly && <X className="size-3.5" />}
+                                </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-72 text-xs">
+                                {awaitingReview.length === 1
+                                    ? `Водитель закрыл рейс ${awaitingReview[0].orderNumber} — проверьте фото накладной, пока он не уехал.`
+                                    : `Водители закрыли рейсов: ${awaitingReview.length}. Проверьте фото накладных, пока они не уехали.`}
+                                {' '}
+                                {reviewOnly ? 'Нажмите — снова все заявки.' : 'Нажмите — в списке останутся только они.'}
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">

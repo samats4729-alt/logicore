@@ -100,6 +100,28 @@ test.describe('Журнал заявок', () => {
         await expect(page.locator('[data-orders-table]')).toBeVisible();
     });
 
+    /**
+     * «Водитель закрыл рейс — проверьте накладную» — компактной кнопкой у
+     * вкладок, а не полосой во всю ширину (владелец, 08.10.2026). Нажал —
+     * только эти рейсы, ещё раз — все.
+     */
+    test('кнопка «Накладная на проверку» оставляет только такие рейсы', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const кнопка = page.locator('[data-review-chip]');
+        test.skip(!(await кнопка.count()), 'На стенде нет рейсов, закрытых водителем без проверки накладной');
+        const всего = await page.locator('[data-order-row]').count();
+        await кнопка.click();
+        await expect(кнопка).toHaveAttribute('aria-pressed', 'true');
+        const строки = page.locator('[data-order-row]');
+        const n = await строки.count();
+        expect(n).toBeGreaterThan(0);
+        expect(await строки.locator('[data-review-mark]').count(), 'в отборе есть рейс без метки проверки').toBe(n);
+        await кнопка.click();
+        await expect(кнопка).toHaveAttribute('aria-pressed', 'false');
+        await expect(строки).toHaveCount(всего);
+    });
+
     test('архив — своя вкладка', async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
         await открыть(page);
