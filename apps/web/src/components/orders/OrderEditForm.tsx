@@ -8,7 +8,7 @@ import { prepareCompanyOptions } from '@/lib/company-helper';
 import { CargoComposition } from '@/components/orders/CargoComposition';
 import type { CargoState } from '@/lib/cargo';
 import CurrencySelect from '@/components/orders/CurrencySelect';
-import { MarginSummary } from '@/components/orders/MarginSummary';
+import { MarginPreview } from '@/components/orders/MarginSummary';
 import { TransportNumbers } from '@/components/orders/TransportNumbers';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import nova from '@/components/nova/nova.module.css';
@@ -487,8 +487,9 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                             правит бухгалтер во вкладке «Финансы» — так у них
                             одно место, а не два. */}
 
-                        {/* Margin preview */}
-                        <Form.Item noStyle dependencies={['customerPrice', 'driverCost']}>
+                        {/* Маржа по ставкам — в одной валюте: ставки в разных
+                            переводятся по курсу на дату погрузки, как на сервере. */}
+                        <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'currency', 'driverCostCurrency', 'pickupDate']}>
                             {({ getFieldValue }) => {
                                 const cp = getFieldValue('customerPrice') || 0;
                                 const dc = getFieldValue('driverCost') || 0;
@@ -500,20 +501,17 @@ export default function OrderEditForm(props: OrderEditFormProps) {
                                 const executorVatRate = Number(settlements?.carrier.vatRate ?? 0);
 
                                 if (cp && dc && showCustomerPriceField && showDriverCostField) {
-                                    const cpNet = hasVat ? (cp / (1 + vatRate / 100)) : cp;
-                                    const dcNet = executorHasVat ? (dc / (1 + executorVatRate / 100)) : dc;
-                                    const margin = Math.round((cpNet - dcNet) * 100) / 100;
-                                    const marginPercent = cpNet > 0 ? Math.round((margin / cpNet) * 100) : 0;
-
                                     return (
-                                        <MarginSummary
+                                        <MarginPreview
+                                            customerPrice={cp}
+                                            driverCost={dc}
+                                            customerCurrency={getFieldValue('currency')}
+                                            carrierCurrency={getFieldValue('driverCostCurrency')}
+                                            date={getFieldValue('pickupDate')}
+                                            customerVatRate={hasVat ? vatRate : null}
+                                            carrierVatRate={executorHasVat ? executorVatRate : null}
                                             customerLabel={customerPriceLabel}
-                                            customerNet={cpNet}
                                             carrierLabel={driverCostLabel}
-                                            carrierNet={dcNet}
-                                            margin={margin}
-                                            marginPercent={marginPercent}
-                                            netOfVat={hasVat || executorHasVat}
                                         />
                                     );
                                 }

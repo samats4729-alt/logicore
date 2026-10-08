@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { FormSelect } from './FormSelect';
 import styles from './OrderWizard.module.css';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import { MarginSummary } from '@/components/orders/MarginSummary';
+import { MarginPreview } from '@/components/orders/MarginSummary';
 import { TransportNumbers } from '@/components/orders/TransportNumbers';
 import { api, Location } from '@/lib/api';
 import { reportLoadFailure } from '@/lib/load';
@@ -1410,8 +1410,9 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     </div>
                 )}
 
-                {/* Маржа по введённым ставкам */}
-                <Form.Item noStyle dependencies={['customerPrice', 'driverCost']}>
+                {/* Маржа по введённым ставкам — в одной валюте: ставки в разных
+                    переводятся по курсу на дату погрузки, как на сервере. */}
+                <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'currency', 'driverCostCurrency', 'pickupDate']}>
                     {({ getFieldValue }) => {
                         const cp = getFieldValue('customerPrice') || 0;
                         const dc = getFieldValue('driverCost') || 0;
@@ -1424,20 +1425,17 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                         const executorVatRate = Number(carrierTerms?.vatRate ?? 0);
 
                         if (cp && dc && showCustomerPriceField && showDriverCostField) {
-                            const cpNet = hasVat ? (cp / (1 + vatRate / 100)) : cp;
-                            const dcNet = executorHasVat ? (dc / (1 + executorVatRate / 100)) : dc;
-                            const margin = Math.round((cpNet - dcNet) * 100) / 100;
-                            const marginPercent = cpNet > 0 ? Math.round((margin / cpNet) * 100) : 0;
-
                             return (
-                                <MarginSummary
+                                <MarginPreview
+                                    customerPrice={cp}
+                                    driverCost={dc}
+                                    customerCurrency={getFieldValue('currency')}
+                                    carrierCurrency={getFieldValue('driverCostCurrency')}
+                                    date={getFieldValue('pickupDate')}
+                                    customerVatRate={hasVat ? vatRate : null}
+                                    carrierVatRate={executorHasVat ? executorVatRate : null}
                                     customerLabel={customerPriceLabel}
-                                    customerNet={cpNet}
                                     carrierLabel={driverCostLabel}
-                                    carrierNet={dcNet}
-                                    margin={margin}
-                                    marginPercent={marginPercent}
-                                    netOfVat={hasVat || executorHasVat}
                                 />
                             );
                         }

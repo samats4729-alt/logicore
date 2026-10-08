@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login } from './helpers';
+import { login, pickFromList } from './helpers';
 
 /**
  * Журнал заявок по макету «shadcn Nova» (владелец, 08.10.2026).
@@ -196,6 +196,49 @@ test.describe('Журнал заявок', () => {
         await page.keyboard.press('Escape');
         await expect(окно).toHaveCount(0);
         await expect(мастер).toBeVisible();
+
+        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
+        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
+        await page.evaluate(() => Object.keys(localStorage)
+            .filter((k) => k.startsWith('lc:picker-recent'))
+            .forEach((k) => localStorage.removeItem(k)));
+    });
+
+    /**
+     * Заказчик платит в рублях, перевозчику — в тенге (владелец, 08.10.2026):
+     * мастер вычитал «рубли минус тенге» и показывал убыток. Теперь, как
+     * сервер, переводит обе ставки в тенге по курсу.
+     */
+    test('ставки в разных валютах: маржа по курсу, а не «рубли минус тенге»', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const API = process.env.E2E_API_URL || 'http://localhost:3001';
+        const курсы: any[] = await (await page.request.get(`${API}/currency/rates`)).json();
+        const рубль = курсы.find((r) => r.code === 'RUB');
+        test.skip(!рубль?.rate, 'на стенде нет курса рубля');
+
+        await page.evaluate(() => Object.keys(localStorage)
+            .filter((k) => k.startsWith('lc:order-draft') || k.startsWith('lc:picker-recent'))
+            .forEach((k) => localStorage.removeItem(k)));
+        await page.getByRole('button', { name: 'Создать заявку' }).click();
+        const мастер = page.locator('[data-order-wizard-dialog]');
+        // Посредник: обе ставки на экране — нужен контрагент и с той, и с другой стороны.
+        await pickFromList(page, 'Выберите заказчика', 1);
+        await pickFromList(page, 'Выберите перевозчика', 1);
+
+        const ставкаЗаказчика = мастер.locator('.ant-form-item').filter({ hasText: 'Ставка от заказчика' });
+        await ставкаЗаказчика.locator('input').first().fill('1000');
+        await ставкаЗаказчика.locator('.ant-select-selector').click();
+        await page.keyboard.type('RUB');
+        await page.keyboard.press('Enter');
+        // Перевозчику — 40% рублёвой ставки в тенге. «1000 − 2000» без курса
+        // был бы убыток, по курсу — маржа даже за вычетом НДС.
+        const вТенге = Math.round(1000 * Number(рубль.rate) * 0.4);
+        await мастер.locator('.ant-form-item').filter({ hasText: 'Ставка перевозчику' }).locator('input').first().fill(String(вТенге));
+
+        await expect(мастер.getByText('В тенге по курсу', { exact: false })).toBeVisible();
+        await expect(мастер.getByText('Маржа', { exact: true })).toBeVisible();
+        await expect(мастер.getByText('Убыток', { exact: true })).toHaveCount(0);
 
         await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
         await page.getByRole('button', { name: 'Сбросить всё?' }).click();
