@@ -7,7 +7,8 @@ import { ArrowRight, Check, RotateCcw, SlidersHorizontal, X } from 'lucide-react
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
+import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { FocusDialog } from '@/components/nova/FocusDialog';
 import { cn } from '@/lib/utils';
 import { BoardSlotContext } from '../DashboardCard';
 import { BlockNote } from './blocks';
@@ -44,7 +45,6 @@ export function BlockDialogHost({ renderBody, onBuy, children }: {
 }) {
     const [state, setState] = useState<{ id: WidgetId; mode: BlockDialogMode; from: BlockDialogMode } | null>(null);
     const [open, setOpen] = useState(false);
-    const content = useRef<HTMLDivElement>(null);
     const openBlock = useCallback((id: WidgetId, mode: BlockDialogMode) => {
         setState({ id, mode, from: mode });
         // Окно открывают и из меню «…»: даём меню сначала закрыться — иначе
@@ -56,36 +56,28 @@ export function BlockDialogHost({ renderBody, onBuy, children }: {
     return (
         <OpenBlockContext.Provider value={openBlock}>
             {children}
-            <Dialog open={open} onOpenChange={setOpen}>
-                <DialogPortal>
-                    <DialogOverlay className={cn('bg-black/25', styles.overlay)} />
-                    <DialogPrimitive.Content
-                        ref={content}
-                        tabIndex={-1}
-                        data-block-dialog={state?.id}
-                        className={cn(styles.dialog, 'fixed left-1/2 top-1/2 z-50 flex flex-col overflow-hidden rounded-2xl bg-card text-card-foreground outline-none')}
-                        style={{ width: 'min(1240px, calc(100vw - 32px))', height: 'min(840px, calc(100svh - 32px))' }}
-                        // Фокус — на само окно, а не на первую кнопку: иначе «Настройки»
-                        // при открытии мышкой встречают жирной рамкой выделения.
-                        onOpenAutoFocus={(e) => { e.preventDefault(); content.current?.focus(); }}
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                    >
-                        {state && (
-                            <DialogInner
-                                key={state.id}
-                                id={state.id}
-                                mode={state.mode}
-                                setMode={(mode) => setState((s) => (s ? { ...s, mode } : s))}
-                                // Пришли за настройками — «Готово» закрывает окно; смотрели крупно — прячет панель.
-                                onDone={() => (state.from === 'settings' ? setOpen(false) : setState((s) => (s ? { ...s, mode: 'view' } : s)))}
-                                onClose={() => setOpen(false)}
-                                renderBody={renderBody}
-                                onBuy={onBuy}
-                            />
-                        )}
-                    </DialogPrimitive.Content>
-                </DialogPortal>
-            </Dialog>
+            <FocusDialog
+                open={open}
+                onOpenChange={setOpen}
+                width="min(1240px, calc(100vw - 32px))"
+                height="min(840px, calc(100svh - 32px))"
+                className={styles.dialog}
+                data-block-dialog={state?.id}
+            >
+                {state && (
+                    <DialogInner
+                        key={state.id}
+                        id={state.id}
+                        mode={state.mode}
+                        setMode={(mode) => setState((s) => (s ? { ...s, mode } : s))}
+                        // Пришли за настройками — «Готово» закрывает окно; смотрели крупно — прячет панель.
+                        onDone={() => (state.from === 'settings' ? setOpen(false) : setState((s) => (s ? { ...s, mode: 'view' } : s)))}
+                        onClose={() => setOpen(false)}
+                        renderBody={renderBody}
+                        onBuy={onBuy}
+                    />
+                )}
+            </FocusDialog>
         </OpenBlockContext.Provider>
     );
 }
