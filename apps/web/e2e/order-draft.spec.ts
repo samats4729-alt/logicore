@@ -49,8 +49,9 @@ test.describe('Черновик новой заявки', () => {
         await expect(полеЗаказчика).toHaveText(заказчик);
         await expect(ставка).toHaveValue(/515/);
 
-        // «Начать заново» — пустая форма и никакого черновика.
-        await page.getByRole('button', { name: 'Начать заново' }).click();
+        // «Сбросить» (с подтверждением на самой кнопке) — пустая форма и никакого черновика.
+        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
+        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
         await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
         await expect(ставка).toHaveValue('');
         expect(await черновиков(page)).toBe(0);

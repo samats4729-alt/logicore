@@ -122,6 +122,38 @@ test.describe('Журнал заявок', () => {
         await expect(строки).toHaveCount(всего);
     });
 
+    /**
+     * Мастер заявки — окном поверх журнала (владелец, 08.10.2026): закрыл —
+     * набранное осталось, открыл — на месте; оплата по умолчанию «за рейс».
+     */
+    test('«Создать заявку» открывает мастер окном, закрытие не теряет набранное', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('lc:order-draft')).forEach((k) => localStorage.removeItem(k)));
+        await page.getByRole('button', { name: 'Создать заявку' }).click();
+        const окно = page.locator('[data-order-wizard-dialog]');
+        await expect(окно.getByRole('heading', { name: 'Новая заявка' })).toBeVisible();
+        await expect(окно.getByRole('combobox', { name: 'Тип оплаты' })).toContainText('За рейс');
+        // Список под окном на месте — мы не ушли со страницы.
+        await expect(page).toHaveURL(/\/company\/orders$/);
+
+        const ставка = окно.locator('.ant-form-item').filter({ hasText: /Ставка от заказчика|^Ставка/ }).locator('input').first();
+        await ставка.fill('321000');
+        await expect(окно.getByTestId('order-draft-saved')).toBeVisible();
+        await окно.getByRole('button', { name: 'Закрыть' }).click();
+        await expect(окно).toHaveCount(0);
+
+        await page.getByRole('button', { name: 'Создать заявку' }).click();
+        await expect(page.getByTestId('order-draft-restored')).toBeVisible();
+        await expect(page.locator('[data-order-wizard-dialog] .ant-form-item').filter({ hasText: /Ставка от заказчика|^Ставка/ }).locator('input').first()).toHaveValue(/321/);
+
+        // Сбросить — с подтверждением, и черновика больше нет.
+        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
+        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
+        await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
+        await page.keyboard.press('Escape');
+    });
+
     test('архив — своя вкладка', async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
         await открыть(page);

@@ -34,16 +34,18 @@ test('мастер заявки доходит до груза и показыв
     // берём первую ещё не заполненную.
     for (let i = 0; i < 2; i++) {
         await page.getByRole('button', { name: /Выберите адрес или склад/ }).first().click();
-        // Адрес выбирается в отдельном окне с поиском и фильтрами.
-        await expect(page.getByRole('dialog')).toBeVisible();
+        // Адрес выбирается в отдельном окне с поиском и фильтрами — поверх
+        // окна мастера, поэтому целимся в него по названию.
+        const окноАдреса = page.getByRole('dialog', { name: 'Адрес точки маршрута' });
+        await expect(окноАдреса).toBeVisible();
         // Целимся в строку адреса, а не «в кнопку с подходящим словом»: в окне
         // есть фильтры по группе и городу, и их подписи содержат те же слова.
         // На стенде с наполненными складами заказчика тест кликал в фильтр,
         // окно оставалось открытым, и падение выглядело как поломка окна.
-        const option = page.getByRole('dialog').locator('[data-address-option]').first();
+        const option = окноАдреса.locator('[data-address-option]').first();
         await expect(option).toBeVisible();
         await option.click();
-        await expect(page.getByRole('dialog')).toBeHidden();
+        await expect(окноАдреса).toBeHidden();
     }
 
     await page.getByRole('button', { name: /Далее/ }).first().click();
@@ -57,7 +59,9 @@ test('мастер заявки доходит до груза и показыв
 
     // Комбинация паллет — ради неё задача и делалась.
     await page.getByRole('button', { name: /Добавить вид паллет/ }).click();
-    await expect(page.locator('select').first()).toBeVisible();
+    // Видимый список вида паллет: у выбора «Тип оплаты» на шаге 1 есть
+    // скрытый служебный <select>, и «первый select на странице» — это он.
+    await expect(page.locator('select:not([aria-hidden="true"])').first()).toBeVisible();
 });
 
 test('список заявок открывается', async ({ page }) => {

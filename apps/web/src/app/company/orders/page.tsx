@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Modal, Form, Input, Typography, Drawer, Descriptions, Select, Checkbox, Popconfirm } from 'antd';
 import dayjs from 'dayjs';
 
@@ -25,6 +25,7 @@ import { OrderPreviewDialog } from '@/components/orders/journal/OrderPreviewDial
 import { OrdersBoard } from '@/components/orders/journal/OrdersBoard';
 import { JournalPagination, OrdersTable, useFillHeight } from '@/components/orders/journal/OrdersTable';
 import type { JournalOrder } from '@/components/orders/journal/types';
+import { OrderWizardDialog, type WizardRequest } from '@/components/orders/wizard/OrderWizardDialog';
 import { needsCompletionReview } from '@/lib/completion-review';
 import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 
@@ -71,7 +72,21 @@ type Order = JournalOrder;
 // Component
 // ============================================================
 
+/**
+ * Журнал заявок. Обёртка — ради `useSearchParams`: адрес
+ * «/company/orders?create=1» (и «?edit=…», «?from=…») открывает мастер
+ * заявки окном поверх журнала, а Next просит ждать параметры адреса в
+ * Suspense.
+ */
 export default function CompanyOrdersPage() {
+    return (
+        <Suspense fallback={null}>
+            <OrdersJournal />
+        </Suspense>
+    );
+}
+
+function OrdersJournal() {
     const { user } = useAuthStore();
     const router = useRouter();
     const isMobile = useIsMobile();
@@ -84,6 +99,24 @@ export default function CompanyOrdersPage() {
      */
     const [view, setView] = useState<'table' | 'board'>('table');
     const [previewOpen, setPreviewOpen] = useState(false);
+    /**
+     * Мастер заявки — окном поверх журнала (владелец, 08.10.2026). Открыть
+     * его можно отсюда («Создать заявку», карандаш в строке) и по адресу:
+     * меню «Новая заявка», дашборд, «Копировать» в карточке рейса ведут на
+     * «/company/orders/create», а тот — сюда с параметром.
+     */
+    const [wizard, setWizard] = useState<WizardRequest | null>(null);
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        const edit = searchParams.get('edit');
+        const from = searchParams.get('from');
+        const quote = searchParams.get('quoteRequestId');
+        if (!searchParams.get('create') && !edit && !from && !quote) return;
+        setWizard({ key: Date.now(), editId: edit || undefined, fromId: from || undefined, quoteRequestId: quote || undefined });
+        // Адрес — обратно чистый: обновил страницу — мастер не открывается снова сам.
+        router.replace('/company/orders', { scroll: false });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
     const [ordersPage, setOrdersPage] = useState(1);
     const [ordersPageSize, setOrdersPageSize] = useState(20);
@@ -1024,7 +1057,7 @@ export default function CompanyOrdersPage() {
         customerRefTitle,
         extractCity,
         onPreview: openPreview,
-        onEdit: (o) => router.push(`/company/orders/create?edit=${o.id}`),
+        onEdit: (o) => setWizard({ key: Date.now(), editId: o.id }),
         onOpen: (o) => router.push(`/company/orders/${o.id}`),
         onInvoice: (id) => router.push(`/company/accounting/invoices/${id}`),
     });
@@ -1200,7 +1233,7 @@ export default function CompanyOrdersPage() {
                         data-guide="orders-create"
                         size="sm"
                         className="h-8 gap-1.5 rounded-lg px-3 text-[13px]"
-                        onClick={() => router.push('/company/orders/create')}
+                        onClick={() => setWizard({ key: Date.now() })}
                     >
                         <Plus className="size-3.5" /> Создать заявку
                     </Button>
@@ -1634,6 +1667,15 @@ export default function CompanyOrdersPage() {
             exporting={exporting}
             onExport={handleExport}
         />
+
+            <OrderWizardDialog
+                request={wizard}
+                onClose={() => setWizard(null)}
+                // Заявка заведена — окно закрывается, список показывает её первой строкой.
+                onCreated={() => { setWizard(null); setActiveTab('all'); mutateAll(); }}
+                // Правку сохранили — в карточку рейса, как и было.
+                onSaved={(id) => { setWizard(null); router.push(`/company/orders/${id}`); }}
+            />
 
             <OrderPreviewDialog
                 order={previewOrder}
