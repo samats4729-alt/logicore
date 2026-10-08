@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import StatusPill from '@/components/ui/StatusPill';
 import FilePreviewModal from '@/components/ui/FilePreviewModal';
 import { DateStringField } from '@/components/ui/DateField';
+import nova from '@/components/nova/nova.module.css';
 
 /**
  * Документы, вложенные в рейсы: накладные, акты, счета, доверенности.
@@ -167,23 +168,27 @@ export default function DocumentsPage() {
         <div className="lc-page min-h-screen bg-background p-6">
             <div className="mx-auto max-w-[1180px]">
                 <div className="mb-5">
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Документы</h1>
-                    <p className="text-sm text-muted-foreground">
+                    <h1 className={nova.title}>Документы</h1>
+                    <p className={nova.subtitle}>
                         Файлы, вложенные в рейсы: накладные, акты, счета и доверенности.
                         Вкладывают их в карточке рейса — здесь они собраны за период.
                     </p>
                 </div>
 
-                <div className="mb-4 flex flex-wrap items-center gap-2">
+                {/* Вид документа — переключатель из одного ряда, как фильтры на
+                    остальных экранах: шесть отдельных кнопок с рамками читались
+                    как шесть разных действий. */}
+                <div className={`${nova.pills} mb-4`} role="group" aria-label="Вид документа">
                     {TYPE_FILTERS.map((f) => (
-                        <Button
+                        <button
                             key={f.key}
-                            size="sm"
-                            variant={type === f.key ? 'default' : 'outline'}
+                            type="button"
+                            aria-pressed={type === f.key}
+                            className={`${nova.pill} ${type === f.key ? nova.pillActive : ''}`}
                             onClick={() => setType(f.key)}
                         >
                             {f.label}
-                        </Button>
+                        </button>
                     ))}
                 </div>
 
@@ -242,14 +247,14 @@ export default function DocumentsPage() {
                             <div className="overflow-x-auto">
                                 <table className="w-full min-w-[900px] text-sm">
                                     <thead>
-                                        <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                                            <th className="px-4 py-3 text-left font-semibold">Вид</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Рейс</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Заказчик</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Водитель</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Файл</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Вложил</th>
-                                            <th className="px-4 py-3 text-right font-semibold">Действия</th>
+                                        <tr className="border-b border-border text-[12.5px] text-muted-foreground">
+                                            <th className="px-4 py-3 text-left font-medium">Вид</th>
+                                            <th className="px-4 py-3 text-left font-medium">Рейс</th>
+                                            <th className="px-4 py-3 text-left font-medium">Заказчик</th>
+                                            <th className="px-4 py-3 text-left font-medium">Водитель</th>
+                                            <th className="px-4 py-3 text-left font-medium">Файл</th>
+                                            <th className="px-4 py-3 text-left font-medium">Вложил</th>
+                                            <th className="px-4 py-3 text-right font-medium">Действия</th>
                                         </tr>
                                     </thead>
                                     <tbody>
