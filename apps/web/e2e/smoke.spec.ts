@@ -63,7 +63,7 @@ test('мастер заявки доходит до груза и показыв
 test('список заявок открывается', async ({ page }) => {
     await login(page);
     await page.goto('/company/orders');
-    await expect(page.getByText('Заявки компании')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Заявки', exact: true })).toBeVisible();
 });
 
 test('взаиморасчёты открываются и считают итоги', async ({ page }) => {
@@ -87,7 +87,7 @@ test('карточка рейса открывается и предлагает
 
     // В строке списка открывает карточку кнопка-шеврон в конце, а не
     // клик по строке.
-    const firstRow = page.locator('.ant-table-row').first();
+    const firstRow = page.locator('[data-order-row]').first();
     await expect(firstRow).toBeVisible();
     await firstRow.locator('button').last().click();
 

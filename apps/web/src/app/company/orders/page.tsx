@@ -2,24 +2,15 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Table, Tag, Space, Modal, Form, Input, Typography, Drawer, Descriptions, Select, Tooltip, InputNumber, Row, Col, Checkbox, Slider, Alert, Popconfirm, Radio } from 'antd';
+import { Modal, Form, Input, Typography, Drawer, Descriptions, Select, Checkbox, Popconfirm } from 'antd';
 import dayjs from 'dayjs';
 
-import {
-    CheckCircleOutlined,
-    EnvironmentOutlined, FlagOutlined, SearchOutlined,
-    CloseCircleOutlined,
-    ExclamationCircleOutlined,
-} from '@ant-design/icons';
-import { ArrowUpDown, ChevronRight, Download, Eraser, FileText, Loader2, Mail, Pencil, Plus, Search, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react';
+import { ArrowUpDown, Columns3, Download, FileText, KanbanSquare, Loader2, Mail, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Table2, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import FeaturedOrderCard from '@/components/ui/FeaturedOrderCard';
-import journal from './orders-journal.module.css';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, Location } from '@/lib/api';
 import { reportLoadFailure } from '@/lib/load';
-import { VEHICLE_TYPES } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth';
-import { shortenCompanyName } from '@/lib/company-helper';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import AssignDriverModal from '@/components/AssignDriverModal';
@@ -27,6 +18,13 @@ import OrdersMobileList from '@/components/OrdersMobileList';
 import { ExportColumnsDialog } from '@/components/orders/ExportColumnsDialog';
 import { TableColumnsButton } from '@/components/orders/TableColumnsButton';
 import { DEFAULT_REF_LABEL } from '@/components/orders/TransportNumbers';
+import { AllFiltersSheet } from '@/components/orders/journal/AllFiltersSheet';
+import { buildColumns } from '@/components/orders/journal/columns';
+import { FacetFilter } from '@/components/orders/journal/FacetFilter';
+import { OrderPreviewDialog } from '@/components/orders/journal/OrderPreviewDialog';
+import { OrdersBoard } from '@/components/orders/journal/OrdersBoard';
+import { JournalPagination, OrdersTable, useFillHeight } from '@/components/orders/journal/OrdersTable';
+import type { JournalOrder } from '@/components/orders/journal/types';
 import { needsCompletionReview } from '@/lib/completion-review';
 import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
 
@@ -34,18 +32,8 @@ import { useIsMobile } from '@/lib/useIsMobile';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
-import { DateRangeField } from '@/components/ui/DateField';
-import {
-    DEBT_RED,
-    getNextStatuses,
-    ORDER_STATUS_COLORS as statusColors,
-    ORDER_STATUS_PROGRESS as STATUS_PROGRESS,
-    isCustomerSettled,
-    isExecutorSettled,
-    isOrderSettled,
-    nameInitials,
-    progressColor,
-} from '@/lib/order-status';
+import { cn } from '@/lib/utils';
+import { getNextStatuses } from '@/lib/order-status';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -76,47 +64,16 @@ interface LocationState {
     id?: string;
 }
 
-interface Order {
-    id: string;
-    orderNumber: string;
-    status: string;
-    cargoDescription: string;
-    cargoWeight?: number;
-    cargoVolume?: number;
-    cargoType?: string;
-    natureOfCargo?: string;
-    requirements?: string;
-    customerPrice?: number;
-    customerPriceType?: string;
-    driverCost?: number;
-    createdAt: string;
-    routePoints?: { pointType: string; sequence: number; location: { id?: string; name: string; address: string; city?: string; emails?: string } }[];
-    customer?: { firstName: string; lastName: string; phone: string; email?: string };
-    customerCompany?: { id?: string; name: string; phone?: string; email?: string };
-    customerCompanyId?: string;
-    assignedDriverName?: string;
-    assignedDriverPhone?: string;
-    assignedDriverPlate?: string;
-    assignedDriverTrailer?: string;
-    assignedAt?: string;
-    driver?: { firstName: string; lastName: string; middleName?: string; phone: string; vehiclePlate?: string; vehicleModel?: string; trailerNumber?: string };
-    subForwarder?: { name: string; email?: string };
-    forwarder?: { id?: string; name: string; email?: string };
-    partner?: { name: string; email?: string };
-    forwarderId?: string;
-    subForwarderId?: string;
-    /** Счета, выставленные заказчику по этому рейсу. Пусто — счёта ещё нет. */
-    accountingDocuments?: { document: { id: string; number: string; status: string } }[];
-    subForwarderPrice?: number;
-    partnerId?: string;
-    isConfirmed?: boolean;
-    driverId?: string;
-    responsibleManager?: { firstName: string; lastName: string; };
-    pendingStatus?: string;
-    pendingStatusById?: string;
-    /** Рейс закрыл водитель — фото накладной ещё никто не смотрел. */
-    driverCompletedAt?: string | null;
-    completionReviewedAt?: string | null;
+/** Заявка журнала — тип общий с таблицей и доской. */
+type Order = JournalOrder;
+
+/** «заявка / заявки / заявок». */
+function plural(n: number, one: string, few: string, many: string) {
+    const t = n % 100, o = n % 10;
+    if (t > 10 && t < 20) return many;
+    if (o === 1) return one;
+    if (o >= 2 && o <= 4) return few;
+    return many;
 }
 
 // ============================================================
@@ -129,18 +86,13 @@ export default function CompanyOrdersPage() {
     const isMobile = useIsMobile();
 
     const [activeTab, setActiveTab] = useState('all');
-    /** Свёрнута ли карточка рейса. Выбор запоминается: логист открывает
-     *  этот экран десятки раз в день, и разворачивать её каждый раз заново —
-     *  это работа, которую он делать не просил. */
-    const [featuredOpen, setFeaturedOpen] = useState(false);
-    useEffect(() => {
-        try {
-            if (localStorage.getItem('lc_orders_featured') === 'open') setFeaturedOpen(true);
-        } catch {}
-    }, []);
-    useEffect(() => {
-        try { localStorage.setItem('lc_orders_featured', featuredOpen ? 'open' : 'closed'); } catch {}
-    }, [featuredOpen]);
+    /**
+     * Вид списка: таблица или доска по этапам (макет «shadcn Nova»). Карточки
+     * рейса над списком больше нет (владелец, 08.10.2026): рейс смотрят по
+     * значку глаза в строке — в окне с картой.
+     */
+    const [view, setView] = useState<'table' | 'board'>('table');
+    const [previewOpen, setPreviewOpen] = useState(false);
 
     const [ordersPage, setOrdersPage] = useState(1);
     const [ordersPageSize, setOrdersPageSize] = useState(20);
@@ -196,9 +148,8 @@ export default function CompanyOrdersPage() {
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
     const [assignModalOpen, setAssignModalOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-    // Заявка, выбранная одним кликом для предпросмотра на карте (без перехода внутрь)
+    // Заявка, открытая по значку глаза — в окне с картой, без перехода внутрь.
     const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
-    const featuredCardRef = useRef<HTMLDivElement>(null);
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const [assignLoading, setAssignLoading] = useState(false);
     const [assignType, setAssignType] = useState<'driver' | 'partner' | 'partner_manual'>('driver');
@@ -1070,48 +1021,22 @@ export default function CompanyOrdersPage() {
 
     // =================== COLUMNS ===================
 
-    const orgColumn = myCompanies.length > 1 ? [{
-        title: 'Организация', key: 'ourOrg', width: 120, ellipsis: true,
-        render: (_: any, r: Order) => {
-            const matched = myCompanies.find(c => c.id === r.customerCompanyId || c.id === r.forwarderId || c.id === (r as any).subForwarderId);
-            const name = matched?.name || '—';
-            return (
-                <Tooltip title={name}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: '#1677ff' }}>{shortenCompanyName(name)}</span>
-                </Tooltip>
-            );
-        }
-    }] : [];
-
     /**
-     * Номера, по которым заказчик находит рейс у себя: накладная и его
-     * собственный номер.
-     *
-     * Одной графой, а не двумя: журнал и так широкий, а номера читают
-     * вместе — бухгалтер сверяет по ним счёт, не открывая заявку. Пустых
-     * подписей в ячейке нет, поэтому у обычного рейса это просто прочерк.
+     * Колонки журнала — в `components/orders/journal/columns`: те же 13, что
+     * были, в оформлении макета. Ключи прежние — по ним в браузере запомнено,
+     * какие колонки человек спрятал.
      */
-    const номер = (значение?: string | null) => {
-        const текст = значение?.trim();
-        if (!текст) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-        return (
-            <Tooltip title={текст}>
-                <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', color: 'var(--nova-fg-2)' }}>
-                    {текст}
-                </span>
-            </Tooltip>
-        );
-    };
-
-    const ttnColumn = {
-        title: 'ТТН', key: 'ttnNumber', width: 104, ellipsis: true,
-        render: (_: any, r: Order) => номер((r as any).ttnNumber),
-    };
-
-    const customerRefColumn = {
-        title: customerRefTitle, key: 'customerRefNumber', width: 104, ellipsis: true,
-        render: (_: any, r: Order) => номер((r as any).customerRefNumber),
-    };
+    const openPreview = (o: Order) => { setPreviewOrder(o); setPreviewOpen(true); };
+    const { active: columns, archive: archiveColumns } = buildColumns({
+        userCompanyId: user?.companyId,
+        myCompanies,
+        customerRefTitle,
+        extractCity,
+        onPreview: openPreview,
+        onEdit: (o) => router.push(`/company/orders/create?edit=${o.id}`),
+        onOpen: (o) => router.push(`/company/orders/${o.id}`),
+        onInvoice: (id) => router.push(`/company/accounting/invoices/${id}`),
+    });
 
     /**
      * Колонки, которые журнал показывает сейчас.
@@ -1120,277 +1045,7 @@ export default function CompanyOrdersPage() {
      * а ключ у графы один. Статус и номер заявки скрыть нельзя — без них
      * строку не узнать.
      */
-    const applyHidden = (list: any[]) => list.filter((c) => !hiddenColumns.has(c.key));
-
-    const columns = [
-        {
-            // 132, а не 110: рядом с плашкой статуса встают значки —
-            // подтверждение завершения и «проверьте накладную», — и в 110
-            // они обрезались по правому краю ячейки.
-            title: 'Статус', dataIndex: 'status', key: 'status', width: 132, fixed: 'left' as const,
-            render: (s: string, r: Order) => (
-                <div>
-                    <StatusPill status={s} />
-                    {r.pendingStatus === 'COMPLETED' && r.pendingStatusById !== user?.companyId && (
-                        <Tooltip title="Ожидает вашего подтверждения завершения">
-                            <ExclamationCircleOutlined style={{ color: '#faad14', marginLeft: 4, fontSize: 13 }} />
-                        </Tooltip>
-                    )}
-                    {r.pendingStatus === 'COMPLETED' && r.pendingStatusById === user?.companyId && (
-                        <Tooltip title="Вы запросили завершение, ожидаем подтверждения">
-                            <ExclamationCircleOutlined style={{ color: '#1890ff', marginLeft: 4, fontSize: 13 }} />
-                        </Tooltip>
-                    )}
-                    {/* Рейс закрыл водитель, накладную никто не смотрел.
-                        Значком, а не подписью: в ячейку статуса вторая
-                        строка не влезает и обрезается. Громкий сигнал —
-                        полоса над списком, здесь достаточно пометить строку,
-                        чтобы её было видно после нажатия «показать их». */}
-                    {needsCompletionReview(r) && (
-                        <Tooltip title="Водитель закрыл рейс — проверьте фото накладной, пока он не уехал">
-                            <span className={journal.reviewMark}>!</span>
-                        </Tooltip>
-                    )}
-                </div>
-            ),
-        },
-        {
-            // `ellipsis` обязателен: без него длинный номер выезжал в соседний
-            // столбец. Подсказка возвращает то, что обрезано.
-            title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, ellipsis: true,
-            render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip>,
-        },
-        ...orgColumn,
-        ttnColumn,
-        customerRefColumn,
-        {
-            title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
-            render: (d: string) => <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>,
-        },
-        {
-            title: 'Дата погр.', key: 'pickupDate', width: 90,
-            render: (_: any, r: Order) => {
-                const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
-                const date = (pickupPt as any)?.expectedDate;
-                return date
-                    ? <span style={{ fontSize: 11, color: 'var(--nova-fg-2)' }}>{dayjs(date).format('DD.MM.YY')}</span>
-                    : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-            },
-        },
-        {
-            title: 'Заказчик', key: 'customer', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => {
-                const name = r.customerCompany?.name || '—';
-                const owesUs = !isCustomerSettled(r);
-                return (
-                    <Tooltip title={owesUs ? `${name} — не оплатил` : name}>
-                        <span style={{ fontSize: 12, fontWeight: owesUs ? 600 : (r.customerCompanyId === user?.companyId ? 600 : undefined), color: owesUs ? DEBT_RED : undefined }}>{shortenCompanyName(name)}</span>
-                    </Tooltip>
-                );
-            },
-        },
-        {
-            title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => {
-                const name = (r.forwarderId === user?.companyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—');
-                const weOwe = !isExecutorSettled(r);
-                return (
-                    <Tooltip title={weOwe ? `${name} — не оплачено` : name}>
-                        <span style={{ fontSize: 12, fontWeight: weOwe ? 600 : (r.forwarderId === user?.companyId ? 600 : undefined), color: weOwe ? DEBT_RED : undefined }}>{shortenCompanyName(name)}</span>
-                    </Tooltip>
-                );
-            },
-        },
-        {
-            title: 'Водитель', key: 'drv', width: 140, ellipsis: true,
-            render: (_: any, r: Order) => {
-                const name = r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '');
-                if (!name) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-                return (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%' }}>
-                        <span className="lc2-avatar lc2-avatar-sm">{nameInitials(name)}</span>
-                        <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                    </span>
-                );
-            },
-        },
-        {
-            title: 'Транспорт', key: 'vehicle', width: 100, ellipsis: true,
-            render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverPlate || r.driver?.vehiclePlate || '—'}</span>,
-        },
-        {
-            title: 'Маршрут', key: 'route', width: 170,
-            render: (_: any, r: Order) => {
-                const from = extractCity(r, 'pickup');
-                const to = extractCity(r, 'delivery');
-                if (!from && !to) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-                return (
-                    <div style={{ minWidth: 120 }}>
-                        <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{from || '?'} → {to || '?'}</span>
-                        <div className="lc2-rowbar">
-                            <i style={{ width: `${STATUS_PROGRESS[r.status] ?? 0}%`, background: progressColor(r.status) }} />
-                        </div>
-                    </div>
-                );
-            },
-        },
-        {
-            title: 'Менеджер', key: 'manager', width: 110, ellipsis: true,
-            render: (_: any, r: Order) => {
-                if (r.responsibleManager) {
-                    return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
-                }
-                return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-            },
-        },
-        {
-            title: 'Ставка зак.', key: 'customerPrice', width: 100, align: 'right' as const,
-            render: (_: any, r: Order) => {
-                return r.customerPrice
-                    ? <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{r.customerPrice.toLocaleString('ru-RU')}</span>
-                    : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-            },
-        },
-        {
-            title: 'Ставка перев.', key: 'carrierPrice', width: 100, align: 'right' as const,
-            render: (_: any, r: Order) => {
-                const cost = r.driverCost || (r as any).subForwarderPrice;
-                return cost
-                    ? <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--nova-neg)' }}>{cost.toLocaleString('ru-RU')}</span>
-                    : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-            },
-        },
-        {
-            // Выставлен ли счёт. Раньше понять это можно было, только сверяя
-            // список заявок с журналом счетов вручную — и рейсы забывались.
-            title: 'Счёт', key: 'invoice', width: 92,
-            render: (_: any, r: Order) => {
-                const invoice = r.accountingDocuments?.[0]?.document;
-                if (!invoice) {
-                    return <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>не выставлен</span>;
-                }
-                return (
-                    <Tooltip title={`Счёт № ${invoice.number}`}>
-                        <span
-                            style={{ fontSize: 11, fontWeight: 600, color: 'var(--nova-accent)', cursor: 'pointer' }}
-                            onClick={(e) => { e.stopPropagation(); router.push(`/company/accounting/invoices/${invoice.id}`); }}
-                        >
-                            № {invoice.number}
-                        </span>
-                    </Tooltip>
-                );
-            },
-        },
-        /* Правка прямо из строки.
-           Изменить ставку можно было и раньше, но путь был неочевидный:
-           щёлкнуть по строке, дождаться боковой панели и найти там
-           «Редактировать заявку». Бухгалтер этого не нашла и решила, что
-           править нечем. Карандаш стоит там, где его ищут. */
-        {
-            title: '', key: 'actions', width: 80, fixed: 'right' as const,
-            render: (_: any, r: Order) => (
-                <div style={{ display: 'flex', gap: 2 }}>
-                    <Tooltip title="Изменить заявку и суммы">
-                        <Button
-                            variant="link"
-                            size="sm"
-                            aria-label="Изменить заявку и суммы"
-                            className="h-7 w-7 px-0"
-                            /* Правка — той же формой, что и заведение: отдельное
-                               окно было второй формой той же заявки и отставало
-                               от неё полями. */
-                            onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/create?edit=${r.id}`); }}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                    </Tooltip>
-                    <Tooltip title="Открыть заявку">
-                        <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
-                    </Tooltip>
-                </div>
-            ),
-        },
-    ];
-
-    const archiveColumns = [
-        {
-            title: 'Статус', dataIndex: 'status', key: 'status', width: 110, fixed: 'left' as const,
-            render: (s: string) => <StatusPill status={s} />,
-        },
-        { title: '№', dataIndex: 'orderNumber', key: 'orderNumber', width: 124, ellipsis: true, render: (t: string) => <Tooltip title={t}><span className="lc-ordernum">{t}</span></Tooltip> },
-        ...orgColumn,
-        ttnColumn,
-        customerRefColumn,
-        { title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80, render: (d: string) => <span style={{ fontSize: 11, color: 'var(--nova-fg-3)' }}>{new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span> },
-        {
-            title: 'Дата погр.', key: 'pickupDate', width: 90,
-            render: (_: any, r: Order) => {
-                const pickupPt = r.routePoints?.find(p => p.pointType === 'PICKUP');
-                const date = (pickupPt as any)?.expectedDate;
-                return date ? <span style={{ fontSize: 11, color: 'var(--nova-fg-2)' }}>{dayjs(date).format('DD.MM.YY')}</span> : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-            },
-        },
-        {
-            title: 'Заказчик', key: 'customer', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => {
-                const name = r.customerCompany?.name || '—';
-                const owesUs = !isCustomerSettled(r);
-                return (
-                    <Tooltip title={owesUs ? `${name} — не оплатил` : name}>
-                        <span style={{ fontSize: 12, fontWeight: owesUs ? 600 : (r.customerCompanyId === user?.companyId ? 600 : undefined), color: owesUs ? DEBT_RED : undefined }}>{shortenCompanyName(name)}</span>
-                    </Tooltip>
-                );
-            }
-        },
-        {
-            title: 'Перевозчик', key: 'forwarder', width: 130, ellipsis: true,
-            render: (_: any, r: Order) => {
-                const name = (r.forwarderId === user?.companyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—');
-                const weOwe = !isExecutorSettled(r);
-                return (
-                    <Tooltip title={weOwe ? `${name} — не оплачено` : name}>
-                        <span style={{ fontSize: 12, fontWeight: weOwe ? 600 : (r.forwarderId === user?.companyId ? 600 : undefined), color: weOwe ? DEBT_RED : undefined }}>{shortenCompanyName(name)}</span>
-                    </Tooltip>
-                );
-            }
-        },
-        { title: 'Водитель', key: 'drv', width: 120, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverName || (r.driver ? `${r.driver.lastName} ${r.driver.firstName.substring(0, 1)}.` : '—')}</span> },
-        { title: 'Транспорт', key: 'vehicle', width: 100, ellipsis: true, render: (_: any, r: Order) => <span style={{ fontSize: 12 }}>{r.assignedDriverPlate || r.driver?.vehiclePlate || '—'}</span> },
-        {
-            title: 'Маршрут', key: 'route', width: 160, ellipsis: true,
-            render: (_: any, r: Order) => {
-                const from = extractCity(r, 'pickup');
-                const to = extractCity(r, 'delivery');
-                if (!from && !to) return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-                return <span style={{ fontSize: 12, fontWeight: 500 }}>{from || '?'} → {to || '?'}</span>;
-            },
-        },
-        {
-            title: 'Менеджер', key: 'manager', width: 110, ellipsis: true,
-            render: (_: any, r: Order) => {
-                if (r.responsibleManager) {
-                    return <span style={{ fontSize: 12 }}>{r.responsibleManager.lastName} {r.responsibleManager.firstName?.substring(0, 1)}.</span>;
-                }
-                return <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-            },
-        },
-        {
-            title: 'Ставка зак.', key: 'customerPrice', width: 100, align: 'right' as const,
-            render: (_: any, r: Order) => r.customerPrice ? <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{r.customerPrice.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>,
-        },
-        {
-            title: 'Ставка перев.', key: 'carrierPrice', width: 100, align: 'right' as const,
-            render: (_: any, r: Order) => {
-                const cost = r.driverCost || (r as any).subForwarderPrice;
-                return cost ? <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--nova-neg)' }}>{cost.toLocaleString('ru-RU')}</span> : <span style={{ color: 'var(--nova-fg-3)', fontSize: 11 }}>—</span>;
-            },
-        },
-        { title: '', key: 'actions', width: 50, fixed: 'right' as const, render: (_: any, r: Order) => (
-            <Tooltip title="Открыть заявку">
-                <Button variant="link" size="sm" aria-label="Открыть заявку" className="h-7 w-7 px-0" onClick={(e) => { e.stopPropagation(); router.push(`/company/orders/${r.id}`); }}><ChevronRight className="h-4 w-4" /></Button>
-            </Tooltip>
-        ) },
-    ];
+    const applyHidden = <C extends { key: string }>(list: C[]) => list.filter((c) => !hiddenColumns.has(c.key));
 
     /**
      * Что предложить в окне выбора колонок.
@@ -1415,371 +1070,272 @@ export default function CompanyOrdersPage() {
 
     // =================== RENDER ===================
 
-    // Карточка рейса показывает то, что видно в списке первой строкой: если
-    // список сужен условиями, показывать рейс не из него — сбивать с толку.
-    const featured = previewOrder || visibleOrders[0] || orders[0] || null;
+    // Сколько в пути и сколько ждут исполнителя — для строки под заголовком,
+    // как в макете. Считает сервер по всем заявкам, а не по одной странице
+    // списка; не открыт этот отчёт — строка просто короче.
+    const { data: pulse } = useSWR('/company/dashboard/orders?period=month', fetcher, {
+        revalidateOnFocus: false,
+        shouldRetryOnError: false,
+    });
+    const inTransitNow: number | undefined = pulse?.kpi?.inWorkParts?.inTransit;
+    const waitingNow: number | undefined = pulse?.kpi?.pending;
 
-    // Один клик по строке — показать заявку на карте (не проваливаться внутрь)
-    const handleRowSelect = (record: Order) => {
-        setPreviewOrder(record);
-        featuredCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const showBoard = view === 'board' && !isArchive && !isMobile;
+    // Таблица и доска прокручиваются внутри себя, подвал со страницами всегда
+    // виден. Запас снизу — под подвал и отступ страницы.
+    const [fillRef, fillHeight] = useFillHeight<HTMLDivElement>(72, `${showBoard}-${isArchive}-${isMobile}`);
+    const chooseView = (v: 'table' | 'board') => {
+        setView(v);
+        // На доске видна вся страница сразу: двадцать заявок на шесть колонок
+        // — это почти пустая доска.
+        if (v === 'board' && ordersPageSize < 100) { setOrdersPage(1); setOrdersPageSize(100); }
     };
 
+    const paging = isArchive
+        ? {
+            current: archivePage,
+            pageSize: archivePageSize,
+            total: totalArchiveOrders,
+            onChange: (p: number, ps: number) => { setArchivePage(p); setArchivePageSize(ps); },
+        }
+        : {
+            current: ordersPage,
+            pageSize: ordersPageSize,
+            total: totalOrders,
+            onChange: (p: number, ps: number) => { setOrdersPage(p); setOrdersPageSize(ps); },
+        };
+    const options = (list: string[]) => list.map((v) => ({ value: v, label: v }));
+    const statusOptions = uniqueStatuses.map((v) => ({ value: v, label: STATUS_LABELS[v] || v }));
+    /* «Нет данных» при упавшем запросе — неправда, и именно на неё человек
+       и опирается. */
+    const emptyText = ordersError && !isArchive
+        ? 'Список не загрузился. Обновите страницу.'
+        : isNarrowed
+            ? <>Под условия ничего не подошло. <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-foreground underline [font-family:inherit]" onClick={clearAllFilters}>Сбросить условия</button></>
+            : 'Заявок пока нет';
+
     return (
-        <div className={journal.page}>
-            {/* ===== HERO =====
-                Плитки показателей («Всего заявок», «Сейчас в пути»,
-                «Ожидают назначения», «Проблемы») убраны по решению владельца:
-                они занимали верх экрана, а отвечали на вопросы, ради которых
-                на журнал не заходят. Их место занял сам список. */}
-            <div className={journal.hero}>
+        <div className="flex min-w-0 flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5" data-orders-journal>
+            {/* ===== Шапка — как в макете =====
+                Плитки показателей («Всего заявок», «Сейчас в пути»…) убраны по
+                решению владельца ещё в августе: их место занимает сам список.
+                Короткая строка под заголовком отвечает на те же вопросы. */}
+            <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <div className={journal.eyebrow}>Заявки · журнал</div>
-                    <h1 className={journal.title}>Заявки компании</h1>
+                    <h1 className="m-0 text-xl font-semibold tracking-tight text-foreground">Заявки</h1>
+                    <p className="m-0 mt-0.5 text-[13px] text-muted-foreground">
+                        {totalOrders} {plural(totalOrders, 'заявка', 'заявки', 'заявок')}
+                        {inTransitNow != null && <> · {inTransitNow} в пути</>}
+                        {waitingNow != null && <> · {waitingNow} {plural(waitingNow, 'ждёт', 'ждут', 'ждут')} исполнителя</>}
+                    </p>
                 </div>
-                <Button
-                    data-guide="orders-create"
-                    className="lc-cta lc-cta-shine"
-                    onClick={() => router.push('/company/orders/create')}
-                >
-                    <Plus className="h-4 w-4" /> Создать заявку
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    {!isMobile && !isArchive && (
+                        <div role="radiogroup" aria-label="Вид списка" className="inline-flex h-8 items-center rounded-lg border border-solid border-input p-0.5">
+                            {([['table', 'Таблица', Table2], ['board', 'Доска', KanbanSquare]] as const).map(([v, label, Icon]) => (
+                                <button
+                                    key={v}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={view === v}
+                                    onClick={() => chooseView(v)}
+                                    className={cn(
+                                        'inline-flex h-full cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 text-[13px] [font-family:inherit] transition-colors',
+                                        view === v ? 'bg-muted font-medium text-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    <Icon className="size-3.5" /> {label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    {/* Выгрузка — то, что сейчас отобрано: файл не расходится с экраном. */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 rounded-lg px-3 text-[13px] font-normal"
+                        disabled={exporting || shownCount === 0}
+                        onClick={openExport}
+                    >
+                        {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                        Выгрузить в Excel
+                    </Button>
+                    <Button
+                        data-guide="orders-create"
+                        size="sm"
+                        className="h-8 gap-1.5 rounded-lg px-3 text-[13px]"
+                        onClick={() => router.push('/company/orders/create')}
+                    >
+                        <Plus className="size-3.5" /> Создать заявку
+                    </Button>
+                </div>
             </div>
 
-            {/* ===== FEATURED: выбранная / последняя заявка =====
-                Карточка занимала треть экрана и показывала один рейс, который
-                и так есть первой строкой в таблице ниже. Свёрнута по умолчанию,
-                выбор запоминается: экран открывается на списке, а не на
-                украшении. Стрелка сворачивания живёт в шапке самой карточки. */}
-            <div ref={featuredCardRef}>
-                <FeaturedOrderCard
-                    order={featured}
-                    onOpen={(id) => router.push(`/company/orders/${id}`)}
-                    collapsed={!featuredOpen}
-                    onToggle={() => setFeaturedOpen(!featuredOpen)}
-                />
-            </div>
-
-            {/* Рейсы, закрытые водителем и никем не просмотренные. Полоса
-                стоит над списком, а не меткой в строке: строку надо ещё
-                найти глазами, а водитель стоит на выгрузке считаные минуты.
-                Нажатие показывает только эти рейсы. */}
+            {/* Рейсы, закрытые водителем и никем не просмотренные. Полоса над
+                списком, а не меткой в строке: строку надо ещё найти глазами, а
+                водитель стоит на выгрузке считаные минуты. */}
             {awaitingReview.length > 0 && (
                 <button
                     type="button"
-                    className={journal.reviewBanner}
+                    data-review-banner
+                    className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-solid border-amber-300 bg-amber-50 px-3 py-2 text-left text-[13px] font-medium text-amber-900 [font-family:inherit] dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
                     onClick={() => { setQuery(''); setActiveTab('all'); setReviewOnly((v) => !v); }}
                 >
-                    <span className={journal.reviewDot} />
+                    <span className="size-2 shrink-0 rounded-full bg-amber-500" />
                     {awaitingReview.length === 1
                         ? `Водитель закрыл рейс ${awaitingReview[0].orderNumber} — проверьте фото накладной`
                         : `Водители закрыли рейсов: ${awaitingReview.length}. Проверьте фото накладных`}
-                    <span className={journal.reviewAction}>
+                    <span className="ml-auto shrink-0 text-xs font-normal underline underline-offset-2">
                         {reviewOnly ? 'показать все' : 'показать их'}
                     </span>
                 </button>
             )}
 
-            {/* ===== КАРТОЧКА СПИСКА =====
-                Полоса управления живёт первой строкой внутри карточки, а не
-                над ней: она управляет списком, а не страницей. */}
-            <div className={journal.tablecard}>
-                <div className={journal.controls}>
-                    <div className={journal.tabs}>
+            {/* ===== Вкладки и полоса управления ===== */}
+            <div className="flex flex-col gap-3">
+                <div role="tablist" aria-label="Какие заявки" className="inline-flex h-8 w-fit items-center rounded-lg bg-muted p-[3px] text-muted-foreground">
+                    {([['all', 'Все заявки', totalOrders], ['archive', 'Архив', totalArchiveOrders]] as const).map(([id, label, n]) => (
                         <button
+                            key={id}
                             type="button"
-                            className={activeTab === 'all' ? `${journal.tab} ${journal.tabActive}` : journal.tab}
-                            onClick={() => setActiveTab('all')}
+                            role="tab"
+                            aria-selected={activeTab === id}
+                            onClick={() => setActiveTab(id)}
+                            className={cn(
+                                'inline-flex h-full cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 text-[13px] font-medium [font-family:inherit] transition-colors',
+                                activeTab === id ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-foreground/60 hover:text-foreground',
+                            )}
                         >
-                            Все заявки <span>{totalOrders}</span>
+                            {label}
+                            <span className="rounded bg-background/60 px-1 text-[10.5px] tabular-nums text-muted-foreground">{n}</span>
                         </button>
-                        <button
-                            type="button"
-                            className={activeTab === 'archive' ? `${journal.tab} ${journal.tabActive}` : journal.tab}
-                            onClick={() => setActiveTab('archive')}
-                        >
-                            Архив <span>{totalArchiveOrders}</span>
-                        </button>
-                    </div>
+                    ))}
+                </div>
 
-                    <div className={journal.search}>
-                        <Search className={journal.searchIcon} size={14} />
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                         <input
                             ref={searchRef}
-                            className={journal.searchInput}
-                            placeholder="Номер, город, заказчик…"
+                            className="h-8 w-80 max-w-[calc(100vw-32px)] rounded-lg border border-solid border-input bg-transparent pl-8 pr-12 text-[13px] text-foreground outline-none [font-family:inherit] placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                            placeholder="Номер, город, заказчик, водитель…"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             aria-label="Поиск по заявкам"
                         />
-                        <span className={journal.searchKey}>⌘K</span>
+                        <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-solid border-border px-1 text-[10.5px] text-muted-foreground [font-family:inherit]">⌘K</kbd>
                     </div>
 
-                    <button
-                        type="button"
-                        className={journal.control}
-                        aria-expanded={filtersOpen}
-                        onClick={() => setFiltersOpen(!filtersOpen)}
-                    >
-                        <SlidersHorizontal size={14} /> Фильтры
-                        {activeFilterCount > 0 && <span className={journal.badge}>{activeFilterCount}</span>}
-                    </button>
-
-                    <Tooltip title={sortDesc ? 'Сначала новые' : 'Сначала старые'}>
-                        <button
-                            type="button"
-                            className={journal.iconControl}
-                            aria-label={sortDesc ? 'Порядок: сначала новые' : 'Порядок: сначала старые'}
-                            onClick={() => setSortDesc(!sortDesc)}
-                        >
-                            <ArrowUpDown size={14} />
-                        </button>
-                    </Tooltip>
-
-                    {/* Рядом с фильтрами: и то и другое отвечает на вопрос
-                        «почему я вижу именно это». Фильтры решают, какие
-                        строки, колонки — какие графы. */}
-                    <TableColumnsButton
-                        storageKey="lc-orders-hidden-columns"
-                        choices={columnChoices}
-                        hidden={hiddenColumns}
-                        onChange={setHiddenColumns}
+                    <FacetFilter
+                        title={isArchive ? 'Контрагент' : 'Заказчик'}
+                        options={options(isArchive ? uniqueArchiveCompanies : uniqueCompanies)}
+                        value={filterCompany}
+                        onChange={setFilterCompany}
                     />
-
-                    {/* Отвечает на вопрос, ради которого раньше смотрели на ряд
-                        плашек с условиями: почему в списке 10 строк, а не 37.
-                        Сами плашки владелец отверг — они переползали на вторую
-                        строку и создавали кашу. */}
-                    <span className={journal.selected}>
-                        {isNarrowed ? (
-                            <>
-                                Отобрано <b>{shownCount}</b> из {totalCount}
-                                {' · '}
-                                <button type="button" className={journal.reset} onClick={clearAllFilters}>сбросить</button>
-                            </>
-                        ) : (
-                            <>Всего {totalCount}</>
-                        )}
-                    </span>
-                    {/* Выгрузка стоит рядом со счётчиком отобранного: это
-                        действие над списком, а не над страницей. */}
+                    {!isArchive && <FacetFilter title="Статус" options={statusOptions} value={filterStatus} onChange={setFilterStatus} />}
+                    <FacetFilter
+                        title="Водитель"
+                        options={options(isArchive ? uniqueArchiveDrivers : uniqueDrivers)}
+                        value={filterDriver}
+                        onChange={setFilterDriver}
+                    />
                     <Button
                         variant="outline"
                         size="sm"
-                        className={journal.exportBtn}
-                        disabled={exporting || shownCount === 0}
-                        onClick={openExport}
+                        className="h-8 gap-1.5 rounded-lg px-2.5 text-[13px] font-normal"
+                        aria-expanded={filtersOpen}
+                        onClick={() => setFiltersOpen(true)}
                     >
-                        {exporting
-                            ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <Download className="h-4 w-4" />}
-                        Выгрузить в Excel
+                        <SlidersHorizontal className="size-3.5" /> Все фильтры
+                        {activeFilterCount > 0 && (
+                            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-primary-foreground">{activeFilterCount}</span>
+                        )}
                     </Button>
-                </div>
-
-                {filtersOpen && (
-                    <div className={journal.filters}>
-                        <Select
-                            size="small" allowClear showSearch optionFilterProp="children"
-                            placeholder={isArchive ? 'Контрагент' : 'Заказчик'} style={{ width: 150 }}
-                            value={filterCompany} onChange={setFilterCompany}
-                        >
-                            {(isArchive ? uniqueArchiveCompanies : uniqueCompanies).map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                        </Select>
-                        {!isArchive && (
-                            <Select
-                                size="small" allowClear showSearch optionFilterProp="children"
-                                placeholder="Исполнитель" style={{ width: 140 }}
-                                value={filterForwarder} onChange={setFilterForwarder}
-                            >
-                                {uniqueForwarders.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                            </Select>
-                        )}
-                        {!isArchive && (
-                            <Select
-                                size="small" allowClear showSearch optionFilterProp="children"
-                                placeholder="Экспедитор" style={{ width: 140 }}
-                                value={filterExpeditor} onChange={setFilterExpeditor}
-                            >
-                                {uniqueExpeditors.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                            </Select>
-                        )}
-                        <Select
-                            size="small" allowClear showSearch optionFilterProp="children"
-                            placeholder="Водитель" style={{ width: 140 }}
-                            value={filterDriver} onChange={setFilterDriver}
-                        >
-                            {(isArchive ? uniqueArchiveDrivers : uniqueDrivers).map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
-                        </Select>
-                        {!isArchive && (
-                            <Select
-                                size="small" allowClear
-                                placeholder="Статус" style={{ width: 130 }}
-                                value={filterStatus} onChange={setFilterStatus}
-                            >
-                                {uniqueStatuses.map(s => <Select.Option key={s} value={s}>{STATUS_LABELS[s] || s}</Select.Option>)}
-                            </Select>
-                        )}
-                        <Select
-                            size="small" allowClear showSearch optionFilterProp="children"
-                            placeholder="Откуда" style={{ width: 120 }}
-                            value={filterFrom} onChange={setFilterFrom}
-                        >
-                            {(isArchive ? uniqueArchiveFromCities : uniqueFromCities).map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                        </Select>
-                        <Select
-                            size="small" allowClear showSearch optionFilterProp="children"
-                            placeholder="Куда" style={{ width: 120 }}
-                            value={filterTo} onChange={setFilterTo}
-                        >
-                            {(isArchive ? uniqueArchiveToCities : uniqueToCities).map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
-                        </Select>
-                        {/* Период. Какую дату считать — рядом, а не решено за
-                            человека: бухгалтер закрывает месяц по погрузке,
-                            логист ищет свежие заявки по дате заведения. */}
-                        <Select
-                            size="small" style={{ width: 128 }}
-                            value={periodField} onChange={setPeriodField}
-                            aria-label="По какой дате отбирать"
-                        >
-                            <Select.Option value="pickup">По погрузке</Select.Option>
-                            <Select.Option value="created">По заведению</Select.Option>
-                        </Select>
-                        <DateRangeField
-                            size="small" style={{ width: 220 }}
-                            placeholder={['Дата с', 'Дата по']}
-                            value={periodFrom || periodTo ? [periodFrom, periodTo] as any : null}
-                            onChange={(range) => {
-                                setPeriodFrom(range?.[0] ?? null);
-                                setPeriodTo(range?.[1] ?? null);
-                            }}
-                        />
-                        <InputNumber
-                            size="small" placeholder="Сумма от" style={{ width: 100 }}
-                            value={filterSumMin} onChange={v => setFilterSumMin(v ?? undefined)}
-                            min={0} controls={false}
-                        />
-                        <InputNumber
-                            size="small" placeholder="Сумма до" style={{ width: 100 }}
-                            value={filterSumMax} onChange={v => setFilterSumMax(v ?? undefined)}
-                            min={0} controls={false}
-                        />
-                        {hasActiveFilters && (
-                            <Button variant="link" size="sm" className="text-destructive" onClick={clearFilters}>
-                                <Eraser className="h-3.5 w-3.5" /> Сбросить условия
-                            </Button>
-                        )}
-                    </div>
-                )}
-
-                <div className={journal.tableWrap}>
-                    {isArchive ? (
-                        isMobile ? (
-                            <OrdersMobileList
-                                orders={visibleArchiveOrders}
-                                loading={archiveLoading}
-                                userCompanyId={user?.companyId}
-                                extractCity={extractCity}
-                                onOpen={(id) => router.push(`/company/orders/${id}`)}
-                                pagination={{
-                                    current: archivePage,
-                                    pageSize: archivePageSize,
-                                    total: isNarrowed ? visibleArchiveOrders.length : totalArchiveOrders,
-                                    onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
-                                }}
-                            />
-                        ) : (
-                            <Table
-                                columns={applyHidden(archiveColumns)}
-                                dataSource={visibleArchiveOrders}
-                                rowKey="id"
-                                loading={archiveLoading}
-                                size="small"
-                                scroll={{ x: 1400 }}
-                                pagination={{
-                                    current: archivePage,
-                                    pageSize: archivePageSize,
-                                    total: totalArchiveOrders,
-                                    onChange: (p, ps) => { setArchivePage(p); setArchivePageSize(ps); },
-                                    showSizeChanger: true,
-                                    pageSizeOptions: ['20', '50', '100'],
-                                    size: 'small',
-                                    showTotal: (t, range) => `Показаны ${range[0]}–${range[1]} из ${t}`,
-                                }}
-                                onRow={(record) => ({
-                                    style: { cursor: 'pointer' },
-                                    onClick: () => handleRowSelect(record),
-                                    onDoubleClick: () => router.push(`/company/orders/${record.id}`),
-                                })}
-                                rowClassName={(record) => (previewOrder?.id === record.id ? 'row-selected row-cancelled' : 'row-cancelled')}
-                            />
-                        )
-                    ) : (
-                        isMobile ? (
-                            <OrdersMobileList
-                                orders={visibleOrders}
-                                loading={loading}
-                                userCompanyId={user?.companyId}
-                                extractCity={extractCity}
-                                onOpen={(id) => router.push(`/company/orders/${id}`)}
-                                pagination={{
-                                    current: ordersPage,
-                                    pageSize: ordersPageSize,
-                                    /* Считаем то, что осталось после условий, а не
-                                       сколько заявок всего. Иначе под пустой
-                                       таблицей стоит «Показаны 1–8 из 8», и человек
-                                       решает, что список сломался. */
-                                    total: isNarrowed ? visibleOrders.length : totalOrders,
-                                    onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
-                                }}
-                            />
-                        ) : (
-                            <Table
-                                columns={applyHidden(columns)}
-                                dataSource={visibleOrders}
-                                rowKey="id"
-                                loading={loading}
-                                size="small"
-                                scroll={{ x: 1400 }}
-                                /* «Нет данных» при упавшем запросе — это неправда,
-                                   и именно на неё человек и опирается. */
-                                locale={{
-                                    emptyText: ordersError
-                                        ? 'Список не загрузился. Обновите страницу.'
-                                        : (isNarrowed ? 'Под условия ничего не подошло' : 'Заявок пока нет'),
-                                }}
-                                pagination={{
-                                    current: ordersPage,
-                                    pageSize: ordersPageSize,
-                                    total: totalOrders,
-                                    onChange: (p, ps) => { setOrdersPage(p); setOrdersPageSize(ps); },
-                                    showSizeChanger: true,
-                                    pageSizeOptions: ['20', '50', '100'],
-                                    size: 'small',
-                                    showTotal: (t, range) => `Показаны ${range[0]}–${range[1]} из ${t}`,
-                                }}
-                                onRow={(record) => ({
-                                    style: { cursor: 'pointer' },
-                                    onClick: () => handleRowSelect(record),
-                                    onDoubleClick: () => router.push(`/company/orders/${record.id}`),
-                                })}
-                                rowClassName={(record) => {
-                                    const sel = previewOrder?.id === record.id ? 'row-selected ' : '';
-                                    // Завершённую заявку строкой не подсвечиваем — статус виден по плашке,
-                                    // а долг (если есть) горит красным на названии контрагента.
-                                    if (record.status === 'PROBLEM') return sel + 'row-problem';
-                                    if (record.status === 'CANCELLED') return sel + 'row-cancelled';
-                                    return sel;
-                                }}
-                            />
-                        )
+                    {isNarrowed && (
+                        <Button variant="ghost" size="sm" className="h-8 gap-1 rounded-lg px-2 text-[13px] font-normal" onClick={clearAllFilters}>
+                            Сбросить <X className="size-3.5" />
+                        </Button>
                     )}
+
+                    <div className="ml-auto flex items-center gap-2">
+                        {/* Отвечает на вопрос, ради которого раньше смотрели на ряд
+                            плашек с условиями: почему в списке 10 строк, а не 37. */}
+                        {isNarrowed && (
+                            <span className="text-[13px] text-muted-foreground" data-narrowed>
+                                Отобрано <b className="font-semibold text-foreground">{shownCount}</b> из {totalCount}
+                            </span>
+                        )}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="size-8 rounded-lg"
+                                    aria-label={sortDesc ? 'Порядок: сначала новые' : 'Порядок: сначала старые'}
+                                    onClick={() => setSortDesc(!sortDesc)}
+                                >
+                                    <ArrowUpDown className="size-3.5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">{sortDesc ? 'Сначала новые' : 'Сначала старые'}</TooltipContent>
+                        </Tooltip>
+                        {!showBoard && (
+                            <TableColumnsButton
+                                storageKey="lc-orders-hidden-columns"
+                                choices={columnChoices}
+                                hidden={hiddenColumns}
+                                onChange={setHiddenColumns}
+                            />
+                        )}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" className="size-8 rounded-lg" aria-label="Обновить список" onClick={() => mutateAll()}>
+                                    <RefreshCw className="size-3.5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">Обновить</TooltipContent>
+                        </Tooltip>
+                    </div>
                 </div>
             </div>
 
-
-
-
+            {/* ===== Список ===== */}
+            {isMobile ? (
+                <OrdersMobileList
+                    orders={isArchive ? visibleArchiveOrders : visibleOrders}
+                    loading={isArchive ? archiveLoading : loading}
+                    userCompanyId={user?.companyId}
+                    extractCity={extractCity}
+                    onOpen={(id) => router.push(`/company/orders/${id}`)}
+                    pagination={{
+                        ...paging,
+                        /* Считаем то, что осталось после условий, а не сколько
+                           заявок всего. Иначе под пустым списком стоит «Показаны
+                           1–8 из 8», и человек решает, что список сломался. */
+                        total: isNarrowed ? shownCount : paging.total,
+                    }}
+                />
+            ) : showBoard ? (
+                <div className="flex min-w-0 flex-col">
+                    <div ref={fillRef} className="min-w-0">
+                        <OrdersBoard rows={visibleOrders} loading={loading} extractCity={extractCity} onPreview={openPreview} height={fillHeight} />
+                    </div>
+                    <JournalPagination paging={paging} sizes={[20, 50, 100]} />
+                </div>
+            ) : (
+                <OrdersTable
+                    columns={applyHidden(isArchive ? archiveColumns : columns)}
+                    rows={isArchive ? visibleArchiveOrders : visibleOrders}
+                    loading={isArchive ? archiveLoading : loading}
+                    empty={emptyText}
+                    tone={(r) => (r.status === 'PROBLEM' ? 'problem' : r.status === 'CANCELLED' ? 'cancelled' : undefined)}
+                    selectedId={previewOpen ? previewOrder?.id : null}
+                    onRowDoubleClick={(r) => router.push(`/company/orders/${r.id}`)}
+                    paging={paging}
+                    height={fillHeight}
+                    scrollRef={fillRef}
+                />
+            )}
 
             {/* ========== ASSIGN DRIVER MODAL ========== */}
             {selectedOrder && (
@@ -2083,6 +1639,39 @@ export default function CompanyOrdersPage() {
             exporting={exporting}
             onExport={handleExport}
         />
+
+            <OrderPreviewDialog
+                order={previewOrder}
+                open={previewOpen}
+                onOpenChange={setPreviewOpen}
+                onOpen={(id) => router.push(`/company/orders/${id}`)}
+            />
+
+            <AllFiltersSheet
+                open={filtersOpen}
+                onOpenChange={setFiltersOpen}
+                isArchive={isArchive}
+                fields={{
+                    company: { value: filterCompany, set: setFilterCompany, options: options(isArchive ? uniqueArchiveCompanies : uniqueCompanies) },
+                    forwarder: { value: filterForwarder, set: setFilterForwarder, options: options(uniqueForwarders) },
+                    expeditor: { value: filterExpeditor, set: setFilterExpeditor, options: options(uniqueExpeditors) },
+                    driver: { value: filterDriver, set: setFilterDriver, options: options(isArchive ? uniqueArchiveDrivers : uniqueDrivers) },
+                    status: { value: filterStatus, set: setFilterStatus, options: statusOptions },
+                    from: { value: filterFrom, set: setFilterFrom, options: options(isArchive ? uniqueArchiveFromCities : uniqueFromCities) },
+                    to: { value: filterTo, set: setFilterTo, options: options(isArchive ? uniqueArchiveToCities : uniqueToCities) },
+                }}
+                period={{
+                    field: periodField,
+                    setField: setPeriodField,
+                    from: periodFrom,
+                    to: periodTo,
+                    setFrom: setPeriodFrom,
+                    setTo: setPeriodTo,
+                }}
+                sum={{ min: filterSumMin, max: filterSumMax, setMin: setFilterSumMin, setMax: setFilterSumMax }}
+                onReset={clearFilters}
+                shown={shownCount}
+            />
         </div>
     );
 }

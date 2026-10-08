@@ -55,17 +55,17 @@ test('главная кнопка списка заявок сохранила �
     const cta = page.getByRole('button', { name: /Создать заявку/ }).first();
     await expect(cta).toBeVisible();
 
-    // Раньше здесь проверялся тёмный градиент. По согласованному эталону
-    // `design/orders-list` главная кнопка залита ровным `--primary` —
-    // градиента больше нет, и проверять его нельзя.
+    // Журнал заявок переведён на макет «shadcn Nova» (08.10.2026): главная
+    // кнопка — обычная кнопка shadcn с основным цветом темы. Токен темы
+    // задан тем же графитом, что и фирменный (см. начало `globals.css`).
     //
-    // Сравниваем с самим токеном, а не с «фон не прозрачный»: у shadcn
-    // заливка есть и по умолчанию, такой тест остался бы зелёным и без
-    // фирменного правила.
+    // Сравниваем с самим токеном, а не с «фон не прозрачный»: если токен
+    // потеряется, кнопка станет прозрачной или синей, а такой тест остался
+    // бы зелёным.
     const actual = await cta.evaluate((el) => getComputedStyle(el).backgroundColor);
     const expected = await page.evaluate(() => {
         const probe = document.createElement('span');
-        probe.style.color = 'var(--nova-primary)';
+        probe.style.color = 'hsl(var(--primary))';
         document.querySelector('.lc-nova')!.appendChild(probe);
         const value = getComputedStyle(probe).color;
         probe.remove();
@@ -85,7 +85,7 @@ test('antd Upload по-прежнему получает клик от кноп�
     await login(page);
     await page.goto('/company/orders');
 
-    const firstRow = page.locator('.ant-table-row').first();
+    const firstRow = page.locator('[data-order-row]').first();
     await expect(firstRow).toBeVisible();
     await firstRow.locator('button').last().click();
     await page.waitForURL(/\/company\/orders\/[^/]+$/);

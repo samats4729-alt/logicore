@@ -1,0 +1,113 @@
+import { expect, test, type Page } from '@playwright/test';
+import { login } from './helpers';
+
+/**
+ * Журнал заявок по макету «shadcn Nova» (владелец, 08.10.2026).
+ *
+ * Ломается молча: кнопка на месте, а окно не открывается, фильтр не
+ * отбирает, подвал со страницами уехал за край экрана. Поэтому проверяем
+ * то, что делает человек: открыть рейс по глазу, отобрать по статусу,
+ * переключиться на доску — и что всё помещается на его экране.
+ */
+
+async function открыть(page: Page) {
+    await page.goto('/company/orders');
+    await expect(page.locator('[data-order-row]').first()).toBeVisible({ timeout: 60_000 });
+    await page.waitForLoadState('networkidle');
+}
+
+test.describe('Журнал заявок', () => {
+    test.beforeEach(async ({ page }) => {
+        await login(page);
+    });
+
+    test('на экране 1920 таблица целиком, подвал со страницами виден', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        await expect(page.getByRole('heading', { name: 'Заявки', exact: true })).toBeVisible();
+        const таблица = page.locator('[data-orders-table]');
+        const вбок = await таблица.evaluate((el) => el.scrollWidth - el.clientWidth);
+        expect(вбок, 'таблица не помещается по ширине и едет вбок').toBeLessThanOrEqual(1);
+        // Подвал «Показано 1–N из M» — в пределах окна, без прокрутки страницы.
+        const подвал = page.getByText(/^Показано \d+–\d+ из \d+$/);
+        await expect(подвал).toBeVisible();
+        const низ = (await подвал.boundingBox())!;
+        expect(низ.y + низ.height, 'подвал со страницами уехал за нижний край окна').toBeLessThanOrEqual(1080);
+    });
+
+    test('значок глаза открывает рейс в окне с картой, Esc закрывает', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const строка = page.locator('[data-order-row]').first();
+        const номер = (await строка.locator('td').nth(1).innerText()).trim();
+        await строка.locator('[data-action="preview"]').click();
+        const окно = page.locator('[data-order-preview]');
+        await expect(окно).toBeVisible();
+        await expect(окно).toContainText(номер);
+        await expect(окно.getByRole('button', { name: /Открыть заявку/ })).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(окно).toHaveCount(0);
+
+        // Из окна — в саму заявку.
+        await строка.locator('[data-action="preview"]').click();
+        await page.locator('[data-order-preview]').getByRole('button', { name: /Открыть заявку/ }).click();
+        await page.waitForURL(/\/company\/orders\/[^/]+$/);
+    });
+
+    test('фильтр «Статус» отбирает, «Сбросить» возвращает всё', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const всего = await page.locator('[data-order-row]').count();
+        await page.locator('[data-facet="Статус"]').click();
+        await page.getByRole('option', { name: 'Завершён' }).click();
+        await expect(page.locator('[data-narrowed]')).toBeVisible();
+        const статусы = await page.locator('[data-order-row] [data-status]').evaluateAll((els) => els.map((e) => e.getAttribute('data-status')));
+        expect(статусы.length).toBeGreaterThan(0);
+        expect(new Set(статусы)).toEqual(new Set(['COMPLETED']));
+
+        await page.getByRole('button', { name: /^Сбросить/ }).first().click();
+        await expect(page.locator('[data-narrowed]')).toHaveCount(0);
+        await expect(page.locator('[data-order-row]')).toHaveCount(всего);
+    });
+
+    test('«Все фильтры»: панель справа, отбор сразу, кнопка говорит сколько осталось', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        await page.getByRole('button', { name: /Все фильтры/ }).click();
+        const панель = page.locator('[data-filters-sheet]');
+        await expect(панель).toBeVisible();
+        await панель.getByRole('combobox', { name: 'Статус' }).click();
+        await page.getByRole('option', { name: 'Завершён' }).click();
+        await expect(панель.getByRole('button', { name: /^Показать \d+ заяв/ })).toBeVisible();
+        await панель.getByRole('button', { name: /^Показать \d+ заяв/ }).click();
+        await expect(панель).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /Все фильтры/ })).toContainText('1');
+    });
+
+    test('доска: колонки по этапам, карточка открывает рейс в окне', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        await page.getByRole('radio', { name: /Доска/ }).click();
+        const доска = page.locator('[data-orders-board]');
+        await expect(доска).toBeVisible();
+        for (const колонка of ['Ждут исполнителя', 'Назначены', 'Погрузка', 'В пути', 'Выгрузка', 'Завершены']) {
+            await expect(доска.getByRole('region', { name: колонка })).toBeVisible();
+        }
+        await доска.locator('[data-board-card]').first().click();
+        await expect(page.locator('[data-order-preview]')).toBeVisible();
+        await page.keyboard.press('Escape');
+        await page.getByRole('radio', { name: /Таблица/ }).click();
+        await expect(page.locator('[data-orders-table]')).toBeVisible();
+    });
+
+    test('архив — своя вкладка', async ({ page }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await открыть(page);
+        await page.getByRole('tab', { name: /Архив/ }).click();
+        await expect(page.getByRole('tab', { name: /Архив/ })).toHaveAttribute('aria-selected', 'true');
+        // В архиве отменённые: либо строки, либо честное «пока нет».
+        await expect(page.locator('[data-order-row], [data-orders-table] td:has-text("Заявок пока нет")').first()).toBeVisible();
+        const вбок = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(вбок, 'страница едет вбок').toBe(0);
+    });
+});
