@@ -2983,7 +2983,9 @@ a.mapboxgl-ctrl-logo,
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
-  max-width: var(--nova-max, 1360px);
+  /* Поля — как у страницы под ней (24px): без них полоса упиралась в меню
+     и в правый край, а текст страницы начинался на 24px правее. */
+  max-width: min(var(--nova-max, 1360px), calc(100% - 48px));
   margin: 12px auto 0;
   padding: 8px 13px;
   background: var(--nova-warn-soft, #fff5e8);
@@ -3037,6 +3039,7 @@ a.mapboxgl-ctrl-logo,
 
 @media (max-width: 720px) {
   .lc-beta-strip {
+    max-width: none;
     margin: 10px 12px 0;
   }
 }
@@ -3413,8 +3416,23 @@ a.mapboxgl-ctrl-logo,
    26–38 точек жирностью 800 с надписью разрядкой над ним, а главную кнопку —
    градиентом, тенью и бегущим бликом. В макете заголовок обычный, 20/600,
    кнопка — ровная тёмная; раздел и так написан хлебными крошками в шапке. */
-.lc-nova .lc-page .lc-eyebrow {
+.lc-nova .lc-page .lc-eyebrow:not(:has(button, a)) {
     display: none;
+}
+
+/* На дюжине экранов «Денег» и «Отчётов» в надписи живёт стрелка «назад к
+   Финансам». Её не прячем — иначе пропал бы путь обратно. Надпись рядом
+   с ней становится тихой строкой обычными буквами, как подпись под
+   кнопкой «назад» в карточке заявки. */
+.lc-nova .lc-page .lc-eyebrow:has(button, a) {
+    display: flex;
+    align-items: center;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--nova-fg-3);
+    margin: -4px 0 6px -6px;
 }
 
 .lc-nova .lc2-title,
@@ -3434,6 +3452,21 @@ a.mapboxgl-ctrl-logo,
 
 .lc-nova .lc2-mic {
     box-shadow: none !important;
+}
+
+/* Строка итогов: подпись над суммой и пояснение под ней — тихие, как в
+   плитках макета. Пояснение было жирным чёрным и спорило с самой суммой
+   («за период», «приход», «на начало периода»). Цвет, заданный страницей
+   прямо в разметке (оранжевое «ждут согласования»), остаётся. */
+.lc-nova .lc2-mlabel {
+    font-size: 12px;
+    color: var(--nova-fg-3);
+}
+
+.lc-nova .lc2-msub {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--nova-fg-3);
 }
 
 .lc-nova .lc-page .lc-cta {
