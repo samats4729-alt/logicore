@@ -345,15 +345,15 @@ export default function FinancialRegistryPage() {
 
     const columns = [
         {
-            title: '№', dataIndex: 'orderNumber', key: 'num', width: 100, fixed: 'left' as const,
+            title: '№', dataIndex: 'orderNumber', key: 'num', width: 92, fixed: 'left' as const,
             render: (t: string) => <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{t}</span>,
         },
         {
-            title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
+            title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 76,
             render: (d: string) => <span style={{ fontSize: 12.5, color: 'var(--lc-text-ter)' }}>{dayjs(d).format('DD.MM.YY')}</span>,
         },
         {
-            title: 'Заказчик / Выручка', key: 'customer', width: 220,
+            title: 'Заказчик / Выручка', key: 'customer', width: 188,
             render: (_: any, r: RegistryOrder) => {
                 const total = r.customerPrice || 0;
                 const currency = r.currency || 'KZT';
@@ -392,7 +392,7 @@ export default function FinancialRegistryPage() {
             },
         },
         {
-            title: 'Исполнитель / Затраты', key: 'executor', width: 220,
+            title: 'Исполнитель / Затраты', key: 'executor', width: 188,
             render: (_: any, r: RegistryOrder) => {
                 const total = getExecutorCost(r);
                 // Ставка суб-экспедитора идёт в валюте заявки, ставка водителя —
@@ -437,7 +437,7 @@ export default function FinancialRegistryPage() {
             render: (s: string) => <StatusPill status={s} />,
         },
         {
-            title: 'Долг заказчика', key: 'customerDebt', width: 172, align: 'right' as const,
+            title: 'Долг заказчика', key: 'customerDebt', width: 160, align: 'right' as const,
             render: (_: any, r: RegistryOrder) => {
                 const debt = r.customerDebt;
                 const paid = r.isCustomerPaid;
@@ -496,7 +496,7 @@ export default function FinancialRegistryPage() {
             }
         },
         {
-            title: 'Наш долг', key: 'executorDebt', width: 132, align: 'right' as const,
+            title: 'Наш долг', key: 'executorDebt', width: 124, align: 'right' as const,
             render: (_: any, r: RegistryOrder) => {
                 const debt = r.executorDebt;
                 const paid = debt === 0;
