@@ -196,7 +196,9 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
     return (
         <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1.5">
+                {/* Отбор по статусу — дорожкой вкладок, как в журнале заявок: чёрная
+                    пилюля спорила с главной кнопкой «Новый запрос». */}
+                <div role="tablist" className="inline-flex flex-wrap items-center gap-0.5 rounded-lg border border-solid border-border bg-muted p-0.5">
                     {[
                         ['all', `Все (${counts.all})`],
                         ['NEW', `Новые (${counts.NEW})`],
@@ -207,10 +209,12 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
                         <button
                             key={value}
                             type="button"
+                            role="tab"
+                            aria-selected={status === value}
                             onClick={() => setStatus(value)}
                             className={cn(
-                                'rounded-full px-3 py-1 text-[12px] transition-colors',
-                                status === value ? 'bg-foreground text-background' : 'bg-muted hover:bg-muted/70',
+                                'h-7 cursor-pointer rounded-md border-0 px-3 text-[13px] font-medium [font-family:inherit] transition-colors',
+                                status === value ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground hover:text-foreground',
                             )}
                         >
                             {label}
@@ -238,7 +242,7 @@ export function QuoteRequestsPanel({ customerCompanyId }: { customerCompanyId?: 
             <div className="overflow-x-auto rounded-2xl shadow-soft">
                 <table className="w-full min-w-[880px] border-collapse text-[13px]">
                     <thead>
-                        <tr className="border-b text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <tr className="border-b text-[12.5px] text-muted-foreground">
                             <Th>Номер</Th>
                             <Th>Дата</Th>
                             {!customerCompanyId && <Th>Клиент</Th>}
@@ -431,7 +435,7 @@ function Row({ label, value }: { label: string; value?: string | null }) {
     if (!value || value === '—') return null;
     return (
         <div className="flex flex-col">
-            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
+            <dt className="text-[12px] text-muted-foreground">{label}</dt>
             <dd className="text-[13px]">{value}</dd>
         </div>
     );
