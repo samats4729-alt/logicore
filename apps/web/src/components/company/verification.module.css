@@ -1,0 +1,33 @@
+/* Отметка у названия компании: проверена организация или нет.
+   Подсказка про проверку живёт в левом меню (SidebarNotices). */
+
+/* Отметка у названия компании. Подпись появляется по наведению: в шапке
+   каждый лишний символ отодвигает имя организации. */
+.badge,
+.badgeOk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: nowrap;
+    cursor: default;
+    vertical-align: middle;
+}
+
+.badge {
+    background: var(--nova-surface-2);
+    color: var(--nova-fg-3);
+}
+
+.badgeOk {
+    background: color-mix(in srgb, var(--nova-pos) 14%, transparent);
+    color: var(--nova-pos);
+}
+
+.badgeText {
+    font-size: 11px;
+}

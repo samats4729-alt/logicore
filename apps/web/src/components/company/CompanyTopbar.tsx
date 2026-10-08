@@ -11,7 +11,7 @@ import {
     BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 
 export interface Crumb {
     label: string;
@@ -30,15 +30,29 @@ export default function CompanyTopbar({
     tools,
     theme,
     onToggleTheme,
+    attention = false,
 }: {
     crumbs: Crumb[];
     tools: React.ReactNode;
     theme: 'light' | 'dark';
     onToggleTheme: () => void;
+    /** В меню есть важная подсказка (проверка организации, пробный период). */
+    attention?: boolean;
 }) {
+    const { state, isMobile } = useSidebar();
+    // Подсказка живёт в меню; меню свёрнуто или это телефон — точка на кнопке
+    // меню, чтобы важное не пропало вместе с меню.
+    const dot = attention && (isMobile || state === 'collapsed');
     return (
         <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-2 border-0 border-b border-solid border-border bg-background px-4">
-            <SidebarTrigger className="-ml-1 size-8 text-muted-foreground" aria-label="Свернуть или развернуть меню" />
+            <span className="relative -ml-1 inline-flex">
+                <SidebarTrigger className="size-8 text-muted-foreground" aria-label="Свернуть или развернуть меню" />
+                {dot && (
+                    <span data-menu-attention className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-amber-500 ring-2 ring-background">
+                        <span className="sr-only">В меню есть важная подсказка</span>
+                    </span>
+                )}
+            </span>
             <Separator orientation="vertical" className="mr-1 h-4" />
             <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="flex-nowrap text-[13px]">

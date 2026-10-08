@@ -30,6 +30,7 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 import { isNavItemActive } from '@/lib/cabinet-nav';
+import { SidebarNotices, type CabinetNotice } from './SidebarNotices';
 
 /**
  * Пункт меню кабинета.
@@ -107,6 +108,7 @@ export default function CompanySidebar({
     user,
     profileLinks,
     hasNewUpdates,
+    notices = [],
     onUpdates,
     onSupport,
     onLogout,
@@ -119,6 +121,8 @@ export default function CompanySidebar({
     user: { name: string; caption: string; avatar: React.ReactNode };
     profileLinks: ProfileLink[];
     hasNewUpdates: boolean;
+    /** Важное по кабинету — проверка организации, пробный период: карточкой над «Помощью». */
+    notices?: CabinetNotice[];
     onUpdates: () => void;
     onSupport: () => void;
     onLogout: () => void;
@@ -164,6 +168,7 @@ export default function CompanySidebar({
             </SidebarContent>
 
             <SidebarFooter>
+                <SidebarNotices notices={notices} onNavigate={closeOnMobile} />
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="sm" tooltip="Помощь" onClick={() => { onSupport(); closeOnMobile(); }}>

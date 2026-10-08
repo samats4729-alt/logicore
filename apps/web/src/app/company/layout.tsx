@@ -10,6 +10,7 @@ import {
     Compass,
     CreditCard,
     FileText,
+    Hourglass,
     LayoutDashboard,
     Settings,
     Truck,
@@ -24,7 +25,8 @@ import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sideb
 import CompanySidebar, { type NavItem, type ProfileLink } from '@/components/company/CompanySidebar';
 import CompanyTopbar, { type Crumb } from '@/components/company/CompanyTopbar';
 import NotificationBell from '@/components/ui/NotificationBell';
-import { VerificationStrip, VerificationBadge } from '@/components/company/VerificationStrip';
+import { VerificationBadge, useVerifiedToast, verificationNotice } from '@/components/company/Verification';
+import type { CabinetNotice } from '@/components/company/SidebarNotices';
 import { useTheme } from '@/components/ThemeProvider';
 import AiButton from '@/components/ui/AiButton';
 import { LiveEventTicker } from '@/components/ui/LiveTicker';
@@ -104,8 +106,9 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     const [hydrated, setHydrated] = useState(false);
     const [hasNewUpdates, setHasNewUpdates] = useState(false);
     const [billingStatus, setBillingStatus] = useState<any>(null);
-    /* Состояние проверки организации. Нужно в двух местах разом: полоса с
-       шагами наверху и отметка о подтверждении рядом с именем компании. */
+    /* Состояние проверки организации. Нужно в двух местах разом: подсказка
+       со следующим шагом в левом меню и отметка о подтверждении рядом с
+       именем компании. */
     const [verification, setVerification] = useState<any>(null);
     const [auditEnabled, setAuditEnabled] = useState(false);
     /* Биржа строится в отдельной ветке и включается на сервере
@@ -123,6 +126,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             .then((res) => setVerification(res.data))
             .catch(() => setVerification(null));
     }, [user?.companyId]);
+    useVerifiedToast(verification);
 
     useEffect(() => {
         if (!user?.companyId) return;
@@ -384,6 +388,28 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
     const initials = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase();
 
+    /* Важное по кабинету — карточками внизу левого меню, рядом с «Помощью»
+       и «Что нового» (владелец, 08.10.2026). Раньше это были полосы над
+       каждой страницей: занимали верх любого экрана, а относились к
+       кабинету, а не к экрану. */
+    const notices: CabinetNotice[] = [];
+    const verificationHint = verificationNotice(verification);
+    if (verificationHint) notices.push(verificationHint);
+    // Бесплатные дни. Видят все сотрудники: закроется кабинет у всех сразу.
+    if (billingStatus?.enabled && !billingStatus?.blocked && billingStatus?.trialEndsAt
+        && ['TRIAL', 'GRACE'].includes(billingStatus?.status)) {
+        const left = Math.max(0, Math.ceil((new Date(billingStatus.trialEndsAt).getTime() - Date.now()) / 86400000));
+        notices.push({
+            key: 'trial',
+            tone: billingStatus.status === 'GRACE' || left <= 3 ? 'warn' : 'info',
+            icon: Hourglass,
+            title: `${billingStatus.status === 'GRACE' ? 'Оплатить подписку' : 'Пробный период'} до ${new Date(billingStatus.trialEndsAt).toLocaleDateString('ru-RU')}`,
+            text: `Осталось ${left} дн.`,
+            // Кнопка — тем, кто может оплатить; остальным там нечего нажать.
+            action: checkSectionAccess('/company/billing', user).allowed ? { label: 'Подписка', href: '/company/billing' } : undefined,
+        });
+    }
+
     return (
         <SidebarProvider
             className="lc-nova"
@@ -414,6 +440,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 }}
                 profileLinks={profileLinks}
                 hasNewUpdates={hasNewUpdates}
+                notices={notices}
                 // Своя страница, а не окно помощника: список нововведений читают целиком.
                 onUpdates={() => router.push('/company/updates')}
                 onSupport={() => router.push('/company/support')}
@@ -425,6 +452,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     crumbs={crumbsFor(menuItems, pathname)}
                     theme={theme === 'dark' ? 'dark' : 'light'}
                     onToggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                    attention={notices.length > 0}
                     tools={
                         <>
                             <AiButton />
@@ -442,16 +470,6 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         <PaywallScreen status={billingStatus} />
                     ) : (
                         <>
-                            {/* Полоска про бесплатные дни. Показывается всем
-                                сотрудникам: закроется кабинет у всех сразу. */}
-                            {billingStatus?.enabled && !billingStatus?.blocked && billingStatus?.trialEndsAt
-                                && ['TRIAL', 'GRACE'].includes(billingStatus?.status) && (
-                                    <div className="lc-trial-banner">
-                                        {billingStatus.status === 'GRACE' ? 'Оплатить подписку' : 'Пробный период'} до{' '}
-                                        {new Date(billingStatus.trialEndsAt).toLocaleDateString('ru-RU')} — осталось{' '}
-                                        {Math.max(0, Math.ceil((new Date(billingStatus.trialEndsAt).getTime() - Date.now()) / 86400000))} дн.
-                                    </div>
-                                )}
                             {/* Прямая ссылка в чужой раздел — понятная причина
                                 вместо пустого экрана. Главным остаётся сервер. */}
                             {!sectionAccess.allowed ? (
@@ -461,8 +479,6 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                             ) : (
                                 <>
                                     {beta?.state === 'beta' && <BetaStrip section={beta} />}
-                                    {/* Где компания в проверке и что делать дальше — первым же экраном. */}
-                                    <VerificationStrip data={verification} />
                                     {children}
                                 </>
                             )}
