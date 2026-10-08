@@ -133,8 +133,11 @@ export default function ProfilePage() {
                             fallback={
                                 <span style={{
                                     width: 96, height: 96, borderRadius: '50%',
-                                    background: 'linear-gradient(145deg, #007aff, #5856d6)',
-                                    color: '#fff', fontWeight: 700, fontSize: 32,
+                                    // Нейтральный кружок: тема чёрно-белая, яркий синий
+                                    // градиент был единственным цветным пятном на странице.
+                                    background: 'var(--nova-surface-2)',
+                                    border: '1px solid var(--nova-border)',
+                                    color: 'var(--nova-fg)', fontWeight: 650, fontSize: 30,
                                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                     boxShadow: '0 4px 16px rgba(16, 24, 40, 0.12)',
                                 }}>
