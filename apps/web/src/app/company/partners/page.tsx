@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, List, Modal, Form, Popconfirm } from 'antd';
 import nova from '@/components/nova/nova.module.css';
+import { Pencil, Trash2 } from 'lucide-react';
+import { Button as UiButton } from '@/components/ui/button';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
     CheckCircleOutlined, CloseCircleOutlined, ShopOutlined,
-    PlusOutlined, EditOutlined, DeleteOutlined, CarOutlined
+    PlusOutlined, CarOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -216,11 +218,17 @@ export default function PartnersPage() {
 
     const getInitials = (name: string) => {
         if (!name || name === '—') return '';
-        const parts = name.trim().split(/\s+/).filter(Boolean);
+        // Без кавычек и формы собственности: «ТОО «Тест Заказчик»» давал «Т«».
+        const parts = name
+            .replace(/[«»"'“”]/g, ' ')
+            .replace(/^\s*(ТОО|ИП|АО|ООО|ЧП|ПК|LLP|LLC)\s+/i, '')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
         if (parts.length >= 2) {
             return (parts[0][0] + parts[1][0]).toUpperCase();
         }
-        return name.slice(0, 2).toUpperCase();
+        return (parts[0] || name).slice(0, 2).toUpperCase();
     };
 
     const columns = [
@@ -242,7 +250,7 @@ export default function PartnersPage() {
                         {getInitials(text) || 'КГ'}
                     </span>
                     <div>
-                        <div style={{ fontWeight: 600 }}>{text}</div>
+                        <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--nova-fg)' }}>{text}</div>
                         <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
                             {record.isCustomer && <span className={nova.chip}>Заказчик</span>}
                             {record.isCarrier && <span className={nova.chip}>Перевозчик</span>}
@@ -295,31 +303,37 @@ export default function PartnersPage() {
             key: 'actions',
             render: (_: any, record: any) => (
                 record.isExternal ? (
-                    <Space size={6}>
-                        <button
-                            type="button"
-                            className={nova.action}
-                            style={{ height: 28 }}
+                    // Значками, как в журнале заявок: две кнопки с подписями в
+                    // каждой строке были шире самих данных о контрагенте.
+                    <div className="flex items-center gap-0.5">
+                        <UiButton
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
+                            aria-label="Изменить"
+                            title="Изменить"
                             onClick={(e) => { e.stopPropagation(); openEdit(record); }}
                         >
-                            <EditOutlined /> Изменить
-                        </button>
+                            <Pencil className="size-4" />
+                        </UiButton>
                         <Popconfirm
                             title="Удалить контрагента?"
                             onConfirm={() => handleDelete(record.id)}
                             okText="Да"
                             cancelText="Нет"
                         >
-                            <button
-                                type="button"
-                                className={`${nova.action} ${nova.actionDanger}`}
-                                style={{ height: 28 }}
+                            <UiButton
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 rounded-lg text-muted-foreground hover:text-destructive"
+                                aria-label="Удалить"
+                                title="Удалить"
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                <DeleteOutlined /> Удалить
-                            </button>
+                                <Trash2 className="size-4" />
+                            </UiButton>
                         </Popconfirm>
-                    </Space>
+                    </div>
                 ) : null
             )
         }
