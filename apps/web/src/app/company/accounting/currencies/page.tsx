@@ -6,6 +6,7 @@ import { ArrowLeft, Check, Download, Pencil, RefreshCw, Search, X } from 'lucide
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import nova from '@/components/nova/nova.module.css';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -201,7 +202,7 @@ export default function CurrenciesPage() {
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-foreground">Курсы валют</h1>
+                            <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-foreground">Курсы валют</h1>
                             <p className="text-sm text-muted-foreground">
                                 Официальные курсы Национального банка РК. Курс, по которому провели документ,
                                 остаётся в нём навсегда — здесь только справочник.
@@ -232,12 +233,17 @@ export default function CurrenciesPage() {
                             onChange={(e) => setSearch(e.target.value)}
                         />
                     </div>
-                    <Button size="sm" variant={onlyCommon ? 'default' : 'outline'} onClick={() => setOnlyCommon(true)}>
-                        СНГ и основные
-                    </Button>
-                    <Button size="sm" variant={onlyCommon ? 'outline' : 'default'} onClick={() => setOnlyCommon(false)}>
-                        Все валюты
-                    </Button>
+                    {/* Какие валюты показать — переключатель, как на остальных
+                        экранах: две тёмные и светлые кнопки рядом с «Обновить с
+                        Нацбанка» спорили с ней за главное действие. */}
+                    <div className={nova.pills} role="group" aria-label="Какие валюты показать">
+                        <button type="button" aria-pressed={onlyCommon} className={`${nova.pill} ${onlyCommon ? nova.pillActive : ''}`} onClick={() => setOnlyCommon(true)}>
+                            СНГ и основные
+                        </button>
+                        <button type="button" aria-pressed={!onlyCommon} className={`${nova.pill} ${!onlyCommon ? nova.pillActive : ''}`} onClick={() => setOnlyCommon(false)}>
+                            Все валюты
+                        </button>
+                    </div>
                 </div>
 
                 {missing > 0 && !loading && (
@@ -266,13 +272,13 @@ export default function CurrenciesPage() {
                             <div className="overflow-x-auto">
                                 <table className="w-full min-w-[860px] text-sm">
                                     <thead>
-                                        <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                                            <th className="px-4 py-3 text-left font-semibold">Валюта</th>
-                                            <th className="px-4 py-3 text-right font-semibold">Тенге за единицу</th>
-                                            <th className="px-4 py-3 text-right font-semibold">Изменение</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Как у Нацбанка</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Источник</th>
-                                            <th className="px-4 py-3 text-right font-semibold">Курс вручную</th>
+                                        <tr className="border-b border-border text-[12.5px] text-muted-foreground">
+                                            <th className="px-4 py-3 text-left font-medium">Валюта</th>
+                                            <th className="px-4 py-3 text-right font-medium">Тенге за единицу</th>
+                                            <th className="px-4 py-3 text-right font-medium">Изменение</th>
+                                            <th className="px-4 py-3 text-left font-medium">Как у Нацбанка</th>
+                                            <th className="px-4 py-3 text-left font-medium">Источник</th>
+                                            <th className="px-4 py-3 text-right font-medium">Курс вручную</th>
                                         </tr>
                                     </thead>
                                     <tbody>
