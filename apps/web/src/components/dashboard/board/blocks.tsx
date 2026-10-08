@@ -725,7 +725,10 @@ export function ActivityBlock() {
                         <Th className="text-right">Сегодня</Th>
                         <Th className="hidden text-right @xl:table-cell">{prevName}</Th>
                         <Th className="text-right">{curName}</Th>
-                        <Th className="text-right">
+                        {/* В узком блоке динамика прячется, как прошлый месяц в
+                            среднем: иначе таблица шире блока и обрезает сам
+                            месяц. В крупном виде блока видно всё. */}
+                        <Th className="hidden text-right @sm:table-cell">
                             <span className="@xl:hidden">Изменение</span>
                             <span className="hidden @xl:inline">{dynLabel}</span>
                         </Th>
@@ -734,11 +737,11 @@ export function ActivityBlock() {
                 <tbody>
                     {ACTIVITY_ROWS.filter((r) => st.rows.includes(r.key)).map((r) => (
                         <tr key={r.key} className="transition-colors hover:bg-muted/50">
-                            <Td>{r.label}</Td>
+                            <Td className="whitespace-normal">{r.label}</Td>
                             <Td className="text-right tabular-nums">{r.money ? <Money n={a.today[r.key]} mode={st.amounts} /> : a.today[r.key]}</Td>
                             <Td className="hidden text-right tabular-nums text-muted-foreground @xl:table-cell">{r.money ? <Money n={a.previous[r.key]} mode={st.amounts === 'short' ? 'short' : 'full'} /> : a.previous[r.key]}</Td>
                             <Td className="text-right font-medium tabular-nums">{r.money ? <Money n={a.current[r.key]} mode={st.amounts} /> : a.current[r.key]}</Td>
-                            <Td className="text-right"><Dynamics cur={a.current[r.key]} base={base[r.key]} money={r.money} neutral={r.neutral} mode={st.amounts} /></Td>
+                            <Td className="hidden text-right @sm:table-cell"><Dynamics cur={a.current[r.key]} base={base[r.key]} money={r.money} neutral={r.neutral} mode={st.amounts} /></Td>
                         </tr>
                     ))}
                 </tbody>

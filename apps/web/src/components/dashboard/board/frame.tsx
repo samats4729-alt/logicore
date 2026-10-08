@@ -212,9 +212,13 @@ export function BlockFrame({ id, collapsed, others, rows, onToggle, onHide, onMo
                         <h2 className="m-0 truncate text-sm font-medium text-foreground">{meta.title}</h2>
                         {!collapsed && <span className="hidden truncate text-xs text-muted-foreground @2xl:inline">{meta.description}</span>}
                     </div>
+                    {/* В узком блоке подпись ссылки съедала название самого блока
+                        («Зара…», «Т..»). Там остаётся одна стрелка — подпись
+                        видна во всплывающей подсказке и читается экранным
+                        чтецом. Шире 384 точек всё как было. */}
                     {!collapsed && action && (
-                        <Button variant="ghost" size="sm" className="h-7 shrink-0 rounded-md px-2 text-[13px] font-normal" onClick={action.onClick}>
-                            {action.label} <ArrowRight className="size-3.5" />
+                        <Button variant="ghost" size="sm" className="h-7 shrink-0 rounded-md px-2 text-[13px] font-normal" onClick={action.onClick} aria-label={action.label} title={action.label}>
+                            <span className="hidden @sm:inline">{action.label}</span> <ArrowRight className="size-3.5" />
                         </Button>
                     )}
                     {expandInHead && (
@@ -227,9 +231,11 @@ export function BlockFrame({ id, collapsed, others, rows, onToggle, onHide, onMo
                             <TooltipContent className="text-xs">Открыть крупно</TooltipContent>
                         </Tooltip>
                     )}
+                    {/* Уже 320 точек «Свернуть» уходит в меню «…» (там оно есть всегда):
+                        иначе на название блока не оставалось места. */}
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className={ICON_BTN} onClick={onToggle} aria-label={collapsed ? 'Развернуть блок' : 'Свернуть блок'}>
+                            <Button variant="ghost" size="icon" className={cn(ICON_BTN, !collapsed && 'hidden @xs:inline-flex')} onClick={onToggle} aria-label={collapsed ? 'Развернуть блок' : 'Свернуть блок'}>
                                 {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
                             </Button>
                         </TooltipTrigger>
