@@ -16,11 +16,13 @@
     line-height: 1.2;
 }
 
+/* Подписи тёмные и плотные, как у полей shadcn рядом (LABEL в мастере):
+   серые сливались с подсказками в полях (владелец, 08.10.2026). */
 .wizard :global(.ant-form-item-label > label) {
     height: auto;
     font-size: 12px;
-    font-weight: 500;
-    color: hsl(var(--muted-foreground));
+    font-weight: 600;
+    color: hsl(var(--foreground));
 }
 
 .wizard :global(.ant-form-item-label > label.ant-form-item-required:not(.ant-form-item-required-mark-optional)::before) {

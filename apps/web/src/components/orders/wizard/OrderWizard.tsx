@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import { Form, InputNumber, Modal, AutoComplete } from 'antd';
-import { ArrowLeft, ArrowRight, Check, CircleAlert, CircleCheck, Loader2, Plus, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CircleAlert, CircleCheck, Info, Loader2, Plus, RotateCcw, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DialogClose, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -111,8 +112,13 @@ const когдаСохранён = (iso: string) => {
 
 // =================== ВИД ===================
 
-/** Подпись поля — как в макете: мелко, приглушённо. */
-const LABEL = 'text-xs font-medium text-muted-foreground';
+/**
+ * Подпись поля — тёмная и плотная (владелец, 08.10.2026): серые подписи
+ * сливались с подсказками в полях, и глазу не за что было зацепиться.
+ */
+const LABEL = 'text-xs font-semibold text-foreground';
+/** Звёздочка обязательного поля — та же, что рисует antd у своих подписей. */
+const REQUIRED = <span aria-hidden className="mr-1 text-destructive">*</span>;
 /** Поле ввода shadcn в размер полей мастера. */
 const FIELD = 'lc-ui-field h-8 rounded-lg text-[13px] md:text-[13px]';
 /** Многострочное поле — тем же видом, что и поле ввода. */
@@ -126,17 +132,29 @@ const ROLE_TONE: Record<RoleTone, string> = {
     muted: 'border-border bg-muted/50 text-muted-foreground',
 };
 
-/** Раздел шага: заголовок, пояснение и поля под ними. */
-function Section({ title, hint, first, children }: { title: string; hint?: string; first?: boolean; children: React.ReactNode }) {
+/**
+ * Раздел шага: заголовок и поля под ним.
+ *
+ * Заголовок крупный — по нему глаз находит место на шаге. Пояснений под
+ * заголовком больше нет: «Кто заказчик и кто выполняет перевозку» под
+ * «Сторонами сделки» только добавляли серого текста. Короткая пометка
+ * («необязательно», кто вы в сделке) — справа от заголовка.
+ */
+function Section({ title, aside, first, children }: { title: string; aside?: React.ReactNode; first?: boolean; children: React.ReactNode }) {
     return (
-        <section className={cn('grid gap-3', !first && 'mt-6')}>
-            <div>
-                <div className="text-[13px] font-semibold text-foreground">{title}</div>
-                {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
+        <section className={cn('grid gap-3', !first && 'mt-7')}>
+            <div className="flex min-h-6 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <h3 className="m-0 text-[15px] font-semibold tracking-[-0.01em] text-foreground">{title}</h3>
+                {aside}
             </div>
             {children}
         </section>
     );
+}
+
+/** Пометка справа от заголовка раздела: «необязательно». */
+function Optional() {
+    return <span className="text-xs text-muted-foreground">необязательно</span>;
 }
 
 function SubTitle({ children }: { children: React.ReactNode }) {
@@ -1177,7 +1195,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     const stepParties = (
         <div>
             {myCompanies.length > 1 && (
-                <Section first title="Организация" hint="От чьего лица заводится заявка">
+                <Section first title="От чьего лица заявка">
                     <FormSelect
                         aria-label="Организация"
                         value={selectedMyCompanyId}
@@ -1196,16 +1214,23 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 </Section>
             )}
 
-            <Section first={myCompanies.length <= 1} title="Стороны сделки" hint="Кто заказчик и кто выполняет перевозку">
-                {/* Кто я в этой сделке — подсказка, что получилось из выбора сторон. */}
-                <div className={cn('flex items-center gap-2 rounded-lg border border-solid px-3 py-2 text-[12.5px] font-medium', ROLE_TONE[roleInfo.tone])}>
-                    <CircleCheck className="size-4 shrink-0" />
-                    <span>{roleInfo.text}</span>
-                </div>
+            <Section
+                first={myCompanies.length <= 1}
+                title="Стороны сделки"
+                // Кто я в этой сделке — что получилось из выбора сторон.
+                // Пока стороны не выбраны, пилюли нет: «укажите стороны» и так
+                // видно по пустым полям.
+                aside={roleInfo.tone !== 'muted' && (
+                    <span className={cn('inline-flex items-center gap-1.5 rounded-full border border-solid px-2.5 py-0.5 text-xs font-medium', ROLE_TONE[roleInfo.tone])}>
+                        <CircleCheck className="size-3.5 shrink-0" />
+                        {roleInfo.text}
+                    </span>
+                )}
+            >
 
                 <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5" data-guide="wizard-customer">
-                        <Label className={LABEL}>Заказчик</Label>
+                        <Label className={LABEL}>{REQUIRED}Заказчик</Label>
                         <PartnerPicker
                             role="CUSTOMER"
                             value={selectedCustomer || undefined}
@@ -1219,7 +1244,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                         />
                     </div>
                     <div className="grid gap-1.5" data-guide="wizard-carrier">
-                        <Label className={LABEL}>Перевозчик</Label>
+                        <Label className={LABEL}>{REQUIRED}Перевозчик</Label>
                         <PartnerPicker
                             role="CARRIER"
                             value={selectedCarrier || undefined}
@@ -1299,7 +1324,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 </Form.Item>
             </Section>
 
-            <Section title="Ставки" hint="Стоимость перевозки. НДС и сроки оплаты подставятся из карточек сторон">
+            <Section title="Ставки">
                 {/* Ставки и тип оплаты — одной строкой: тип оплаты короткий
                     список, по умолчанию «за рейс» (владелец, 08.10.2026). */}
                 <div className="flex flex-wrap items-start gap-x-3">
@@ -1355,9 +1380,9 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     нужны, чтобы разговаривать с перевозчиком, а менять их он
                     не может. */}
                 {(customerTerms || carrierTerms) && (
-                    <div className="rounded-lg bg-muted/60 px-3 py-2.5 text-[12.5px]">
-                        <div className="font-medium">Условия расчётов</div>
-                        <div className="mt-0.5 text-muted-foreground">
+                    <div className="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-[12.5px]">
+                        <span className="shrink-0 font-semibold">Расчёты</span>
+                        <div className="min-w-0 flex-1 text-muted-foreground">
                             {[
                                 customerTerms && `заказчик — ${vatLabel(customerTerms.vatPayer, customerTerms.vatRate)}`
                                     + (paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom)
@@ -1369,10 +1394,19 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                         : ', срок оплаты не указан'),
                             ].filter(Boolean).join(' · ')}
                         </div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                            Заполняются в карточке контрагента, раздел «Расчёты». Не заполнены —
-                            рейс дождётся бухгалтера, заводить его это не мешает.
-                        </div>
+                        <TooltipProvider delayDuration={150}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button type="button" aria-label="Откуда условия расчётов" className="grid size-5 shrink-0 cursor-help place-items-center rounded-full border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground">
+                                        <Info className="size-3.5" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                    Берутся из карточки контрагента, раздел «Расчёты». Не заполнены —
+                                    рейс дождётся бухгалтера, заводить его это не мешает.
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     </div>
                 )}
 
@@ -1413,9 +1447,9 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
             </Section>
 
             {isOwnOrExternalCarrier && (
-                <Section title="Водитель и транспорт" hint="Можно назначить сейчас или позже — это необязательно">
+                <Section title="Водитель и транспорт" aside={<Optional />}>
                     {selectedCarrier === MY_COMPANY_VALUE && vehicles.length > 0 && (
-                        <Form.Item label="Машина из автопарка (необязательно)">
+                        <Form.Item label="Машина из автопарка">
                             <ChoiceField
                                 aria-label="Машина из автопарка"
                                 title="Машина из автопарка"
@@ -1439,7 +1473,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
 
                     {/* Вся база водителей, а не только водители этого ИП:
                         сверху — кто уже ездил за него, ниже — остальные. */}
-                    <Form.Item name="driverId" label="Водитель (необязательно)">
+                    <Form.Item name="driverId" label="Водитель">
                         <DriverPicker
                             drivers={drivers}
                             carrierId={selectedCarrier === MY_COMPANY_VALUE ? (user?.companyId ?? null) : selectedCarrier}
@@ -1546,7 +1580,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 </Form.Item>
             </Section>
 
-            <Section title="Точки маршрута" hint="Погрузка, выгрузка и промежуточные точки по порядку">
+            <Section title="Точки маршрута">
                 <div className="grid gap-2">
                     {routePointsState.map((pt, i) => {
                         const selected = locations.find((l) => l.id === pt.id);
@@ -1785,7 +1819,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                             {editingId ? `Правка заявки ${editingNumber}`.trim() : 'Новая заявка'}
                         </DialogTitle>
                         <DialogDescription className="m-0 mt-0.5 text-[13px]">
-                            Шаг {currentStep + 1} из {steps.length} · {steps[currentStep].title}
+                            Шаг {currentStep + 1} из {steps.length}
                             {/* Чтобы знали, что закрыть можно: набранное не пропадёт. */}
                             {!editingId && черновикСохранён && (
                                 <span data-testid="order-draft-saved"> · черновик сохранён</span>
@@ -1840,16 +1874,17 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 {!editingId && черновикОт && (
                     <div role="status" data-testid="order-draft-restored" className="mb-4 rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">
                         <b className="font-medium text-foreground">Продолжаем незаконченную заявку</b> — черновик
-                        сохранён {когдаСохранён(черновикОт)}. Всё, что вы успели ввести, на месте.
+                        от {когдаСохранён(черновикОт)}.
                     </div>
                 )}
 
-                {!profileComplete && (
-                    <div className="mb-4 flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">
-                        <CircleAlert className="mt-px size-4 shrink-0" />
+                {/* Только на первом шаге: на каждом шаге одна и та же плашка
+                    становилась фоном, который перестают читать. */}
+                {!profileComplete && currentStep === 0 && (
+                    <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">
+                        <CircleAlert className="size-4 shrink-0" />
                         <span>
-                            {editingId ? 'Заявку можно сохранить сейчас' : 'Заявку можно создать сейчас'}, но для формирования документов (доверенности, счета)
-                            заполните{' '}
+                            Для доверенностей и счетов заполните{' '}
                             <button type="button" className="cursor-pointer border-0 bg-transparent p-0 font-medium text-foreground underline [font-family:inherit]" onClick={() => router.push('/company/settings')}>
                                 профиль компании
                             </button>

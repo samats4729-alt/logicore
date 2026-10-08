@@ -35,13 +35,9 @@ export function RoutePointEmails({
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
 
-    if (!locationId) {
-        return (
-            <div className="mt-2 text-xs text-muted-foreground">
-                Выберите адрес — и можно будет указать, кому отправлять доверенность.
-            </div>
-        );
-    }
+    // Адреса для доверенности — когда выбран адрес точки. Подсказку «выберите
+    // адрес — и можно будет…» владелец счёл лишним текстом (08.10.2026).
+    if (!locationId) return null;
 
     /** Сохраняем сразу за адресом: иначе список живёт только в этой заявке. */
     const persist = async (next: string[]) => {
