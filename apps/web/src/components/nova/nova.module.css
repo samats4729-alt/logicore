@@ -39,7 +39,12 @@
     max-width: none;
 }
 
-/* ===== Шапка страницы ===== */
+/* ===== Шапка страницы =====
+ *
+ * По макету «LogiCore на shadcn Nova» (владелец, 08.10.2026): заголовок —
+ * обычный Inter, без плакатного Unbounded; надзаголовка нет — раздел и
+ * так написан в шапке кабинета («Кабинет › Контрагенты»), повтор над
+ * заголовком только добавлял серого текста. Unbounded остаётся лендингу. */
 
 .hero {
     display: flex;
@@ -51,28 +56,23 @@
 }
 
 .eyebrow {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: 9.5px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--nova-fg-3);
+    display: none;
 }
 
 .title {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: 23px;
+    font-family: Inter, sans-serif;
+    font-size: 20px;
     font-weight: 600;
-    letter-spacing: -0.045em;
-    line-height: 1.2;
-    margin: 6px 0 0;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    margin: 0;
     color: var(--nova-fg);
 }
 
 .subtitle {
     font-size: 13px;
     color: var(--nova-fg-3);
-    margin: 6px 0 0;
+    margin: 4px 0 0;
     max-width: 68ch;
 }
 
@@ -155,39 +155,42 @@
 }
 
 /* ===== Пилюли-переключатели =====
-   Дорожка вкладок внутри страницы: период, вид отчёта. Тот же вид, что у
-   верхней навигации, — активная заливается тёмным. */
+   Дорожка вкладок внутри страницы: период, вид отчёта. Как вкладки журнала
+   заявок и макета: светлая дорожка, выбранная вкладка — белая плашка.
+   Тёмная заливка остаётся главной кнопке страницы: две тёмные плашки
+   рядом спорили, что здесь главное. */
 
 .pills {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     padding: 3px;
-    border: 1px solid var(--nova-border);
-    border-radius: 999px;
+    background: var(--nova-surface-2);
+    border: 1px solid var(--nova-border-2, var(--nova-border));
+    border-radius: 10px;
     flex-wrap: wrap;
 }
 
 .pill {
-    padding: 5px 12px;
+    padding: 6px 12px;
     border: 0;
-    border-radius: 999px;
+    border-radius: 7px;
     background: transparent;
     color: var(--nova-fg-2);
-    font: 500 12px/1 Inter, sans-serif;
+    font: 500 13px/1 Inter, sans-serif;
     cursor: pointer;
     white-space: nowrap;
 }
 
 .pill:hover {
-    background: var(--nova-hover);
+    color: var(--nova-fg);
 }
 
 .pillActive,
 .pillActive:hover {
-    background: var(--nova-primary);
-    color: var(--nova-primary-fg);
-    font-weight: 550;
+    background: var(--nova-surface);
+    color: var(--nova-fg);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
 }
 
 /* ===== Две равные колонки =====
@@ -247,11 +250,11 @@
     gap: 8px;
 }
 
+/* Подпись показателя — обычными буквами, как на дашборде: капс с
+   разрядкой кричал громче самой цифры. */
 .tileLabel {
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 500;
     color: var(--nova-fg-3);
     white-space: nowrap;
     overflow: hidden;
@@ -323,13 +326,13 @@
     margin-bottom: 14px;
 }
 
+/* Заголовок карточки — без серой полосы и черты под ней, как в макете:
+   название раздела жирнее текста — этого хватает, чтобы его найти. */
 .cardHead {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 14px 10px;
-    background: var(--nova-surface-2);
-    border-bottom: 1px solid var(--nova-border-2);
+    padding: 14px 16px 2px;
 }
 
 .cardHead svg {
@@ -337,10 +340,10 @@
 }
 
 .cardTitle {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: 11.5px;
-    font-weight: 500;
-    letter-spacing: -0.03em;
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--nova-fg);
     margin: 0;
     flex: 1;
@@ -354,7 +357,7 @@
 }
 
 .cardBody {
-    padding: 14px;
+    padding: 12px 16px 16px;
 }
 
 /* ===== Список ссылок внутри карточки ===== */
