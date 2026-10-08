@@ -106,14 +106,14 @@ const roleLabels: Record<string, string> = {
     DRIVER: 'Водитель',
 };
 
-const roleColors: Record<string, string> = {
-    COMPANY_ADMIN: 'red',
-    LOGISTICIAN: 'blue',
-    ACCOUNTANT: 'gold',
-    WAREHOUSE_MANAGER: 'green',
-    FORWARDER: 'orange',
-    DRIVER: 'purple',
-};
+/**
+ * Кружок сотрудника без фото — нейтральный (владелец, 08.10.2026: подбить под
+ * чёрно-белую тему макета). Раньше заливался цветом роли — словами red, blue,
+ * green, и выходили чистые «светофорные» цвета. Роль и так подписана над
+ * именем.
+ */
+const AVATAR_FALLBACK = { background: 'var(--nova-surface-2)', color: 'var(--nova-fg)', border: '1px solid var(--nova-border)' } as const;
+const ROLE_LABEL_COLOR = 'var(--nova-fg-3)';
 
 const formatNameInitials = (user: { firstName: string; lastName: string; middleName?: string | null }) => {
     const last = user.lastName || '';
@@ -756,7 +756,7 @@ export default function CompanyUsersPage() {
 
     const renderEmployeeNode = (u: CompanyUser, isRoot: boolean = false) => {
         const roleLabel = u.position || roleLabels[u.role] || u.role;
-        const roleColor = roleColors[u.role] || '#6b7280';
+        const roleColor = ROLE_LABEL_COLOR;
         const initials = formatNameInitials(u);
         const firstLetter = u.firstName ? u.firstName[0].toUpperCase() : '?';
 
@@ -769,7 +769,7 @@ export default function CompanyUsersPage() {
                 fallback={
                     <div
                         className="node-avatar"
-                        style={{ backgroundColor: roleColor }}
+                        style={AVATAR_FALLBACK}
                     >
                         {firstLetter}
                     </div>
@@ -1955,7 +1955,7 @@ export default function CompanyUsersPage() {
                                                         hasAvatar={!!u.avatarPath}
                                                         size={34}
                                                         fallback={
-                                                            <span className="org-side-person-av" style={{ background: roleColors[u.role] || '#6b7280' }}>
+                                                            <span className="org-side-person-av" style={AVATAR_FALLBACK}>
                                                                 {(u.firstName?.[0] || '?').toUpperCase()}
                                                             </span>
                                                         }
