@@ -219,7 +219,7 @@ export default function CompanyLocationsPage() {
             render: (text: string, record: Location) => (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <Space size={6}>
-                        <EnvironmentOutlined style={{ color: '#1677ff' }} />
+                        <EnvironmentOutlined style={{ color: 'var(--nova-fg-3)' }} />
                         <strong>{text}</strong>
                     </Space>
                     {record.address && (
@@ -287,8 +287,10 @@ export default function CompanyLocationsPage() {
             align: 'right' as const,
             render: (_: any, record: Location) => (
                 <Space size="middle">
-                    <Button type="text" icon={<EditOutlined style={{ color: '#1677ff' }} />} onClick={() => handleEditClick(record)} style={{ padding: 0 }} />
-                    <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} style={{ padding: 0 }} />
+                    {/* Приглушённые значки, как в журнале заявок: синий карандаш и
+                        красная корзина в каждой строке пестрели сильнее адресов. */}
+                    <Button type="text" aria-label="Изменить" title="Изменить" icon={<EditOutlined style={{ color: 'var(--nova-fg-3)' }} />} onClick={() => handleEditClick(record)} style={{ padding: 0 }} />
+                    <Button type="text" aria-label="Удалить" title="Удалить" icon={<DeleteOutlined style={{ color: 'var(--nova-fg-3)' }} />} onClick={() => handleDelete(record.id)} style={{ padding: 0 }} />
                 </Space>
             ),
         },
