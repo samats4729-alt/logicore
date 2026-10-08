@@ -89,11 +89,11 @@ export default function MyYearReport({ year, selected, lastMonth, reloadKey, onS
                 <Table className="border-collapse text-[13px]">
                     <TableHeader>
                         <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
-                            <TableHead className="h-9 text-[11px] uppercase tracking-wide">Месяц</TableHead>
-                            <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Оклад</TableHead>
-                            <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Проценты</TableHead>
-                            {showBonus && <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Бонус</TableHead>}
-                            <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Итого</TableHead>
+                            <TableHead className="h-9 text-[12.5px]">Месяц</TableHead>
+                            <TableHead className="h-9 text-right text-[12.5px]">Оклад</TableHead>
+                            <TableHead className="h-9 text-right text-[12.5px]">Проценты</TableHead>
+                            {showBonus && <TableHead className="h-9 text-right text-[12.5px]">Бонус</TableHead>}
+                            <TableHead className="h-9 text-right text-[12.5px]">Итого</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
