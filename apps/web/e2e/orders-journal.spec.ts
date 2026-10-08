@@ -154,6 +154,56 @@ test.describe('Журнал заявок', () => {
         await page.keyboard.press('Escape');
     });
 
+    /**
+     * Заказчик, перевозчик, водитель — окном по центру с поиском, а не
+     * выпадающим списком (владелец, 08.10.2026): контрагентов сотни, и
+     * список прокручивался вместе со всем мастером.
+     */
+    test('заказчик выбирается окном с поиском, выбранный потом — в «Недавних»', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        await page.evaluate(() => Object.keys(localStorage)
+            .filter((k) => k.startsWith('lc:order-draft') || k.startsWith('lc:picker-recent'))
+            .forEach((k) => localStorage.removeItem(k)));
+        await page.getByRole('button', { name: 'Создать заявку' }).click();
+        const мастер = page.locator('[data-order-wizard-dialog]');
+        const поле = мастер.getByRole('button', { name: 'Заказчик', exact: true });
+        await поле.click();
+
+        const окно = page.locator('[data-list-picker]');
+        await expect(окно).toBeVisible();
+        // По центру экрана, а не списком под полем.
+        const рамка = (await окно.boundingBox())!;
+        expect(Math.abs(рамка.x + рамка.width / 2 - 960), 'окно выбора не по центру').toBeLessThan(4);
+
+        const строки = окно.locator('[data-picker-option]');
+        const всего = await строки.count();
+        test.skip(всего < 2, 'на стенде нет заказчиков-контрагентов');
+        // Первая строка — своя компания, вторая — первый контрагент.
+        const имя = (await строки.nth(1).innerText()).split('\n')[0].trim();
+
+        await окно.getByRole('textbox', { name: 'Поиск' }).fill(имя);
+        await expect(строки.filter({ hasText: имя }).first()).toBeVisible();
+        expect(await строки.count()).toBeLessThanOrEqual(всего);
+        await строки.filter({ hasText: имя }).first().click();
+        await expect(окно).toHaveCount(0);
+        await expect(поле).toContainText(имя);
+
+        // Снова открыл — выбранный уже наверху, в «Недавних».
+        await поле.click();
+        await expect(окно.getByText('Недавние', { exact: true })).toBeVisible();
+        // Esc закрывает только окно выбора, мастер остаётся.
+        await page.keyboard.press('Escape');
+        await expect(окно).toHaveCount(0);
+        await expect(мастер).toBeVisible();
+
+        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
+        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
+        await page.evaluate(() => Object.keys(localStorage)
+            .filter((k) => k.startsWith('lc:picker-recent'))
+            .forEach((k) => localStorage.removeItem(k)));
+    });
+
     test('архив — своя вкладка', async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
         await открыть(page);

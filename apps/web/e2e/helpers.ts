@@ -111,3 +111,21 @@ export async function pickAntOption(page: Page, placeholder: string, index = 0) 
     // в уходящий слой.
     await page.waitForTimeout(600);
 }
+
+/**
+ * Выбор в окне выбора из большого списка (контрагент, водитель) — по
+ * подсказке пустого поля: «Выберите заказчика».
+ *
+ * Номер — как в прежнем выпадающем списке: 0 — первая строка окна (своя
+ * компания стоит первой), 1 — следующая.
+ */
+export async function pickFromList(page: Page, placeholder: string, index = 0) {
+    await page.locator('[data-picker-field]').filter({ hasText: placeholder }).first().click();
+    const окно = page.locator('[data-list-picker]');
+    await expect(окно).toBeVisible();
+    const строки = окно.locator('[data-picker-option]');
+    await expect(строки.first()).toBeVisible();
+    const count = await строки.count();
+    await строки.nth(Math.min(index, count - 1)).click();
+    await expect(окно).toHaveCount(0);
+}

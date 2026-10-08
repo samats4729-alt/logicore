@@ -64,6 +64,14 @@ export function FocusDialog({ open, onOpenChange, width, height, className, chil
                         if (!modal && document.querySelector(
                             '.ant-select-dropdown:not(.ant-select-dropdown-hidden), .ant-picker-dropdown:not(.ant-picker-dropdown-hidden), .ant-modal-wrap:not([style*="display: none"])',
                         )) e.preventDefault();
+                        // Esc, нажатый в другом окне поверх этого (выбор заказчика,
+                        // адреса), закрывает то окно, а не это. Обычно Radix
+                        // разбирается сам, но в первые миллисекунды после открытия
+                        // верхнее окно ещё не встало в его очередь — и Esc
+                        // закрывал весь мастер вместе с набранным.
+                        const target = e.target instanceof Element ? e.target : null;
+                        const other = target?.closest('[role="dialog"], [role="alertdialog"]');
+                        if (other && other !== content.current) e.preventDefault();
                         onEscapeKeyDown?.(e);
                     }}
                     {...rest}

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, pickAntOption } from './helpers';
+import { login, pickFromList } from './helpers';
 
 /**
  * Черновик новой заявки.
@@ -31,11 +31,11 @@ test.describe('Черновик новой заявки', () => {
         await чистыйМастер(page);
         await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
 
-        await pickAntOption(page, 'Выберите заказчика', 0);
-        await pickAntOption(page, 'Выберите перевозчика', 0);
+        await pickFromList(page, 'Выберите заказчика', 0);
+        await pickFromList(page, 'Выберите перевозчика', 0);
         // Поле заказчика — по его якорю: над ним бывает поле «Организация»,
         // и порядковый номер списка на разных стендах разный.
-        const полеЗаказчика = page.locator('[data-guide="wizard-customer"] .ant-select-selector');
+        const полеЗаказчика = page.locator('[data-guide="wizard-customer"] [data-picker-field]');
         const заказчик = await полеЗаказчика.innerText();
         const ставка = page.locator('.ant-form-item').filter({ hasText: /Ставка от заказчика|^Ставка/ }).locator('input').first();
         await ставка.fill('515000');

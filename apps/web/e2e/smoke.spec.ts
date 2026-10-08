@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, pickAntOption } from './helpers';
+import { login, pickFromList } from './helpers';
 
 /**
  * Пути, по которым в компании ходят каждый день. Ломается любой — работа
@@ -16,8 +16,8 @@ test('мастер заявки доходит до груза и показыв
     await page.goto('/company/orders/create');
 
     // Шаг 1: без сторон сделки дальше не пускает.
-    await pickAntOption(page, 'Выберите заказчика', 1);
-    await pickAntOption(page, 'Выберите перевозчика', 1);
+    await pickFromList(page, 'Выберите заказчика', 1);
+    await pickFromList(page, 'Выберите перевозчика', 1);
     await page.getByRole('button', { name: /Далее/ }).first().click();
 
     // Шаг 2: маршрут. Дата погрузки обязательна — без неё шага «Груз» не будет.

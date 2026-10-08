@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { Form, InputNumber, Select, Modal, AutoComplete } from 'antd';
+import { Form, InputNumber, Modal, AutoComplete } from 'antd';
 import { ArrowLeft, ArrowRight, Check, CircleAlert, CircleCheck, Loader2, Plus, RotateCcw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -27,6 +27,11 @@ interface Partner {
     isExternal?: boolean;
     isCustomer?: boolean;
     isCarrier?: boolean;
+    /** По ним контрагента узнают в окне выбора: БИН, адрес, телефон, чей он. */
+    bin?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    responsibleManagerId?: string | null;
     /** Условия расчётов из карточки: их заполнил бухгалтер. */
     vatPayer?: boolean | null;
     vatRate?: number | null;
@@ -47,7 +52,10 @@ import PartnerFormFields, { partnerFormToBody, подставитьПоБин, �
 import CurrencySelect from '@/components/orders/CurrencySelect';
 import { DateField } from '@/components/ui/DateField';
 import { clearDraft, formValuesEmpty, readDraft, reviveFormValues, serializeFormValues, writeDraft } from '@/lib/form-draft';
-import DriverPoolSelect, { NEW_DRIVER } from '@/components/orders/DriverPoolSelect';
+import { NEW_DRIVER } from '@/components/orders/DriverPoolSelect';
+import { DriverPicker } from '@/components/orders/DriverPicker';
+import { PartnerPicker } from './PartnerPicker';
+import { ChoiceField } from './ChoiceField';
 import { DRIVER_CARD_FIELDS, alreadyExistsMessage, fetchDriverPool, tripVehicle, type PoolDriver } from '@/lib/driver-pool';
 
 interface LocationState {
@@ -182,9 +190,10 @@ export interface OrderWizardProps {
  *
  * Вся логика — прежняя: проверки шагов, черновик в браузере, правка и
  * копирование, водитель и машина рейса, ставки и валюты. Поменялся вид —
- * как в макете «shadcn Nova». Поля выбора из справочников (контрагенты,
- * водители, валюта, характер груза) и даты пока на Ant Design: в них живут
- * поиск, группы и ввод даты руками; выглядят они так же, как остальные.
+ * как в макете «shadcn Nova». Контрагенты, водители, адреса — окном выбора
+ * с поиском (владелец, 08.10.2026); менеджер и машина — окном, когда
+ * список длинный. Валюта, характер груза и даты пока на Ant Design:
+ * выглядят они так же, как остальные.
  */
 export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteRequestId: quoteIdProp, onClose, onCreated, onSaved, onRestart }: OrderWizardProps) {
     const { user } = useAuthStore();
@@ -241,6 +250,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     const формаВодителяЗаполнена = useRef(false);
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [vehiclesLoading, setVehiclesLoading] = useState(false);
+    /** Какая машина выбрана в поле «Машина из автопарка» — только чтобы показать её. */
+    const [машинаИзПарка, setМашинаИзПарка] = useState<string | undefined>();
 
     // Parties
     const [selectedCustomer, setSelectedCustomer] = useState<string>('');
@@ -734,6 +745,12 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 isExternal: true,
                 isCustomer: !!e.isCustomer,
                 isCarrier: !!e.isCarrier,
+                // По ним контрагента узнают и ищут в окне выбора: названий
+                // «ТОО Транс» бывает несколько, БИН — один.
+                bin: e.bin ?? null,
+                address: e.address ?? null,
+                phone: e.phone ?? null,
+                responsibleManagerId: e.responsibleManagerId ?? null,
                 // Как заказчик называет свой номер перевозки. Без этого поля
                 // графа в заявке не появлялась вовсе: список контрагентов
                 // пересобирался по нескольким полям, и настройка терялась
@@ -1189,40 +1206,22 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5" data-guide="wizard-customer">
                         <Label className={LABEL}>Заказчик</Label>
-                        <Select
-                            placeholder="Выберите заказчика"
-                            style={{ width: '100%' }}
+                        <PartnerPicker
+                            role="CUSTOMER"
                             value={selectedCustomer || undefined}
                             onChange={setSelectedCustomer}
-                            showSearch
-                            optionFilterProp="children"
-                            dropdownRender={(menu) => (
-                                <>
-                                    <Button
-                                        variant="ghost"
-                                        className="h-auto w-full justify-start px-3 py-2 text-[13px] font-medium"
-                                        onClick={() => открытьЗаведениеКонтрагента('CUSTOMER')}
-                                    >
-                                        <Plus className="h-3.5 w-3.5" /> Добавить контрагента
-                                    </Button>
-                                    <div className="my-1 h-px bg-border" />
-                                    {menu}
-                                </>
-                            )}
-                        >
-                            <Select.Option value={MY_COMPANY_VALUE}>
-                                <span style={{ fontWeight: 600 }}>{myCompanyLabel}</span>
-                            </Select.Option>
-                            <Select.OptGroup label="Контрагенты">
-                                {partners.filter(p => p.isCustomer).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                            </Select.OptGroup>
-                        </Select>
+                            partners={partners}
+                            ownValue={MY_COMPANY_VALUE}
+                            ownLabel={myCompanyLabel}
+                            userId={user?.id}
+                            scope={user?.companyId}
+                            onAdd={() => открытьЗаведениеКонтрагента('CUSTOMER')}
+                        />
                     </div>
                     <div className="grid gap-1.5" data-guide="wizard-carrier">
                         <Label className={LABEL}>Перевозчик</Label>
-                        <Select
-                            placeholder="Выберите перевозчика"
-                            style={{ width: '100%' }}
+                        <PartnerPicker
+                            role="CARRIER"
                             value={selectedCarrier || undefined}
                             onChange={(val) => {
                                 setSelectedCarrier(val);
@@ -1234,56 +1233,48 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                     docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: ''
                                 });
                             }}
-                            showSearch
-                            optionFilterProp="children"
-                            dropdownRender={(menu) => (
-                                <>
-                                    <Button
-                                        variant="ghost"
-                                        className="h-auto w-full justify-start px-3 py-2 text-[13px] font-medium"
-                                        onClick={() => открытьЗаведениеКонтрагента('CARRIER')}
-                                    >
-                                        <Plus className="h-3.5 w-3.5" /> Добавить контрагента
-                                    </Button>
-                                    <div className="my-1 h-px bg-border" />
-                                    {menu}
-                                </>
-                            )}
-                        >
-                            <Select.Option value={MY_COMPANY_VALUE}>
-                                <span style={{ fontWeight: 600 }}>{myCompanyLabel}</span>
-                            </Select.Option>
-                            {/* Биржа временно отключена до запуска (перевёрнутая цепочка ролей при takeOrder) */}
-                            <Select.OptGroup label="Контрагенты">
-                                {partners.filter(p => p.isCarrier).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
-                            </Select.OptGroup>
-                        </Select>
+                            partners={partners}
+                            ownValue={MY_COMPANY_VALUE}
+                            ownLabel={myCompanyLabel}
+                            userId={user?.id}
+                            scope={user?.companyId}
+                            onAdd={() => открытьЗаведениеКонтрагента('CARRIER')}
+                        />
+                        {/* Биржа временно отключена до запуска (перевёрнутая цепочка ролей при takeOrder) */}
                     </div>
                 </div>
 
                 <div className="grid gap-1.5">
                     <Label className={LABEL}>Ответственный менеджер</Label>
-                    <Select
-                        style={{ width: '100%' }}
+                    {/* Сотрудников пять — выпадающий список, пятьдесят — окно с поиском. */}
+                    <ChoiceField
+                        aria-label="Ответственный менеджер"
+                        title="Ответственный менеджер"
+                        placeholder="Выберите менеджера"
+                        searchPlaceholder="Фамилия или имя"
                         value={responsibleChoice}
-                        onChange={setResponsibleChoice}
-                        showSearch
-                        optionFilterProp="label"
-                        filterOption={(input, option) =>
-                            String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                        }
-                        options={[
+                        onChange={(v) => setResponsibleChoice(v ?? 'SELF')}
+                        pinned={[
                             {
-                                value: 'SELF',
-                                label: user?.firstName
+                                id: 'SELF',
+                                title: user?.firstName
                                     ? `${user.lastName || ''} ${user.firstName}`.trim()
                                     : 'Текущий пользователь',
+                                subtitle: 'Это вы',
+                                emphasis: true,
                             },
-                            { value: 'NONE', label: 'Не назначать — заявку возьмёт любой менеджер' },
-                            ...officeUsers
-                                .filter(u => u.id !== user?.id)
-                                .map(u => ({ value: u.id, label: `${u.lastName} ${u.firstName}${u.role === 'LOGISTICIAN' ? '' : ' (админ)'}` })),
+                            { id: 'NONE', title: 'Не назначать — заявку возьмёт любой менеджер' },
                         ]}
+                        groups={[{
+                            label: 'Сотрудники',
+                            items: officeUsers
+                                .filter(u => u.id !== user?.id)
+                                .map(u => ({ id: u.id, title: `${u.lastName} ${u.firstName}${u.role === 'LOGISTICIAN' ? '' : ' (админ)'}` })),
+                        }]}
+                        chipSets={[[
+                            { id: 'logist', label: 'Логисты', test: (item) => officeUsers.find(u => u.id === item.id)?.role === 'LOGISTICIAN' },
+                            { id: 'admin', label: 'Администраторы', test: (item) => officeUsers.find(u => u.id === item.id)?.role !== 'LOGISTICIAN' },
+                        ]]}
                     />
                     {responsibleChoice !== 'SELF' && responsibleChoice !== 'NONE' && (
                         <p className="m-0 text-xs text-muted-foreground">
@@ -1425,16 +1416,23 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 <Section title="Водитель и транспорт" hint="Можно назначить сейчас или позже — это необязательно">
                     {selectedCarrier === MY_COMPANY_VALUE && vehicles.length > 0 && (
                         <Form.Item label="Машина из автопарка (необязательно)">
-                            <Select
-                                placeholder="Выберите транспортное средство"
-                                loading={vehiclesLoading}
-                                onChange={handleVehicleSelect}
+                            <ChoiceField
+                                aria-label="Машина из автопарка"
+                                title="Машина из автопарка"
+                                placeholder={vehiclesLoading ? 'Загружаем автопарк…' : 'Выберите транспортное средство'}
+                                searchPlaceholder="Модель или госномер"
+                                value={машинаИзПарка}
+                                onChange={(v) => { setМашинаИзПарка(v); if (v) handleVehicleSelect(v); }}
                                 allowClear
-                                showSearch
-                                filterOption={(input, option) =>
-                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                                }
-                                options={vehicles.map(v => ({ value: v.id, label: `${v.model} (${v.plate})` }))}
+                                clearLabel="Не выбрана"
+                                groups={[{
+                                    label: 'Автопарк',
+                                    items: vehicles.map(v => ({
+                                        id: v.id,
+                                        title: `${v.model} (${v.plate})`,
+                                        subtitle: v.trailerNumber ? `прицеп ${v.trailerNumber}` : undefined,
+                                    })),
+                                }]}
                             />
                         </Form.Item>
                     )}
@@ -1442,7 +1440,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     {/* Вся база водителей, а не только водители этого ИП:
                         сверху — кто уже ездил за него, ниже — остальные. */}
                     <Form.Item name="driverId" label="Водитель (необязательно)">
-                        <DriverPoolSelect
+                        <DriverPicker
                             drivers={drivers}
                             carrierId={selectedCarrier === MY_COMPANY_VALUE ? (user?.companyId ?? null) : selectedCarrier}
                             ownTransport={selectedCarrier === MY_COMPANY_VALUE}
