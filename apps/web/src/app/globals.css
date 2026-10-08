@@ -875,12 +875,14 @@ a.mapboxgl-ctrl-logo,
   to { opacity: 1; transform: none; }
 }
 
-/* Tables — refined header + hover */
+/* Шапка таблицы — обычными буквами, как в журнале заявок и макете Nova
+   (владелец, 08.10.2026): капс с разрядкой над каждой колонкой читался
+   громче самих данных. */
 .ant-table-thead > tr > th {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .ant-table-tbody > tr > td {
@@ -1222,7 +1224,7 @@ a.mapboxgl-ctrl-logo,
   background: transparent !important;
   border-bottom: 1px solid var(--lc-border) !important;
   color: var(--lc-text-ter) !important;
-  font-size: 10.5px !important;
+  font-size: 12.5px !important;
   padding-top: 8px !important;
   padding-bottom: 8px !important;
 }
@@ -3404,6 +3406,48 @@ a.mapboxgl-ctrl-logo,
    обёртке старых страниц, и снимается вместе с ней при переезде. */
 .lc-nova .lc-page {
     padding: 16px 24px 24px;
+}
+
+/* ── шапка старых страниц — как в макете Nova (владелец, 08.10.2026) ──
+   Тридцать с лишним экранов (`lc2-hero`) рисовали заголовок плакатом в
+   26–38 точек жирностью 800 с надписью разрядкой над ним, а главную кнопку —
+   градиентом, тенью и бегущим бликом. В макете заголовок обычный, 20/600,
+   кнопка — ровная тёмная; раздел и так написан хлебными крошками в шапке. */
+.lc-nova .lc-page .lc-eyebrow {
+    display: none;
+}
+
+.lc-nova .lc2-title,
+.lc-nova .lc-page .lc-title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    margin: 0;
+    max-width: none;
+}
+
+.lc-nova .lc2-mvalue {
+    font-size: 20px;
+    font-weight: 650;
+}
+
+.lc-nova .lc2-mic {
+    box-shadow: none !important;
+}
+
+.lc-nova .lc-page .lc-cta {
+    background: var(--nova-primary) !important;
+    color: var(--nova-primary-fg) !important;
+    box-shadow: none !important;
+}
+
+.lc-nova .lc-page .lc-cta:hover:not(:disabled) {
+    transform: none;
+}
+
+.lc-nova .lc-cta-shine::after {
+    display: none;
 }
 
 /* ── шапка ───────────────────────────────────────────────────────────── */

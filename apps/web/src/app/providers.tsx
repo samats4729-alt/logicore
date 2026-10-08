@@ -52,12 +52,17 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                             controlHeight: 32,
                         },
                         Table: {
-                            headerBg: '#fafafa',
-                            headerColor: '#6b7280',
                             headerSplitColor: 'transparent',
-                            rowHoverBg: '#f5f8ff',
                             cellPaddingBlock: 9,
-                            borderColor: '#efeff2',
+                            // Светлые цвета шапки и строк — только для светлой темы. Были
+                            // заданы для обеих, и в тёмной шапка таблицы оставалась почти
+                            // белой полосой поперёк тёмной страницы.
+                            ...(isDark ? {} : {
+                                headerBg: '#fafafa',
+                                headerColor: '#6b7280',
+                                rowHoverBg: '#f6f7f9',
+                                borderColor: '#efeff2',
+                            }),
                         },
                         Card: {
                             borderRadiusLG: 16,
