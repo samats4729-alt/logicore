@@ -24,7 +24,7 @@ test.describe('Журнал заявок', () => {
     test('на экране 1920 таблица целиком, подвал со страницами виден', async ({ page }) => {
         await page.setViewportSize({ width: 1920, height: 1080 });
         await открыть(page);
-        await expect(page.getByRole('heading', { name: 'Заявки', exact: true })).toBeVisible();
+        await expect(page.getByRole('tab', { name: /Все заявки/ })).toBeVisible();
         const таблица = page.locator('[data-orders-table]');
         const вбок = await таблица.evaluate((el) => el.scrollWidth - el.clientWidth);
         expect(вбок, 'таблица не помещается по ширине и едет вбок').toBeLessThanOrEqual(1);

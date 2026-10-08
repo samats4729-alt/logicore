@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Modal, Form, Input, Typography, Drawer, Descriptions, Select, Checkbox, Popconfirm } from 'antd';
 import dayjs from 'dayjs';
 
-import { ArrowUpDown, Columns3, Download, FileText, KanbanSquare, Loader2, Mail, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Table2, UserPlus, X } from 'lucide-react';
+import { ArrowUpDown, Download, FileText, KanbanSquare, Loader2, Mail, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Table2, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, Location } from '@/lib/api';
@@ -66,15 +66,6 @@ interface LocationState {
 
 /** Заявка журнала — тип общий с таблицей и доской. */
 type Order = JournalOrder;
-
-/** «заявка / заявки / заявок». */
-function plural(n: number, one: string, few: string, many: string) {
-    const t = n % 100, o = n % 10;
-    if (t > 10 && t < 20) return many;
-    if (o === 1) return one;
-    if (o >= 2 && o <= 4) return few;
-    return many;
-}
 
 // ============================================================
 // Component
@@ -1070,16 +1061,6 @@ export default function CompanyOrdersPage() {
 
     // =================== RENDER ===================
 
-    // Сколько в пути и сколько ждут исполнителя — для строки под заголовком,
-    // как в макете. Считает сервер по всем заявкам, а не по одной странице
-    // списка; не открыт этот отчёт — строка просто короче.
-    const { data: pulse } = useSWR('/company/dashboard/orders?period=month', fetcher, {
-        revalidateOnFocus: false,
-        shouldRetryOnError: false,
-    });
-    const inTransitNow: number | undefined = pulse?.kpi?.inWorkParts?.inTransit;
-    const waitingNow: number | undefined = pulse?.kpi?.pending;
-
     const showBoard = view === 'board' && !isArchive && !isMobile;
     // Таблица и доска прокручиваются внутри себя, подвал со страницами всегда
     // виден. Запас снизу — под подвал и отступ страницы.
@@ -1116,63 +1097,13 @@ export default function CompanyOrdersPage() {
 
     return (
         <div className="flex min-w-0 flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5" data-orders-journal>
-            {/* ===== Шапка — как в макете =====
-                Плитки показателей («Всего заявок», «Сейчас в пути»…) убраны по
-                решению владельца ещё в августе: их место занимает сам список.
-                Короткая строка под заголовком отвечает на те же вопросы. */}
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h1 className="m-0 text-xl font-semibold tracking-tight text-foreground">Заявки</h1>
-                    <p className="m-0 mt-0.5 text-[13px] text-muted-foreground">
-                        {totalOrders} {plural(totalOrders, 'заявка', 'заявки', 'заявок')}
-                        {inTransitNow != null && <> · {inTransitNow} в пути</>}
-                        {waitingNow != null && <> · {waitingNow} {plural(waitingNow, 'ждёт', 'ждут', 'ждут')} исполнителя</>}
-                    </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    {!isMobile && !isArchive && (
-                        <div role="radiogroup" aria-label="Вид списка" className="inline-flex h-8 items-center rounded-lg border border-solid border-input p-0.5">
-                            {([['table', 'Таблица', Table2], ['board', 'Доска', KanbanSquare]] as const).map(([v, label, Icon]) => (
-                                <button
-                                    key={v}
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={view === v}
-                                    onClick={() => chooseView(v)}
-                                    className={cn(
-                                        'inline-flex h-full cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 text-[13px] [font-family:inherit] transition-colors',
-                                        view === v ? 'bg-muted font-medium text-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground',
-                                    )}
-                                >
-                                    <Icon className="size-3.5" /> {label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    {/* Выгрузка — то, что сейчас отобрано: файл не расходится с экраном. */}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-1.5 rounded-lg px-3 text-[13px] font-normal"
-                        disabled={exporting || shownCount === 0}
-                        onClick={openExport}
-                    >
-                        {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
-                        Выгрузить в Excel
-                    </Button>
-                    <Button
-                        data-guide="orders-create"
-                        size="sm"
-                        className="h-8 gap-1.5 rounded-lg px-3 text-[13px]"
-                        onClick={() => router.push('/company/orders/create')}
-                    >
-                        <Plus className="size-3.5" /> Создать заявку
-                    </Button>
-                </div>
-            </div>
-
-            {/* ===== Вкладки и полоса управления ===== */}
-            <div className="flex flex-col gap-3">
+            {/* ===== Шапка =====
+                Заголовка и строки-сводки нет (владелец, 08.10.2026): где
+                человек — видно в верхней полосе, а место отдано списку.
+                Вкладки и действия — одной строкой. Плитки показателей убраны
+                ещё в августе: их место занимает сам список. */}
+            <h1 className="sr-only">Заявки</h1>
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                     <div role="tablist" aria-label="Какие заявки" className="inline-flex h-8 w-fit items-center rounded-lg bg-muted p-[3px] text-muted-foreground">
                         {([['all', 'Все заявки', totalOrders], ['archive', 'Архив', totalArchiveOrders]] as const).map(([id, label, n]) => (
@@ -1234,91 +1165,132 @@ export default function CompanyOrdersPage() {
                         </Tooltip>
                     )}
                 </div>
-
                 <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            ref={searchRef}
-                            className="h-8 w-80 max-w-[calc(100vw-32px)] rounded-lg border border-solid border-input bg-transparent pl-8 pr-12 text-[13px] text-foreground outline-none [font-family:inherit] placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
-                            placeholder="Номер, город, заказчик, водитель…"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            aria-label="Поиск по заявкам"
-                        />
-                        <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-solid border-border px-1 text-[10.5px] text-muted-foreground [font-family:inherit]">⌘K</kbd>
-                    </div>
-
-                    <FacetFilter
-                        title={isArchive ? 'Контрагент' : 'Заказчик'}
-                        options={options(isArchive ? uniqueArchiveCompanies : uniqueCompanies)}
-                        value={filterCompany}
-                        onChange={setFilterCompany}
-                    />
-                    {!isArchive && <FacetFilter title="Статус" options={statusOptions} value={filterStatus} onChange={setFilterStatus} />}
-                    <FacetFilter
-                        title="Водитель"
-                        options={options(isArchive ? uniqueArchiveDrivers : uniqueDrivers)}
-                        value={filterDriver}
-                        onChange={setFilterDriver}
-                    />
+                    {!isMobile && !isArchive && (
+                        <div role="radiogroup" aria-label="Вид списка" className="inline-flex h-8 items-center rounded-lg border border-solid border-input p-0.5">
+                            {([['table', 'Таблица', Table2], ['board', 'Доска', KanbanSquare]] as const).map(([v, label, Icon]) => (
+                                <button
+                                    key={v}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={view === v}
+                                    onClick={() => chooseView(v)}
+                                    className={cn(
+                                        'inline-flex h-full cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 text-[13px] [font-family:inherit] transition-colors',
+                                        view === v ? 'bg-muted font-medium text-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    <Icon className="size-3.5" /> {label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    {/* Выгрузка — то, что сейчас отобрано: файл не расходится с экраном. */}
                     <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 gap-1.5 rounded-lg px-2.5 text-[13px] font-normal"
-                        aria-expanded={filtersOpen}
-                        onClick={() => setFiltersOpen(true)}
+                        className="h-8 gap-1.5 rounded-lg px-3 text-[13px] font-normal"
+                        disabled={exporting || shownCount === 0}
+                        onClick={openExport}
                     >
-                        <SlidersHorizontal className="size-3.5" /> Все фильтры
-                        {activeFilterCount > 0 && (
-                            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-primary-foreground">{activeFilterCount}</span>
-                        )}
+                        {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                        Выгрузить в Excel
                     </Button>
-                    {isNarrowed && (
-                        <Button variant="ghost" size="sm" className="h-8 gap-1 rounded-lg px-2 text-[13px] font-normal" onClick={clearAllFilters}>
-                            Сбросить <X className="size-3.5" />
-                        </Button>
-                    )}
+                    <Button
+                        data-guide="orders-create"
+                        size="sm"
+                        className="h-8 gap-1.5 rounded-lg px-3 text-[13px]"
+                        onClick={() => router.push('/company/orders/create')}
+                    >
+                        <Plus className="size-3.5" /> Создать заявку
+                    </Button>
+                </div>
+            </div>
 
-                    <div className="ml-auto flex items-center gap-2">
-                        {/* Отвечает на вопрос, ради которого раньше смотрели на ряд
-                            плашек с условиями: почему в списке 10 строк, а не 37. */}
-                        {isNarrowed && (
-                            <span className="text-[13px] text-muted-foreground" data-narrowed>
-                                Отобрано <b className="font-semibold text-foreground">{shownCount}</b> из {totalCount}
-                            </span>
-                        )}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="size-8 rounded-lg"
-                                    aria-label={sortDesc ? 'Порядок: сначала новые' : 'Порядок: сначала старые'}
-                                    onClick={() => setSortDesc(!sortDesc)}
-                                >
-                                    <ArrowUpDown className="size-3.5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs">{sortDesc ? 'Сначала новые' : 'Сначала старые'}</TooltipContent>
-                        </Tooltip>
-                        {!showBoard && (
-                            <TableColumnsButton
-                                storageKey="lc-orders-hidden-columns"
-                                choices={columnChoices}
-                                hidden={hiddenColumns}
-                                onChange={setHiddenColumns}
-                            />
-                        )}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="size-8 rounded-lg" aria-label="Обновить список" onClick={() => mutateAll()}>
-                                    <RefreshCw className="size-3.5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs">Обновить</TooltipContent>
-                        </Tooltip>
-                    </div>
+            {/* ===== Полоса управления ===== */}
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                        ref={searchRef}
+                        className="h-8 w-80 max-w-[calc(100vw-32px)] rounded-lg border border-solid border-input bg-transparent pl-8 pr-12 text-[13px] text-foreground outline-none [font-family:inherit] placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                        placeholder="Номер, город, заказчик, водитель…"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        aria-label="Поиск по заявкам"
+                    />
+                    <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-solid border-border px-1 text-[10.5px] text-muted-foreground [font-family:inherit]">⌘K</kbd>
+                </div>
+
+                <FacetFilter
+                    title={isArchive ? 'Контрагент' : 'Заказчик'}
+                    options={options(isArchive ? uniqueArchiveCompanies : uniqueCompanies)}
+                    value={filterCompany}
+                    onChange={setFilterCompany}
+                />
+                {!isArchive && <FacetFilter title="Статус" options={statusOptions} value={filterStatus} onChange={setFilterStatus} />}
+                <FacetFilter
+                    title="Водитель"
+                    options={options(isArchive ? uniqueArchiveDrivers : uniqueDrivers)}
+                    value={filterDriver}
+                    onChange={setFilterDriver}
+                />
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 rounded-lg px-2.5 text-[13px] font-normal"
+                    aria-expanded={filtersOpen}
+                    onClick={() => setFiltersOpen(true)}
+                >
+                    <SlidersHorizontal className="size-3.5" /> Все фильтры
+                    {activeFilterCount > 0 && (
+                        <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-primary-foreground">{activeFilterCount}</span>
+                    )}
+                </Button>
+                {isNarrowed && (
+                    <Button variant="ghost" size="sm" className="h-8 gap-1 rounded-lg px-2 text-[13px] font-normal" onClick={clearAllFilters}>
+                        Сбросить <X className="size-3.5" />
+                    </Button>
+                )}
+
+                <div className="ml-auto flex items-center gap-2">
+                    {/* Отвечает на вопрос, ради которого раньше смотрели на ряд
+                        плашек с условиями: почему в списке 10 строк, а не 37. */}
+                    {isNarrowed && (
+                        <span className="text-[13px] text-muted-foreground" data-narrowed>
+                            Отобрано <b className="font-semibold text-foreground">{shownCount}</b> из {totalCount}
+                        </span>
+                    )}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="size-8 rounded-lg"
+                                aria-label={sortDesc ? 'Порядок: сначала новые' : 'Порядок: сначала старые'}
+                                onClick={() => setSortDesc(!sortDesc)}
+                            >
+                                <ArrowUpDown className="size-3.5" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs">{sortDesc ? 'Сначала новые' : 'Сначала старые'}</TooltipContent>
+                    </Tooltip>
+                    {!showBoard && (
+                        <TableColumnsButton
+                            storageKey="lc-orders-hidden-columns"
+                            choices={columnChoices}
+                            hidden={hiddenColumns}
+                            onChange={setHiddenColumns}
+                        />
+                    )}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="size-8 rounded-lg" aria-label="Обновить список" onClick={() => mutateAll()}>
+                                <RefreshCw className="size-3.5" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs">Обновить</TooltipContent>
+                    </Tooltip>
                 </div>
             </div>
 

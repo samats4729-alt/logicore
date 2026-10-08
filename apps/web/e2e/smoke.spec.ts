@@ -63,7 +63,7 @@ test('мастер заявки доходит до груза и показыв
 test('список заявок открывается', async ({ page }) => {
     await login(page);
     await page.goto('/company/orders');
-    await expect(page.getByRole('heading', { name: 'Заявки', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Все заявки/ })).toBeVisible();
 });
 
 test('взаиморасчёты открываются и считают итоги', async ({ page }) => {
