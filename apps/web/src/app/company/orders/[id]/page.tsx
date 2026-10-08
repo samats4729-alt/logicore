@@ -4,13 +4,19 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Typography, Tag, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, Space, Divider, Popconfirm, Upload, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
 import {
-    DollarOutlined, WalletOutlined, ClockCircleOutlined, FilePdfOutlined, FileTextOutlined, SwapOutlined, CarOutlined, ExclamationCircleOutlined, 
+    WalletOutlined, ClockCircleOutlined, SwapOutlined, CarOutlined, ExclamationCircleOutlined, 
 } from '@ant-design/icons';
 import {
-    ArrowLeft, ArrowLeftRight, Banknote, CheckCircle2, Copy, FileText,
-    History, Loader2, Pencil, Plus, Receipt, Trash2, Wallet,
+    ArrowLeft, ArrowLeftRight, Banknote, CheckCircle2, ChevronDown, Copy, FileText,
+    History, Loader2, Mail, MoreHorizontal, Pencil, Plus, Receipt, Trash2, Wallet,
     XCircle,
 } from 'lucide-react';
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { api, Location } from '@/lib/api';
 import { reportLoadFailure } from '@/lib/load';
@@ -18,7 +24,7 @@ import { needsCompletionReview } from '@/lib/completion-review';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
-import { prepareCompanyOptions } from '@/lib/company-helper';
+import { prepareCompanyOptions, resolveCompanyName } from '@/lib/company-helper';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -27,7 +33,8 @@ import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
 import PillTabs from '@/components/ui/PillTabs';
-import OrderDetails from '@/components/orders/OrderDetails';
+import OrderDetails, { OrderSideCards } from '@/components/orders/OrderDetails';
+import { OrderStageBar } from '@/components/orders/OrderStageBar';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
@@ -126,6 +133,8 @@ export default function OrderDetailPage() {
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
     const [actLoading, setActLoading] = useState(false);
+    /** «Отменить заявку?» — отмена из меню «Действия» переспрашивает, как и раньше. */
+    const [cancelAsk, setCancelAsk] = useState(false);
     const [invoiceLoading, setInvoiceLoading] = useState(false);
     /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
     const [documentChainKey, setDocumentChainKey] = useState(0);
@@ -1527,29 +1536,45 @@ export default function OrderDetailPage() {
     return (
         <div className={`${nova.page} ${nova.pageWide}`}>
             {/* =================== ШАПКА ===================
-                Оболочка карточки на языке кабинета: тот же надзаголовок,
-                заголовок и ряд действий, что на «Деньгах» и «Отчётах».
-                Главное действие заливается тёмным — синий в кабинете
-                означает ссылку, а не кнопку. */}
-            <div className={nova.hero}>
-                <div>
-                    <div className={nova.eyebrow}>Заявки · Рейс</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <h1 className={nova.title} style={{ margin: 0 }}>
-                            Заявка {order.orderNumber}
-                        </h1>
-                        <StatusPill status={order.status} />
+                По макету «LogiCore на shadcn Nova» (владелец, 08.10.2026):
+                «назад», номер, статус и строка «кто · откуда — куда ·
+                когда»; справа — доверенность и «Действия» списками и одно
+                главное действие. Пять кнопок в ряд читались как пять
+                одинаково важных — а главное здесь «Изменить статус». */}
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+                <div className="flex min-w-0 items-start gap-3">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="mt-0.5 size-8 shrink-0 rounded-lg"
+                        onClick={() => router.back()}
+                        aria-label="К заявкам"
+                        title="К заявкам"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                            <h1 className={nova.title}>Заявка {order.orderNumber}</h1>
+                            <StatusPill status={order.status} />
+                            {isEditing && <span className={`${nova.chip} ${nova.chipWarn}`}>Режим редактирования</span>}
+                        </div>
+                        <p className={nova.subtitle} style={{ maxWidth: 'none' }}>
+                            {[
+                                order.customerCompanyId || order.customerCompany
+                                    ? resolveCompanyName(order.customerCompanyId, partners, order.customerCompany?.name)
+                                    : null,
+                                (order.routePoints || []).length
+                                    ? `${order.routePoints[0]?.location?.city || order.routePoints[0]?.location?.name || '—'} → ${order.routePoints[order.routePoints.length - 1]?.location?.city || order.routePoints[order.routePoints.length - 1]?.location?.name || '—'}`
+                                    : null,
+                                `создана ${dayjs(order.createdAt).format('DD.MM.YYYY в HH:mm')}`
+                                    + (order.responsibleManager ? `, менеджер ${order.responsibleManager.firstName || ''} ${order.responsibleManager.lastName || ''}`.trimEnd() : ''),
+                            ].filter(Boolean).join(' · ')}
+                        </p>
                     </div>
-                    <p className={nova.subtitle}>
-                        Создана {dayjs(order.createdAt).format('DD.MM.YYYY в HH:mm')}
-                    </p>
                 </div>
 
-                {isEditing ? (
-                    <div className={nova.heroActions}>
-                        <span className={`${nova.chip} ${nova.chipWarn}`}>Режим редактирования</span>
-                    </div>
-                ) : (
+                {!isEditing && (
                     <div className={nova.heroActions}>
                         {/* Рейс закрыл водитель, и накладную никто не смотрел.
                             Подтверждение — отдельное действие, а не факт
@@ -1566,35 +1591,53 @@ export default function OrderDetailPage() {
                                 {reviewSaving ? 'Сохраняю…' : 'Проверил ТТН'}
                             </button>
                         )}
-                        <button type="button" className={nova.action} onClick={() => router.back()}>
-                            <ArrowLeft className="h-4 w-4" /> К заявкам
-                        </button>
-                        {isNotFinished && (
-                            <button type="button" className={nova.action} onClick={startEditing}>
-                                <Pencil className="h-4 w-4" /> Редактировать
-                            </button>
+                        {/* Доверенность — одна бумага, три действия с ней. Жила
+                            кнопками в карточке водителя; в шапке её видно с
+                            любой вкладки, как в макете. */}
+                        {hasDriver && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button type="button" className={nova.action}>
+                                        <FileText className="h-4 w-4" /> Доверенность <ChevronDown className="h-3.5 w-3.5" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuItem onSelect={() => handleDownloadPoA()}>Скачать</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => handleDownloadPoA(true)}>С печатью</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => openSharePoAModal()}>
+                                        <Mail className="h-4 w-4" /> На почту
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
-                        <button
-                            type="button"
-                            className={nova.action}
-                            onClick={() => router.push(`/company/orders/create?from=${orderId}`)}
-                        >
-                            <Copy className="h-4 w-4" /> Дублировать
-                        </button>
-                        {isNotFinished && (
-                            <Popconfirm
-                                title="Отменить заявку?"
-                                description="Заявка будет отменена."
-                                onConfirm={handleCancelOrder}
-                                okText="Да, отменить"
-                                cancelText="Нет"
-                                okButtonProps={{ danger: true }}
-                            >
-                                <button type="button" className={`${nova.action} ${nova.actionDanger}`}>
-                                    <XCircle className="h-4 w-4" /> Отменить заявку
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button type="button" className={nova.action}>
+                                    <MoreHorizontal className="h-4 w-4" /> Действия
                                 </button>
-                            </Popconfirm>
-                        )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                                {isNotFinished && (
+                                    <DropdownMenuItem onSelect={() => startEditing()}>
+                                        <Pencil className="h-4 w-4" /> Редактировать
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onSelect={() => router.push(`/company/orders/create?from=${orderId}`)}>
+                                    <Copy className="h-4 w-4" /> Дублировать
+                                </DropdownMenuItem>
+                                {isNotFinished && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            onSelect={() => setCancelAsk(true)}
+                                        >
+                                            <XCircle className="h-4 w-4" /> Отменить заявку
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         {canChangeStatus && (
                             <button
                                 type="button"
@@ -1608,6 +1651,24 @@ export default function OrderDetailPage() {
                     </div>
                 )}
             </div>
+
+            {/* Где рейс сейчас — полосой этапов, как в макете. */}
+            <OrderStageBar status={order.status} />
+
+            <Dialog open={cancelAsk} onOpenChange={setCancelAsk}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Отменить заявку?</DialogTitle>
+                        <DialogDescription>Заявка будет отменена.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCancelAsk(false)}>Нет</Button>
+                        <Button variant="destructive" onClick={() => { setCancelAsk(false); handleCancelOrder(); }}>
+                            Да, отменить
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* =================== PENDING COMPLETION BANNER =================== */}
             {hasPendingCompletion && isCompletionApprover && (
@@ -1691,20 +1752,18 @@ export default function OrderDetailPage() {
             )}
 
             {/* =================== MAIN TABS =================== */}
-            {/* Вкладки — пилюли кабинета вместо подчёркнутых вкладок antd:
-                тот же переключатель, что на «Отчётах» и в верхнем меню. */}
+            {/* Слева вкладки, справа — водитель, деньги и стороны сделки рядом
+                с любой вкладкой (по макету). В режиме правки форма — на всю
+                ширину: ей колонка справа только мешает. */}
+            <div className={isEditing ? undefined : 'grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]'}>
+            <div className="min-w-0">
             <PillTabs
                 active={activeTab}
                 onChange={setActiveTab}
                 items={[
                     {
                         key: 'details',
-                        label: (
-                            <span>
-                                <FileTextOutlined style={{ marginRight: 6 }} />
-                                Основная информация
-                            </span>
-                        ),
+                        label: 'Маршрут и груз',
                         children: (
                             isEditing ? (
                                 <OrderEditForm
@@ -1744,26 +1803,7 @@ export default function OrderDetailPage() {
                                 <>
                                 {/* Биржа: найти исполнителя, пока его нет. */}
                                 <OrderExchangePanel orderId={orderId} reloadKey={order.updatedAt} onChanged={fetchData} />
-                                <OrderDetails
-                                    order={order}
-                                    partners={partners}
-                                    user={user}
-                                    fmt={fmt}
-                                    palletLines={palletLines}
-                                    hasDriver={hasDriver}
-                                    driverName={driverName}
-                                    driverPhone={driverPhone}
-                                    driverPlate={driverPlate}
-                                    driverTrailer={driverTrailer}
-                                    driverLinkLoading={driverLinkLoading}
-                                    documentsCount={contracts.length + poaDocuments.length}
-                                    openDriverLink={openDriverLink}
-                                    openAssignModal={openAssignModal}
-                                    handleDownloadPoA={handleDownloadPoA}
-                                    openSharePoAModal={openSharePoAModal}
-                                    openTransferModal={openTransferModal}
-                                    onOpenDocuments={() => setActiveTab('documents')}
-                                />
+                                <OrderDetails order={order} fmt={fmt} palletLines={palletLines} />
                                 </>
                             )
                         )
@@ -1773,12 +1813,7 @@ export default function OrderDetailPage() {
                     // спрятать по одному полю не выйдет, здесь всё об этом.
                     mayAccount && {
                         key: 'finances',
-                        label: (
-                            <span>
-                                <DollarOutlined style={{ marginRight: 6 }} />
-                                Финансы
-                            </span>
-                        ),
+                        label: 'Финансы',
                         children: (
                             <div>
                                 {/* Первое на вкладке — условия расчётов: с них
@@ -2124,12 +2159,7 @@ export default function OrderDetailPage() {
                     },
                     {
                         key: 'documents',
-                        label: (
-                            <span>
-                                <FilePdfOutlined style={{ marginRight: 6 }} />
-                                Документы
-                            </span>
-                        ),
+                        label: 'Документы',
                         // Все документы рейса одним списком: печатные формы с
                         // версиями, счёт и акт, приложенные файлы. Раньше они
                         // жили в трёх разных местах карточки.
@@ -2160,12 +2190,7 @@ export default function OrderDetailPage() {
                     },
                     {
                         key: 'history',
-                        label: (
-                            <span>
-                                <ClockCircleOutlined style={{ marginRight: 6 }} />
-                                История
-                            </span>
-                        ),
+                        label: 'История',
                         children: (
                             <section className={nova.card}>
                                 <div className={nova.cardHead}>
@@ -2184,6 +2209,29 @@ export default function OrderDetailPage() {
                     }
                 ].filter(Boolean) as any}
             />
+            </div>
+            {!isEditing && (
+                <aside className="min-w-0" aria-label="Водитель, деньги и стороны">
+                    <OrderSideCards
+                        order={order}
+                        partners={partners}
+                        user={user}
+                        fmt={fmt}
+                        hasDriver={hasDriver}
+                        driverName={driverName}
+                        driverPhone={driverPhone}
+                        driverPlate={driverPlate}
+                        driverTrailer={driverTrailer}
+                        driverLinkLoading={driverLinkLoading}
+                        documentsCount={contracts.length + poaDocuments.length}
+                        openDriverLink={openDriverLink}
+                        openAssignModal={openAssignModal}
+                        openTransferModal={openTransferModal}
+                        onOpenDocuments={() => setActiveTab('documents')}
+                    />
+                </aside>
+            )}
+            </div>
 
             {/* =================== ASSIGN DRIVER MODAL =================== */}
             {data?.order && (

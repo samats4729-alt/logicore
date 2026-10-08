@@ -66,8 +66,11 @@ export const nameInitials = (name?: string) => {
     return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '—';
 };
 
-/** Порядок этапов рейса — по нему строится список «куда можно перевести». */
-const STATUS_CHAIN = [
+/**
+ * Порядок этапов рейса — по нему строится список «куда можно перевести»
+ * и полоса этапов в карточке рейса.
+ */
+export const STATUS_CHAIN = [
     'ASSIGNED', 'EN_ROUTE_PICKUP', 'AT_PICKUP', 'LOADING',
     'IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING', 'COMPLETED',
 ];
