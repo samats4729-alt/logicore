@@ -13,6 +13,18 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '5010908858
 
 const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
+/**
+ * Основной текст полей, списков и таблиц — 13 точек.
+ *
+ * Компактный режим antd считает шрифт от уменьшенного размера, и на старых
+ * экранах поля, выпадающие списки, даты, ячейки таблиц и страницы таблиц
+ * выходили 10-точечными — мельче, чем допускают правила интерфейса (11 —
+ * предел, основной текст — 13). Высоты полей от этого не меняются: их
+ * держит controlHeight. Задаём размер по компонентам, а не всей теме:
+ * компактные отступы при этом остаются, а текст читается.
+ */
+const TEXT = { fontSize: 13 } as const;
+
 function AntdConfig({ children }: { children: React.ReactNode }) {
     const { theme: currentTheme } = useTheme();
     const isDark = currentTheme === 'dark';
@@ -50,8 +62,11 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                             fontWeight: 500,
                             borderRadius: 10,
                             controlHeight: 32,
+                            contentFontSize: 13,
+                            contentFontSizeSM: 12,
                         },
                         Table: {
+                            ...TEXT,
                             headerSplitColor: 'transparent',
                             cellPaddingBlock: 9,
                             // Светлые цвета шапки и строк — только для светлой темы. Были
@@ -69,32 +84,48 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                             colorBorderSecondary: '#e8e9ee',
                         },
                         Modal: {
+                            ...TEXT,
                             borderRadiusLG: 16,
                         },
                         Input: {
+                            ...TEXT,
                             controlHeight: 32,
                             activeShadow: '0 0 0 3px rgba(22, 119, 255, 0.12)',
                         },
                         InputNumber: {
+                            ...TEXT,
                             controlHeight: 32,
                         },
                         Select: {
+                            ...TEXT,
                             controlHeight: 32,
                             borderRadiusLG: 12,
                         },
                         DatePicker: {
+                            ...TEXT,
                             controlHeight: 32,
                         },
+                        Pagination: TEXT,
+                        Checkbox: TEXT,
+                        Radio: TEXT,
+                        Empty: TEXT,
+                        Form: TEXT,
+                        Descriptions: TEXT,
+                        List: TEXT,
+                        Upload: TEXT,
+                        Alert: TEXT,
                         Menu: {
                             itemBorderRadius: 8,
                         },
                         Tag: {
                             borderRadiusSM: 6,
+                            fontSizeSM: 12,
                         },
                         Dropdown: {
                             borderRadiusLG: 12,
                         },
                         Segmented: {
+                            ...TEXT,
                             borderRadius: 10,
                         },
                         Tabs: {

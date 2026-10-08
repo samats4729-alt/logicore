@@ -3440,6 +3440,7 @@ a.mapboxgl-ctrl-logo,
     background: var(--nova-primary) !important;
     color: var(--nova-primary-fg) !important;
     box-shadow: none !important;
+    font-size: 13px !important;
 }
 
 .lc-nova .lc-page .lc-cta:hover:not(:disabled) {
