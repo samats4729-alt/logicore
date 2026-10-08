@@ -157,13 +157,13 @@ export default function IncomingDocumentsPage() {
         <div className="mx-auto w-full max-w-5xl px-4 py-6">
             <button
                 onClick={() => router.push('/company/finance')}
-                className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                className="mb-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
             >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Финансы
             </button>
 
-            <h1 className="text-2xl font-semibold tracking-tight">Входящие документы</h1>
+            <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-foreground">Входящие документы</h1>
             <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
                 Документы, которые контрагенты прислали прямо на платформе. Это тот же самый документ,
                 что у отправителя, — не копия: номер и суммы у обеих сторон одни и те же, и спорить,
