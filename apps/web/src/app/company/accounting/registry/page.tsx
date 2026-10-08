@@ -4,15 +4,17 @@ import { useEffect, useState, useMemo } from 'react';
 import { Table, Typography, Tag, Card, Row, Col, Statistic, Input, Select, Space, Tooltip, Drawer, Descriptions, Button, Popconfirm, Progress, Modal, Form, InputNumber, theme } from 'antd';
 import {
     ArrowUpOutlined, ArrowDownOutlined, DollarOutlined,
-    SearchOutlined, EyeOutlined, PlusOutlined, FileExcelOutlined,
+    SearchOutlined, EyeOutlined, FileExcelOutlined,
     CalendarOutlined, DeleteOutlined, CarOutlined
 } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
-import { shortenCompanyName } from '@/lib/company-helper';
+import { companyInitials, shortenCompanyName } from '@/lib/company-helper';
 import StatusPill from '@/components/ui/StatusPill';
 import nova from '@/components/nova/nova.module.css';
+import { Plus as PlusIcon } from 'lucide-react';
+import { Button as UiButton } from '@/components/ui/button';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
 import { money } from '@/lib/money-format';
@@ -339,23 +341,16 @@ export default function FinancialRegistryPage() {
         }
     };
 
-    const getInitials = (name: string) => {
-        if (!name || name === '—') return '';
-        const parts = name.trim().split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) {
-            return (parts[0][0] + parts[1][0]).toUpperCase();
-        }
-        return name.slice(0, 2).toUpperCase();
-    };
+    const getInitials = companyInitials;
 
     const columns = [
         {
-            title: '№', dataIndex: 'orderNumber', key: 'num', width: 75, fixed: 'left' as const,
-            render: (t: string) => <span style={{ fontWeight: 600 }}>{t}</span>,
+            title: '№', dataIndex: 'orderNumber', key: 'num', width: 100, fixed: 'left' as const,
+            render: (t: string) => <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{t}</span>,
         },
         {
-            title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 85,
-            render: (d: string) => <span style={{ fontSize: 11, color: 'var(--lc-text-ter)' }}>{dayjs(d).format('DD.MM.YY')}</span>,
+            title: 'Дата', dataIndex: 'createdAt', key: 'date', width: 80,
+            render: (d: string) => <span style={{ fontSize: 12.5, color: 'var(--lc-text-ter)' }}>{dayjs(d).format('DD.MM.YY')}</span>,
         },
         {
             title: 'Заказчик / Выручка', key: 'customer', width: 220,
@@ -369,28 +364,29 @@ export default function FinancialRegistryPage() {
                 const percent = totalBase > 0 ? Math.min(Math.round((paid / totalBase) * 100), 100) : 0;
                 const name = r.customerCompany?.name || '—';
 
+                // Название — первой строкой, сумма с оплатой — второй: в одной
+                // строке шириной 220 сумма наезжала на название, а «₸»
+                // переносился под неё.
                 return (
-                    <div style={{ padding: '2px 0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                    <div className="grid gap-1 py-0.5">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="lc2-avatar lc2-avatar-sm" style={{ background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
+                                {getInitials(name) || 'ЗК'}
+                            </span>
                             <Tooltip title={name}>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>
-                                    <span className="lc2-avatar lc2-avatar-sm" style={{ marginRight: 6, background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
-                                        {getInitials(name) || 'ЗК'}
-                                    </span>
-                                    {shortenCompanyName(name)}
-                                </span>
+                                <span className="min-w-0 truncate text-[13px] font-medium">{shortenCompanyName(name)}</span>
                             </Tooltip>
-                            <span style={{ fontSize: 12, fontWeight: 600 }}>{money(total, currency)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="whitespace-nowrap text-[12.5px] font-semibold tabular-nums">{money(total, currency)}</span>
+                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? 'var(--nova-pos)' : 'var(--nova-fg-3)'} style={{ flex: 1, margin: 0 }} />
+                            <span className="whitespace-nowrap text-[11px] text-muted-foreground">{percent}%</span>
                         </div>
                         {currency !== 'KZT' && (
-                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textAlign: 'right' }}>
+                            <div className="text-[11px] text-muted-foreground">
                                 {totalBase > 0 ? `${fmt(totalBase)} ₸ по курсу рейса` : 'курса нет'}
                             </div>
                         )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? 'var(--nova-pos)' : 'var(--nova-fg-3)'} style={{ flex: 1, margin: 0 }} />
-                            <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
-                        </div>
                     </div>
                 );
             },
@@ -412,28 +408,26 @@ export default function FinancialRegistryPage() {
                 const isSub = !!r.subForwarderId;
 
                 return (
-                    <div style={{ padding: '2px 0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                    <div className="grid gap-1 py-0.5">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="lc2-avatar lc2-avatar-sm" style={{ background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
+                                {getInitials(name) || 'ПВ'}
+                            </span>
                             <Tooltip title={name}>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>
-                                    <span className="lc2-avatar lc2-avatar-sm" style={{ marginRight: 6, background: 'var(--nova-surface-2)', color: 'var(--nova-fg-2)', border: '1px solid var(--nova-border)', flexShrink: 0 }}>
-                                        {getInitials(name) || 'ПВ'}
-                                    </span>
-                                    {shortenCompanyName(name)}
-                                    {isSub && <span className={nova.chip} style={{ marginLeft: 4, flexShrink: 0 }}>Суб</span>}
-                                </span>
+                                <span className="min-w-0 truncate text-[13px] font-medium">{shortenCompanyName(name)}</span>
                             </Tooltip>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>{money(total, currency)}</span>
+                            {isSub && <span className={nova.chip} style={{ flexShrink: 0 }}>Суб</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="whitespace-nowrap text-[12.5px] font-semibold tabular-nums text-muted-foreground">{money(total, currency)}</span>
+                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? 'var(--nova-pos)' : 'var(--nova-fg-3)'} style={{ flex: 1, margin: 0 }} />
+                            <span className="whitespace-nowrap text-[11px] text-muted-foreground">{percent}%</span>
                         </div>
                         {currency !== 'KZT' && (
-                            <div style={{ fontSize: 10, color: token.colorTextSecondary, textAlign: 'right' }}>
+                            <div className="text-[11px] text-muted-foreground">
                                 {totalBase > 0 ? `${fmt(totalBase)} ₸ по курсу рейса` : 'курса нет'}
                             </div>
                         )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Progress percent={percent} size="small" showInfo={false} strokeColor={percent === 100 ? 'var(--nova-pos)' : 'var(--nova-fg-3)'} style={{ flex: 1, margin: 0 }} />
-                            <span style={{ fontSize: 10, color: token.colorTextSecondary, whiteSpace: 'nowrap' }}>{percent}%</span>
-                        </div>
                     </div>
                 );
             },
@@ -443,7 +437,7 @@ export default function FinancialRegistryPage() {
             render: (s: string) => <StatusPill status={s} />,
         },
         {
-            title: 'Долг заказчика', key: 'customerDebt', width: 140, align: 'right' as const,
+            title: 'Долг заказчика', key: 'customerDebt', width: 172, align: 'right' as const,
             render: (_: any, r: RegistryOrder) => {
                 const debt = r.customerDebt;
                 const paid = r.isCustomerPaid;
@@ -457,12 +451,12 @@ export default function FinancialRegistryPage() {
                                 просто сумма, а «Оплачено» — не событие. */}
                             <span
                                 className={isLate ? nova.valueNeg : undefined}
-                                style={{ fontSize: 12, fontWeight: 700 }}
+                                style={{ fontSize: 13, fontWeight: 650 }}
                             >
                                 {debt === 0 ? 'Оплачено' : `${fmt(debt)} ₸`}
                             </span>
                             {isLate && (
-                                <div className={nova.valueNeg} style={{ fontSize: 9, fontWeight: 600 }}>Просрочка 5д+</div>
+                                <div className={nova.valueNeg} style={{ fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>Просрочка 5д+</div>
                             )}
                             {/* Долга формально нет, пока нет счёта. Без этой
                                 пометки строка выглядит как «всё в порядке»,
@@ -474,8 +468,9 @@ export default function FinancialRegistryPage() {
                                 читался бы как противоречие. */}
                             {!r.hasCustomerInvoice && (
                                 <div style={{
-                                    fontSize: 9,
-                                    fontWeight: 600,
+                                    fontSize: 11,
+                                    fontWeight: 500,
+                                    whiteSpace: 'nowrap',
                                     color: debt > 0 ? 'var(--nova-warn)' : 'var(--nova-fg-3)',
                                 }}>
                                     Счёт не выставлен
@@ -484,14 +479,16 @@ export default function FinancialRegistryPage() {
                         </div>
                         {debt > 0 && canEditFinance && (
                             <Tooltip title="Зарегистрировать платёж">
-                                <Button
-                                    size="small"
-                                    type="primary"
-                                    shape="circle"
-                                    icon={<PlusOutlined />}
+                                {/* Светлым кружком: чёрные «+» в каждой строке спорили с суммами. */}
+                                <UiButton
+                                    variant="outline"
+                                    size="icon"
+                                    className="size-7 shrink-0 rounded-full"
+                                    aria-label="Зарегистрировать платёж"
                                     onClick={(e) => handleAddPaymentClick(e, r, 'IN')}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                />
+                                >
+                                    <PlusIcon className="size-3.5" />
+                                </UiButton>
                             </Tooltip>
                         )}
                     </div>
@@ -499,7 +496,7 @@ export default function FinancialRegistryPage() {
             }
         },
         {
-            title: 'Наш долг', key: 'executorDebt', width: 140, align: 'right' as const,
+            title: 'Наш долг', key: 'executorDebt', width: 132, align: 'right' as const,
             render: (_: any, r: RegistryOrder) => {
                 const debt = r.executorDebt;
                 const paid = debt === 0;
@@ -507,20 +504,21 @@ export default function FinancialRegistryPage() {
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: 12, fontWeight: 700 }}>
+                            <span style={{ fontSize: 13, fontWeight: 650 }}>
                                 {paid ? 'Оплачено' : `${fmt(debt)} ₸`}
                             </span>
                         </div>
                         {debt > 0 && canEditFinance && (
                             <Tooltip title="Выплатить исполнителю">
-                                <Button
-                                    size="small"
-                                    type="primary"
-                                    shape="circle"
-                                    icon={<PlusOutlined />}
+                                <UiButton
+                                    variant="outline"
+                                    size="icon"
+                                    className="size-7 shrink-0 rounded-full"
+                                    aria-label="Выплатить исполнителю"
                                     onClick={(e) => handleAddPaymentClick(e, r, 'OUT')}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                />
+                                >
+                                    <PlusIcon className="size-3.5" />
+                                </UiButton>
                             </Tooltip>
                         )}
                     </div>
@@ -528,7 +526,7 @@ export default function FinancialRegistryPage() {
             }
         },
         {
-            title: 'Маржа ₸', key: 'margin', width: 100, align: 'right' as const,
+            title: 'Маржа ₸', key: 'margin', width: 110, align: 'right' as const,
             render: (_: any, r: RegistryOrder) => {
                 const m = r.margin || 0;
                 // Маржа уже в тенге — и процент считается от тенговой выручки,
@@ -539,11 +537,11 @@ export default function FinancialRegistryPage() {
                     <div style={{ textAlign: 'right' }}>
                         <span
                             className={m >= 0 ? nova.valuePos : nova.valueNeg}
-                            style={{ fontSize: 12, fontWeight: 700 }}
+                            style={{ fontSize: 13, fontWeight: 650 }}
                         >
                             {m >= 0 ? '+' : ''}{fmt(m)}
                         </span>
-                        <div style={{ fontSize: 10, color: token.colorTextSecondary }}>{percent}%</div>
+                        <div style={{ fontSize: 11, color: token.colorTextSecondary }}>{percent}%</div>
                     </div>
                 );
             },
@@ -572,7 +570,7 @@ export default function FinancialRegistryPage() {
     ];
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+        <div className="lc-page lc-registry" style={{ maxWidth: 1600, margin: '0 auto' }}>
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 {/* Кнопка и подпись стояли отдельными строками под заголовком, и
@@ -652,7 +650,7 @@ export default function FinancialRegistryPage() {
                     rowKey="id"
                     loading={loading}
                     size="small"
-                    scroll={{ x: 1000 }}
+                    scroll={{ x: 'max-content' }}
                     pagination={{ pageSize: 25, size: 'small', showSizeChanger: true, pageSizeOptions: ['25', '50', '100'], showTotal: (t) => `Всего: ${t}` }}
                     onRow={(record) => ({
                         style: { cursor: 'pointer' },
@@ -662,30 +660,31 @@ export default function FinancialRegistryPage() {
                 />
             </div>
 
-            {/* CSS FOR COMPACT PREMIUM GRID */}
+            {/* Плотная сетка реестра — только на этой странице (`.lc-registry`).
+                Раньше эти правила были глобальными: стоило открыть реестр, и до
+                перезагрузки капсом становились таблицы всего кабинета. Шапка —
+                обычными буквами, как в остальных таблицах по макету Nova. */}
             <style jsx global>{`
-                .ant-table-thead > tr > th {
+                .lc-registry .ant-table-thead > tr > th {
                     padding: 8px 10px !important;
-                    font-size: 11px !important;
-                    font-weight: 600 !important;
+                    font-size: 12.5px !important;
+                    font-weight: 500 !important;
                     background: ${token.colorBgLayout} !important;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
                     color: ${token.colorTextSecondary} !important;
-                    border-bottom: 2px solid ${token.colorBorderSecondary} !important;
-                }
-                .ant-table-tbody > tr > td {
-                    padding: 6px 10px !important;
-                    font-size: 12px !important;
                     border-bottom: 1px solid ${token.colorBorderSecondary} !important;
                 }
-                .ant-table-tbody > tr:hover > td {
-                    background: ${token.colorPrimaryBg} !important;
+                .lc-registry .ant-table-tbody > tr > td {
+                    padding: 8px 10px !important;
+                    font-size: 13px !important;
+                    border-bottom: 1px solid ${token.colorBorderSecondary} !important;
+                }
+                .lc-registry .ant-table-tbody > tr:hover > td {
+                    background: var(--nova-hover) !important;
                 }
                 /* Завершённый рейс — большинство строк в реестре, и заливать
                    их зелёным значит красить весь экран. Статус подписан в своей
                    графе. Цветом осталась только проблема — её ищут глазами. */
-                .row-problem td {
+                .lc-registry .row-problem td {
                     background: var(--nova-neg-soft) !important;
                 }
             `}</style>

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Tabs, Table, Card, Input, Button, Tag, Space, Typography, Avatar, Badge, List, Modal, Form, Popconfirm } from 'antd';
 import nova from '@/components/nova/nova.module.css';
 import { Pencil, Trash2 } from 'lucide-react';
+import { companyInitials } from '@/lib/company-helper';
 import { Button as UiButton } from '@/components/ui/button';
 import {
     SearchOutlined, UserAddOutlined, TeamOutlined,
@@ -216,20 +217,7 @@ export default function PartnersPage() {
         setModalOpen(true);
     };
 
-    const getInitials = (name: string) => {
-        if (!name || name === '—') return '';
-        // Без кавычек и формы собственности: «ТОО «Тест Заказчик»» давал «Т«».
-        const parts = name
-            .replace(/[«»"'“”]/g, ' ')
-            .replace(/^\s*(ТОО|ИП|АО|ООО|ЧП|ПК|LLP|LLC)\s+/i, '')
-            .trim()
-            .split(/\s+/)
-            .filter(Boolean);
-        if (parts.length >= 2) {
-            return (parts[0][0] + parts[1][0]).toUpperCase();
-        }
-        return (parts[0] || name).slice(0, 2).toUpperCase();
-    };
+    const getInitials = companyInitials;
 
     const columns = [
         {
