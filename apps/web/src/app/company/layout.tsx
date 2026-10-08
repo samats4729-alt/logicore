@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { isValidElement, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
     Banknote,
@@ -79,6 +79,17 @@ function MobileMenuOpener() {
     return null;
 }
 
+/**
+ * Название пункта меню текстом. Пункты с пометкой «бета» записаны не
+ * строкой, а значком `MenuLabel` — у них берём его подпись, иначе
+ * в хлебных крошках оставался один раздел: «Мониторинг ›» и пусто.
+ */
+function plainLabel(label: React.ReactNode): string {
+    if (typeof label === 'string') return label;
+    if (isValidElement<{ label?: unknown }>(label) && typeof label.props.label === 'string') return label.props.label;
+    return '';
+}
+
 /** Где я: раздел и, если открыт его пункт, сам пункт. */
 function crumbsFor(items: NavItem[], pathname: string): Crumb[] {
     for (const item of items) {
@@ -86,9 +97,9 @@ function crumbsFor(items: NavItem[], pathname: string): Crumb[] {
             const path = c.key.split('?')[0];
             return pathname === path || pathname.startsWith(path + '/');
         });
-        const label = typeof item.label === 'string' ? item.label : '';
+        const label = plainLabel(item.label);
         if (sub) {
-            const subLabel = typeof sub.label === 'string' ? sub.label : '';
+            const subLabel = plainLabel(sub.label);
             // Пункт, совпадающий с самим разделом («Обзор» у «Денег»), второй раз не пишем.
             if (sub.key === item.key) return [{ label }];
             return [{ label, href: item.key.startsWith('/') ? item.key : undefined }, { label: subLabel }];
