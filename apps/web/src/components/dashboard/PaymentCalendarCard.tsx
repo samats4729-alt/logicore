@@ -116,7 +116,7 @@ export default function PaymentCalendarCard({ className }: { className?: string 
                             <div className={card.nav}>
                                 {(monthTotals.in > 0 || monthTotals.out > 0) && (
                                     <span style={{
-                                        display: 'flex', gap: 6, marginRight: 4,
+                                        display: 'flex', gap: 6, marginRight: 4, whiteSpace: 'nowrap',
                                         fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
                                     }}>
                                         {monthTotals.in > 0 && <span style={{ color: IN_HEX }}>+{shortMoney(monthTotals.in)}</span>}
@@ -191,18 +191,17 @@ export default function PaymentCalendarCard({ className }: { className?: string 
                                         ].filter(Boolean).join(' ')}
                                     >
                                         <span>{день.date()}</span>
+                                        {/* Зелёная — в этот день поступят деньги по счёту,
+                                            красная — платим мы. Цвет остаётся и на
+                                            выбранном дне (владелец, 09.10.2026): белые
+                                            точки на тёмной клетке не говорили, приход
+                                            это или расход. */}
                                         <span className={card.dots}>
                                             {bucket && bucket.in > 0 && (
-                                                <span
-                                                    className={card.dot}
-                                                    style={{ background: выбран ? '#fff' : IN_HEX }}
-                                                />
+                                                <span className={card.dot} style={{ background: IN_HEX }} />
                                             )}
                                             {bucket && bucket.out > 0 && (
-                                                <span
-                                                    className={card.dot}
-                                                    style={{ background: выбран ? 'rgba(255,255,255,.65)' : OUT_HEX }}
-                                                />
+                                                <span className={card.dot} style={{ background: OUT_HEX }} />
                                             )}
                                         </span>
                                     </button>

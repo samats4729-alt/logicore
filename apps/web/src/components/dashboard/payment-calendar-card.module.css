@@ -49,13 +49,15 @@
 
 .head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 4px 8px;
     padding: 0 0 10px;
 }
 
 .month {
+    white-space: nowrap;
     font-size: 13px;
     font-weight: 600;
     letter-spacing: -0.02em;
@@ -300,18 +302,26 @@
     background: rgba(220, 38, 38, 0.09);
 }
 
+/* Точки прихода и расхода под числом. Шесть точек, а не четыре: при
+   четырёх их было не разглядеть, и календарь читался пустым. */
 .dots {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    height: 4px;
+    gap: 3px;
+    height: 6px;
 }
 
 .dot {
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
+}
+
+/* На выбранном (тёмном) дне точка в светлом ободке — иначе красная на
+   чёрном пропадает. */
+.selected .dot {
+    box-shadow: 0 0 0 1.5px var(--nova-surface);
 }
 
 /* ===== Платежи выбранного дня ===== */
@@ -339,6 +349,7 @@
 .daySums {
     display: flex;
     gap: 8px;
+    white-space: nowrap;
     font-size: 11.5px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
