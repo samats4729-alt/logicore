@@ -146,11 +146,11 @@ export default function ExchangePage() {
                         <Table className="hidden border-collapse text-[13px] md:table">
                             <TableHeader>
                                 <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Маршрут</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Погрузка</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Груз</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">{tab === 'board' ? 'Компания' : 'Заявка'}</TableHead>
-                                    <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Цена</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Маршрут</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Погрузка</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Груз</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">{tab === 'board' ? 'Компания' : 'Заявка'}</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">Цена</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
