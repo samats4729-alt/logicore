@@ -113,8 +113,10 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                 >
                     <AntdApp>
                         {children}
-                        {/* Уведомления теперь sonner, а не message из antd */}
-                        <Toaster />
+                        {/* Уведомления — sonner, а не message из antd. Внизу справа, как в
+                            макете «shadcn Nova» (владелец, 08.10.2026): сверху они закрывали
+                            кнопки шапки. Крестик — чтобы убрать, не дожидаясь. */}
+                        <Toaster position="bottom-right" closeButton />
                     </AntdApp>
                 </SWRConfig>
             </ConfigProvider>
