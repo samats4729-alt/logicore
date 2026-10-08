@@ -1538,7 +1538,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     const stepRoute = (
         <div>
             <Section first title="Дата и время погрузки">
-                <Form.Item name="pickupDate" rules={[{ required: true, message: 'Укажите дату' }]} data-guide="wizard-pickup-date" className="mb-0 max-w-xs">
+                <Form.Item name="pickupDate" rules={[{ required: true, message: 'Укажите дату' }]} data-guide="wizard-pickup-date" className="max-w-xs" style={{ marginBottom: 0 }}>
                     <DateField
                         style={{ width: '100%' }}
                         format="DD.MM.YYYY HH:mm"
