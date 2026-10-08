@@ -103,10 +103,10 @@ export default function ParkDriversPage() {
                     <Table className="border-collapse text-[13px]">
                         <TableHeader>
                             <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
-                                <TableHead className="h-9 text-[11px] uppercase tracking-wide">Водитель</TableHead>
-                                <TableHead className="h-9 text-[11px] uppercase tracking-wide">ИИН и телефон</TableHead>
-                                <TableHead className="h-9 text-[11px] uppercase tracking-wide">Машина</TableHead>
-                                <TableHead className="h-9 text-[11px] uppercase tracking-wide">Анкета подана</TableHead>
+                                <TableHead className="h-9 text-[12.5px]">Водитель</TableHead>
+                                <TableHead className="h-9 text-[12.5px]">ИИН и телефон</TableHead>
+                                <TableHead className="h-9 text-[12.5px]">Машина</TableHead>
+                                <TableHead className="h-9 text-[12.5px]">Анкета подана</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
