@@ -7,7 +7,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { monthLabel } from '@/lib/ru-date';
-import StatusPill, { STATUS_LABELS } from '@/components/ui/StatusPill';
+import StatusPill, { STATUS_LABELS, STATUS_PILL } from '@/components/ui/StatusPill';
 import { Button } from '@/components/ui/button';
 import { RevenueChart, StatusChart, colorOf } from './charts';
 import { useSize } from './dnd';
@@ -630,7 +630,7 @@ export function ByStatusBlock() {
     if (!rows.length) return <BlockNote>Заявок в работе нет</BlockNote>;
     // Один цвет на всех или свой у каждого статуса; в кольце один цвет — оттенками.
     const fills = rows.map((r, i) => (st.color === 'status'
-        ? { color: STATUS_DOT[r.key] ?? '#9ca3af', opacity: 1 }
+        ? { color: statusDot(r.key), opacity: 1 }
         : { color: colorOf(st.color), opacity: st.kind === 'donut' ? Math.max(0.25, 1 - i * 0.11) : 1 }));
     const total = rows.reduce((s, r) => s + r.n, 0);
     return (
@@ -754,10 +754,9 @@ export function ActivityBlock() {
 
 interface OrderEvent { orderId: string; orderNumber: string; status: string; changedAt: string }
 
-const STATUS_DOT: Record<string, string> = {
-    PENDING: '#b45309', ASSIGNED: '#1d4ed8', EN_ROUTE_PICKUP: '#0e7490', AT_PICKUP: '#4d7c0f', LOADING: '#7e22ce',
-    IN_TRANSIT: '#0369a1', AT_DELIVERY: '#3f6212', UNLOADING: '#a21caf', COMPLETED: '#15803d', PROBLEM: '#dc2626', CANCELLED: '#b91c1c', DRAFT: '#5f6672',
-};
+/** Цвет точки статуса — из общей палитры плашек: свой словарь здесь однажды
+ *  разошёлся бы с плашкой того же рейса на соседнем экране. */
+const statusDot = (status: string) => STATUS_PILL[status]?.fg ?? '#9ca3af';
 
 export function EventsBlock() {
     const router = useRouter();
@@ -782,7 +781,7 @@ export function EventsBlock() {
                     className="flex w-full items-center justify-between gap-3 border-0 border-b border-solid border-border py-2 text-left text-[13px] last:border-b-0 hover:bg-muted/50"
                 >
                     <span className="flex min-w-0 items-center gap-2">
-                        <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: STATUS_DOT[e.status] ?? '#9ca3af' }} />
+                        <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: statusDot(e.status) }} />
                         <b className="font-medium tabular-nums">{e.orderNumber}</b>
                         <span className="truncate text-muted-foreground">{STATUS_LABELS[e.status] || e.status}</span>
                     </span>
