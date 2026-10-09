@@ -22,6 +22,24 @@
  * а голые <button> и <input> сброс по-прежнему получают: стили браузера
  * лежат в origin ниже авторских, вес там ни при чём.
  */
+/*
+ * Списки левого меню кабинета. Без preflight у <ul> остаются браузерные
+ * точки и отступ слева — подпункты меню шли «маркированным списком».
+ * :where() — чтобы отступы-утилиты Tailwind у подменю выигрывали.
+ */
+@layer base {
+  :where([data-sidebar='menu'], [data-sidebar='menu-sub']) {
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+  }
+  /* Кнопки меню («Мониторинг», «Помощь», профиль) — цвет панели, а не
+     системный цвет кнопок браузера: в тёмной теме они выходили бледными. */
+  :where([data-sidebar='sidebar'] button) {
+    color: inherit;
+  }
+}
+
 @layer base {
   :where(button:not([class*='ant-'])),
   :where(input:not([class*='ant-'])),
@@ -72,6 +90,19 @@
      главной кнопки. */
   --ring: 223 24% 6%;
   --radius: 0.75rem;
+  /* Боковая панель кабинета (макет «shadcn Nova», 07.10.2026): чуть
+     темнее страницы, выделенный пункт — серой подложкой, без цвета. */
+  --sidebar-background: 220 20% 98%;  /* #f9fafb */
+  --sidebar-foreground: 223 24% 6%;
+  --sidebar-primary: 223 24% 6%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 14% 94%;
+  --sidebar-accent-foreground: 223 24% 6%;
+  --sidebar-border: 228 12% 92%;
+  --sidebar-ring: 223 24% 6%;
+  /* Вторая серия графиков дашборда («Маржа» рядом с «Выручкой») — светло-серая,
+     как в макете: тема чёрно-белая. */
+  --chart-1: 0 0% 83%;
 }
 
 [data-theme='dark'] {
@@ -97,6 +128,15 @@
   --border: 60 3% 20%;              /* #343430 */
   --input: 60 3% 16%;
   --ring: 40 16% 93%;
+  --sidebar-background: 60 2% 10%;    /* #1a1a19 — как карточка */
+  --sidebar-foreground: 40 16% 93%;
+  --sidebar-primary: 48 15% 94%;
+  --sidebar-primary-foreground: 223 24% 6%;
+  --sidebar-accent: 60 3% 16%;
+  --sidebar-accent-foreground: 40 16% 93%;
+  --sidebar-border: 60 3% 20%;
+  --sidebar-ring: 40 16% 93%;
+  --chart-1: 0 0% 45%;
 }
 
 :root {
@@ -835,12 +875,14 @@ a.mapboxgl-ctrl-logo,
   to { opacity: 1; transform: none; }
 }
 
-/* Tables — refined header + hover */
+/* Шапка таблицы — обычными буквами, как в журнале заявок и макете Nova
+   (владелец, 08.10.2026): капс с разрядкой над каждой колонкой читался
+   громче самих данных. */
 .ant-table-thead > tr > th {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .ant-table-tbody > tr > td {
@@ -1182,7 +1224,7 @@ a.mapboxgl-ctrl-logo,
   background: transparent !important;
   border-bottom: 1px solid var(--lc-border) !important;
   color: var(--lc-text-ter) !important;
-  font-size: 10.5px !important;
+  font-size: 12.5px !important;
   padding-top: 8px !important;
   padding-bottom: 8px !important;
 }
@@ -2367,143 +2409,7 @@ a.mapboxgl-ctrl-logo,
   background: rgba(0, 0, 0, 0.06) !important;
 }
 
-/* ==========================================
-   AI ASSISTANT — PREMIUM PANEL
-   ========================================== */
-.ai-glass-panel {
-  background: var(--lc-card) !important;
-  border: 1px solid var(--lc-border) !important;
-  border-radius: 20px !important;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.16) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-.ai-glass-header {
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--lc-border-soft) !important;
-  background: var(--lc-hover) !important;
-  position: relative;
-  z-index: 2;
-}
-
-/* iOS-сегменты */
-.ai-seg {
-  display: flex;
-  gap: 4px;
-  background: var(--lc-bg) !important;
-  padding: 3px;
-  border-radius: 11px;
-  border: 1px solid var(--lc-border-soft) !important;
-}
-
-.ai-seg-btn {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 7px 0;
-  border-radius: 9px;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--lc-text-sec);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.ai-seg-btn.active {
-  background: var(--lc-card) !important;
-  color: var(--lc-text) !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
-}
-
-/* Message bubbles */
-.ai-msg-user {
-  max-width: 85%;
-  padding: 10px 14px;
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  border-radius: 14px;
-  background: var(--nova-primary) !important;
-  color: var(--nova-primary-fg) !important;
-  border: none !important;
-}
-
-.ai-msg-assistant {
-  max-width: 85%;
-  padding: 10px 14px;
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  border-radius: 14px;
-  background: var(--lc-card) !important;
-  color: var(--lc-text) !important;
-  border: 1px solid var(--lc-border) !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
-}
-
-/* Prompt Quick Actions */
-.ai-prompt-btn {
-  background: var(--lc-card) !important;
-  border: 1px solid var(--lc-border) !important;
-  color: var(--lc-text-sec) !important;
-  padding: 6px 14px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-  transition: all 0.2s;
-}
-
-.ai-prompt-btn:hover {
-  background: var(--lc-hover) !important;
-  color: var(--lc-text) !important;
-  border-color: var(--lc-text-ter) !important;
-}
-
-/* Footer & Inputs */
-.ai-footer {
-  display: flex;
-  gap: 8px;
-  padding: 12px;
-  border-top: 1px solid var(--lc-border-soft) !important;
-  background: var(--lc-hover) !important;
-  align-items: flex-end;
-  position: relative;
-  z-index: 2;
-}
-
-.ai-input {
-  flex: 1;
-  resize: none;
-  background: var(--lc-card) !important;
-  color: var(--lc-text) !important;
-  border: 1px solid var(--lc-border) !important;
-  border-radius: 12px;
-  padding: 8px 14px;
-  font-size: 13px;
-  transition: all 0.2s ease;
-}
-
-.ai-input:focus {
-  border-color: var(--nova-fg-3) !important;
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15) !important;
-}
-
-.ai-send-btn {
-  background: var(--nova-primary) !important;
-  border: none !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.3) !important;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-}
-
-.ai-send-btn:hover {
-  background: #4096ff !important;
-  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.45) !important;
-}
+/* Панель ИИ-помощника — на shadcn в самом компоненте (AssistantWidget). */
 
 /* ==========================================
    AI GUIDE — SPOTLIGHT HIGHLIGHT
@@ -3065,24 +2971,6 @@ a.mapboxgl-ctrl-logo,
 }
 
 /* Баннер пробного периода (биллинг) */
-.lc-trial-banner {
-  margin: 12px 16px 0;
-  padding: 8px 16px;
-  background: #fff7e6;
-  border: 1px solid #ffd591;
-  border-radius: 12px;
-  color: #b45309;
-  font-size: 12.5px;
-  font-weight: 600;
-  text-align: center;
-}
-
-:root[data-theme="dark"] .lc-trial-banner {
-  background: rgba(180, 83, 9, 0.12);
-  border-color: rgba(180, 83, 9, 0.35);
-  color: #fbbf24;
-}
-
 /* ==========================================
    БЕТА-ТЕСТИРОВАНИЕ — метка на непроверенном
    ==========================================
@@ -3095,7 +2983,9 @@ a.mapboxgl-ctrl-logo,
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
-  max-width: var(--nova-max, 1360px);
+  /* Поля — как у страницы под ней (24px): без них полоса упиралась в меню
+     и в правый край, а текст страницы начинался на 24px правее. */
+  max-width: min(var(--nova-max, 1360px), calc(100% - 48px));
   margin: 12px auto 0;
   padding: 8px 13px;
   background: var(--nova-warn-soft, #fff5e8);
@@ -3149,6 +3039,7 @@ a.mapboxgl-ctrl-logo,
 
 @media (max-width: 720px) {
   .lc-beta-strip {
+    max-width: none;
     margin: 10px 12px 0;
   }
 }
@@ -3520,6 +3411,79 @@ a.mapboxgl-ctrl-logo,
     padding: 16px 24px 24px;
 }
 
+/* ── шапка старых страниц — как в макете Nova (владелец, 08.10.2026) ──
+   Тридцать с лишним экранов (`lc2-hero`) рисовали заголовок плакатом в
+   26–38 точек жирностью 800 с надписью разрядкой над ним, а главную кнопку —
+   градиентом, тенью и бегущим бликом. В макете заголовок обычный, 20/600,
+   кнопка — ровная тёмная; раздел и так написан хлебными крошками в шапке. */
+.lc-nova .lc-page .lc-eyebrow:not(:has(button, a)) {
+    display: none;
+}
+
+/* На дюжине экранов «Денег» и «Отчётов» в надписи живёт стрелка «назад к
+   Финансам». Её не прячем — иначе пропал бы путь обратно. Надпись рядом
+   с ней становится тихой строкой обычными буквами, как подпись под
+   кнопкой «назад» в карточке заявки. */
+.lc-nova .lc-page .lc-eyebrow:has(button, a) {
+    display: flex;
+    align-items: center;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--nova-fg-3);
+    margin: -4px 0 6px -6px;
+}
+
+.lc-nova .lc2-title,
+.lc-nova .lc-page .lc-title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    margin: 0;
+    max-width: none;
+}
+
+.lc-nova .lc2-mvalue {
+    font-size: 20px;
+    font-weight: 650;
+}
+
+.lc-nova .lc2-mic {
+    box-shadow: none !important;
+}
+
+/* Строка итогов: подпись над суммой и пояснение под ней — тихие, как в
+   плитках макета. Пояснение было жирным чёрным и спорило с самой суммой
+   («за период», «приход», «на начало периода»). Цвет, заданный страницей
+   прямо в разметке (оранжевое «ждут согласования»), остаётся. */
+.lc-nova .lc2-mlabel {
+    font-size: 12px;
+    color: var(--nova-fg-3);
+}
+
+.lc-nova .lc2-msub {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--nova-fg-3);
+}
+
+.lc-nova .lc-page .lc-cta {
+    background: var(--nova-primary) !important;
+    color: var(--nova-primary-fg) !important;
+    box-shadow: none !important;
+    font-size: 13px !important;
+}
+
+.lc-nova .lc-page .lc-cta:hover:not(:disabled) {
+    transform: none;
+}
+
+.lc-nova .lc-cta-shine::after {
+    display: none;
+}
+
 /* ── шапка ───────────────────────────────────────────────────────────── */
 
 .lc-nova .app-header-2026 {
@@ -3698,6 +3662,25 @@ a.mapboxgl-ctrl-logo,
 .lc-nova .lc2-header-right button .anticon,
 .lc-nova .lc2-header-right .ai-btn svg {
     color: currentColor !important;
+}
+
+/* Помощник открыт — кнопка становится пилюлей «✕ Помощник»: видно, что
+   панель справа — это он и что этой же кнопкой её закрыть. */
+.lc-nova .ai-btn.ai-btn-open {
+    width: auto !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid var(--nova-border);
+    box-shadow: none;
+    padding: 0 12px 0 10px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--nova-hover) !important;
+    color: var(--nova-fg) !important;
 }
 
 .lc-nova .lc2-header-divider {

@@ -32,8 +32,23 @@ describe('Блоки дашборда', () => {
             expect(блокиПоРоли(UserRole.ACCOUNTANT, [])).toEqual(['events']);
         });
 
-        it('менеджеру — личная сводка и лента событий', () => {
-            expect(блокиПоРоли(UserRole.LOGISTICIAN, ['orders'])).toEqual(['events']);
+        it('менеджеру — лента событий и блоки по заявкам (в них только его заявки)', () => {
+            expect(блокиПоРоли(UserRole.LOGISTICIAN, ['orders'])).toEqual([
+                'events', 'calendar', 'upcoming', 'attention', 'inTransit', 'byStatus',
+            ]);
+        });
+
+        it('деньги и водители менеджеру по роли не открываются', () => {
+            const блоки = блокиПоРоли(UserRole.LOGISTICIAN, ['orders']);
+            for (const закрытый of ['chart', 'debtors', 'activity', 'earnings', 'drivers'] as const) {
+                expect(блоки).not.toContain(закрытый);
+            }
+        });
+
+        it('бухгалтеру с бухгалтерией — ещё и должники', () => {
+            expect(блокиПоРоли(UserRole.ACCOUNTANT, ['accounting'])).toEqual([
+                'pendingWork', 'paymentCalendar', 'paymentProofs', 'incomingInvoices', 'events', 'debtors',
+            ]);
         });
     });
 

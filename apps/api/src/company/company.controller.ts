@@ -5,6 +5,7 @@ import { Response } from 'express';
 import { CompanyService } from './company.service';
 import { OrdersService } from '../orders/orders.service';
 import { CompanyDriversService } from './services/company-drivers.service';
+import { DashboardBoardService, parsePeriod } from './dashboard-board.service';
 import { S3Service } from '../s3/s3.service';
 import { видимыеБлоки } from '../common/dashboard-blocks';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -33,6 +34,7 @@ export class CompanyController {
         private s3Service: S3Service,
         private billingService: BillingService,
         private auditService: AuditService,
+        private dashboardBoard: DashboardBoardService,
     ) { }
 
     // ==================== Уведомления ====================
@@ -218,6 +220,47 @@ export class CompanyController {
             throw new ForbiddenException('Блок «Активность» вам не открыт');
         }
         return this.companyService.getDashboardActivity(req.user.companyId);
+    }
+
+    // ==================== Дашборд-конструктор ====================
+    //
+    // Данные для блоков нового дашборда (макет «shadcn Nova», 07.10.2026).
+    // Заявки — тем, кому открыт раздел «Заявки», и в той же видимости, что
+    // журнал (менеджеру «только свои» — свои). Деньги и водители — только
+    // если блок открыт в «Сотрудниках», как у «Активности».
+
+    @Get('dashboard/orders')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER)
+    @RequirePermissions('orders')
+    @ApiOperation({ summary: 'Дашборд: показатели по заявкам с историей, погрузки, рейсы в пути, этапы, внимание' })
+    async getDashboardOrders(@Request() req: any, @Query() query: { period?: string; month?: string }) {
+        return this.dashboardBoard.ordersOverview(
+            { companyId: req.user.companyId, userId: req.user.sub, role: req.user.role },
+            { period: parsePeriod(query.period), month: query.month },
+        );
+    }
+
+    @Get('dashboard/revenue')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Дашборд: выручка и маржа за период и по неделям' })
+    async getDashboardRevenue(@Request() req: any, @Query() query: { period?: string }) {
+        if (!видимыеБлоки(req.user).includes('chart')) {
+            throw new ForbiddenException('Блок «Выручка и маржа» вам не открыт');
+        }
+        return this.dashboardBoard.revenue(
+            { companyId: req.user.companyId, userId: req.user.sub, role: req.user.role },
+            { period: parsePeriod(query.period) },
+        );
+    }
+
+    @Get('dashboard/drivers')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER)
+    @ApiOperation({ summary: 'Дашборд: свои водители сегодня — свободны, в рейсе, не работают' })
+    async getDashboardDrivers(@Request() req: any) {
+        if (!видимыеБлоки(req.user).includes('drivers')) {
+            throw new ForbiddenException('Блок «Водители сегодня» вам не открыт');
+        }
+        return this.dashboardBoard.driversToday({ companyId: req.user.companyId, userId: req.user.sub, role: req.user.role });
     }
 
     // ==================== Профиль компании ====================

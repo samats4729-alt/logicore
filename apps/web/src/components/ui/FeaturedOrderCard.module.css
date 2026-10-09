@@ -9,6 +9,18 @@
     margin-bottom: 14px;
 }
 
+/* В окне просмотра заявки: рамку и тень даёт само окно, карта крупнее. */
+.bare {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin-bottom: 0;
+}
+
+.bare .mapCell {
+    min-height: 340px;
+}
+
 /* ===== Шапка ===== */
 
 .head {

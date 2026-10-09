@@ -111,10 +111,10 @@ export default function PayTermsTab({ data, rules, selectedIds, onSelect, focusK
                                             onCheckedChange={toggleAllVisible}
                                         />
                                     </TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Сотрудник</TableHead>
-                                    <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Оклад</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Процент с рейса</TableHead>
-                                    {data.bonusesEnabled && <TableHead className="h-9 text-[11px] uppercase tracking-wide">Бонус за план</TableHead>}
+                                    <TableHead className="h-9 text-[12.5px]">Сотрудник</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">Оклад</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Процент с рейса</TableHead>
+                                    {data.bonusesEnabled && <TableHead className="h-9 text-[12.5px]">Бонус за план</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

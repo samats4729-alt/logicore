@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Dropdown } from 'antd';
-import { RightOutlined, PhoneOutlined, EnvironmentOutlined, WhatsAppOutlined, CopyOutlined } from '@ant-design/icons';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Copy, MapPin, MessageCircle, Phone, X } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import dayjs from 'dayjs';
 import { STATUS_LABELS } from './StatusPill';
 import StatusPill from './StatusPill';
@@ -214,10 +213,7 @@ function RouteMapThumbnail({ order, theme }: { order: any; theme: string }) {
                 borderRadius: 12,
                 marginBottom: 12
             }}>
-                <EnvironmentOutlined style={{
-                    fontSize: 22,
-                    color: isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)'
-                }} />
+                <MapPin size={22} color={isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)'} />
             </div>
         );
     }
@@ -270,17 +266,24 @@ function money(value?: number | null) {
  * карточкой больше нет: владелец смотрел прямо на неё и не понимал, чем
  * свернулась карточка. В шапке стрелка стоит там же, где сама карточка, и
  * читается как её собственный орган управления.
+ *
+ * `bare` — карточка внутри окна просмотра заявки (значок глаза в журнале):
+ * без своей рамки и с картой покрупнее; `onClose` — крестик в шапке.
  */
 export default function FeaturedOrderCard({
     order,
     onOpen,
     collapsed = false,
     onToggle,
+    bare = false,
+    onClose,
 }: {
     order: any;
     onOpen?: (id: string) => void;
     collapsed?: boolean;
     onToggle?: () => void;
+    bare?: boolean;
+    onClose?: () => void;
 }) {
     const { theme } = useTheme();
     const router = useRouter();
@@ -313,7 +316,7 @@ export default function FeaturedOrderCard({
     const stepDate = (pt: any) => (pt?.expectedDate ? dayjs(pt.expectedDate).format('DD.MM HH:mm') : '');
 
     return (
-        <div className={styles.card}>
+        <div className={bare ? `${styles.card} ${styles.bare}` : styles.card}>
             <div className={styles.head}>
                 <span className={styles.num}>{order.orderNumber}</span>
                 <StatusPill status={order.status} />
@@ -323,12 +326,12 @@ export default function FeaturedOrderCard({
                 <div className={styles.actions}>
                     {phone && (
                         <button type="button" className={styles.act} onClick={() => { window.location.href = `tel:${phone}`; }}>
-                            <PhoneOutlined /> Позвонить
+                            <Phone size={14} /> Позвонить
                         </button>
                     )}
                     {phone && (
                         <button type="button" className={styles.act} onClick={() => window.open(`https://wa.me/${digits}`, '_blank')}>
-                            <WhatsAppOutlined /> WhatsApp
+                            <MessageCircle size={14} /> WhatsApp
                         </button>
                     )}
                     {/* Кнопка есть, только когда машину видно: экран мониторинга
@@ -336,12 +339,12 @@ export default function FeaturedOrderCard({
                         она сломалась. */}
                     {hasDriverPosition && (
                         <button type="button" className={styles.act} onClick={() => router.push('/company/tracking')}>
-                            <EnvironmentOutlined /> На карте
+                            <MapPin size={14} /> На карте
                         </button>
                     )}
                     {onOpen && (
                         <button type="button" className={`${styles.act} ${styles.actPrimary}`} onClick={() => onOpen(order.id)}>
-                            Открыть заявку <RightOutlined />
+                            Открыть заявку <ChevronRight size={14} />
                         </button>
                     )}
                     {onToggle && (
@@ -353,6 +356,11 @@ export default function FeaturedOrderCard({
                             onClick={onToggle}
                         >
                             {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                        </button>
+                    )}
+                    {onClose && (
+                        <button type="button" className={styles.arrow} aria-label="Закрыть" onClick={onClose}>
+                            <X className="h-4 w-4" />
                         </button>
                     )}
                 </div>
@@ -413,37 +421,40 @@ export default function FeaturedOrderCard({
                                     <div className={styles.driverName}>{driverName || 'Водитель не назначен'}</div>
                                     <div className={styles.driverSub}>{[plate, phone].filter(Boolean).join(' · ') || '—'}</div>
                                 </div>
+                                {/* Меню из shadcn, а не antd: карточка открывается и в окне
+                                    просмотра, а выпадающее меню antd поверх такого окна не
+                                    нажималось бы. */}
                                 {phone && (
-                                    <Dropdown
-                                        trigger={['click']}
-                                        placement="topRight"
-                                        menu={{
-                                            items: [
-                                                { key: 'wa', icon: <WhatsAppOutlined style={{ color: '#25D366' }} />, label: 'Написать в WhatsApp' },
-                                                { key: 'call', icon: <PhoneOutlined />, label: `Позвонить · ${phone}` },
-                                                { key: 'copy', icon: <CopyOutlined />, label: 'Скопировать номер' },
-                                            ],
-                                            onClick: ({ key, domEvent }) => {
-                                                domEvent?.stopPropagation?.();
-                                                if (key === 'wa') window.open(`https://wa.me/${digits}`, '_blank');
-                                                else if (key === 'call') window.location.href = `tel:${phone}`;
-                                                else if (key === 'copy') {
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <a
+                                                className="lc2-callbtn"
+                                                role="button"
+                                                aria-label="Связаться с водителем"
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ cursor: 'pointer' }}
+                                            >
+                                                <Phone size={14} />
+                                            </a>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" side="top" className="w-56">
+                                            <DropdownMenuItem className="text-[13px]" onSelect={() => window.open(`https://wa.me/${digits}`, '_blank')}>
+                                                <MessageCircle className="size-4" style={{ color: '#25D366' }} /> Написать в WhatsApp
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="text-[13px]" onSelect={() => { window.location.href = `tel:${phone}`; }}>
+                                                <Phone className="size-4" /> Позвонить · {phone}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="text-[13px]"
+                                                onSelect={() => {
                                                     navigator.clipboard?.writeText(phone);
                                                     toast.success('Номер водителя скопирован');
-                                                }
-                                            },
-                                        }}
-                                    >
-                                        <a
-                                            className="lc2-callbtn"
-                                            role="button"
-                                            aria-label="Связаться с водителем"
-                                            onClick={(e) => e.stopPropagation()}
-                                            style={{ cursor: 'pointer' }}
-                                        >
-                                            <PhoneOutlined />
-                                        </a>
-                                    </Dropdown>
+                                                }}
+                                            >
+                                                <Copy className="size-4" /> Скопировать номер
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 )}
                             </div>
                         </div>

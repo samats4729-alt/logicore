@@ -114,12 +114,12 @@ export default function PayrollLedger({ month, reloadKey, onOpenEmployee }: {
                     <Table className="border-collapse text-[13px]">
                         <TableHeader>
                             <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
-                                <TableHead className="h-9 text-[11px] uppercase tracking-wide">Сотрудник · как платим</TableHead>
-                                <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Рейсов</TableHead>
-                                <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Оклад</TableHead>
-                                <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Проценты</TableHead>
-                                {showBonuses && <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Бонус</TableHead>}
-                                <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Итого</TableHead>
+                                <TableHead className="h-9 text-[12.5px]">Сотрудник · как платим</TableHead>
+                                <TableHead className="h-9 text-right text-[12.5px]">Рейсов</TableHead>
+                                <TableHead className="h-9 text-right text-[12.5px]">Оклад</TableHead>
+                                <TableHead className="h-9 text-right text-[12.5px]">Проценты</TableHead>
+                                {showBonuses && <TableHead className="h-9 text-right text-[12.5px]">Бонус</TableHead>}
+                                <TableHead className="h-9 text-right text-[12.5px]">Итого</TableHead>
                                 <TableHead className="h-9 w-8" />
                             </TableRow>
                         </TableHeader>

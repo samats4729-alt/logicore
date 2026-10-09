@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, pickAntOption } from './helpers';
+import { login, pickFromList } from './helpers';
 
 /**
  * Общая база водителей.
@@ -44,29 +44,29 @@ test.describe('Общая база водителей', () => {
         test.skip(!водители.length, 'на стенде нет водителей');
 
         await page.goto('/company/orders/create');
-        await pickAntOption(page, 'Выберите заказчика', 0);
-        await page.locator('.ant-select-selector').filter({ hasText: 'Выберите перевозчика' }).first().click();
-        await page.locator('.ant-select-item-option:visible').filter({ hasText: перевозчик.name }).first().click();
-        await page.waitForTimeout(600);
+        await pickFromList(page, 'Выберите заказчика', 0);
+        // Выбор — окном с поиском (владелец, 08.10.2026).
+        const окно = page.locator('[data-list-picker]');
+        await page.locator('[data-picker-field]').filter({ hasText: 'Выберите перевозчика' }).first().click();
+        await окно.getByRole('textbox', { name: 'Поиск' }).fill(перевозчик.name);
+        await окно.locator('[data-picker-option]').filter({ hasText: перевозчик.name }).first().click();
+        await expect(окно).toHaveCount(0);
 
-        const выбор = page.locator('.ant-select-selector').filter({ hasText: 'Выберите водителя из базы' }).first();
-        await выбор.click();
+        await page.locator('[data-picker-field]').filter({ hasText: 'Выберите водителя из базы' }).first().click();
+        const поиск = окно.getByRole('textbox', { name: 'Поиск' });
 
-        // Список длинный и прокручивается, поэтому ищем по фамилии — так же,
-        // как диспетчер. Находиться должны и прописанные у других ИП.
+        // Список длинный, поэтому ищем по фамилии — так же, как диспетчер.
+        // Находиться должны и прописанные у других ИП.
         for (const в of водители.slice(0, 3)) {
-            await page.keyboard.press('Control+A');
-            await page.keyboard.type(в.lastName);
+            await поиск.fill(в.lastName);
             await expect(
-                page.locator('.ant-select-item-option:visible').filter({ hasText: в.lastName }).first(),
+                окно.locator('[data-picker-option]').filter({ hasText: в.lastName }).first(),
                 `водитель ${в.lastName} (прописан у «${в.companyName}») не нашёлся в заявке «${перевозчик.name}»`,
             ).toBeVisible();
         }
 
         // «Добавить нового» на виду при любом поиске: не нашёл — сразу заводит.
-        await expect(
-            page.locator('.ant-select-item-option:visible').filter({ hasText: 'Добавить нового водителя' }),
-        ).toBeVisible();
+        await expect(окно.getByRole('button', { name: 'Добавить нового водителя' })).toBeVisible();
     });
 
     test('в заявке окно назначения сразу на водителе — перевозчик взят из заявки', async ({ page }) => {
@@ -144,15 +144,16 @@ test.describe('Общая база водителей', () => {
         test.skip(!сМашиной, 'на стенде нет водителя с госномером');
 
         await page.goto('/company/orders/create');
-        await pickAntOption(page, 'Выберите заказчика', 0);
-        await pickAntOption(page, 'Выберите перевозчика', 0);
-        const выбор = page.locator('.ant-select-selector').filter({ hasText: 'Выберите водителя из базы' });
+        await pickFromList(page, 'Выберите заказчика', 0);
+        await pickFromList(page, 'Выберите перевозчика', 0);
+        const выбор = page.locator('[data-picker-field]').filter({ hasText: 'Выберите водителя из базы' });
         test.skip(await выбор.count() === 0, 'у первого перевозчика водителя назначают сами (он на платформе)');
 
         await выбор.first().click();
-        await page.keyboard.type(String(сМашиной.vehiclePlate).slice(0, 5));
+        const окно = page.locator('[data-list-picker]');
+        await окно.getByRole('textbox', { name: 'Поиск' }).fill(String(сМашиной.vehiclePlate).slice(0, 5));
         await expect(
-            page.locator('.ant-select-item-option:visible').filter({ hasText: сМашиной.lastName }).first(),
+            окно.locator('[data-picker-option]').filter({ hasText: сМашиной.lastName }).first(),
         ).toBeVisible();
     });
 });

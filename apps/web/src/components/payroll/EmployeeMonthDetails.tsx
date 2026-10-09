@@ -43,7 +43,7 @@ export default function EmployeeMonthDetails({ data, showTotal = true, who = 'em
             {showTotal && (
                 // Итог месяца — одна главная цифра, разбивка под ней.
                 <section>
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Начислено за месяц</div>
+                    <div className="text-[12px] font-medium text-muted-foreground">Начислено за месяц</div>
                     <div className="mt-1 text-[24px] font-bold tabular-nums">{тенге(data.totals.total)}</div>
                     <div className="text-muted-foreground">
                         {[

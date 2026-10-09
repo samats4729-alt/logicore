@@ -14,7 +14,7 @@ test.describe('Документы заявки', () => {
         await login(page);
         await page.goto('/company/orders');
 
-        const firstRow = page.locator('.ant-table-row').first();
+        const firstRow = page.locator('[data-order-row]').first();
         await expect(firstRow).toBeVisible();
         await firstRow.locator('button').last().click();
         await page.waitForURL(/\/company\/orders\/[^/]+$/);
@@ -53,7 +53,7 @@ test.describe('Документы заявки', () => {
 
         // Рейс с заполненными условиями расчётов: у него проведение проходит.
         // Демо-стенд заводит такой (ЗК-2607, перевозчик «Алтын Жол»).
-        const row = page.locator('.ant-table-row').filter({ hasText: 'ЗК-2607' }).first();
+        const row = page.locator('[data-order-row]').filter({ hasText: 'ЗК-2607' }).first();
         await expect(
             row,
             'Нет рейса ЗК-2607. Его заводит prisma/seed-demo.js — проверьте, что сид отработал.',
@@ -85,7 +85,7 @@ test.describe('Документы заявки', () => {
 
         // Тот же рейс с заполненными условиями: у перевозчика «Алтын Жол»
         // отсрочка идёт от оригиналов накладных.
-        const row = page.locator('.ant-table-row').filter({ hasText: 'ЗК-2607' }).first();
+        const row = page.locator('[data-order-row]').filter({ hasText: 'ЗК-2607' }).first();
         await expect(
             row,
             'Нет рейса ЗК-2607. Его заводит prisma/seed-demo.js — проверьте, что сид отработал.',
@@ -124,7 +124,7 @@ test.describe('Документы заявки', () => {
         // Сообщение при падении обязательно: на стенде из одних завершённых
         // рейсов эта строка просто не находится, и без объяснения проверка
         // выглядит поломкой страницы, а не нехваткой данных.
-        const inWork = page.locator('.ant-table-row').filter({ hasNot: page.getByText('Завершён') }).first();
+        const inWork = page.locator('[data-order-row]').filter({ hasNot: page.getByText('Завершён') }).first();
         await expect(
             inWork,
             'В списке нет рейса в работе. Демо-стенд заводит такой рейс (ЗК-2606, «В пути») — '

@@ -103,12 +103,12 @@ export default function ParkTripsPage() {
                         <Table className="hidden border-collapse text-[13px] md:table">
                             <TableHeader>
                                 <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Маршрут</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Водитель</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Погрузка</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Для компании</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Статус</TableHead>
-                                    <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">За рейс</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Маршрут</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Водитель</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Погрузка</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Для компании</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Статус</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">За рейс</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

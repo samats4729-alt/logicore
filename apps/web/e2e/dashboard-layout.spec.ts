@@ -2,148 +2,242 @@ import { expect, test, type Page } from '@playwright/test';
 import { login } from './helpers';
 
 /**
- * Раскладка дашборда (просьба владельца от 23.09.2026: «равновесие
- * нарушено… один выше другого… активность на всю ширину длинный»).
+ * Дашборд-конструктор (макет владельца «LogiCore на shadcn Nova», 07.10.2026).
  *
- * Ломается она молча: разметка на месте, данные на месте, а карточки снова
- * стоят лесенкой — и замечает это владелец, а не проверки. Поэтому здесь
- * проверяется то, что видно глазом, — положение и размеры карточек, а не
- * их содержимое.
- *
- * Данные на стенде бывают любыми (чеки и входящие счета появляются только
- * когда они есть), поэтому проверки не расписывают, какой блок где стоит, —
- * только правила: края в ряду совпадают, активность не во всю ширину,
- * тариф в ряду плиток.
+ * Ломается он молча: блоки на месте, а перетаскивание, свёртка или
+ * «Вернуть» не работают, или ряд встаёт лесенкой. Поэтому проверяем то, что
+ * делает человек руками, и то, что видно глазом, — положение и размеры, а не
+ * содержимое: данные на стенде бывают любыми.
  */
 
-/** Карточки блоков дашборда — дети той же сетки, что и «Активность». */
-async function карточки(page: Page) {
-    const активность = page.locator('section', { has: page.getByRole('heading', { name: 'Активность', exact: true }) });
-    await expect(активность).toBeVisible();
-    // Ждём, пока блоки догрузятся: до ответа сервера карточки ниже и
-    // сравнивать их края рано.
-    await expect(активность.locator('table')).toBeVisible();
+const LAYOUT_KEY = 'lc_dashboard_layout_v5';
+
+async function открыть(page: Page) {
+    await page.goto('/company');
+    await expect(page.locator('[data-widget="chart"]')).toBeVisible({ timeout: 60_000 });
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(500);
-    const сетка = активность.locator('xpath=..');
-    return { активность, сетка, блоки: сетка.locator(':scope > section') };
 }
 
-test.describe('Раскладка дашборда', () => {
+test.describe('Дашборд-конструктор', () => {
     test.beforeEach(async ({ page }) => {
         await login(page);
-        // Свёрнутые блоки живут в браузере — начинаем с полного набора.
-        await page.evaluate(() => localStorage.setItem('lc_dashboard_hidden_blocks', '[]'));
+        // Расстановка живёт в браузере — каждый тест начинает с макетной.
+        await page.evaluate((k) => localStorage.removeItem(k), LAYOUT_KEY);
     });
 
-    test('на мониторе карточки одного ряда кончаются на одной высоте', async ({ page }) => {
-        await page.setViewportSize({ width: 1440, height: 900 });
-        await page.goto('/company');
-        const { блоки } = await карточки(page);
-
-        const рамки = await блоки.evaluateAll((els) => els.map((el) => {
-            const r = el.getBoundingClientRect();
-            return { top: Math.round(r.top), bottom: Math.round(r.bottom) };
-        }));
-        expect(рамки.length).toBeGreaterThan(1);
-
-        // Ряд — карточки с общим верхним краем. Нижние края у них обязаны
-        // совпасть: лесенка из карточек разной высоты и была жалобой.
-        const ряды = new Map<number, number[]>();
-        for (const { top, bottom } of рамки) {
-            ряды.set(top, [...(ряды.get(top) ?? []), bottom]);
+    test('по умолчанию — расстановка из макета', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        for (const kpi of ['inWork', 'pending', 'problems', 'ordersMonth', 'revenue']) {
+            await expect(page.locator(`[data-kpi="${kpi}"]`)).toBeVisible();
         }
-        for (const [top, низы] of Array.from(ряды.entries())) {
-            const разброс = Math.max(...низы) - Math.min(...низы);
-            expect(разброс, `в ряду с верхом ${top} карточки разной высоты: ${низы.join(', ')}`).toBeLessThanOrEqual(1);
+        for (const block of ['Выручка и маржа по неделям', 'Календарь погрузок', 'Ближайшие погрузки', 'Требуют внимания', 'Активность']) {
+            await expect(page.getByRole('heading', { name: block, exact: true })).toBeVisible();
         }
+        const ряды = await page.locator('[data-row]').evaluateAll((rows) =>
+            rows.map((r) => Array.from(r.querySelectorAll('[data-drop-area]')).map((x) => x.getAttribute('data-drop-area')).join(',')));
+        expect(ряды.slice(0, 3)).toEqual([
+            'inWork,pending,problems,ordersMonth,revenue',
+            'chart,calendar',
+            'upcoming,attention',
+        ]);
     });
 
-    test('«Активность» занимает две трети ряда, а не всю ширину', async ({ page }) => {
+    test('блоки одного ряда — одной высоты, края совпадают', async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
-        await page.goto('/company');
-        const { активность, сетка } = await карточки(page);
-
-        const ширинаСетки = (await сетка.boundingBox())!.width;
-        const ширина = (await активность.boundingBox())!.width;
-        const доля = ширина / ширинаСетки;
-        expect(доля, `активность заняла ${Math.round(доля * 100)}% ряда`).toBeGreaterThan(0.6);
-        expect(доля, `активность заняла ${Math.round(доля * 100)}% ряда`).toBeLessThan(0.7);
-    });
-
-    test('шапки всех блоков одного вида', async ({ page }) => {
-        await page.setViewportSize({ width: 1440, height: 900 });
-        await page.goto('/company');
-        const { блоки } = await карточки(page);
-
-        // Раньше у половины блоков был свой заголовок — крупный жирный на
-        // белом, у другой половины серая полоса. Сравниваем вычисленный
-        // стиль, а не классы: у сломанной шапки разметка правильная.
-        const виды = await блоки.evaluateAll((els) => els.map((el) => {
-            const h = el.querySelector('h2');
-            const шапка = h?.parentElement;
-            if (!h || !шапка) return 'нет шапки';
-            const t = getComputedStyle(h);
-            const s = getComputedStyle(шапка);
-            return [t.fontFamily, t.fontSize, t.fontWeight, s.backgroundColor, s.borderBottomWidth].join(' | ');
+        await открыть(page);
+        const разброс = await page.locator('[data-row]').evaluateAll((rows) => rows.map((r) => {
+            const boxes = Array.from(r.querySelectorAll('[data-drop-area]')).map((x) => x.getBoundingClientRect());
+            const tops = boxes.map((b) => b.top);
+            const heights = boxes.map((b) => b.height);
+            return Math.max(Math.max(...tops) - Math.min(...tops), Math.max(...heights) - Math.min(...heights));
         }));
-        expect(new Set(виды).size, `шапки различаются:\n${виды.join('\n')}`).toBe(1);
-        expect(виды[0]).not.toBe('нет шапки');
+        for (const d of разброс) expect(d, 'в ряду блоки стоят лесенкой').toBeLessThanOrEqual(1);
     });
 
-    test('тариф — плиткой в ряду показателей, а не отдельной полосой', async ({ page }) => {
+    /** Карточка не вылезает за свой ряд и не налезает на соседний (владелец, 08.10.2026). */
+    test('блоки не налезают друг на друга — и после растягивания ряда', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const налезают = () => page.locator('[data-row]').evaluateAll((rows) => {
+            const bad: string[] = [];
+            for (const r of rows) {
+                const rb = r.getBoundingClientRect();
+                for (const card of Array.from(r.querySelectorAll('[data-widget]'))) {
+                    const cb = card.getBoundingClientRect();
+                    if (cb.bottom > rb.bottom + 1 || cb.top < rb.top - 1) bad.push(card.getAttribute('data-widget')!);
+                }
+            }
+            return bad;
+        });
+        expect(await налезают()).toEqual([]);
+        // Ряд с показателями тянем вниз и обратно вверх: плашки меняют вид, но из ряда не вылезают.
+        const ручка = (await page.locator('[data-slot="row-handle"]').first().boundingBox())!;
+        await page.mouse.move(ручка.x + ручка.width / 2, ручка.y + ручка.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(ручка.x + ручка.width / 2, ручка.y + 260, { steps: 10 });
+        await page.mouse.move(ручка.x + ручка.width / 2, ручка.y + 20, { steps: 10 });
+        await page.mouse.up();
+        await page.waitForTimeout(300);
+        expect(await налезают()).toEqual([]);
+    });
+
+    /**
+     * Ширина (владелец, 08.10.2026). Граница между блоками меняет только двух
+     * соседей. Край ряда ужимает весь ряд, и блок снизу поднимается в
+     * освободившееся место; потянул обратно — его выталкивает вниз.
+     */
+    test('граница между блоками меняет только двух соседей', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const ширина = async (id: string) => (await page.locator(`[data-drop-area="${id}"]`).boundingBox())!.width;
+        const до = { chart: await ширина('chart'), calendar: await ширина('calendar'), upcoming: await ширина('upcoming') };
+        const ручка = page.locator('[data-handle-for="chart"]');
+        await expect(ручка).toHaveAttribute('data-handle-kind', 'divider');
+        const к = (await ручка.boundingBox())!;
+        await page.mouse.move(к.x + к.width / 2, к.y + к.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(к.x + к.width / 2 - 200, к.y + к.height / 2, { steps: 10 });
+        await page.mouse.up();
+        expect(до.chart - (await ширина('chart'))).toBeGreaterThan(150);
+        expect((await ширина('calendar')) - до.calendar).toBeGreaterThan(150);
+        // Соседний ряд не тронут.
+        expect(Math.abs((await ширина('upcoming')) - до.upcoming)).toBeLessThanOrEqual(1);
+        const ряд = await page.locator('[data-drop-area="chart"]').evaluate((el) =>
+            Array.from(el.closest('[data-row]')!.querySelectorAll('[data-drop-area]')).map((x) => x.getAttribute('data-drop-area')));
+        expect(ряд).toEqual(['chart', 'calendar']);
+    });
+
+    test('край ряда: ужал — блок снизу поднялся, потянул обратно — ушёл вниз', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const ряд = (id: string) => page.locator(`[data-drop-area="${id}"]`).evaluate((el) =>
+            Array.from(el.closest('[data-row]')!.querySelectorAll('[data-drop-area]')).map((x) => x.getAttribute('data-drop-area')));
+        const ширина = async (id: string) => (await page.locator(`[data-drop-area="${id}"]`).boundingBox())!.width;
+        expect(await ряд('upcoming')).toEqual(['upcoming', 'attention']);
+        const до = { upcoming: await ширина('upcoming'), attention: await ширина('attention') };
+
+        const поле = (await page.locator('[data-dashboard-field]').boundingBox())!;
+        const колонка = поле.width / 120;
+        const ручка = page.locator('[data-handle-for="attention"]');
+        await expect(ручка).toHaveAttribute('data-handle-kind', 'edge');
+        const к = (await ручка.boundingBox())!;
+        const x0 = к.x + к.width / 2;
+        const y0 = к.y + к.height / 2;
+        await page.mouse.move(x0, y0);
+        await page.mouse.down();
+        await page.mouse.move(x0 - 36 * колонка, y0, { steps: 15 });
+        // Ещё держим мышку: ужались оба блока ряда, а «Активность» поднялась к ним.
+        expect(await ряд('upcoming')).toEqual(['upcoming', 'attention', 'activity']);
+        expect(await ширина('upcoming')).toBeLessThan(до.upcoming - 50);
+        expect(await ширина('attention')).toBeLessThan(до.attention - 30);
+        // Тянем обратно — «Активность» вытолкнуло вниз, ряд как был.
+        await page.mouse.move(x0, y0, { steps: 15 });
+        expect(await ряд('upcoming')).toEqual(['upcoming', 'attention']);
+        expect((await ряд('activity'))[0]).toBe('activity');
+        // И снова влево — отпускаем там.
+        await page.mouse.move(x0 - 36 * колонка, y0, { steps: 15 });
+        await page.mouse.up();
+        await page.waitForTimeout(100);
+        expect(await ряд('upcoming')).toEqual(['upcoming', 'attention', 'activity']);
+
+        // Ряды — до правого края: ни пустоты справа, ни «выступов».
+        const правыеКрая = await page.locator('[data-row]').evaluateAll((rows) => rows.map((r) => {
+            const items = Array.from(r.querySelectorAll('[data-drop-area]'));
+            return items[items.length - 1].getBoundingClientRect().right;
+        }));
+        for (const x of правыеКрая) expect(Math.abs(x - (поле.x + поле.width)), 'ряд не доходит до правого края').toBeLessThanOrEqual(2);
+
+        // Граница внутри ряда теперь между «Требуют внимания» и «Активностью» — меняет только их.
+        const сейчас = { upcoming: await ширина('upcoming'), attention: await ширина('attention'), activity: await ширина('activity') };
+        await expect(ручка).toHaveAttribute('data-handle-kind', 'divider');
+        const к2 = (await ручка.boundingBox())!;
+        await page.mouse.move(к2.x + к2.width / 2, к2.y + к2.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(к2.x + к2.width / 2 + 60, к2.y + к2.height / 2, { steps: 10 });
+        await page.mouse.up();
+        expect(Math.abs((await ширина('upcoming')) - сейчас.upcoming)).toBeLessThanOrEqual(1);
+        expect((await ширина('attention')) - сейчас.attention).toBeGreaterThan(40);
+        expect(сейчас.activity - (await ширина('activity'))).toBeGreaterThan(40);
+        expect(await ряд('upcoming')).toEqual(['upcoming', 'attention', 'activity']);
+    });
+
+    /** Узкое окно не «запоминается»: расширил обратно — расстановка как была. */
+    test('сузил окно и расширил — показатели снова в один ряд', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        const первыйРяд = () => page.locator('[data-row]').first().evaluate((r) =>
+            Array.from(r.querySelectorAll('[data-drop-area]')).map((x) => x.getAttribute('data-drop-area')).join(','));
+        expect(await первыйРяд()).toBe('inWork,pending,problems,ordersMonth,revenue');
+        // Ждём результат, а не таймер: на нагруженной машине ряды перестраиваются не сразу.
+        await page.setViewportSize({ width: 1100, height: 900 });
+        await expect.poll(первыйРяд, { timeout: 10_000 }).not.toBe('inWork,pending,problems,ordersMonth,revenue');
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await expect.poll(первыйРяд, { timeout: 10_000 }).toBe('inWork,pending,problems,ordersMonth,revenue');
+    });
+
+    test('«Убрать» — с кнопкой «Вернуть», и расстановка запоминается', async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
-        await page.goto('/company');
+        await открыть(page);
+        await page.locator('[data-widget="upcoming"]').getByRole('button', { name: 'Действия с блоком' }).click();
+        await page.getByRole('menuitem', { name: 'Убрать с дашборда' }).click();
+        await expect(page.locator('[data-widget="upcoming"]')).toHaveCount(0);
 
-        const тариф = page.getByText('Тариф', { exact: true }).locator('xpath=../..');
-        const вРаботе = page.getByText('Сейчас в работе', { exact: true }).locator('xpath=../..');
-        await expect(тариф).toBeVisible();
-        await expect(вРаботе).toBeVisible();
+        await page.locator('[data-sonner-toast] button', { hasText: 'Вернуть' }).click();
+        await expect(page.locator('[data-widget="upcoming"]')).toHaveCount(1);
 
-        const a = (await тариф.boundingBox())!;
-        const b = (await вРаботе.boundingBox())!;
-        expect(Math.abs(a.y - b.y), 'тариф стоит не в ряду плиток').toBeLessThanOrEqual(1);
-        expect(Math.abs(a.height - b.height), 'тариф другой высоты, чем соседние плитки').toBeLessThanOrEqual(1);
+        // Убираем снова — и после перезагрузки блока нет: выбор запомнился.
+        await page.locator('[data-widget="upcoming"]').getByRole('button', { name: 'Действия с блоком' }).click();
+        await page.getByRole('menuitem', { name: 'Убрать с дашборда' }).click();
+        await page.reload();
+        await expect(page.locator('[data-widget="chart"]')).toBeVisible({ timeout: 60_000 });
+        await expect(page.locator('[data-widget="upcoming"]')).toHaveCount(0);
     });
 
-    test('на телефоне ничего не уезжает вбок, а активность видна целиком', async ({ page }) => {
+    test('«Блоки»: добавить блок новым рядом снизу и вернуть как было', async ({ page }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await открыть(page);
+        await page.getByRole('button', { name: /^Блоки/ }).click();
+        await page.getByLabel('Добавить «Последние события»').click();
+        await page.getByRole('menuitem', { name: 'Снизу' }).click();
+        await expect(page.locator('[data-widget="events"]')).toHaveCount(1);
+
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: /^Блоки/ }).click();
+        await page.getByRole('button', { name: 'Как было' }).click();
+        await expect(page.locator('[data-widget="events"]')).toHaveCount(0);
+    });
+
+    test('блок сворачивается вбок и разворачивается', async ({ page }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await открыть(page);
+        await page.locator('[data-widget="attention"]').getByRole('button', { name: 'Свернуть блок' }).click();
+        const полоска = page.getByRole('button', { name: 'Развернуть блок «Требуют внимания»' });
+        await expect(полоска).toBeVisible();
+        const w = (await page.locator('[data-drop-area="attention"]').boundingBox())!.width;
+        expect(w, 'свёрнутый блок не сузился').toBeLessThan(120);
+        await полоска.click();
+        await expect(page.getByRole('heading', { name: 'Требуют внимания', exact: true })).toBeVisible();
+    });
+
+    test('перетаскивание: блок встаёт слева от того, на что навели', async ({ page }) => {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await открыть(page);
+        await page.locator('[data-grip="attention"]').dragTo(page.locator('[data-drop-area="upcoming"]'), { targetPosition: { x: 20, y: 150 } });
+        const ряд = await page.locator('[data-drop-area="upcoming"]').evaluate((el) =>
+            Array.from(el.closest('[data-row]')!.querySelectorAll('[data-drop-area]')).map((x) => x.getAttribute('data-drop-area')));
+        // «Требуют внимания» встал перед погрузками — в том же ряду.
+        expect(ряд).toEqual(['attention', 'upcoming']);
+    });
+
+    test('на телефоне ничего не уезжает вбок, блоки идут друг под другом', async ({ page }) => {
         await page.setViewportSize({ width: 390, height: 844 });
-        await page.goto('/company');
-        const { активность } = await карточки(page);
-
+        await открыть(page);
         const вбок = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         expect(вбок, 'страница прокручивается вбок').toBe(0);
-
-        // Раньше за краем таблицы оставались этот месяц и динамика — ровно
-        // то, ради чего в неё смотрят. Теперь шапки столбцов нет, а каждая
-        // строка складывается вдвое и помещается в карточку.
-        await expect(активность.locator('thead')).toBeHidden();
-        const влезает = await активность.locator('tbody tr').evaluateAll((rows) => rows.every((tr) => {
-            const r = tr.getBoundingClientRect();
-            const card = tr.closest('section')!.getBoundingClientRect();
-            return r.right <= card.right + 0.5 && tr.scrollWidth <= tr.clientWidth + 1;
-        }));
-        expect(влезает, 'строка активности не помещается в карточку').toBe(true);
-    });
-
-    test('«Настроить» сворачивает блок и помнит выбор', async ({ page }) => {
-        await page.setViewportSize({ width: 1440, height: 900 });
-        await page.goto('/company');
-        await карточки(page);
-
-        await page.getByRole('button', { name: 'Настроить' }).click();
-        const галочка = page.getByRole('checkbox', { name: 'Последние события' });
-        await expect(галочка).toBeVisible();
-
-        // Квадратная, а не круглая: круг читается как «выбрать одно из».
-        const радиус = await галочка.evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius));
-        expect(радиус, 'галочка в настройках круглая').toBeLessThanOrEqual(5);
-
-        await галочка.click();
-        await expect(page.getByRole('heading', { name: 'Последние события' })).toHaveCount(0);
-        expect(await page.evaluate(() => localStorage.getItem('lc_dashboard_hidden_blocks'))).toContain('events');
-
-        await галочка.click();
-        await expect(page.getByRole('heading', { name: 'Последние события' })).toBeVisible();
+        const график = (await page.locator('[data-widget="chart"]').boundingBox())!;
+        const календарь = (await page.locator('[data-widget="calendar"]').boundingBox())!;
+        expect(календарь.y, 'календарь не под графиком').toBeGreaterThan(график.y + график.height - 1);
     });
 });

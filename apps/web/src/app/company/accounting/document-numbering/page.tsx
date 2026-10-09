@@ -172,13 +172,13 @@ export default function DocumentNumberingPage() {
         <div className="mx-auto w-full max-w-5xl px-4 py-6">
             <button
                 onClick={() => router.push('/company/finance')}
-                className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                className="mb-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
             >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Финансы
             </button>
 
-            <h1 className="text-2xl font-semibold tracking-tight">Нумерация счетов и актов</h1>
+            <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-foreground">Нумерация счетов и актов</h1>
             <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
                 Номер собирается из трёх частей: префикс, число и сколько в нём цифр. Префикс «АВ-»,
                 номер 10002 и восемь цифр дают <span className="font-mono">АВ-00010002</span>.

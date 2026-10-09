@@ -5,6 +5,7 @@ import { CompanyController } from './company.controller';
 import { CompanyVerificationController } from './company-verification.controller';
 import { MyCompanyController } from './my-company.controller';
 import { CompanyService } from './company.service';
+import { DashboardBoardService } from './dashboard-board.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CompanyDriversService } from './services/company-drivers.service';
 import { CompanyTrackingService } from './services/company-tracking.service';
@@ -46,7 +47,7 @@ import { AccountingModule } from '../accounting/accounting.module';
         }),
     ],
     controllers: [CompanyController, CompanyVerificationController, MyCompanyController],
-    providers: [CompanyService, CompanyDriversService, CompanyTrackingService],
+    providers: [CompanyService, CompanyDriversService, CompanyTrackingService, DashboardBoardService],
     // Ре-экспорт модулем, а не провайдером: экспортировать чужой
     // провайдер Nest не даёт.
     exports: [CompanyService, CompanyDriversService, CompanyTrackingService, CompanyVerificationModule],

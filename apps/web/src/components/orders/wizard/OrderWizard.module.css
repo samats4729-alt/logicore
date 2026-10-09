@@ -1,0 +1,116 @@
+/* Мастер заявки в окне — поля Ant Design в виде полей shadcn (макет «Nova»):
+   32 точки высотой, радиус 8, тонкая рамка цвета полей, без тени, 13px.
+   Всё в пределах .wizard: на остальных экранах antd выглядит как раньше. */
+
+.wizard {
+    font-size: 13px;
+    color: hsl(var(--foreground));
+}
+
+.wizard :global(.ant-form-item) {
+    margin-bottom: 12px;
+}
+
+.wizard :global(.ant-form-item-label) {
+    padding: 0 0 4px;
+    line-height: 1.2;
+}
+
+/* Подписи тёмные и плотные, как у полей shadcn рядом (LABEL в мастере):
+   серые сливались с подсказками в полях (владелец, 08.10.2026). */
+.wizard :global(.ant-form-item-label > label) {
+    height: auto;
+    font-size: 12px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+}
+
+.wizard :global(.ant-form-item-label > label.ant-form-item-required:not(.ant-form-item-required-mark-optional)::before) {
+    color: hsl(var(--destructive));
+    font-size: 12px;
+}
+
+.wizard :global(.ant-form-item-explain-error) {
+    font-size: 12px;
+    color: hsl(var(--destructive));
+}
+
+/* Рамка, высота, радиус — у всех однострочных полей antd. */
+.wizard :global(.ant-input-number),
+.wizard :global(.ant-picker),
+.wizard :global(.ant-select:not(.ant-select-customize-input) .ant-select-selector),
+.wizard :global(.ant-input-affix-wrapper) {
+    min-height: 32px;
+    border-color: hsl(var(--input)) !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    font-size: 13px;
+}
+
+.wizard :global(.ant-select-single:not(.ant-select-customize-input) .ant-select-selector) {
+    height: 32px;
+}
+
+.wizard :global(.ant-select-single .ant-select-selector .ant-select-selection-item),
+.wizard :global(.ant-select-single .ant-select-selector .ant-select-selection-placeholder),
+.wizard :global(.ant-select-single .ant-select-selector .ant-select-selection-search-input) {
+    line-height: 30px !important;
+    height: 30px !important;
+    font-size: 13px;
+}
+
+.wizard :global(.ant-select-selection-placeholder),
+.wizard :global(.ant-picker-input > input::placeholder),
+.wizard :global(.ant-input-number-input::placeholder) {
+    color: hsl(var(--muted-foreground)) !important;
+}
+
+.wizard :global(.ant-input-number-input) {
+    height: 30px;
+    font-size: 13px;
+}
+
+.wizard :global(.ant-picker-input > input) {
+    font-size: 13px;
+}
+
+/* Сумма с валютой: валюта — часть поля, без своей серой подложки. */
+.wizard :global(.ant-input-number-group-wrapper .ant-input-number) {
+    border-radius: 8px 0 0 8px !important;
+}
+
+.wizard :global(.ant-input-number-group-addon) {
+    background: transparent !important;
+    border-color: hsl(var(--input)) !important;
+    border-radius: 0 8px 8px 0 !important;
+}
+
+.wizard :global(.ant-input-number-group-addon .ant-select .ant-select-selector) {
+    border: 0 !important;
+    min-height: 30px;
+    height: 30px;
+}
+
+/* Фокус — тонкое кольцо, как у полей shadcn. */
+.wizard :global(.ant-input-number-focused),
+.wizard :global(.ant-input-number:focus-within),
+.wizard :global(.ant-picker-focused),
+.wizard :global(.ant-select-focused:not(.ant-select-disabled) .ant-select-selector) {
+    border-color: hsl(var(--ring)) !important;
+    box-shadow: 0 0 0 1px hsl(var(--ring)) !important;
+}
+
+/* Ошибка — красная рамка у любого поля, и у полей shadcn тоже. */
+.wizard :global(.ant-form-item-has-error) :global(.ant-input-number),
+.wizard :global(.ant-form-item-has-error) :global(.ant-picker),
+.wizard :global(.ant-form-item-has-error) :global(.ant-select-selector),
+.wizard :global(.ant-form-item-has-error) :global(.lc-ui-field),
+.wizard :global(.ant-form-item-has-error) button[role='combobox'] {
+    border-color: hsl(var(--destructive)) !important;
+}
+
+/* Кнопки внутри мастера — цветом текста, а не системным цветом браузера. */
+:where(.wizard) :where(button) {
+    color: inherit;
+}

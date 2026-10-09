@@ -346,7 +346,7 @@ export default function CounterpartyReportPage() {
     }
 
     return (
-        <div className="lc-page" style={{ maxWidth: 1600, margin: '0 auto' }}>
+        <div className="lc-page lc-cp-report" style={{ maxWidth: 1600, margin: '0 auto' }}>
             {/* ===== HERO 2026 ===== */}
             <div className="lc2-hero">
                 <div>
@@ -730,33 +730,33 @@ export default function CounterpartyReportPage() {
                 onClose={() => setShareModal({ open: false, counterpartyId: '', ourRole: '', counterpartyName: '' })}
             />
 
-            {/* COMPACT TABLE STYLES */}
+            {/* Плотная сетка — только на этой странице (`.lc-cp-report`): глобальные
+                правила перекрашивали маленькие таблицы всего кабинета. Шапка —
+                обычными буквами, как в остальных таблицах по макету Nova. */}
             <style jsx global>{`
-                .ant-table-small .ant-table-thead > tr > th {
+                .lc-cp-report .ant-table-small .ant-table-thead > tr > th {
                     padding: 6px 8px !important;
-                    font-size: 11px !important;
-                    font-weight: 600 !important;
+                    font-size: 12.5px !important;
+                    font-weight: 500 !important;
                     background: ${token.colorBgLayout} !important;
-                    text-transform: uppercase;
-                    letter-spacing: 0.3px;
                     color: ${token.colorTextSecondary} !important;
                     white-space: nowrap;
                 }
-                .ant-table-small .ant-table-tbody > tr > td {
-                    padding: 4px 8px !important;
-                    font-size: 12px !important;
+                .lc-cp-report .ant-table-small .ant-table-tbody > tr > td {
+                    padding: 6px 8px !important;
+                    font-size: 13px !important;
                     border-bottom: 1px solid ${token.colorBorderSecondary} !important;
                 }
-                .ant-table-small .ant-table-tbody > tr:hover > td {
-                    background: ${token.colorPrimaryBg} !important;
+                .lc-cp-report .ant-table-small .ant-table-tbody > tr:hover > td {
+                    background: var(--nova-hover) !important;
                 }
-                .ant-table-small .ant-table-tbody > tr.row-completed > td {
+                .lc-cp-report .ant-table-small .ant-table-tbody > tr.row-completed > td {
                     background: ${token.colorSuccessBg} !important;
                 }
-                .ant-table-small .ant-table-tbody > tr.row-problem > td {
+                .lc-cp-report .ant-table-small .ant-table-tbody > tr.row-problem > td {
                     background: ${token.colorErrorBg} !important;
                 }
-                .ant-table-small .ant-table-tbody > tr.row-overdue > td {
+                .lc-cp-report .ant-table-small .ant-table-tbody > tr.row-overdue > td {
                     background: ${token.colorErrorBg} !important;
                     box-shadow: inset 3px 0 0 ${token.colorError};
                 }

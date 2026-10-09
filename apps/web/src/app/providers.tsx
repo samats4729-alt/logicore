@@ -13,6 +13,18 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '5010908858
 
 const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
+/**
+ * Основной текст полей, списков и таблиц — 13 точек.
+ *
+ * Компактный режим antd считает шрифт от уменьшенного размера, и на старых
+ * экранах поля, выпадающие списки, даты, ячейки таблиц и страницы таблиц
+ * выходили 10-точечными — мельче, чем допускают правила интерфейса (11 —
+ * предел, основной текст — 13). Высоты полей от этого не меняются: их
+ * держит controlHeight. Задаём размер по компонентам, а не всей теме:
+ * компактные отступы при этом остаются, а текст читается.
+ */
+const TEXT = { fontSize: 13 } as const;
+
 function AntdConfig({ children }: { children: React.ReactNode }) {
     const { theme: currentTheme } = useTheme();
     const isDark = currentTheme === 'dark';
@@ -50,46 +62,74 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                             fontWeight: 500,
                             borderRadius: 10,
                             controlHeight: 32,
+                            contentFontSize: 13,
+                            contentFontSizeSM: 12,
                         },
                         Table: {
-                            headerBg: '#fafafa',
-                            headerColor: '#6b7280',
+                            ...TEXT,
                             headerSplitColor: 'transparent',
-                            rowHoverBg: '#f5f8ff',
                             cellPaddingBlock: 9,
-                            borderColor: '#efeff2',
+                            // Светлые цвета шапки и строк — только для светлой темы. Были
+                            // заданы для обеих, и в тёмной шапка таблицы оставалась почти
+                            // белой полосой поперёк тёмной страницы.
+                            ...(isDark ? {} : {
+                                headerBg: '#fafafa',
+                                headerColor: '#6b7280',
+                                rowHoverBg: '#f6f7f9',
+                                borderColor: '#efeff2',
+                            }),
                         },
                         Card: {
                             borderRadiusLG: 16,
                             colorBorderSecondary: '#e8e9ee',
                         },
                         Modal: {
+                            ...TEXT,
                             borderRadiusLG: 16,
                         },
                         Input: {
+                            ...TEXT,
                             controlHeight: 32,
                             activeShadow: '0 0 0 3px rgba(22, 119, 255, 0.12)',
                         },
                         InputNumber: {
+                            ...TEXT,
                             controlHeight: 32,
                         },
                         Select: {
+                            ...TEXT,
                             controlHeight: 32,
                             borderRadiusLG: 12,
                         },
                         DatePicker: {
+                            ...TEXT,
                             controlHeight: 32,
                         },
+                        Pagination: TEXT,
+                        Checkbox: TEXT,
+                        Radio: TEXT,
+                        Empty: TEXT,
+                        Form: TEXT,
+                        Descriptions: TEXT,
+                        List: TEXT,
+                        Upload: TEXT,
+                        Alert: TEXT,
+                        // Корень бейджа держит то, что он обнимает: подпись вкладки со
+                        // счётчиком иначе выходила 10-точечной рядом с 13-точечными.
+                        Badge: TEXT,
+                        Typography: TEXT,
                         Menu: {
                             itemBorderRadius: 8,
                         },
                         Tag: {
                             borderRadiusSM: 6,
+                            fontSizeSM: 12,
                         },
                         Dropdown: {
                             borderRadiusLG: 12,
                         },
                         Segmented: {
+                            ...TEXT,
                             borderRadius: 10,
                         },
                         Tabs: {
@@ -113,8 +153,10 @@ function AntdConfig({ children }: { children: React.ReactNode }) {
                 >
                     <AntdApp>
                         {children}
-                        {/* Уведомления теперь sonner, а не message из antd */}
-                        <Toaster />
+                        {/* Уведомления — sonner, а не message из antd. Внизу справа, как в
+                            макете «shadcn Nova» (владелец, 08.10.2026): сверху они закрывали
+                            кнопки шапки. Крестик — чтобы убрать, не дожидаясь. */}
+                        <Toaster position="bottom-right" closeButton />
                     </AntdApp>
                 </SWRConfig>
             </ConfigProvider>

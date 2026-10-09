@@ -88,7 +88,8 @@ test.describe('Платёжный календарь', () => {
         await login(page);
 
         const плитка = page.locator('section').filter({ hasText: 'Платёжный календарь' }).first();
-        await плитка.getByRole('button', { name: 'Открыть' }).click();
+        // Точное имя: рядом бывает «Открыть «Платёжный календарь» крупно».
+        await плитка.getByRole('button', { name: 'Открыть', exact: true }).click();
 
         await expect(page).toHaveURL(/\/company\/accounting\/calendar/);
         await expect(page.getByRole('heading', { name: 'Платёжный календарь' })).toBeVisible();

@@ -49,6 +49,25 @@ export function prepareCompanyOptions(
 }
 
 /**
+ * Две буквы для кружка вместо логотипа: «ТОО «Тест Заказчик Б»» → «ТЗ».
+ *
+ * Кавычки и форма собственности в инициалы не идут: прежний подсчёт брал
+ * первые буквы слов как есть и давал «Т«» — так было в контрагентах и в
+ * реестре заявок, каждый со своей копией.
+ */
+export function companyInitials(name: string | null | undefined): string {
+    if (!name || name === '—') return '';
+    const parts = name
+        .replace(/[«»"'“”()]/g, ' ')
+        .replace(/^\s*(ТОО|ИП|АО|ООО|ЧП|ПК|LLP|LLC)\s+/i, '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return (parts[0] || name).slice(0, 2).toUpperCase();
+}
+
+/**
  * Shortens common legal structures in company names to their abbreviations.
  * Example: "Товарищество с ограниченной ответственностью Ромашка" -> "ТОО Ромашка"
  */

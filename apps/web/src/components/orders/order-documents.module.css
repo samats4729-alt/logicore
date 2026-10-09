@@ -1,6 +1,6 @@
 /* Раздел «Документы» в карточке заявки.
  *
- * Блоки те же, что у остальных экранов кабинета: карточка с серой шапкой,
+ * Блоки те же, что у остальных экранов кабинета (макет Nova): карточка без серой полосы,
  * строки списка, приглушённые прежние версии. Значения цвета берутся из
  * токенов `.lc-nova`, здесь только вёрстка.
  */
@@ -17,9 +17,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 14px 10px;
-    background: var(--nova-surface-2, #f6f7f8);
-    border-bottom: 1px solid var(--nova-border-2, #eff0f3);
+    padding: 14px 16px 2px;
 }
 
 .cardHead svg {
@@ -27,10 +25,10 @@
 }
 
 .cardTitle {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: 11.5px;
-    font-weight: 500;
-    letter-spacing: -0.03em;
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--nova-fg, #0b0d12);
     margin: 0;
     flex: 1;

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, pickAntOption } from './helpers';
+import { login, pickFromList } from './helpers';
 
 /**
  * Пути, по которым в компании ходят каждый день. Ломается любой — работа
@@ -16,8 +16,8 @@ test('мастер заявки доходит до груза и показыв
     await page.goto('/company/orders/create');
 
     // Шаг 1: без сторон сделки дальше не пускает.
-    await pickAntOption(page, 'Выберите заказчика', 1);
-    await pickAntOption(page, 'Выберите перевозчика', 1);
+    await pickFromList(page, 'Выберите заказчика', 1);
+    await pickFromList(page, 'Выберите перевозчика', 1);
     await page.getByRole('button', { name: /Далее/ }).first().click();
 
     // Шаг 2: маршрут. Дата погрузки обязательна — без неё шага «Груз» не будет.
@@ -34,16 +34,18 @@ test('мастер заявки доходит до груза и показыв
     // берём первую ещё не заполненную.
     for (let i = 0; i < 2; i++) {
         await page.getByRole('button', { name: /Выберите адрес или склад/ }).first().click();
-        // Адрес выбирается в отдельном окне с поиском и фильтрами.
-        await expect(page.getByRole('dialog')).toBeVisible();
+        // Адрес выбирается в отдельном окне с поиском и фильтрами — поверх
+        // окна мастера, поэтому целимся в него по названию.
+        const окноАдреса = page.getByRole('dialog', { name: 'Адрес точки маршрута' });
+        await expect(окноАдреса).toBeVisible();
         // Целимся в строку адреса, а не «в кнопку с подходящим словом»: в окне
         // есть фильтры по группе и городу, и их подписи содержат те же слова.
         // На стенде с наполненными складами заказчика тест кликал в фильтр,
         // окно оставалось открытым, и падение выглядело как поломка окна.
-        const option = page.getByRole('dialog').locator('[data-address-option]').first();
+        const option = окноАдреса.locator('[data-address-option]').first();
         await expect(option).toBeVisible();
         await option.click();
-        await expect(page.getByRole('dialog')).toBeHidden();
+        await expect(окноАдреса).toBeHidden();
     }
 
     await page.getByRole('button', { name: /Далее/ }).first().click();
@@ -57,13 +59,15 @@ test('мастер заявки доходит до груза и показыв
 
     // Комбинация паллет — ради неё задача и делалась.
     await page.getByRole('button', { name: /Добавить вид паллет/ }).click();
-    await expect(page.locator('select').first()).toBeVisible();
+    // Видимый список вида паллет: у выбора «Тип оплаты» на шаге 1 есть
+    // скрытый служебный <select>, и «первый select на странице» — это он.
+    await expect(page.locator('select:not([aria-hidden="true"])').first()).toBeVisible();
 });
 
 test('список заявок открывается', async ({ page }) => {
     await login(page);
     await page.goto('/company/orders');
-    await expect(page.getByText('Заявки компании')).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Все заявки/ })).toBeVisible();
 });
 
 test('взаиморасчёты открываются и считают итоги', async ({ page }) => {
@@ -87,7 +91,7 @@ test('карточка рейса открывается и предлагает
 
     // В строке списка открывает карточку кнопка-шеврон в конце, а не
     // клик по строке.
-    const firstRow = page.locator('.ant-table-row').first();
+    const firstRow = page.locator('[data-order-row]').first();
     await expect(firstRow).toBeVisible();
     await firstRow.locator('button').last().click();
 

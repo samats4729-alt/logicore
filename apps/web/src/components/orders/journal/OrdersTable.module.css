@@ -1,0 +1,142 @@
+/* Таблица журнала заявок — по макету «shadcn Nova»: тонкие линии, 13px,
+   шапка на сером, прибитые края. */
+
+.frame {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.scroll {
+    position: relative;
+    min-width: 0;
+    overflow: auto;
+    border: 1px solid hsl(var(--border));
+    border-radius: 10px;
+    background: hsl(var(--card));
+}
+
+.table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    color: hsl(var(--foreground));
+}
+
+.th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 40px;
+    padding: 0 8px;
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Непрозрачный: под шапкой при прокрутке едут строки. */
+    background: color-mix(in srgb, hsl(var(--muted)) 70%, hsl(var(--card)));
+    border-bottom: 1px solid hsl(var(--border));
+}
+
+.td {
+    height: 44px;
+    padding: 6px 8px;
+    vertical-align: middle;
+    white-space: nowrap;
+    background: hsl(var(--card));
+    border-bottom: 1px solid hsl(var(--border));
+}
+
+.row:last-child .td {
+    border-bottom: 0;
+}
+
+.right {
+    text-align: right;
+}
+
+.ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Под курсором и выбранная — цветом, но непрозрачно: прибитые ячейки
+   лежат поверх прокручиваемых, и сквозь полупрозрачный фон было бы видно
+   соседние столбцы. */
+.row:hover .td {
+    background: color-mix(in srgb, hsl(var(--muted)) 55%, hsl(var(--card)));
+}
+
+.row[data-selected] .td {
+    background: hsl(var(--muted));
+}
+
+.clickable {
+    cursor: pointer;
+}
+
+.fixedLeft {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    box-shadow: inset -1px 0 0 hsl(var(--border));
+}
+
+.fixedRight {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    box-shadow: inset 1px 0 0 hsl(var(--border));
+}
+
+.th.fixedLeft,
+.th.fixedRight {
+    z-index: 3;
+}
+
+/* Рейс с проблемой — красная засечка слева, на прибитой ячейке статуса. */
+.problem .fixedLeft {
+    box-shadow: inset 2px 0 0 #ef4444, inset -1px 0 0 hsl(var(--border));
+}
+
+.cancelled .td {
+    color: hsl(var(--muted-foreground));
+}
+
+.empty {
+    height: 160px;
+    padding: 16px;
+    text-align: center;
+    color: hsl(var(--muted-foreground));
+}
+
+.bone {
+    display: inline-block;
+    height: 12px;
+    border-radius: 4px;
+    background: hsl(var(--muted));
+    animation: lcBone 1.2s ease-in-out infinite;
+}
+
+@keyframes lcBone {
+    50% { opacity: 0.5; }
+}
+
+.footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 12px;
+    font-size: 13px;
+    color: hsl(var(--muted-foreground));
+}
+
+/* Кнопки внутри таблицы — цветом текста, а не системным цветом браузера. */
+:where(.table) :where(button) {
+    color: inherit;
+}

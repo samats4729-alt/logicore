@@ -15,8 +15,11 @@ test.describe('Биржа · заявки', () => {
         test.setTimeout(150_000);
         await page.goto('/company');
 
-        const tab = page.getByRole('button', { name: 'Биржа', exact: true });
-        const enabled = await tab.waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+        // Включена ли биржа — спрашиваем сервер, а не ищем пункт меню: меню
+        // переехало влево, «Биржа» там ссылка внутри «Заявок», и прежний
+        // поиск кнопки «Биржа» молча пропускал тест на стенде, где биржа есть.
+        const status = await page.request.get(`${API}/exchange/status`);
+        const enabled = status.ok() && !!(await status.json()).enabled;
         test.skip(!enabled, 'Биржа на этом сервере выключена');
 
         // Свободную заявку спрашиваем у самого сервера: он знает, кому её

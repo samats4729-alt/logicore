@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import containerQueries from '@tailwindcss/container-queries';
 
 /**
  * Tailwind включён ради компонентов shadcn/ui — на них переезжает интерфейс.
@@ -67,6 +68,17 @@ const config: Config = {
                     DEFAULT: 'hsl(var(--popover))',
                     foreground: 'hsl(var(--popover-foreground))',
                 },
+                /** Боковая панель кабинета — компонент `sidebar` из shadcn. */
+                sidebar: {
+                    DEFAULT: 'hsl(var(--sidebar-background))',
+                    foreground: 'hsl(var(--sidebar-foreground))',
+                    primary: 'hsl(var(--sidebar-primary))',
+                    'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+                    accent: 'hsl(var(--sidebar-accent))',
+                    'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+                    border: 'hsl(var(--sidebar-border))',
+                    ring: 'hsl(var(--sidebar-ring))',
+                },
             },
             borderRadius: {
                 lg: 'var(--radius)',
@@ -96,7 +108,12 @@ const config: Config = {
             },
         },
     },
-    plugins: [],
+    /**
+     * Контейнерные правила (`@container`, `@md:block`): блок дашборда
+     * перестраивается по своей ширине, а не по ширине окна — его тянут
+     * мышкой, и узкий блок на широком мониторе обычное дело.
+     */
+    plugins: [containerQueries],
 };
 
 export default config;

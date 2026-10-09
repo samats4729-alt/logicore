@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { downloadCsv } from '@/lib/exportCsv';
 import { SETTLEMENT_SIDES } from '@/lib/vocabulary';
 import { Button } from '@/components/ui/button';
+import nova from '@/components/nova/nova.module.css';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -97,7 +98,7 @@ export default function PlannedPaymentsPage() {
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-foreground">Планируемые платежи</h1>
+                            <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-foreground">Планируемые платежи</h1>
                             <p className="text-sm text-muted-foreground">
                                 Срок отсчитывается от выставленного счёта, а не от даты в карточке рейса
                             </p>
@@ -196,16 +197,17 @@ export default function PlannedPaymentsPage() {
                     </Card>
                 )}
 
-                <div className="mb-4 flex gap-2">
+                <div className={`${nova.pills} mb-4`} role="group" aria-label="Какие платежи показать">
                     {filters.map((f) => (
-                        <Button
+                        <button
                             key={f.key}
-                            size="sm"
-                            variant={typeFilter === f.key ? 'default' : 'outline'}
+                            type="button"
+                            aria-pressed={typeFilter === f.key}
+                            className={`${nova.pill} ${typeFilter === f.key ? nova.pillActive : ''}`}
                             onClick={() => setTypeFilter(f.key)}
                         >
                             {f.label}
-                        </Button>
+                        </button>
                     ))}
                 </div>
 
@@ -224,12 +226,12 @@ export default function PlannedPaymentsPage() {
                             <div className="overflow-x-auto">
                                 <table className="w-full min-w-[860px] text-sm">
                                     <thead>
-                                        <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                                            <th className="px-4 py-3 text-left font-semibold">Срок оплаты</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Счёт</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Контрагент</th>
-                                            <th className="px-4 py-3 text-left font-semibold">Рейсы</th>
-                                            <th className="px-4 py-3 text-right font-semibold">К оплате</th>
+                                        <tr className="border-b border-border text-[12.5px] text-muted-foreground">
+                                            <th className="px-4 py-3 text-left font-medium">Срок оплаты</th>
+                                            <th className="px-4 py-3 text-left font-medium">Счёт</th>
+                                            <th className="px-4 py-3 text-left font-medium">Контрагент</th>
+                                            <th className="px-4 py-3 text-left font-medium">Рейсы</th>
+                                            <th className="px-4 py-3 text-right font-medium">К оплате</th>
                                         </tr>
                                     </thead>
                                     <tbody>

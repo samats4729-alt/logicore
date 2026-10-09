@@ -387,10 +387,14 @@ export default function PnLReportPage() {
                 <div style={{ textAlign: 'center', padding: 40 }}>Отчет недоступен</div>
             )}
 
+            {/* Разделитель между блоками отчёта — просто воздух, а не серая
+                полоса во всю строку: полосы читались как пустые строки
+                таблицы. Итоговая строка — мягкой зелёной заливкой из палитры,
+                в тёмной теме она не слепит. */}
             <style jsx global>{`
-                .spacer-row > td { background: var(--lc-card-2) !important; height: 16px; border: none; padding: 0 !important; }
-                .total-accent-row > td { background: var(--lc-card-2) !important; border-top: 1px solid var(--lc-border); border-bottom: 2px double var(--lc-border); }
-                .final-accent-row > td { background: #f6ffed !important; border-top: 2px solid #b7eb8f; border-bottom: 2px solid #b7eb8f; }
+                .lc-page .ant-table-tbody > tr.spacer-row > td { background: transparent !important; height: 8px; border: none !important; padding: 0 !important; line-height: 0; font-size: 0; }
+                .total-accent-row > td { background: var(--nova-surface-2, var(--lc-card-2)) !important; border-top: 1px solid var(--lc-border); }
+                .final-accent-row > td { background: var(--nova-pos-soft, #f6ffed) !important; border-top: 1px solid var(--lc-border); border-bottom: 1px solid var(--lc-border); }
             `}</style>
         </div>
     );

@@ -73,7 +73,7 @@ export default function OffersList({ orderId, onAccepted }: { orderId: string; o
 
     return (
         <div className="space-y-2">
-            <div className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Отклики · {active.length}</div>
+            <div className="text-[13px] font-semibold text-foreground">Отклики · {active.length}</div>
             <ul className="m-0 list-none divide-y divide-border rounded-xl border border-solid border-border p-0">
                 {active.map((o) => (
                     <li key={o.id} className="flex flex-wrap items-start justify-between gap-3 px-3 py-2.5">

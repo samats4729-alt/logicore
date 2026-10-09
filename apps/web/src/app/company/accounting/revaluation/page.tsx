@@ -139,13 +139,13 @@ export default function RevaluationPage() {
         <div className="mx-auto w-full max-w-6xl px-4 py-6">
             <button
                 onClick={() => router.push('/company/finance')}
-                className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                className="mb-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
             >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Финансы
             </button>
 
-            <h1 className="text-2xl font-semibold tracking-tight">Переоценка валютных остатков</h1>
+            <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-foreground">Переоценка валютных остатков</h1>
             <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
                 На конец месяца валютные остатки и неоплаченные валютные долги стоят уже других тенге,
                 чем когда их записали. Эта разница — курсовая, и она должна попасть в отчёт того месяца,
@@ -254,7 +254,7 @@ export default function RevaluationPage() {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                                        <tr className="border-b text-[12.5px] text-muted-foreground">
                                             <th className="px-4 py-2.5 text-left font-medium">Что переоценено</th>
                                             <th className="px-4 py-2.5 text-right font-medium">Остаток</th>
                                             <th className="px-4 py-2.5 text-right font-medium">Было в тенге</th>

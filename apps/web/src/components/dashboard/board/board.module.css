@@ -1,0 +1,79 @@
+/* Карточка дашборда-конструктора — по коду макета «shadcn Nova»:
+   скругление 12, тонкое кольцо цветом текста на 10% и мягкая двойная тень.
+   Кольцо, а не рамка: рамка добавляла бы пиксель к размеру, и края соседних
+   карточек в ряду расходились бы при растягивании. */
+.card {
+    position: relative;
+    min-width: 0;
+    border-radius: 12px;
+    background: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    font-size: 14px;
+    box-shadow:
+        0 0 0 1px hsl(var(--foreground) / 0.1),
+        0 1px 2px rgb(15 23 42 / 0.06),
+        0 2px 8px -1px rgb(15 23 42 / 0.11);
+}
+
+:global([data-theme='dark']) .card {
+    box-shadow:
+        0 0 0 1px hsl(var(--foreground) / 0.1),
+        0 1px 2px rgb(0 0 0 / 0.35),
+        0 2px 8px -1px rgb(0 0 0 / 0.45);
+}
+
+/* Тариф на исходе: рамка ловит взгляд — после срока кабинет закроется. */
+.urgent {
+    box-shadow:
+        0 0 0 1px rgb(245 158 11 / 0.6),
+        0 1px 2px rgb(15 23 42 / 0.06),
+        0 2px 8px -1px rgb(15 23 42 / 0.11);
+}
+
+/* Кнопка в плашке («Продлить», «Оплатить»). */
+.tileAction {
+    flex-shrink: 0;
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid hsl(var(--primary));
+    border-radius: 999px;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font: 600 12px/1 Inter, sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.tileAction:hover {
+    opacity: .9;
+}
+
+/* «…» у плашки: всплывает при наведении, на белой подложке поверх числа. */
+.tileMenu {
+    background: hsl(var(--card));
+    box-shadow: 0 0 0 1px hsl(var(--foreground) / 0.1), 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+/* Пустое тело блока: старые карточки при пустой очереди не рисуют ничего —
+   внутри конструктора на этом месте говорим словами, что пусто. */
+.card [data-block-body]:empty::before,
+.dialog [data-block-body]:empty::before {
+    content: 'Сейчас здесь пусто';
+    margin: auto;
+    padding: 24px 16px;
+    font-size: 13px;
+    color: hsl(var(--muted-foreground));
+}
+
+/* Кнопки внутри блоков (клетки календаря, строки списков) — цветом текста
+   карточки, а не системным цветом кнопок браузера: в тёмной теме они
+   выходили чёрными на тёмном. :where — чтобы любой класс цвета сильнее. */
+:where(.card, .dialog) :where(button) {
+    color: inherit;
+}
+
+/* Окно «Открыть крупно» и настроек — оболочка `nova/FocusDialog`; здесь
+   только метка окна дашборда, на неё завязаны правила выше. */
+.dialog {
+    font-size: 14px;
+}

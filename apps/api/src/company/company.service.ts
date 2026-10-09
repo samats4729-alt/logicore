@@ -897,11 +897,16 @@ export class CompanyService {
         const today = makeBucket();
         const cur = makeBucket();
         const prev = makeBucket();
+        // Прошлый месяц по тот же день, что сейчас идёт: седьмого числа
+        // сравнивать неделю работы с полным месяцем бессмысленно — минус
+        // будет всегда (макет «shadcn Nova», столбец «к 1–7 сентября»).
+        const prevSame = makeBucket();
+        const prevSameEnd = new Date(Math.min(prevStart.getTime() + (Date.now() - curStart.getTime()), curStart.getTime()));
         // «Сегодня» входит и в текущий месяц — заявка попадает в оба периода
         const bucketsOf = (d: Date) => {
             if (d >= todayStart) return [today, cur];
             if (d >= curStart) return [cur];
-            if (d >= prevStart) return [prev];
+            if (d >= prevStart) return d < prevSameEnd ? [prev, prevSame] : [prev];
             return [];
         };
 
@@ -957,6 +962,9 @@ export class CompanyService {
             today: pack(today),
             current: pack(cur),
             previous: pack(prev),
+            previousSame: pack(prevSame),
+            /** По какое число взят прошлый месяц в `previousSame` (не включая). */
+            previousSameEnd: prevSameEnd,
             // Какими месяцами подписать колонки. Считает сервер — он же и
             // раскладывал заявки по этим месяцам; браузер в своём поясе
             // первого числа ночью назвал бы их иначе, чем посчитано.

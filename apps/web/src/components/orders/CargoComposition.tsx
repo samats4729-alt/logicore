@@ -65,12 +65,6 @@ export function CargoComposition({
                     )}
                 </div>
 
-                {pallets.length === 0 && (
-                    <div className="mb-2 text-xs text-muted-foreground">
-                        Груз на паллетах? Добавьте строку — можно указать несколько видов сразу.
-                    </div>
-                )}
-
                 <div className="flex flex-col gap-2">
                     {pallets.map((line, i) => (
                         <div key={i} className="flex flex-wrap items-center gap-2">
@@ -167,9 +161,6 @@ export function CargoComposition({
                         );
                     })}
                 </div>
-                <div className="mt-1 text-[11px] text-muted-foreground">
-                    Можно отметить несколько — например заднюю и боковую.
-                </div>
             </section>
 
             <section>
@@ -205,7 +196,7 @@ export function CargoComposition({
 
                 <div className="flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1">
-                        <span className="text-[11px] text-muted-foreground">Грузовых мест</span>
+                        <span className="text-xs font-semibold text-foreground">Грузовых мест</span>
                         <Input
                             type="number"
                             inputMode="numeric"
@@ -218,7 +209,7 @@ export function CargoComposition({
                     </label>
 
                     <label className="flex flex-col gap-1">
-                        <span className="text-[11px] text-muted-foreground">Температура, °C</span>
+                        <span className="text-xs font-semibold text-foreground">Температура, °C</span>
                         <div className="flex items-center gap-1">
                             <Input
                                 type="number"
@@ -241,7 +232,7 @@ export function CargoComposition({
                     </label>
 
                     <label className="flex flex-col gap-1">
-                        <span className="text-[11px] text-muted-foreground">Объявленная стоимость, ₸</span>
+                        <span className="text-xs font-semibold text-foreground">Объявленная стоимость, ₸</span>
                         <Input
                             type="number"
                             inputMode="numeric"

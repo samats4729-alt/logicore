@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, pickAntOption } from './helpers';
+import { login, pickFromList } from './helpers';
 
 /**
  * Черновик новой заявки.
@@ -31,11 +31,11 @@ test.describe('Черновик новой заявки', () => {
         await чистыйМастер(page);
         await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
 
-        await pickAntOption(page, 'Выберите заказчика', 0);
-        await pickAntOption(page, 'Выберите перевозчика', 0);
+        await pickFromList(page, 'Выберите заказчика', 0);
+        await pickFromList(page, 'Выберите перевозчика', 0);
         // Поле заказчика — по его якорю: над ним бывает поле «Организация»,
         // и порядковый номер списка на разных стендах разный.
-        const полеЗаказчика = page.locator('[data-guide="wizard-customer"] .ant-select-selector');
+        const полеЗаказчика = page.locator('[data-guide="wizard-customer"] [data-picker-field]');
         const заказчик = await полеЗаказчика.innerText();
         const ставка = page.locator('.ant-form-item').filter({ hasText: /Ставка от заказчика|^Ставка/ }).locator('input').first();
         await ставка.fill('515000');
@@ -49,8 +49,9 @@ test.describe('Черновик новой заявки', () => {
         await expect(полеЗаказчика).toHaveText(заказчик);
         await expect(ставка).toHaveValue(/515/);
 
-        // «Начать заново» — пустая форма и никакого черновика.
-        await page.getByRole('button', { name: 'Начать заново' }).click();
+        // «Сбросить» (с подтверждением на самой кнопке) — пустая форма и никакого черновика.
+        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
+        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
         await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
         await expect(ставка).toHaveValue('');
         expect(await черновиков(page)).toBe(0);

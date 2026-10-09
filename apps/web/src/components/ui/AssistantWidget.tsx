@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Button, Input } from 'antd';
-import { RobotOutlined, SendOutlined, CloseOutlined, CompassOutlined } from '@ant-design/icons';
+import {
+    ArrowUp, ClipboardList, Compass, FilePlus2, LifeBuoy, ReceiptText, SquarePen, Truck, Users, X,
+} from 'lucide-react';
 import { api } from '@/lib/api';
+import { Button } from '@/components/ui/button';
 import Loader from '@/components/ui/Loader';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface Step {
     selector?: string;
@@ -51,20 +55,28 @@ const GREETING_SUPPORT: ChatMsg = {
     content: 'Опишите проблему — что работает неправильно? Я сверюсь с вашими данными (заявки, счета, оплаты), уточню детали и оформлю обращение разработчику.',
 };
 
-// Карта преломления «толстой линзы»: центр нейтральный (#808080 — без смещения),
-// у скруглённых краёв R/G-каналы кодируют изгиб фона наружу (эффект Apple Liquid Glass)
-const LG_MAP = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='380' height='560'>" +
-    "<defs>" +
-    "<linearGradient id='x' x1='0' y1='0' x2='1' y2='0'><stop offset='0' stop-color='#000000'/><stop offset='1' stop-color='#ff0000'/></linearGradient>" +
-    "<linearGradient id='y' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#000000'/><stop offset='1' stop-color='#00ff00'/></linearGradient>" +
-    "<filter id='b'><feGaussianBlur stdDeviation='12'/></filter>" +
-    "</defs>" +
-    "<rect width='380' height='560' fill='url(#x)'/>" +
-    "<rect width='380' height='560' fill='url(#y)' style='mix-blend-mode:screen'/>" +
-    "<rect x='22' y='22' width='336' height='516' rx='34' fill='#808080' filter='url(#b)'/>" +
-    "</svg>"
-);
+/** Частые вопросы — кнопками над полем ввода, чтобы обычный случай не набирать. */
+const SUGGESTIONS = {
+    guide: [
+        { icon: FilePlus2, text: 'Как создать заявку?' },
+        { icon: Truck, text: 'Как назначить водителя?' },
+        { icon: ReceiptText, text: 'Как выставить счёт?' },
+        { icon: Users, text: 'Как добавить контрагента?' },
+        { icon: ClipboardList, text: 'Где посмотреть долги заказчиков?' },
+    ],
+    support: [
+        { icon: LifeBuoy, text: 'Не сходится сумма в счёте' },
+        { icon: LifeBuoy, text: 'Не вижу свою заявку в списке' },
+        { icon: LifeBuoy, text: 'Не сохраняется заявка' },
+    ],
+} as const;
+
+/** Ширина панели: по умолчанию, меньше и больше которой не тянется. */
+const PANEL_W = { initial: 400, min: 340, max: 640 } as const;
+const OPEN_KEY = 'lc_assistant_open';
+/** Высота шапки кабинета (CompanyTopbar, h-12): ниже неё панель и прилипает при прокрутке. */
+const HEADER_H = 48;
+const WIDTH_KEY = 'lc_assistant_width';
 
 function parseTicket(text: string): { clean: string; ticket: TicketDraft | null } {
     const match = text.match(/```ticket\s*([\s\S]*?)```/);
@@ -79,10 +91,10 @@ function parseTicket(text: string): { clean: string; ticket: TicketDraft | null 
     return { clean: text.replace(match[0], '').trim(), ticket };
 }
 
-const SEVERITY_LABEL: Record<string, { text: string; color: string }> = {
-    low: { text: 'Низкая', color: '#64748b' },
-    medium: { text: 'Средняя', color: '#b45309' },
-    high: { text: 'Высокая', color: '#dc2626' },
+const SEVERITY_LABEL: Record<string, { text: string; className: string }> = {
+    low: { text: 'Низкая', className: 'text-muted-foreground' },
+    medium: { text: 'Средняя', className: 'text-amber-700 dark:text-amber-400' },
+    high: { text: 'Высокая', className: 'text-red-600 dark:text-red-400' },
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -125,7 +137,7 @@ function renderRich(text: string) {
             <div key={li} style={line.trim() ? undefined : { height: 6 }}>
                 {parts.map((p, i) => {
                     const b = p.match(/^\*\*([^*]+)\*\*$/);
-                    if (b) return <strong key={i}>{b[1]}</strong>;
+                    if (b) return <strong key={i} className="font-semibold">{b[1]}</strong>;
                     return <span key={i}>{p.replace(/\*/g, '')}</span>;
                 })}
             </div>
@@ -133,10 +145,32 @@ function renderRich(text: string) {
     });
 }
 
+const readStore = (key: string) => {
+    try { return localStorage.getItem(key); } catch { return null; }
+};
+const writeStore = (key: string, value: string) => {
+    try { localStorage.setItem(key, value); } catch { /* без памяти — просто не запомним */ }
+};
+
+/**
+ * ИИ-помощник — панелью справа (владелец, 08.10.2026).
+ *
+ * Раньше — плавающее окно в углу поверх страницы: закрывало таблицу и
+ * кнопки, и спросить «как это сделать», глядя на то самое место, было
+ * нельзя. Теперь панель встаёт третьей колонкой после меню и страницы и
+ * сдвигает страницу, а не ложится сверху. На телефоне места на колонку
+ * нет — там панель во весь экран.
+ *
+ * Вид — как у чатов-агентов: заголовок, вкладки «Гид / Поддержка», лента
+ * сообщений, частые вопросы над полем ввода. Открыта ли панель и её
+ * ширина — запоминаются в этом браузере.
+ */
 export default function AssistantWidget() {
     const router = useRouter();
     const pathname = usePathname();
-    const [open, setOpen] = useState(false);
+    const isMobile = useIsMobile();
+    const [open, setOpenState] = useState(false);
+    const [width, setWidth] = useState<number>(PANEL_W.initial);
     const [mode, setMode] = useState<'guide' | 'support'>('guide');
     const [messages, setMessages] = useState<ChatMsg[]>([GREETING]);
     const [supportMessages, setSupportMessages] = useState<ChatMsg[]>([GREETING_SUPPORT]);
@@ -149,16 +183,61 @@ export default function AssistantWidget() {
     const [tipMeta, setTipMeta] = useState({ index: 0, total: 0 });
 
     const bodyRef = useRef<HTMLDivElement>(null);
+    const spacerRef = useRef<HTMLElement>(null);
+    const dockRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const ringRef = useRef<HTMLDivElement>(null);
     const tipRef = useRef<HTMLDivElement>(null);
     const targetElRef = useRef<HTMLElement | null>(null);
     const stepsRef = useRef<Step[]>([]);
     const indexRef = useRef(0);
     const activeRef = useRef(false);
+    const openRef = useRef(false);
+
+    /** Открыть или закрыть — и сказать кнопке в шапке, чтобы она показала состояние. */
+    const setOpen = useCallback((next: boolean) => {
+        openRef.current = next;
+        setOpenState(next);
+        writeStore(OPEN_KEY, next ? '1' : '0');
+        window.dispatchEvent(new CustomEvent('logicore:assistant-state', { detail: { open: next } }));
+    }, []);
+
+    // Панель была открыта — открыта и после перезагрузки; ширина — та, что тянули.
+    useEffect(() => {
+        const w = Number(readStore(WIDTH_KEY));
+        if (w >= PANEL_W.min && w <= PANEL_W.max) setWidth(w);
+        if (readStore(OPEN_KEY) === '1') setOpen(true);
+    }, [setOpen]);
 
     useEffect(() => {
         if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
     }, [messages, supportMessages, mode, loading, open]);
+
+    // Панель стоит под шапкой и бегущей строкой — вровень с началом
+    // страницы (владелец, 08.10.2026: «на уровне с верхом кнопки „Создать
+    // заявку“, а не до самого верха»). Прокрутили — прилипает к низу шапки.
+    // Место под неё держит колонка справа от страницы, а сама панель стоит
+    // поверх этого места: так её высота — всегда до низа окна и не растит
+    // страницу (иначе короткая страница начинала бесконечно прокручиваться).
+    useEffect(() => {
+        if (!open || isMobile) return;
+        let raf = 0;
+        const follow = () => {
+            raf = requestAnimationFrame(follow);
+            const spacer = spacerRef.current;
+            const dock = dockRef.current;
+            if (!spacer || !dock) return;
+            const top = `${Math.max(Math.round(spacer.getBoundingClientRect().top), HEADER_H)}px`;
+            if (dock.style.top !== top) dock.style.top = top;
+        };
+        follow();
+        return () => cancelAnimationFrame(raf);
+    }, [open, isMobile]);
+
+    // Открыли — сразу можно печатать.
+    useEffect(() => {
+        if (open) window.setTimeout(() => inputRef.current?.focus(), 220);
+    }, [open, mode]);
 
     // Follow the target element every frame (no re-render, smooth on scroll)
     useEffect(() => {
@@ -285,9 +364,25 @@ export default function AssistantWidget() {
     const handleOpen = () => setOpen(true);
 
     useEffect(() => {
-        const onOpenAssistant = () => handleOpen();
+        const w = window as Window & { __lcAssistantPending?: boolean };
+        // Событие дошло — отметка «ждёт открытия» больше не нужна.
+        const onOpenAssistant = () => { w.__lcAssistantPending = false; handleOpen(); };
+        // Кнопка в шапке — переключатель: открыта панель — закрывает.
+        const onToggleAssistant = () => { w.__lcAssistantPending = false; setOpen(!openRef.current); };
         window.addEventListener('logicore:open-assistant', onOpenAssistant);
-        return () => window.removeEventListener('logicore:open-assistant', onOpenAssistant);
+        window.addEventListener('logicore:toggle-assistant', onToggleAssistant);
+        // Помощник подгружается отдельно от страницы. Нажали кнопку раньше,
+        // чем он загрузился, — событие ушло в пустоту, и окно не открывалось.
+        // Кнопка оставляет отметку — забираем её при загрузке.
+        if (w.__lcAssistantPending) {
+            w.__lcAssistantPending = false;
+            handleOpen();
+        }
+        return () => {
+            window.removeEventListener('logicore:open-assistant', onOpenAssistant);
+            window.removeEventListener('logicore:toggle-assistant', onToggleAssistant);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const sendPrompt = async (text: string) => {
@@ -351,151 +446,230 @@ export default function AssistantWidget() {
         }
     };
 
+    /** Начать разговор заново — во вкладке, где сейчас. */
+    const newChat = () => {
+        if (loading) return;
+        if (mode === 'guide') setMessages([GREETING]);
+        else setSupportMessages([GREETING_SUPPORT]);
+        setInput('');
+    };
+
+    /** Ширина — тянется за левый край панели. */
+    const startResize = (e: React.PointerEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startW = width;
+        let last = startW;
+        const onMove = (ev: PointerEvent) => {
+            last = Math.min(PANEL_W.max, Math.max(PANEL_W.min, startW + (startX - ev.clientX)));
+            setWidth(last);
+        };
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            writeStore(WIDTH_KEY, String(Math.round(last)));
+        };
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+    };
+
+    const current = mode === 'guide' ? messages : supportMessages;
+    const fresh = current.length === 1;
+    const greeting = current[0];
+
     return (
         <>
-            {open && (
-                <div
-                    className="ai-glass-panel"
-                    style={{
-                        position: 'fixed', right: 24, bottom: 24,
-                        width: 'min(380px, calc(100vw - 32px))', height: 'min(560px, calc(100vh - 100px))',
-                        zIndex: 1600,
-                        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                    }}
-                >
-                    <div className="ai-glass-header">
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, color: 'var(--lc-text)' }}>
-                                <span style={{
-                                    width: 30, height: 30, borderRadius: 10, background: 'rgba(22,119,255,0.14)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1677ff', fontSize: 16,
-                                }}>
-                                    <RobotOutlined />
-                                </span>
-                                <span>
-                                    Ассистент LogiCore
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 500, color: 'var(--lc-text-sec)', opacity: 0.85 }}>
-                                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.18)' }} />
-                                        онлайн
-                                    </span>
-                                </span>
-                            </span>
-                            <CloseOutlined style={{ cursor: 'pointer', color: 'var(--lc-text-sec)', fontSize: 14 }} onClick={() => setOpen(false)} />
-                        </div>
-                        <div className="ai-seg" style={{ marginTop: 12 }}>
-                            {([['guide', 'Гид'], ['support', 'Поддержка']] as const).map(([key, label]) => (
-                                <button
-                                    key={key}
-                                    onClick={() => setMode(key)}
-                                    className={`ai-seg-btn${mode === key ? ' active' : ''}`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+            <aside
+                ref={spacerRef}
+                data-assistant-panel
+                aria-label="ИИ-помощник"
+                aria-hidden={!open}
+                className={cn(
+                    isMobile
+                        ? 'fixed inset-0 z-[1600] bg-black/30 backdrop-blur-[2px]'
+                        : 'relative shrink-0 transition-[width] duration-200 ease-out',
+                    isMobile && !open && 'hidden',
+                )}
+                style={isMobile ? undefined : { width: open ? width : 0 }}
+            >
+                {open && (
+                    <div
+                        ref={dockRef}
+                        // Сверху — тот же отступ, что у страницы: верх панели вровень
+                        // с первой строкой страницы («Создать заявку», заголовок).
+                        className={cn('flex flex-col', isMobile ? 'relative h-full p-2' : 'fixed bottom-0 right-0 z-30 pb-2 pr-2 pt-5')}
+                        style={isMobile ? undefined : { width, top: 85 }}
+                    >
+                        {/* Ручка ширины — на левом краю панели. */}
+                        {!isMobile && (
+                            <div
+                                role="separator"
+                                aria-orientation="vertical"
+                                aria-label="Изменить ширину помощника"
+                                onPointerDown={startResize}
+                                className="group absolute bottom-2 left-0 top-5 z-10 w-2 cursor-col-resize"
+                            >
+                                <span className="absolute inset-y-6 left-[3px] w-0.5 rounded-full bg-transparent transition-colors group-hover:bg-border" />
+                            </div>
+                        )}
 
-                    <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 16, background: 'var(--lc-bg)', position: 'relative', zIndex: 2 }}>
-                        {(mode === 'guide' ? messages : supportMessages).map((m, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
-                                <div
-                                    className={m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant'}
-                                    style={{
-                                        borderBottomRightRadius: m.role === 'user' ? 4 : 14,
-                                        borderBottomLeftRadius: m.role === 'user' ? 14 : 4,
-                                    }}
-                                >
-                                    {m.role === 'assistant' ? renderRich(m.content) : m.content}
-                                    {m.steps && m.steps.length > 0 && (
-                                        <Button
-                                            type="primary"
-                                            size="small"
-                                            icon={<CompassOutlined />}
-                                            onClick={() => startTour(m.steps as Step[])}
-                                            style={{ marginTop: 10, display: 'block' }}
+                        <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-solid border-border bg-card text-card-foreground shadow-sm', !isMobile && 'ml-2')}>
+                            {/* Шапка: название, новый разговор, закрыть. */}
+                            <div className="flex items-center gap-2 px-4 pb-2 pt-3.5">
+                                <h2 className="m-0 min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-0.01em]">ИИ-помощник</h2>
+                                <Button variant="ghost" size="icon" className="size-8 rounded-lg text-muted-foreground hover:text-foreground" onClick={newChat} aria-label="Новый разговор" title="Новый разговор">
+                                    <SquarePen className="size-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="-mr-1.5 size-8 rounded-lg text-muted-foreground hover:text-foreground" onClick={() => setOpen(false)} aria-label="Закрыть помощника" title="Закрыть">
+                                    <X className="size-4" />
+                                </Button>
+                            </div>
+
+                            {/* Гид или поддержка — те же пилюли, что во вкладках кабинета. */}
+                            <div className="px-4 pb-3">
+                                <div role="tablist" aria-label="Режим помощника" className="inline-flex rounded-lg bg-muted p-0.5">
+                                    {([['guide', 'Гид'], ['support', 'Поддержка']] as const).map(([key, label]) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={mode === key}
+                                            onClick={() => setMode(key)}
+                                            className={cn(
+                                                'h-7 cursor-pointer rounded-md border-0 px-3 text-[12.5px] font-medium [font-family:inherit] transition-colors',
+                                                mode === key ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground hover:text-foreground',
+                                            )}
                                         >
-                                            Показать по шагам
-                                        </Button>
-                                    )}
-                                    {m.ticket && (
-                                        <div style={{ marginTop: 10, border: '1px solid var(--lc-border)', borderRadius: 10, padding: '10px 12px', background: 'var(--lc-card)' }}>
-                                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>{m.ticket.title}</div>
-                                            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'var(--lc-hover)', color: 'var(--lc-text-sec)', fontWeight: 500 }}>
-                                                    {CATEGORY_LABEL[m.ticket.category || 'other'] || m.ticket.category}
-                                                </span>
-                                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'var(--lc-bg)', border: '1px solid var(--lc-border)', fontWeight: 600, color: (SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).color }}>
-                                                    {(SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).text}
-                                                </span>
-                                            </div>
-                                            {m.ticket.expected && (
-                                                <div style={{ fontSize: 11.5, marginBottom: 4 }}>
-                                                    <span style={{ color: '#16a34a', fontWeight: 600 }}>Ожидается: </span>
-                                                    <span style={{ color: 'var(--lc-text-sec)' }}>{m.ticket.expected}</span>
-                                                </div>
-                                            )}
-                                            {m.ticket.actual && (
-                                                <div style={{ fontSize: 11.5, marginBottom: 8 }}>
-                                                    <span style={{ color: '#dc2626', fontWeight: 600 }}>Фактически: </span>
-                                                    <span style={{ color: 'var(--lc-text-sec)' }}>{m.ticket.actual}</span>
-                                                </div>
-                                            )}
-                                            {m.ticket.orders && m.ticket.orders.length > 0 && (
-                                                <div style={{ fontSize: 11, color: 'var(--lc-text-ter)', marginBottom: 8 }}>
-                                                    Заявки: {m.ticket.orders.join(', ')}
-                                                </div>
-                                            )}
-                                            <Button
-                                                type="primary"
-                                                size="small"
-                                                loading={ticketSending}
-                                                onClick={() => sendTicket(m.ticket as TicketDraft, i)}
-                                            >
-                                                Отправить в поддержку
-                                            </Button>
-                                        </div>
-                                    )}
+                                            {label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                        ))}
-                        {mode === 'guide' && messages.length === 1 && !loading && (
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, marginBottom: 8 }}>
-                                <button
-                                    onClick={() => sendPrompt('Как создать заявку?')}
-                                    className="ai-prompt-btn"
-                                >
-                                    Как создать заявку?
-                                </button>
-                            </div>
-                        )}
-                        {loading && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--lc-text-ter)', fontSize: 13 }}>
-                                <Loader size="small" /> Думаю…
-                            </div>
-                        )}
-                    </div>
 
-                    <div className="ai-footer">
-                        <Input.TextArea
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); send(); } }}
-                            placeholder={mode === 'guide' ? 'Спросите, как что сделать…' : 'Опишите проблему…'}
-                            autoSize={{ minRows: 1, maxRows: 3 }}
-                            variant="borderless"
-                            className="ai-input"
-                        />
-                        <Button
-                            type="primary"
-                            shape="circle"
-                            icon={<SendOutlined />}
-                            onClick={send}
-                            loading={loading}
-                            className="ai-send-btn"
-                        />
+                            {/* Лента. */}
+                            <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+                                {/* Приветствие — карточкой сверху, как подсказка, а не репликой в ленте. */}
+                                <div className="rounded-xl border border-solid border-border bg-muted/50 px-3.5 py-3">
+                                    <div className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold">
+                                        {mode === 'guide' ? <Compass className="size-3.5" /> : <LifeBuoy className="size-3.5" />}
+                                        {mode === 'guide' ? 'Гид по LogiCore' : 'Поддержка'}
+                                    </div>
+                                    <div className="text-[13px] leading-relaxed text-muted-foreground">{greeting.content}</div>
+                                </div>
+
+                                {current.slice(1).map((m, j) => {
+                                    const i = j + 1;
+                                    return m.role === 'user' ? (
+                                        <div key={i} className="mt-4 flex justify-end">
+                                            <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-muted px-3.5 py-2 text-[13.5px] leading-relaxed">
+                                                {m.content}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div key={i} className="mt-4 text-[13.5px] leading-relaxed">
+                                            {renderRich(m.content)}
+                                            {m.steps && m.steps.length > 0 && (
+                                                <Button size="sm" className="mt-3 h-8 gap-1.5 rounded-lg text-[13px]" onClick={() => startTour(m.steps as Step[])}>
+                                                    <Compass className="size-3.5" /> Показать по шагам
+                                                </Button>
+                                            )}
+                                            {m.ticket && (
+                                                <div className="mt-3 rounded-xl border border-solid border-border bg-card p-3">
+                                                    <div className="mb-1.5 text-[13px] font-semibold">{m.ticket.title}</div>
+                                                    <div className="mb-2 flex flex-wrap gap-1.5">
+                                                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                                            {CATEGORY_LABEL[m.ticket.category || 'other'] || m.ticket.category}
+                                                        </span>
+                                                        <span className={cn('rounded-full border border-solid border-border px-2 py-0.5 text-[11px] font-semibold', (SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).className)}>
+                                                            {(SEVERITY_LABEL[m.ticket.severity || 'medium'] || SEVERITY_LABEL.medium).text}
+                                                        </span>
+                                                    </div>
+                                                    {m.ticket.expected && (
+                                                        <div className="mb-1 text-[12px]">
+                                                            <span className="font-semibold text-emerald-700 dark:text-emerald-400">Ожидается: </span>
+                                                            <span className="text-muted-foreground">{m.ticket.expected}</span>
+                                                        </div>
+                                                    )}
+                                                    {m.ticket.actual && (
+                                                        <div className="mb-2 text-[12px]">
+                                                            <span className="font-semibold text-red-600 dark:text-red-400">Фактически: </span>
+                                                            <span className="text-muted-foreground">{m.ticket.actual}</span>
+                                                        </div>
+                                                    )}
+                                                    {m.ticket.orders && m.ticket.orders.length > 0 && (
+                                                        <div className="mb-2 text-[11.5px] text-muted-foreground">
+                                                            Заявки: {m.ticket.orders.join(', ')}
+                                                        </div>
+                                                    )}
+                                                    <Button size="sm" className="h-8 rounded-lg text-[13px]" disabled={ticketSending} onClick={() => sendTicket(m.ticket as TicketDraft, i)}>
+                                                        {ticketSending ? 'Отправляем…' : 'Отправить в поддержку'}
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                {loading && (
+                                    <div className="mt-4 flex items-center gap-2 text-[13px] text-muted-foreground">
+                                        <Loader size="small" /> Думаю…
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Частые вопросы — пока разговор не начат. */}
+                            {fresh && !loading && (
+                                <div className="flex flex-wrap gap-1.5 px-4 pb-2.5">
+                                    {SUGGESTIONS[mode].map(({ icon: Icon, text }) => (
+                                        <button
+                                            key={text}
+                                            type="button"
+                                            onClick={() => sendPrompt(text)}
+                                            className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-solid border-border bg-card px-2.5 text-[12px] text-muted-foreground [font-family:inherit] transition-colors hover:bg-accent hover:text-foreground"
+                                        >
+                                            <Icon className="size-3.5" /> {text}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Поле ввода: Enter — отправить, Shift+Enter — новая строка. */}
+                            <div className="px-3 pb-3">
+                                <div className="rounded-xl border border-solid border-border bg-muted/40 transition-colors focus-within:border-foreground/30 focus-within:bg-card">
+                                    <textarea
+                                        ref={inputRef}
+                                        value={input}
+                                        rows={2}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+                                        }}
+                                        placeholder={mode === 'guide' ? 'Спросите, как что сделать…' : 'Опишите проблему…'}
+                                        className="block max-h-40 min-h-[52px] w-full resize-none border-0 bg-transparent px-3 pt-2.5 text-[13.5px] leading-relaxed text-foreground outline-none [field-sizing:content] [font-family:inherit] placeholder:text-muted-foreground"
+                                    />
+                                    <div className="flex items-center justify-between px-2 pb-2">
+                                        <span className="pl-1 text-[11px] text-muted-foreground">
+                                            {mode === 'guide' ? 'Проведёт по шагам прямо на экране' : 'Оформит обращение разработчику'}
+                                        </span>
+                                        <Button
+                                            size="icon"
+                                            className="size-7 rounded-full"
+                                            onClick={send}
+                                            disabled={loading || !input.trim()}
+                                            aria-label="Отправить"
+                                        >
+                                            <ArrowUp className="size-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+            </aside>
 
             {tourActive && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 1500, pointerEvents: 'none' }}>

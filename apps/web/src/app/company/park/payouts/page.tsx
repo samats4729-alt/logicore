@@ -154,12 +154,12 @@ export default function ParkPayoutsPage() {
                             <TableHeader>
                                 <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
                                     <TableHead className="h-9 w-8" />
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Водитель</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Счёт</TableHead>
-                                    <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Начислено</TableHead>
-                                    <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">Удержано</TableHead>
-                                    <TableHead className="h-9 text-right text-[11px] uppercase tracking-wide">На руки</TableHead>
-                                    <TableHead className="h-9 text-[11px] uppercase tracking-wide">Статус</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Водитель</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Счёт</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">Начислено</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">Удержано</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">На руки</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Статус</TableHead>
                                     <TableHead className="h-9" />
                                 </TableRow>
                             </TableHeader>
