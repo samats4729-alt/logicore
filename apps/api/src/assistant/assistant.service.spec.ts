@@ -118,8 +118,10 @@ describe('карта интерфейса ИИ-гида не разошлась 
      * выходит за число шагов мастера. Иначе гид уверенно поведёт на
      * четвёртый шаг там, где их три.
      */
+    // Мастер с 08.10.2026 — окно поверх журнала; страница /company/orders/create
+    // только переводит в журнал с открытым окном, поэтому шаги ищем в самом окне.
     const WIZARD = {
-        file: 'app/company/orders/create/page.tsx',
+        file: 'components/orders/wizard/OrderWizard.tsx',
         pattern: 'data-guide={`wizard-step-',
     };
 
