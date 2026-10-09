@@ -96,6 +96,17 @@ export default function ExchangeProfile() {
                 <Row icon="trophy-outline" label="Рейсов" value={String(me.tripsCompleted)} />
             </Card>
 
+            <Card onPress={() => router.push('/exchange/documents')} style={styles.menuItem}>
+                <Ionicons name="document-text-outline" size={20} color={colors.text} />
+                <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>Мои документы</Text>
+                    <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
+                        {me.kind === 'PARK' ? 'Удостоверение, права, техпаспорт, договор с парком' : 'Что загружено и проверено'}
+                    </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </Card>
+
             <Card onPress={edit} style={styles.menuItem}>
                 <Ionicons name="create-outline" size={20} color={colors.text} />
                 <View style={{ flex: 1 }}>

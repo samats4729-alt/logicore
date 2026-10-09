@@ -22,7 +22,7 @@ export interface DriverProfile {
     rejectReason: string | null;
     blockedReason: string | null;
     tripsCompleted: number;
-    documents: { id: string; kind: DocumentKind; fileName: string; mimeType: string }[];
+    documents: { id: string; kind: DocumentKind; fileName: string; mimeType: string; createdAt: string }[];
     /** Чего не хватает, чтобы отправить анкету — словами. */
     missing: string[];
 }
