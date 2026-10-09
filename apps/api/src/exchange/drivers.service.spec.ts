@@ -58,14 +58,18 @@ const base = {
     kind: null as any, parkCompanyId: null, lastName: null, firstName: null, iin: null, phone: null,
     ipName: null, ipIin: null, vehiclePlate: null, vehicleBodyType: null, vehicleIsOwn: true, contractSignedAt: null,
     idNumber: null as string | null, idIssuedBy: null as string | null, consentAt: null as Date | null,
+    registrationAddress: null as string | null, vehicleModel: null as string | null, vehicleRegNumber: null as string | null,
     documents: [] as { kind: any }[],
 };
 const filled = {
     ...base, lastName: 'Сериков', firstName: 'Серик', iin: GOOD_IIN, phone: '+77011234567', vehiclePlate: '123ABC02', vehicleBodyType: 'тент',
     consentAt: new Date(),
 };
-/** Удостоверение вписано — нужно водителю через парк. */
-const withId = { idNumber: '045123456', idIssuedBy: 'МВД РК' };
+/** Удостоверение, прописка и машина для договора — нужны водителю через парк. */
+const withId = {
+    idNumber: '045123456', idIssuedBy: 'МВД РК',
+    registrationAddress: 'г. Алматы, ул. Абая, 1', vehicleModel: 'MAN TGX', vehicleRegNumber: 'AB1234567',
+};
 const allDocs = ['ID_FRONT', 'ID_BACK', 'SELFIE_WITH_ID', 'LICENSE', 'VEHICLE_REGISTRATION'].map((kind) => ({ kind })) as { kind: any }[];
 
 describe('Биржа: чего не хватает в анкете', () => {
@@ -85,6 +89,9 @@ describe('Биржа: чего не хватает в анкете', () => {
         expect(m).toContain('подпись договора с парком');
         expect(m).toContain('номер удостоверения личности');
         expect(m).toContain('кем выдано удостоверение');
+        expect(m).toContain('адрес прописки');
+        expect(m).toContain('марка и модель машины');
+        expect(m).toContain('номер техпаспорта');
         expect(missingFor({ ...filled, ...withId, kind: 'PARK', parkCompanyId: 'park-1', documents: allDocs, contractSignedAt: new Date() as any })).toEqual([]);
     });
 
@@ -109,6 +116,7 @@ function driverRow(overrides: Record<string, any> = {}) {
     return {
         id: 'd-1', userId: 'u-1', kind: 'PARK', status: 'DRAFT', parkCompanyId: 'park-1', park: { id: 'park-1', name: 'Парк А' },
         lastName: 'Сериков', firstName: 'Серик', middleName: null, iin: GOOD_IIN, phone: '+77011234567', birthDate: null,
+        registrationAddress: 'г. Алматы, ул. Абая, 1', vehicleModel: 'MAN TGX', vehicleRegNumber: 'AB1234567',
         idNumber: '045123456', idIssuedBy: 'МВД РК', idIssuedAt: null, idExpiresAt: null, consentAt: new Date(), consentVersion: CONSENT_VERSION,
         ipName: null, ipIin: null, vehiclePlate: '123ABC02', vehicleBodyType: 'тент', vehicleCapacityKg: 20000, vehicleIsOwn: true,
         contractSignedAt: new Date(), submittedAt: null, reviewedAt: null, rejectReason: null, blockedAt: null, blockedReason: null,
@@ -132,10 +140,16 @@ function build(row = driverRow()) {
         exchangeBlocklist: { findFirst: jest.fn().mockResolvedValue(null), upsert: jest.fn((a: any) => a) },
         company: { findUnique: jest.fn().mockResolvedValue({ isPark: true }), findFirst: jest.fn() },
         user: { findFirst: jest.fn(), create: jest.fn() },
-        $transaction: jest.fn(async (ops: any[]) => ops),
+        exchangeDriverContract: { create: jest.fn(async (args: any) => ({ id: 'c-1', ...args.data })) },
+        $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
     };
     const s3: any = { isS3Enabled: () => true, uploadFile: jest.fn(), deleteFile: jest.fn() };
-    return { service: new ExchangeDriversService(prisma, s3), prisma };
+    const contracts: any = {
+        contentToSign: jest.fn(async () => ({ number: 'ПА-261009-D1', version: 'v-test', sections: [] })),
+        latestSigned: jest.fn(async () => ({ number: 'ПА-261009-D1', signedAt: new Date('2026-10-09T10:00:00Z') })),
+        forDriver: jest.fn(),
+    };
+    return { service: new ExchangeDriversService(prisma, s3, contracts), prisma, contracts };
 }
 
 describe('Биржа: отправить анкету', () => {
@@ -319,5 +333,43 @@ describe('Биржа: вступить в парк по коду', () => {
     it('анкета на проверке — код не сменить', async () => {
         const { service } = build(driverRow({ status: 'PENDING' }));
         await expect(service.joinParkByCode('u-1', 'ABC234')).rejects.toThrow(/на проверке/);
+    });
+});
+
+describe('Биржа: договор с парком', () => {
+    it('подпись замораживает полный текст: экземпляр сохраняется вместе с отметкой о подписи', async () => {
+        const { service, prisma, contracts } = build(driverRow({ contractSignedAt: null }));
+        await service.signContract('u-1', 'device-1', '10.0.0.1');
+        expect(contracts.contentToSign).toHaveBeenCalledWith('d-1', expect.any(Date));
+        const saved = prisma.exchangeDriverContract.create.mock.calls[0][0].data;
+        expect(saved).toMatchObject({ driverId: 'd-1', parkCompanyId: 'park-1', number: 'ПА-261009-D1', version: 'v-test', signedDevice: 'device-1', signedIp: '10.0.0.1' });
+        expect(saved.signedAt).toEqual(prisma.exchangeDriver.update.mock.calls[0][0].data.contractSignedAt);
+    });
+
+    it('данных для договора не хватает — подписать нельзя, и ничего не сохраняется', async () => {
+        const { service, prisma, contracts } = build(driverRow({ contractSignedAt: null }));
+        contracts.contentToSign.mockRejectedValue(new BadRequestException('Для договора не хватает: адрес прописки'));
+        await expect(service.signContract('u-1', undefined, undefined)).rejects.toThrow(/адрес прописки/);
+        expect(prisma.exchangeDriverContract.create).not.toHaveBeenCalled();
+    });
+
+    it('после подписи сменилась машина — подпись снимается, договор подписывать заново', async () => {
+        const { service, prisma } = build(driverRow({ contractSignedAt: new Date() }));
+        await service.update('u-1', { vehicleModel: 'Volvo FH' });
+        expect(prisma.exchangeDriver.update.mock.calls[0][0].data.contractSignedAt).toBeNull();
+    });
+
+    it('те же данные ещё раз — подпись остаётся: «Далее» пересохраняет шаг целиком', async () => {
+        const { service, prisma } = build(driverRow({ contractSignedAt: new Date() }));
+        prisma.exchangeDriver.findFirst.mockResolvedValue(null);
+        await service.update('u-1', { lastName: 'Сериков', vehicleModel: 'MAN TGX', vehicleRegNumber: 'ab 1234567' });
+        expect(prisma.exchangeDriver.update.mock.calls[0][0].data).not.toHaveProperty('contractSignedAt');
+    });
+
+    it('парку в карточке — номер и дата подписанного договора', async () => {
+        const { service, prisma } = build(driverRow({ status: 'PENDING' }));
+        prisma.company.findUnique.mockResolvedValue({ isPark: true });
+        const card: any = await service.parkDriverCard('park-1', 'd-1');
+        expect(card.contract).toEqual({ number: 'ПА-261009-D1', signedAt: new Date('2026-10-09T10:00:00Z') });
     });
 });
