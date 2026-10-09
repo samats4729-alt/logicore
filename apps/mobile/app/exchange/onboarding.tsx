@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,
+    ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { API_URL, getAuthHeader, getDeviceId } from '@/lib/api';
-import { DOCUMENTS, DocumentKind, DriverProfile, Park, documentPath, exchangeApi, PARK_INVITE_KEY, вКавычках, иинВерный, телефонВерный, телефонКрасиво, ответ } from '@/lib/exchange';
+import {
+    DOCUMENTS, DocumentKind, DriverProfile, Park, documentPath, exchangeApi, PARK_INVITE_KEY, вКавычках, иинВерный, телефонВерный, телефонКрасиво, ответ,
+    датаРожденияПоИин, деньВвод, деньИзСервера, деньНаСервер,
+} from '@/lib/exchange';
+import { CONSENT_TEXT, CONSENT_TITLE } from '@/lib/consent';
 import { useStore } from '@/store';
 import * as SecureStore from '@/lib/secure';
 import { BRAND, RADIUS, selectedColors } from '@/lib/theme';
@@ -16,6 +21,9 @@ import { Button, Card, Choice, Field, Title } from '@/components/kit';
 import { BodyTypePicker } from '@/components/BodyTypePicker';
 import { ParkContractSummary } from '@/components/ParkContract';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
+
+/** Адрес сайта платформы — для ссылки на политику конфиденциальности рядом с согласием. */
+const SITE_URL: string = (Constants.expoConfig?.extra?.siteUrl as string | undefined) || '';
 
 /** Документы-карточки (удостоверение, права, техпаспорт) — рамка лёжа; остальное — лист. */
 const CARD_DOCUMENTS: DocumentKind[] = ['ID_FRONT', 'ID_BACK', 'LICENSE', 'VEHICLE_REGISTRATION'];
@@ -58,6 +66,7 @@ export default function Onboarding() {
     const [form, setForm] = useState({
         lastName: '', firstName: '', middleName: '', iin: '', phone: '+7',
         ipName: '', ipIin: '', vehiclePlate: '', vehicleBodyType: '', capacityTons: '',
+        idNumber: '', idIssuedBy: '', idIssuedAt: '', idExpiresAt: '',
     });
     type FieldKey = keyof typeof form;
     // Ошибки показываем под полем, общую — плашкой над кнопками.
@@ -109,6 +118,8 @@ export default function Onboarding() {
                 iin: d.iin ?? '', phone: d.phone ?? '+7', ipName: d.ipName ?? '', ipIin: d.ipIin ?? '',
                 vehiclePlate: d.vehiclePlate ?? '', vehicleBodyType: d.vehicleBodyType ?? '',
                 capacityTons: d.vehicleCapacityKg ? String(d.vehicleCapacityKg / 1000) : '',
+                idNumber: d.idNumber ?? '', idIssuedBy: d.idIssuedBy ?? '',
+                idIssuedAt: деньИзСервера(d.idIssuedAt), idExpiresAt: деньИзСервера(d.idExpiresAt),
             });
             // Исправление после отказа — сразу ко второму шагу: вид работы уже выбран.
             if (d.kind) setIndex(1);
@@ -143,6 +154,14 @@ export default function Onboarding() {
                 if (!form.ipName.trim()) e.ipName = 'Впишите название ИП, как в документе';
                 if (form.ipIin && form.ipIin.length !== 12) e.ipIin = 'ИИН ИП — 12 цифр';
             }
+            // Удостоверение — водителю через парк: парк сверит его с фото и
+            // впишет в договор. Даты — по желанию, но если вписаны, то целиком.
+            if (driver?.kind === 'PARK') {
+                if (!/^\d{9}$/.test(form.idNumber)) e.idNumber = 'Номер удостоверения — девять цифр, как на карточке';
+                if (!form.idIssuedBy.trim()) e.idIssuedBy = 'Впишите, кем выдано — как на обороте удостоверения';
+                if (деньНаСервер(form.idIssuedAt) === null) e.idIssuedAt = 'День, месяц и год — например 15.03.2020';
+                if (деньНаСервер(form.idExpiresAt) === null) e.idExpiresAt = 'День, месяц и год — например 15.03.2030';
+            }
         }
         if (step === 'vehicle') {
             if (!form.vehiclePlate.trim()) e.vehiclePlate = 'Впишите госномер машины';
@@ -155,7 +174,10 @@ export default function Onboarding() {
 
     /** Ошибку сервера — к нужному полю, если понятно к какому; иначе плашкой. */
     const showServerError = (message: string) => {
-        if (/ИИН ИП/.test(message)) setErrors({ ipIin: message });
+        if (/просрочено|Срок действия/.test(message)) setErrors({ idExpiresAt: message });
+        else if (/выдачи/.test(message)) setErrors({ idIssuedAt: message });
+        else if (/Номер удостоверения/.test(message)) setErrors({ idNumber: message });
+        else if (/ИИН ИП/.test(message)) setErrors({ ipIin: message });
         else if (/ИИН/.test(message)) setErrors({ iin: message });
         else if (/Телефон/i.test(message)) setErrors({ phone: message });
         else setStepError(message);
@@ -170,11 +192,16 @@ export default function Onboarding() {
         setBusy(true);
         try {
             if (step === 'kind' && !driver.kind) { setStepError('Выберите, как вы работаете: свой ИП или через парк'); return; }
+            if (step === 'kind' && !driver.consentAt) { setStepError('Отметьте согласие на обработку данных — без него анкету не отправить'); return; }
             if (step === 'person') {
                 await save({
                     lastName: form.lastName, firstName: form.firstName, middleName: form.middleName,
                     iin: form.iin, phone: form.phone,
                     ...(driver.kind === 'IP' ? { ipName: form.ipName, ipIin: form.ipIin || form.iin } : {}),
+                    ...(driver.kind === 'PARK' ? {
+                        idNumber: form.idNumber, idIssuedBy: form.idIssuedBy,
+                        idIssuedAt: деньНаСервер(form.idIssuedAt) ?? '', idExpiresAt: деньНаСервер(form.idExpiresAt) ?? '',
+                    } : {}),
                 });
             }
             if (step === 'vehicle') {
@@ -207,6 +234,13 @@ export default function Onboarding() {
         { text: 'Отмена', style: 'cancel' },
         { text: 'Выйти', style: 'destructive', onPress: async () => { await logout(); router.replace('/login'); } },
     ]);
+
+    /** Согласие сохраняется сразу, как и выбор вида работы: снял галочку — отозвал. */
+    const toggleConsent = async () => {
+        if (!driver) return;
+        setStepError(null);
+        try { await save({ consent: !driver.consentAt }); } catch (e) { setStepError(ответ(e, 'Не удалось сохранить — проверьте интернет')); }
+    };
 
     const chooseKind = async (kind: 'IP' | 'PARK') => {
         setStepError(null);
@@ -318,6 +352,26 @@ export default function Onboarding() {
                             selected={driver.kind === 'PARK'}
                             onPress={() => chooseKind('PARK')}
                         />
+
+                        {/* Согласие — до того, как человек впишет ИИН и снимет документы. */}
+                        <Pressable
+                            onPress={toggleConsent}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: !!driver.consentAt }}
+                            accessibilityLabel={CONSENT_TITLE}
+                            style={[styles.consent, { backgroundColor: colors.card, borderColor: driver.consentAt ? colors.text : colors.border }]}
+                        >
+                            <Ionicons name={driver.consentAt ? 'checkbox' : 'square-outline'} size={24} color={colors.text} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14.5 }}>{CONSENT_TITLE}</Text>
+                                <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 4 }}>{CONSENT_TEXT}</Text>
+                                {!!SITE_URL && (
+                                    <Text onPress={() => Linking.openURL(`${SITE_URL}/privacy`)} style={[styles.link, { fontSize: 13, marginTop: 6 }]}>
+                                        Политика конфиденциальности
+                                    </Text>
+                                )}
+                            </View>
+                        </Pressable>
                     </>
                 )}
 
@@ -326,12 +380,32 @@ export default function Onboarding() {
                         <Field label="Фамилия" error={errors.lastName} value={form.lastName} onChangeText={(v: string) => set('lastName', v)} autoCapitalize="words" />
                         <Field label="Имя" error={errors.firstName} value={form.firstName} onChangeText={(v: string) => set('firstName', v)} autoCapitalize="words" />
                         <Field label="Отчество" hint="Если есть" value={form.middleName} onChangeText={(v: string) => set('middleName', v)} autoCapitalize="words" />
-                        <Field label="ИИН" error={errors.iin} hint="12 цифр, как в удостоверении" value={form.iin} onChangeText={(v: string) => set('iin', v.replace(/\D/g, '').slice(0, 12))} keyboardType="number-pad" />
+                        {/* Дата рождения — из ИИН, отдельного поля нет: увидел «1909 год» —
+                            значит, ошибся в цифрах ИИН. */}
+                        <Field
+                            label="ИИН"
+                            error={errors.iin}
+                            hint={датаРожденияПоИин(form.iin) ? `Дата рождения по ИИН: ${датаРожденияПоИин(form.iin)}` : '12 цифр, как в удостоверении'}
+                            value={form.iin}
+                            onChangeText={(v: string) => set('iin', v.replace(/\D/g, '').slice(0, 12))}
+                            keyboardType="number-pad"
+                        />
                         <Field label="Телефон" error={errors.phone} hint="На него позвонит парк или заказчик" value={form.phone} onChangeText={(v: string) => set('phone', v)} keyboardType="phone-pad" />
                         {driver.kind === 'IP' && (
                             <>
                                 <Field label="Название ИП" error={errors.ipName} hint="Как в документе о регистрации" placeholder="ИП Сериков" value={form.ipName} onChangeText={(v: string) => set('ipName', v)} />
                                 <Field label="ИИН ИП" error={errors.ipIin} hint="Обычно совпадает с вашим ИИН" value={form.ipIin} onChangeText={(v: string) => set('ipIin', v.replace(/\D/g, '').slice(0, 12))} keyboardType="number-pad" />
+                            </>
+                        )}
+                        {driver.kind === 'PARK' && (
+                            <>
+                                <Text style={[styles.groupLabel, { color: colors.text }]}>Удостоверение личности</Text>
+                                <Field label="Номер" error={errors.idNumber} hint="Девять цифр на лицевой стороне" placeholder="045123456" value={form.idNumber} onChangeText={(v: string) => set('idNumber', v.replace(/\D/g, '').slice(0, 9))} keyboardType="number-pad" />
+                                <Field label="Кем выдано" error={errors.idIssuedBy} hint="Как на обороте" placeholder="МВД РК" value={form.idIssuedBy} onChangeText={(v: string) => set('idIssuedBy', v)} />
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    <Field style={{ flex: 1 }} label="Дата выдачи" error={errors.idIssuedAt} hint="Если есть" placeholder="ДД.ММ.ГГГГ" value={form.idIssuedAt} onChangeText={(v: string) => set('idIssuedAt', деньВвод(v))} keyboardType="number-pad" />
+                                    <Field style={{ flex: 1 }} label="Действует до" error={errors.idExpiresAt} hint="Если есть" placeholder="ДД.ММ.ГГГГ" value={form.idExpiresAt} onChangeText={(v: string) => set('idExpiresAt', деньВвод(v))} keyboardType="number-pad" />
+                                </View>
                             </>
                         )}
                     </>
@@ -465,9 +539,12 @@ export default function Onboarding() {
                                 ['Работаю', driver.kind === 'IP' ? `свой ИП${driver.ipName ? ` · ${driver.ipName}` : ''}` : `через парк ${вКавычках(driver.park?.name)}`],
                                 ['ФИО', [driver.lastName, driver.firstName, driver.middleName].filter(Boolean).join(' ') || '—'],
                                 ['ИИН', driver.iin ?? '—'],
+                                ['Родился', деньИзСервера(driver.birthDate) || '—'],
+                                ...(driver.kind === 'PARK' ? [['Удостоверение', driver.idNumber ? `№ ${driver.idNumber}${driver.idIssuedBy ? `, ${driver.idIssuedBy}` : ''}` : '—']] : []),
                                 ['Телефон', телефонКрасиво(driver.phone)],
                                 ['Машина', [driver.vehiclePlate, driver.vehicleBodyType, driver.vehicleCapacityKg ? `${driver.vehicleCapacityKg / 1000} т` : null].filter(Boolean).join(' · ') || '—'],
                                 ...(driver.kind === 'PARK' ? [['Документы', `${driver.documents.length} фото`], ['Договор', driver.contractSignedAt ? 'подписан' : 'не подписан']] : []),
+                                ['Согласие', driver.consentAt ? 'на обработку данных — дано' : 'не дано'],
                             ].map(([label, value]) => (
                                 <View key={label} style={styles.reviewRow}>
                                     <Text style={{ color: colors.textTertiary, width: 100, fontSize: 13.5 }}>{label}</Text>
@@ -536,4 +613,6 @@ const styles = StyleSheet.create({
     stepError: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#fef2f2', borderRadius: 12, padding: 10, marginBottom: 10 },
     stepErrorText: { flex: 1, color: '#b91c1c', fontSize: 13.5, lineHeight: 19, fontWeight: '600' },
     fieldError: { fontSize: 12, marginTop: 6, lineHeight: 16 },
+    consent: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', borderWidth: 1, borderRadius: RADIUS.card, padding: 14, marginTop: 6 },
+    groupLabel: { fontSize: 15, fontWeight: '800', marginTop: 10, marginBottom: 10 },
 });
