@@ -15,6 +15,10 @@ import { BRAND, RADIUS, selectedColors } from '@/lib/theme';
 import { Button, Card, Choice, Field, Title } from '@/components/kit';
 import { BodyTypePicker } from '@/components/BodyTypePicker';
 import { ParkContractSummary } from '@/components/ParkContract';
+import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
+
+/** Документы-карточки (удостоверение, права, техпаспорт) — рамка лёжа; остальное — лист. */
+const CARD_DOCUMENTS: DocumentKind[] = ['ID_FRONT', 'ID_BACK', 'LICENSE', 'VEHICLE_REGISTRATION'];
 
 type Step = 'kind' | 'person' | 'vehicle' | 'park' | 'documents' | 'contract' | 'review';
 
@@ -209,7 +213,33 @@ export default function Onboarding() {
         try { await save({ kind }); } catch (e) { setStepError(ответ(e, 'Не удалось сохранить — проверьте интернет')); }
     };
 
+    /** Какой документ снимаем камерой с рамкой и проверкой — и откуда фото. */
+    const [capture, setCapture] = useState<{ kind: DocumentKind; source: 'camera' | 'gallery' } | null>(null);
+
+    const uploadCaptured = async (photo: CapturedPhoto) => {
+        const kind = capture?.kind;
+        setCapture(null);
+        if (!kind) return;
+        setUploading(kind);
+        try {
+            setDriver(await exchangeApi.uploadDocument(kind, photo.uri));
+            setStepError(null);
+        } catch (e) {
+            Alert.alert('Фото не загрузилось', ответ(e, 'Попробуйте ещё раз'));
+        } finally {
+            setUploading(null);
+        }
+    };
+
     const pickPhoto = async (kind: DocumentKind, from: 'camera' | 'library') => {
+        // Документы снимаются камерой с рамкой: она сама скажет, если темно,
+        // блики или размыто, — парку не придётся возвращать анкету из-за
+        // нечитаемого фото. Селфи с удостоверением — не снимок документа,
+        // его проверяют иначе, поэтому оно идёт обычной камерой.
+        if (kind !== 'SELFIE_WITH_ID') {
+            setCapture({ kind, source: from === 'camera' ? 'camera' : 'gallery' });
+            return;
+        }
         try {
             // Галерея открывается системным выбором фото — разрешения на все
             // фото телефона не нужно (и в приложении оно отключено). Спрашиваем
@@ -461,6 +491,16 @@ export default function Onboarding() {
                     </>
                 )}
             </ScrollView>
+
+            <DocumentCapture
+                visible={!!capture}
+                title={capture ? DOCUMENTS.find((d) => d.kind === capture.kind)?.title ?? 'Фото документа' : ''}
+                hint={capture && CARD_DOCUMENTS.includes(capture.kind) ? 'Документ целиком в рамке, без бликов от ламинации' : undefined}
+                frame={capture && CARD_DOCUMENTS.includes(capture.kind) ? 'card' : 'sheet'}
+                source={capture?.source}
+                onClose={() => setCapture(null)}
+                onDone={uploadCaptured}
+            />
 
             <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
                 {!!stepError && (

@@ -44,11 +44,13 @@ type Phase = 'camera' | 'checking' | 'review';
  * должен застрять из-за ошибки оценки. Содержимое документа не читается и
  * с заявкой не сверяется — это решение владельца.
  */
-export function DocumentCapture({ visible, title, hint, frame = 'sheet', onClose, onDone }: {
+export function DocumentCapture({ visible, title, hint, frame = 'sheet', source = 'camera', onClose, onDone }: {
     visible: boolean;
     title: string;
     hint?: string;
     frame?: CaptureFrame;
+    /** «Из галереи» — сразу выбор готового фото, и он проходит ту же проверку. */
+    source?: 'camera' | 'gallery';
     onClose: () => void;
     onDone: (photo: CapturedPhoto) => void;
 }) {
@@ -71,6 +73,11 @@ export function DocumentCapture({ visible, title, hint, frame = 'sheet', onClose
         setVerdict(null);
         setTorch(false);
         setReady(false);
+        if (source === 'gallery') {
+            // Не выбрал фото — закрываемся, а не оставляем пустую камеру.
+            fromGallery().then((picked) => { if (!picked) onClose(); });
+            return;
+        }
         if (permission && !permission.granted && permission.canAskAgain) requestPermission();
     }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -92,10 +99,13 @@ export function DocumentCapture({ visible, title, hint, frame = 'sheet', onClose
         }
     };
 
-    const fromGallery = async () => {
+    /** Готовое фото из галереи — та же проверка, что у снимка с камеры. */
+    const fromGallery = async (): Promise<boolean> => {
         const picked = await ImagePicker.launchImageLibraryAsync({ quality: 0.8, mediaTypes: ['images'] });
         const asset = picked.canceled ? null : picked.assets?.[0];
-        if (asset) await check({ uri: asset.uri, width: asset.width, height: asset.height });
+        if (!asset) return false;
+        await check({ uri: asset.uri, width: asset.width, height: asset.height });
+        return true;
     };
 
     const send = () => {
@@ -113,11 +123,16 @@ export function DocumentCapture({ visible, title, hint, frame = 'sheet', onClose
     const fy = Math.max(insets.top + 96, (H - fh) / 2 - 40);
 
     const noAccess = permission && !permission.granted;
+    // Из галереи камера не нужна вовсе — ни видоискатель, ни вопрос о доступе.
+    const live = phase === 'camera' && source === 'camera';
+    /** Переснять с камеры или выбрать другое фото из галереи. */
+    const retake = () => (source === 'gallery' ? fromGallery() : setPhase('camera'));
+    const retakeTitle = source === 'gallery' ? 'Выбрать другое' : 'Переснять';
 
     return (
         <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
             <View style={styles.root}>
-                {phase === 'camera' && !noAccess && (
+                {live && !noAccess && (
                     <>
                         <CameraView
                             ref={camera}
@@ -139,7 +154,7 @@ export function DocumentCapture({ visible, title, hint, frame = 'sheet', onClose
                     </>
                 )}
 
-                {phase === 'camera' && noAccess && (
+                {live && noAccess && (
                     <View style={styles.center}>
                         <Ionicons name="camera-outline" size={40} color="#fff" />
                         <Text style={styles.noAccessTitle}>Нет доступа к камере</Text>
@@ -168,7 +183,7 @@ export function DocumentCapture({ visible, title, hint, frame = 'sheet', onClose
                     <View style={{ width: 44 }} />
                 </View>
 
-                {phase === 'camera' && !noAccess && (
+                {live && !noAccess && (
                     <View style={[styles.bottom, { paddingBottom: insets.bottom + 18 }]}>
                         <Pressable onPress={fromGallery} hitSlop={8} accessibilityRole="button" accessibilityLabel="Выбрать из галереи" style={styles.roundButton}>
                             <Ionicons name="images-outline" size={24} color="#fff" />
@@ -205,14 +220,14 @@ export function DocumentCapture({ visible, title, hint, frame = 'sheet', onClose
                         <Verdict verdict={verdict} />
                         {verdict && !verdict.ok ? (
                             <>
-                                <Button title="Переснять" icon="camera-outline" onPress={() => setPhase('camera')} />
+                                <Button title={retakeTitle} icon={source === 'gallery' ? 'images-outline' : 'camera-outline'} onPress={retake} />
                                 <Pressable onPress={send} hitSlop={8} accessibilityRole="button" style={styles.anyway}>
                                     <Text style={styles.anywayText}>Всё равно отправить</Text>
                                 </Pressable>
                             </>
                         ) : (
                             <View style={{ flexDirection: 'row', gap: 10 }}>
-                                <Button title="Переснять" variant="secondary" onPress={() => setPhase('camera')} style={{ flex: 1 }} />
+                                <Button title={retakeTitle} variant="secondary" onPress={retake} style={{ flex: 1 }} />
                                 <Button title="Отправить" icon="arrow-up" onPress={send} style={{ flex: 2 }} />
                             </View>
                         )}
@@ -314,7 +329,7 @@ const styles = StyleSheet.create({
         position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 12,
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
-    title: { flex: 1, textAlign: 'center', color: '#fff', fontFamily: FONT.semibold, fontSize: 16 },
+    title: { flex: 1, textAlign: 'center', color: '#fff', fontFamily: FONT.semibold, fontSize: 15 },
     roundButton: {
         width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
         backgroundColor: 'rgba(255,255,255,0.16)',
