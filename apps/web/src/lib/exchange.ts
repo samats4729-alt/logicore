@@ -223,6 +223,15 @@ export interface ExchangeDriver {
     middleName: string | null;
     iin: string | null;
     phone: string | null;
+    /** Из ИИН — сервер считает сам. */
+    birthDate: string | null;
+    idNumber: string | null;
+    idIssuedBy: string | null;
+    idIssuedAt: string | null;
+    idExpiresAt: string | null;
+    /** Когда водитель дал согласие на обработку персональных данных и на какой текст. */
+    consentAt: string | null;
+    consentVersion: string | null;
     email: string | null;
     ipName: string | null;
     ipIin: string | null;

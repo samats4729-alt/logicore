@@ -123,9 +123,21 @@ export default function ParkDriverPage() {
                     <div className={`${styles.cardBody} space-y-2 text-[13px]`}>
                         <Row label="ФИО" value={фиоВодителя(driver)} />
                         <Row label="ИИН" value={иинКрасиво(driver.iin)} />
+                        <Row label="Дата рождения" value={driver.birthDate ? `${dayjs(driver.birthDate).format('DD.MM.YYYY')} (по ИИН)` : '—'} />
+                        {/* Удостоверение — сверить с фото ниже и вписать в договор. */}
+                        <Row label="Удостоверение" value={driver.idNumber ? `№ ${driver.idNumber}${driver.idIssuedBy ? `, ${driver.idIssuedBy}` : ''}` : '—'} />
+                        {(driver.idIssuedAt || driver.idExpiresAt) && (
+                            <Row
+                                label="Выдано / действует"
+                                value={`${driver.idIssuedAt ? dayjs(driver.idIssuedAt).format('DD.MM.YYYY') : '—'} — ${driver.idExpiresAt ? `до ${dayjs(driver.idExpiresAt).format('DD.MM.YYYY')}` : 'срок не указан'}`}
+                            />
+                        )}
                         <Row label="Телефон" value={driver.phone ? <a className="lc-link" href={`tel:${driver.phone}`}>{телефонКрасиво(driver.phone)}</a> : '—'} />
                         <Row label="Почта Google" value={driver.email || '—'} />
                         <Row label="Рейсов довёз" value={String(driver.tripsCompleted)} />
+                        {/* Без согласия анкету не отправить (с 09.10.2026); у поданных
+                            раньше его может не быть — так и пишем. */}
+                        <Row label="Согласие на данные" value={driver.consentAt ? `дано ${dayjs(driver.consentAt).format('DD.MM.YYYY HH:mm')}` : 'не давал'} />
                     </div>
                 </section>
 
