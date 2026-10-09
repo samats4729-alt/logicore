@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { ExchangeDriversService, missingFor } from './drivers.service';
-import { isValidIin, normalizePhone, normalizePlate } from './driver-identity';
+import { CONSENT_VERSION, ExchangeDriversService, missingFor } from './drivers.service';
+import { birthDateFromIin, isValidIin, normalizeIdNumber, normalizePhone, normalizePlate, parseDay } from './driver-identity';
 
 /** Настоящий по контрольной цифре ИИН из первых одиннадцати цифр. */
 function iinFrom(first11: string): string {
@@ -36,14 +36,36 @@ describe('Биржа: личные данные водителя', () => {
     it('госномер — заглавными и без пробелов', () => {
         expect(normalizePlate(' 123 abc 02 ')).toBe('123ABC02');
     });
+
+    it('дата рождения — из ИИН, с веком по седьмой цифре', () => {
+        // 900101 + 3 (XX век) → 1 января 1990
+        expect(birthDateFromIin(GOOD_IIN)?.toISOString().slice(0, 10)).toBe('1990-01-01');
+        const xxi = ['05031550012', '05031550013', '05031550014'].map(iinFrom).find((x) => x.length === 12)!;
+        expect(birthDateFromIin(xxi)?.toISOString().slice(0, 10)).toBe('2005-03-15');
+        expect(birthDateFromIin('12345')).toBeNull();
+    });
+
+    it('номер удостоверения — девять цифр; дата из анкеты — настоящий день', () => {
+        expect(normalizeIdNumber('045 123 456')).toBe('045123456');
+        expect(normalizeIdNumber('12345')).toBe('');
+        expect(parseDay('2030-02-28')?.toISOString().slice(0, 10)).toBe('2030-02-28');
+        expect(parseDay('2030-02-30')).toBeNull();
+        expect(parseDay('28.02.2030')).toBeNull();
+    });
 });
 
 const base = {
     kind: null as any, parkCompanyId: null, lastName: null, firstName: null, iin: null, phone: null,
     ipName: null, ipIin: null, vehiclePlate: null, vehicleBodyType: null, vehicleIsOwn: true, contractSignedAt: null,
+    idNumber: null as string | null, idIssuedBy: null as string | null, consentAt: null as Date | null,
     documents: [] as { kind: any }[],
 };
-const filled = { ...base, lastName: 'Сериков', firstName: 'Серик', iin: GOOD_IIN, phone: '+77011234567', vehiclePlate: '123ABC02', vehicleBodyType: 'тент' };
+const filled = {
+    ...base, lastName: 'Сериков', firstName: 'Серик', iin: GOOD_IIN, phone: '+77011234567', vehiclePlate: '123ABC02', vehicleBodyType: 'тент',
+    consentAt: new Date(),
+};
+/** Удостоверение вписано — нужно водителю через парк. */
+const withId = { idNumber: '045123456', idIssuedBy: 'МВД РК' };
 const allDocs = ['ID_FRONT', 'ID_BACK', 'SELFIE_WITH_ID', 'LICENSE', 'VEHICLE_REGISTRATION'].map((kind) => ({ kind })) as { kind: any }[];
 
 describe('Биржа: чего не хватает в анкете', () => {
@@ -61,19 +83,33 @@ describe('Биржа: чего не хватает в анкете', () => {
         expect(m).toContain('парк');
         expect(m).toContain('фото: фото с удостоверением в руке');
         expect(m).toContain('подпись договора с парком');
-        expect(missingFor({ ...filled, kind: 'PARK', parkCompanyId: 'park-1', documents: allDocs, contractSignedAt: new Date() as any })).toEqual([]);
+        expect(m).toContain('номер удостоверения личности');
+        expect(m).toContain('кем выдано удостоверение');
+        expect(missingFor({ ...filled, ...withId, kind: 'PARK', parkCompanyId: 'park-1', documents: allDocs, contractSignedAt: new Date() as any })).toEqual([]);
     });
 
     it('машина не своя — нужна доверенность от владельца', () => {
-        const m = missingFor({ ...filled, kind: 'PARK', parkCompanyId: 'park-1', documents: allDocs, contractSignedAt: new Date() as any, vehicleIsOwn: false });
+        const m = missingFor({ ...filled, ...withId, kind: 'PARK', parkCompanyId: 'park-1', documents: allDocs, contractSignedAt: new Date() as any, vehicleIsOwn: false });
         expect(m).toEqual(['фото: доверенность от владельца машины']);
+    });
+
+    it('без согласия на обработку данных анкету не отправить — ни с ИП, ни через парк', () => {
+        expect(missingFor({ ...filled, kind: 'IP', ipName: 'ИП Сериков', ipIin: GOOD_IIN, consentAt: null }))
+            .toEqual(['согласие на обработку персональных данных']);
+        expect(missingFor({ ...filled, ...withId, kind: 'PARK', parkCompanyId: 'park-1', documents: allDocs, contractSignedAt: new Date() as any, consentAt: null }))
+            .toEqual(['согласие на обработку персональных данных']);
+    });
+
+    it('с ИП удостоверение не спрашиваем — как и раньше (владелец, 09.10)', () => {
+        expect(missingFor({ ...filled, kind: 'IP', ipName: 'ИП Сериков', ipIin: GOOD_IIN })).not.toContain('номер удостоверения личности');
     });
 });
 
 function driverRow(overrides: Record<string, any> = {}) {
     return {
         id: 'd-1', userId: 'u-1', kind: 'PARK', status: 'DRAFT', parkCompanyId: 'park-1', park: { id: 'park-1', name: 'Парк А' },
-        lastName: 'Сериков', firstName: 'Серик', middleName: null, iin: GOOD_IIN, phone: '+77011234567',
+        lastName: 'Сериков', firstName: 'Серик', middleName: null, iin: GOOD_IIN, phone: '+77011234567', birthDate: null,
+        idNumber: '045123456', idIssuedBy: 'МВД РК', idIssuedAt: null, idExpiresAt: null, consentAt: new Date(), consentVersion: CONSENT_VERSION,
         ipName: null, ipIin: null, vehiclePlate: '123ABC02', vehicleBodyType: 'тент', vehicleCapacityKg: 20000, vehicleIsOwn: true,
         contractSignedAt: new Date(), submittedAt: null, reviewedAt: null, rejectReason: null, blockedAt: null, blockedReason: null,
         tripsCompleted: 0, createdAt: new Date(), user: { email: 'serik@gmail.com' },
@@ -187,6 +223,36 @@ describe('Биржа: анкета', () => {
         const { service, prisma } = build();
         prisma.company.findFirst.mockResolvedValue(null);
         await expect(service.update('u-1', { parkCompanyId: 'company-x' })).rejects.toThrow(/парка на бирже нет/);
+    });
+
+    it('ИИН вписан — дата рождения встаёт из него сама', async () => {
+        const { service, prisma } = build();
+        prisma.exchangeDriver.findFirst.mockResolvedValue(null);
+        await service.update('u-1', { iin: GOOD_IIN });
+        expect(prisma.exchangeDriver.update.mock.calls[0][0].data.birthDate.toISOString().slice(0, 10)).toBe('1990-01-01');
+    });
+
+    it('удостоверение: номер — девять цифр, просроченное не принимаем, пустое — стираем', async () => {
+        const { service, prisma } = build();
+        await expect(service.update('u-1', { idNumber: '12345' })).rejects.toThrow(/девять цифр/);
+        await expect(service.update('u-1', { idExpiresAt: '2020-01-01' })).rejects.toThrow(/просрочено/);
+        await expect(service.update('u-1', { idIssuedAt: '2999-01-01' })).rejects.toThrow(/не наступила/);
+        await expect(service.update('u-1', { idIssuedAt: '01.02.2020' })).rejects.toThrow(/день, месяц и год/);
+        await service.update('u-1', { idNumber: '045 123 456', idIssuedBy: ' МВД РК ', idIssuedAt: '2020-02-01', idExpiresAt: '' });
+        const data = prisma.exchangeDriver.update.mock.calls[0][0].data;
+        expect(data.idNumber).toBe('045123456');
+        expect(data.idIssuedBy).toBe('МВД РК');
+        expect(data.idIssuedAt.toISOString().slice(0, 10)).toBe('2020-02-01');
+        expect(data.idExpiresAt).toBeNull();
+    });
+
+    it('согласие запоминается со временем и версией текста; снял галочку — отозвано', async () => {
+        const { service, prisma } = build();
+        await service.update('u-1', { consent: true });
+        expect(prisma.exchangeDriver.update.mock.calls[0][0].data.consentAt).toBeInstanceOf(Date);
+        expect(prisma.exchangeDriver.update.mock.calls[0][0].data.consentVersion).toBe(CONSENT_VERSION);
+        await service.update('u-1', { consent: false });
+        expect(prisma.exchangeDriver.update.mock.calls[1][0].data).toMatchObject({ consentAt: null, consentVersion: null });
     });
 });
 

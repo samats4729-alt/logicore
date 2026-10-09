@@ -50,3 +50,38 @@ export function normalizePhone(raw: string | null | undefined): string {
 export function normalizePlate(raw: string | null | undefined): string {
     return String(raw ?? '').toUpperCase().replace(/[\s-]/g, '');
 }
+
+/**
+ * Дата рождения из ИИН: первые шесть цифр — ГГММДД, седьмая — век (1–2 —
+ * XIX, 3–4 — XX, 5–6 — XXI). Водитель её не вводит: вторая копия того же
+ * числа рано или поздно разошлась бы с ИИН. Неверный ИИН — `null`.
+ */
+export function birthDateFromIin(raw: string | null | undefined): Date | null {
+    const iin = digitsOnly(raw);
+    if (!isValidIin(iin)) return null;
+    const century = [0, 1800, 1800, 1900, 1900, 2000, 2000][Number(iin[6])];
+    const year = century + Number(iin.slice(0, 2));
+    const month = Number(iin.slice(2, 4));
+    const day = Number(iin.slice(4, 6));
+    const date = new Date(Date.UTC(year, month - 1, day));
+    // 31 февраля и подобное — не дата.
+    return date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date : null;
+}
+
+/**
+ * Номер удостоверения личности РК — девять цифр на карточке. Пробелы и
+ * прочее убираем; не девять цифр — пустая строка.
+ */
+export function normalizeIdNumber(raw: string | null | undefined): string {
+    const digits = digitsOnly(raw);
+    return /^\d{9}$/.test(digits) ? digits : '';
+}
+
+/** Дата из анкеты «ГГГГ-ММ-ДД» — без часов и поясов. Не дата — `null`. */
+export function parseDay(raw: string | null | undefined): Date | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(raw ?? '').trim());
+    if (!m) return null;
+    const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date : null;
+}
