@@ -229,6 +229,12 @@ export interface ExchangeDriver {
     idIssuedBy: string | null;
     idIssuedAt: string | null;
     idExpiresAt: string | null;
+    /** Для договора с парком: адрес прописки, марка и модель, номер техпаспорта. */
+    registrationAddress: string | null;
+    vehicleModel: string | null;
+    vehicleRegNumber: string | null;
+    /** Подписанный договор с этим парком — только в карточке парка. */
+    contract?: { number: string; signedAt: string } | null;
     /** Когда водитель дал согласие на обработку персональных данных и на какой текст. */
     consentAt: string | null;
     consentVersion: string | null;
