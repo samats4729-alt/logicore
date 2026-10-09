@@ -3084,6 +3084,20 @@ model ExchangeDriver {
   iin        String? @unique
   /// Вписан водителем; парк при проверке звонит на него.
   phone      String?
+  /// Дата рождения — из ИИН (первые шесть цифр и седьмая — век), не вводится руками.
+  birthDate  DateTime? @db.Date
+
+  /// Удостоверение личности: номер и кем выдано обязательны водителю через
+  /// парк — парк сверяет их с фото и вписывает в договор; даты — если есть.
+  idNumber    String?
+  idIssuedBy  String?
+  idIssuedAt  DateTime? @db.Date
+  idExpiresAt DateTime? @db.Date
+
+  /// Согласие на сбор и обработку персональных данных (в том числе фото
+  /// документов и лица): когда дано и какой текст водителю показали.
+  consentAt      DateTime?
+  consentVersion String?
 
   /// Данные ИП — у водителя-перевозчика.
   ipName String?

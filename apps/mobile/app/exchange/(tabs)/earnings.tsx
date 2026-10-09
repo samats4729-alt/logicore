@@ -6,9 +6,15 @@ import { Earnings, PayoutStatus, exchangeApi, деньги, ответ, вКав
 import { BRAND } from '@/lib/theme';
 import { Badge, Button, Card, Empty, Field } from '@/components/kit';
 
+/**
+ * Три состояния денег — словами задачи владельца (09.10.2026): «Начислено»
+ * (рейс довезён, выплату ещё не просили), «Ожидает выплаты» (запрошена;
+ * парк может уже переводить) и «Выплачено». Отклонённая выплата — отдельно:
+ * её рейсы снова в «Начислено».
+ */
 const STATUS: Record<PayoutStatus, { label: string; tone: 'blue' | 'orange' | 'green' | 'red' }> = {
-    REQUESTED: { label: 'Запрошена', tone: 'blue' },
-    EXPORTED: { label: 'Парк платит', tone: 'orange' },
+    REQUESTED: { label: 'Ожидает выплаты', tone: 'orange' },
+    EXPORTED: { label: 'Ожидает выплаты', tone: 'orange' },
     PAID: { label: 'Выплачено', tone: 'green' },
     REJECTED: { label: 'Отклонена', tone: 'red' },
 };
@@ -16,12 +22,13 @@ const STATUS: Record<PayoutStatus, { label: string; tone: 'blue' | 'orange' | 'g
 const date = (d: string | null) => (d ? new Date(d).toLocaleDateString('ru-RU') : '');
 
 /**
- * Заработок водителя парка.
+ * Баланс водителя парка (был «Заработок»).
  *
- * Крупно — сколько придёт на карту за довезённые рейсы. Под ним — откуда
- * эта цифра: начислено, комиссия парка, ОПВ, ВОСМС, ИПН. Ниже — счёт
- * (IBAN), кнопка «Запросить выплату» и история: запрошена → парк платит →
- * выплачено. Отклонил парк — видна причина, рейсы снова к выплате.
+ * Крупно — «Начислено»: сколько придёт на карту за довезённые рейсы. Под
+ * ним — откуда эта цифра: начислено, комиссия парка, ОПВ, ВОСМС, ИПН, и
+ * ещё две суммы: сколько ждёт выплаты и сколько уже выплачено. Ниже — счёт
+ * (IBAN), «Запросить выплату» и история выплат. Платит парк — так решил
+ * владелец; другого способа вывода экран не обещает.
  */
 export default function EarningsScreen() {
     const { colors } = useAppTheme();
@@ -90,7 +97,10 @@ export default function EarningsScreen() {
     if (!data) return <ActivityIndicator style={{ marginTop: 40 }} size="large" color={BRAND.primary} />;
 
     const a = data.available;
-    const open = data.payouts.some((p) => p.status === 'REQUESTED' || p.status === 'EXPORTED');
+    const waiting = data.payouts.filter((p) => p.status === 'REQUESTED' || p.status === 'EXPORTED');
+    const open = waiting.length > 0;
+    const waitingSum = waiting.reduce((s, p) => s + p.net, 0);
+    const paidSum = data.payouts.filter((p) => p.status === 'PAID').reduce((s, p) => s + p.net, 0);
 
     return (
         <ScrollView
@@ -99,7 +109,7 @@ export default function EarningsScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         >
             <Card>
-                <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>К ВЫПЛАТЕ НА КАРТУ</Text>
+                <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>НАЧИСЛЕНО — МОЖНО ЗАПРОСИТЬ</Text>
                 <Text style={[styles.big, { color: colors.text }]}>{деньги(a.net)}</Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
                     {data.trips.length ? `за довезённых рейсов: ${data.trips.length}` : 'Довезите рейс — здесь появится сумма к выплате'}
@@ -116,6 +126,12 @@ export default function EarningsScreen() {
                         </Text>
                     </View>
                 )}
+                {/* Два других состояния денег — под расшифровкой, чтобы она
+                    осталась рядом со своей суммой. */}
+                <View style={[styles.states, { borderTopColor: colors.border }]}>
+                    <StateLine label="Ожидает выплаты" value={деньги(waitingSum)} hint={open ? `запрошено выплат: ${waiting.length}` : 'запросов нет'} colors={colors} />
+                    <StateLine label="Выплачено" value={деньги(paidSum)} hint="за всё время" colors={colors} />
+                </View>
             </Card>
 
             <Card>
@@ -157,7 +173,7 @@ export default function EarningsScreen() {
 
             {data.trips.length > 0 && (
                 <>
-                    <Text style={[styles.section, { color: colors.textTertiary }]}>РЕЙСЫ К ВЫПЛАТЕ</Text>
+                    <Text style={[styles.section, { color: colors.textTertiary }]}>НАЧИСЛЕНО ЗА РЕЙСЫ</Text>
                     {data.trips.map((t) => (
                         <Card key={t.orderId} style={{ paddingVertical: 12 }}>
                             <View style={styles.row}>
@@ -182,8 +198,13 @@ export default function EarningsScreen() {
                                 <Badge label={STATUS[p.status].label} tone={STATUS[p.status].tone} />
                             </View>
                             <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>
-                                Запрошена {date(p.requestedAt)}{p.paidAt ? ` · выплачено ${date(p.paidAt)}` : ''}{p.trips ? ` · рейсов: ${p.trips}` : ''}
+                                Запрошена {date(p.requestedAt)}{p.status === 'EXPORTED' ? ' · парк уже переводит' : ''}{p.paidAt ? ` · выплачено ${date(p.paidAt)}` : ''}{p.trips ? ` · рейсов: ${p.trips}` : ''}
                             </Text>
+                            {p.status !== 'REJECTED' && (
+                                <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
+                                    Начислено {деньги(p.gross)} · удержано {деньги(p.gross - p.net)} — комиссия и налоги
+                                </Text>
+                            )}
                             {!!p.rejectReason && (
                                 <Text style={{ color: colors.danger, fontSize: 13, marginTop: 4 }}>
                                     Парк отклонил: {p.rejectReason}. Рейсы снова к выплате.
@@ -194,6 +215,19 @@ export default function EarningsScreen() {
                 </>
             )}
         </ScrollView>
+    );
+}
+
+/** Строка состояния под крупной суммой: «Ожидает выплаты», «Выплачено». */
+function StateLine({ label, value, hint, colors }: { label: string; value: string; hint: string; colors: { text: string; textSecondary: string; textTertiary: string } }) {
+    return (
+        <View style={styles.stateLine}>
+            <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{label}</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{hint}</Text>
+            </View>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{value}</Text>
+        </View>
     );
 }
 
@@ -210,6 +244,8 @@ const styles = StyleSheet.create({
     eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
     big: { fontSize: 32, fontWeight: '800', letterSpacing: -0.8, marginTop: 2 },
     breakdown: { marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
+    states: { marginTop: 12, paddingTop: 8, borderTopWidth: 1, gap: 6 },
+    stateLine: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
     line: { flexDirection: 'row', paddingVertical: 3 },
     cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 10 },
     accountRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

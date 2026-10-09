@@ -11,6 +11,15 @@ export interface DriverProfile {
     middleName: string | null;
     iin: string | null;
     phone: string | null;
+    /** Из ИИН — сервер считает сам. */
+    birthDate: string | null;
+    /** Удостоверение личности: номер, кем выдано, даты «ГГГГ-ММ-ДД…». */
+    idNumber: string | null;
+    idIssuedBy: string | null;
+    idIssuedAt: string | null;
+    idExpiresAt: string | null;
+    /** Когда дано согласие на обработку персональных данных. */
+    consentAt: string | null;
     email: string | null;
     ipName: string | null;
     ipIin: string | null;
@@ -22,7 +31,7 @@ export interface DriverProfile {
     rejectReason: string | null;
     blockedReason: string | null;
     tripsCompleted: number;
-    documents: { id: string; kind: DocumentKind; fileName: string; mimeType: string }[];
+    documents: { id: string; kind: DocumentKind; fileName: string; mimeType: string; createdAt: string }[];
     /** Чего не хватает, чтобы отправить анкету — словами. */
     missing: string[];
 }
@@ -194,6 +203,41 @@ export function иинВерный(raw: string): boolean {
         if (check === 10) return false;
     }
     return check === d[11];
+}
+
+/**
+ * Дата рождения из ИИН — как считает сервер: ГГММДД и седьмая цифра —
+ * век. Показываем под полем ИИН, чтобы водитель сразу увидел ошибку в
+ * цифрах: «1909 год» заметнее, чем неверная контрольная цифра.
+ */
+export function датаРожденияПоИин(raw: string): string | null {
+    const iin = raw.replace(/\D/g, '');
+    if (!иинВерный(iin)) return null;
+    const century = [0, 1800, 1800, 1900, 1900, 2000, 2000][Number(iin[6])];
+    return `${iin.slice(4, 6)}.${iin.slice(2, 4)}.${century + Number(iin.slice(0, 2))}`;
+}
+
+/** Поле даты «ДД.ММ.ГГГГ»: человек жмёт только цифры, точки встают сами. */
+export function деньВвод(raw: string): string {
+    const d = raw.replace(/\D/g, '').slice(0, 8);
+    return [d.slice(0, 2), d.slice(2, 4), d.slice(4, 8)].filter(Boolean).join('.');
+}
+
+/** «ДД.ММ.ГГГГ» → «ГГГГ-ММ-ДД» для сервера; пусто — пустая строка; не дата — null. */
+export function деньНаСервер(text: string): string | null {
+    if (!text.trim()) return '';
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(text.trim());
+    if (!m) return null;
+    const [day, month, year] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+    return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+/** Дата с сервера «ГГГГ-ММ-ДД…» → «ДД.ММ.ГГГГ» для поля. */
+export function деньИзСервера(iso: string | null | undefined): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '');
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
 }
 
 /** Казахстанский мобильный: «8 701…», «+7 (701)…», «701…» — все годятся. */

@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { assertAllowedUpload } from '../documents/allowed-files';
-import { digitsOnly, isValidIin, normalizePhone, normalizePlate } from './driver-identity';
+import { birthDateFromIin, digitsOnly, isValidIin, normalizeIdNumber, normalizePhone, normalizePlate, parseDay } from './driver-identity';
 import { removeExchangeFile, safeExtension, storeExchangeFile } from './exchange-files';
 import { PARK_FILTER_STATUSES, ParkDriverFilter, UpdateDriverProfileDto } from './dto/driver.dto';
 
@@ -19,13 +19,22 @@ export const DOCUMENT_TITLES: Record<ExchangeDriverDocumentKind, string> = {
     IP_CERTIFICATE: 'документ о регистрации ИП',
 };
 
+/**
+ * Версия текста согласия на обработку персональных данных. Текст — в
+ * приложении водителя (`apps/mobile/lib/consent.ts`); поменяли текст —
+ * меняется и версия, и по ней видно, на какой текст согласился человек.
+ */
+export const CONSENT_VERSION = '2026-10-09';
+
 /** Пока анкету можно править: заполняет или исправляет после отказа. */
 const EDITABLE: ExchangeDriverStatus[] = ['DRAFT', 'REJECTED'];
 
 const DRIVER_SELECT = {
     id: true, userId: true, kind: true, status: true,
     parkCompanyId: true, park: { select: { id: true, name: true } },
-    lastName: true, firstName: true, middleName: true, iin: true, phone: true,
+    lastName: true, firstName: true, middleName: true, iin: true, phone: true, birthDate: true,
+    idNumber: true, idIssuedBy: true, idIssuedAt: true, idExpiresAt: true,
+    consentAt: true, consentVersion: true,
     ipName: true, ipIin: true,
     vehiclePlate: true, vehicleBodyType: true, vehicleCapacityKg: true, vehicleIsOwn: true,
     contractSignedAt: true,
@@ -44,9 +53,14 @@ type DriverRow = Prisma.ExchangeDriverGetPayload<{ select: typeof DRIVER_SELECT 
  * 04.10.2026): нужны имя, ИИН (один человек — одна анкета), телефон, ИП и
  * машина. Без ИП — ещё парк, фото документов и подписанный договор с
  * парком: его допускает парк, посмотрев документы и позвонив.
+ *
+ * Согласие на обработку персональных данных — у всех: имя, ИИН и телефон
+ * есть и у водителя с ИП. Удостоверение (номер и кем выдано) — только через
+ * парк: парк сверяет его с фото и вписывает в договор (владелец, 09.10.2026).
  */
 export function missingFor(d: Pick<DriverRow, 'kind' | 'parkCompanyId' | 'lastName' | 'firstName' | 'iin' | 'phone'
-    | 'ipName' | 'ipIin' | 'vehiclePlate' | 'vehicleBodyType' | 'vehicleIsOwn' | 'contractSignedAt'> & {
+    | 'ipName' | 'ipIin' | 'vehiclePlate' | 'vehicleBodyType' | 'vehicleIsOwn' | 'contractSignedAt'
+    | 'idNumber' | 'idIssuedBy' | 'consentAt'> & {
     documents: { kind: ExchangeDriverDocumentKind }[];
 }): string[] {
     const missing: string[] = [];
@@ -57,11 +71,14 @@ export function missingFor(d: Pick<DriverRow, 'kind' | 'parkCompanyId' | 'lastNa
     if (!d.phone) missing.push('телефон');
     if (!d.vehiclePlate) missing.push('госномер машины');
     if (!d.vehicleBodyType) missing.push('тип кузова');
+    if (!d.consentAt) missing.push('согласие на обработку персональных данных');
     if (d.kind === 'IP') {
         if (!d.ipName) missing.push('название ИП');
         if (!d.ipIin) missing.push('ИИН ИП');
         return missing;
     }
+    if (!d.idNumber) missing.push('номер удостоверения личности');
+    if (!d.idIssuedBy) missing.push('кем выдано удостоверение');
     if (!d.parkCompanyId) missing.push('парк');
     const has = new Set(d.documents.map((x) => x.kind));
     const needed: ExchangeDriverDocumentKind[] = ['ID_FRONT', 'ID_BACK', 'SELFIE_WITH_ID', 'LICENSE', 'VEHICLE_REGISTRATION'];
@@ -190,6 +207,8 @@ export class ExchangeDriversService {
                 if (taken) throw new BadRequestException('Этот ИИН уже зарегистрирован на бирже');
             }
             data.iin = iin || null;
+            // Дата рождения — из ИИН, вместе с ним: отдельно её не ввести и не перепутать.
+            data.birthDate = birthDateFromIin(iin);
         }
         if (dto.phone !== undefined) {
             const phone = normalizePhone(dto.phone);
@@ -206,6 +225,32 @@ export class ExchangeDriversService {
         if (dto.vehicleBodyType !== undefined) data.vehicleBodyType = text(dto.vehicleBodyType);
         if (dto.vehicleCapacityKg !== undefined) data.vehicleCapacityKg = dto.vehicleCapacityKg;
         if (dto.vehicleIsOwn !== undefined) data.vehicleIsOwn = dto.vehicleIsOwn;
+        if (dto.idNumber !== undefined) {
+            const idNumber = normalizeIdNumber(dto.idNumber);
+            if (dto.idNumber.trim() && !idNumber) throw new BadRequestException('Номер удостоверения — девять цифр, как на карточке');
+            data.idNumber = idNumber || null;
+        }
+        if (dto.idIssuedBy !== undefined) data.idIssuedBy = text(dto.idIssuedBy);
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        if (dto.idIssuedAt !== undefined) {
+            const issued = dto.idIssuedAt.trim() ? parseDay(dto.idIssuedAt) : null;
+            if (dto.idIssuedAt.trim() && !issued) throw new BadRequestException('Дата выдачи удостоверения — день, месяц и год');
+            if (issued && issued > today) throw new BadRequestException('Дата выдачи удостоверения — ещё не наступила, проверьте год');
+            data.idIssuedAt = issued;
+        }
+        if (dto.idExpiresAt !== undefined) {
+            const expires = dto.idExpiresAt.trim() ? parseDay(dto.idExpiresAt) : null;
+            if (dto.idExpiresAt.trim() && !expires) throw new BadRequestException('Срок действия удостоверения — день, месяц и год');
+            // Просроченное удостоверение парк не примет — лучше сказать сразу,
+            // чем через день проверки.
+            if (expires && expires < today) throw new BadRequestException('Удостоверение просрочено — для допуска нужно действующее');
+            data.idExpiresAt = expires;
+        }
+        if (dto.consent !== undefined) {
+            data.consentAt = dto.consent ? new Date() : null;
+            data.consentVersion = dto.consent ? CONSENT_VERSION : null;
+        }
 
         const updated = await this.prisma.exchangeDriver.update({ where: { id: driver.id }, data, select: DRIVER_SELECT });
         return this.view(updated);

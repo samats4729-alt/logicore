@@ -12,7 +12,6 @@ import {
     Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { useStore } from '@/store';
 import { showNavigationOptions } from '@/lib/navigation';
 import { startBackgroundTracking, stopBackgroundTracking, getCurrentLocation } from '@/lib/location';
@@ -22,6 +21,7 @@ import { statusMeta, FONT, RADIUS, SHADOW } from '@/lib/theme';
 import { Empty, IconTile, ScreenHeader, Section, StatusPill } from '@/components/kit';
 import { SwipeConfirm } from '@/components/SwipeConfirm';
 import { ProblemSheet } from '@/components/ProblemSheet';
+import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
 import { useTabBarSpace } from '@/components/TabBar';
 
 /** Шагов у рейса от «Назначен» до «Завершён» — столько делений у полосы прогресса. */
@@ -52,6 +52,7 @@ export default function CurrentTrip({
     const [uploading, setUploading] = useState(false);
     const tabBarSpace = useTabBarSpace();
     const [problemOpen, setProblemOpen] = useState(false);
+    const [captureOpen, setCaptureOpen] = useState(false);
 
     // При каждом возврате на экран: рейс могли назначить, пока водитель был в ленте.
     useFocusEffect(useCallback(() => {
@@ -126,20 +127,16 @@ export default function CurrentTrip({
         setProblemOpen(true);
     };
 
-    const uploadPhoto = async (fromCamera: boolean) => {
+    // Снимок приходит уже проверенным: камера с рамкой сама сказала водителю,
+    // если темно, размыто или лист не целиком (`DocumentCapture`).
+    const uploadPhoto = async (photo: CapturedPhoto) => {
         if (!currentOrder) return;
+        setCaptureOpen(false);
         try {
-            const picker = fromCamera
-                ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
-                : await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
-
-            if (picker.canceled || !picker.assets?.[0]) return;
-            const asset = picker.assets[0];
-
             setUploading(true);
             const formData = new FormData();
             formData.append('file', {
-                uri: asset.uri,
+                uri: photo.uri,
                 name: `doc_${Date.now()}.jpg`,
                 type: 'image/jpeg',
             } as any);
@@ -156,13 +153,7 @@ export default function CurrentTrip({
         }
     };
 
-    const handleAttachDocument = () => {
-        Alert.alert('Фото документа', 'ТТН, накладная или акт — прикрепите фото к рейсу', [
-            { text: 'Камера', onPress: () => uploadPhoto(true) },
-            { text: 'Галерея', onPress: () => uploadPhoto(false) },
-            { text: 'Отмена', style: 'cancel' },
-        ]);
-    };
+    const handleAttachDocument = () => setCaptureOpen(true);
 
     const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.text} />;
 
@@ -420,6 +411,13 @@ export default function CurrentTrip({
         </ScrollView>
 
             <ProblemSheet visible={problemOpen} onSubmit={sendProblem} onClose={() => setProblemOpen(false)} />
+            <DocumentCapture
+                visible={captureOpen}
+                title="Фото документа"
+                hint="ТТН, накладная или акт — целиком в рамке"
+                onClose={() => setCaptureOpen(false)}
+                onDone={uploadPhoto}
+            />
 
             {/* Рейс с проблемой: шага нет, пока диспетчер не вернёт рейс в работу —
                 без пояснения водитель искал бы пропавший ползунок. */}

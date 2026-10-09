@@ -6,7 +6,8 @@ import { TabIcon, useTabScreenOptions } from '@/components/TabBar';
 /** Допущенный водитель биржи: лента грузов, свой рейс, профиль. */
 export default function ExchangeTabs() {
     const screenOptions = useTabScreenOptions();
-    /* «Заработок» — только у водителя парка: водителю с ИП платит заказчик напрямую. */
+    /* «Баланс» — только у водителя парка: водителю с ИП платит заказчик напрямую.
+       Был «Заработок»; переименован по задаче владельца от 09.10.2026. */
     const [viaPark, setViaPark] = useState(false);
     useEffect(() => { exchangeApi.me().then((d) => setViaPark(d.kind === 'PARK')).catch(() => undefined); }, []);
     return (
@@ -32,8 +33,8 @@ export default function ExchangeTabs() {
             <Tabs.Screen
                 name="earnings"
                 options={{
-                    title: 'Заработок',
-                    headerTitle: 'Заработок',
+                    title: 'Баланс',
+                    headerTitle: 'Баланс',
                     href: viaPark ? undefined : null,
                     tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="wallet" focused={focused} />,
                 }}

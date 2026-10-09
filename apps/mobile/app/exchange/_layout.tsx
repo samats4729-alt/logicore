@@ -35,6 +35,7 @@ export default function ExchangeLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ title: 'Анкета водителя' }} />
             <Stack.Screen name="load/[id]" options={{ title: 'Груз' }} />
+            <Stack.Screen name="documents" options={{ title: 'Мои документы' }} />
         </Stack>
     );
 }

@@ -54,6 +54,18 @@ export class UpdateDriverProfileDto {
     @IsBoolean()
     @IsOptional()
     vehicleIsOwn?: boolean;
+
+    /** Удостоверение личности: номер — девять цифр, даты — «ГГГГ-ММ-ДД». */
+    @ApiProperty({ required: false }) @IsString() @IsOptional() @MaxLength(20) idNumber?: string;
+    @ApiProperty({ required: false }) @IsString() @IsOptional() @MaxLength(120) idIssuedBy?: string;
+    @ApiProperty({ required: false, description: 'ГГГГ-ММ-ДД; пустая строка — стереть' }) @IsString() @IsOptional() @MaxLength(10) idIssuedAt?: string;
+    @ApiProperty({ required: false, description: 'ГГГГ-ММ-ДД; пустая строка — стереть' }) @IsString() @IsOptional() @MaxLength(10) idExpiresAt?: string;
+
+    /** Согласие на обработку персональных данных: да — запомнить время и версию текста, нет — отозвать. */
+    @ApiProperty({ required: false })
+    @IsBoolean()
+    @IsOptional()
+    consent?: boolean;
 }
 
 export class DriverDocumentDto {
