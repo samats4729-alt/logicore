@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 
 /** Точка маршрута на бирже — только город и день: адрес откроется исполнителю. */
 export interface ExchangePoint {
@@ -177,12 +178,22 @@ export interface ExchangeStatus {
 }
 
 /**
- * Включена ли биржа и парк ли компания. Спрашиваем один раз за сессию:
+ * Включена ли биржа и парк ли компания. Спрашиваем один раз на вход:
  * вкладка в меню не должна мигать при каждом переходе.
+ *
+ * Ответ запоминается за конкретным человеком и компанией. Выход и вход
+ * страницу не перезагружают, и без этого новый вход получал ответ,
+ * данный прошлому: владелец, заглянув перед этим в компанию без биржи,
+ * не видел в админке раздела «Биржа: доступ и парки», а компания после
+ * админа — кабинета парка.
  */
 let statusRequest: Promise<ExchangeStatus> | null = null;
+let statusFor = '';
 export function exchangeStatus(): Promise<ExchangeStatus> {
-    if (!statusRequest) {
+    const user = useAuthStore.getState().user;
+    const who = `${user?.id ?? ''}:${user?.companyId ?? ''}`;
+    if (!statusRequest || statusFor !== who) {
+        statusFor = who;
         statusRequest = api.get('/exchange/status')
             .then((r) => ({ enabled: !!r.data?.enabled, isPark: !!r.data?.isPark }))
             .catch(() => {
