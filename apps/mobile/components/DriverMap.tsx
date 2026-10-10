@@ -1,12 +1,11 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import Mapbox, { UserLocationRenderMode, UserTrackingMode } from '@rnmapbox/maps';
+import Mapbox, { UserTrackingMode } from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'react-native';
 
 import * as Location from 'expo-location';
 import { useStore } from '@/store';
-import { featureCollection, point, lineString } from '@turf/helpers';
+import { featureCollection, lineString } from '@turf/helpers';
 import { FONT } from '@/lib/theme';
 import { StatusPill } from '@/components/kit';
 
@@ -16,9 +15,8 @@ Mapbox.setAccessToken(MAPBOX_TOKEN);
 const MAPBOX_STYLE_DARK = 'mapbox://styles/pontipilat/cmkrnybo6006c01qxdlo18v6e';
 const MAPBOX_STYLE_LIGHT = 'mapbox://styles/pontipilat/cmkro81vk005m01s55aem6mcy';
 
-const truckModelSource = require('../assets/low_poly_truck.glb');
-// Resolve asset URI for Mapbox
-const truckModelUri = Image.resolveAssetSource(truckModelSource).uri;
+/** Пустая линия маршрута — пока рейса нет (зачем она, см. ниже у карты). */
+const NO_ROUTE = featureCollection([]);
 
 /**
  * Есть ли у точки маршрута место на карте.
@@ -35,7 +33,10 @@ export default function DriverMap() {
     const { currentOrder, mapTheme } = useStore();
     const cameraRef = useRef<Mapbox.Camera>(null);
     const [userLocation, setUserLocation] = useState<number[] | null>(null);
-    const [heading, setHeading] = useState(0);
+    // Точку «я здесь» ставим, когда есть и разрешение, и загруженная карта.
+    // Поставленная раньше разрешения, она молча не появлялась до перезапуска.
+    const [locationAllowed, setLocationAllowed] = useState(false);
+    const [styleReady, setStyleReady] = useState(false);
 
     // Determines style based on theme
     const getStyleURL = () => {
@@ -59,6 +60,7 @@ export default function DriverMap() {
                     );
                     return;
                 }
+                setLocationAllowed(true);
             } catch (e) {
                 console.error(e);
                 Alert.alert('Ошибка', 'Не удалось запросить права на геолокацию');
@@ -69,9 +71,6 @@ export default function DriverMap() {
     const onUserLocationUpdate = (location: Mapbox.Location) => {
         if (location?.coords) {
             setUserLocation([location.coords.longitude, location.coords.latitude]);
-            if (typeof location.coords.heading === 'number') {
-                setHeading(location.coords.heading);
-            }
         }
     };
 
@@ -169,12 +168,15 @@ export default function DriverMap() {
     const lineCoords = roadRoute || routeCoordinates;
     const routeFeature = lineCoords.length > 1 ? lineString(lineCoords) : null;
 
-    // Truck location feature
-    const truckFeature = useMemo(() => userLocation ? point(userLocation) : null, [userLocation]);
-
     return (
         <View style={styles.container}>
-            <Mapbox.MapView style={styles.map} styleURL={styleURL} logoEnabled={false} scaleBarEnabled={false}>
+            <Mapbox.MapView
+                style={styles.map}
+                styleURL={styleURL}
+                logoEnabled={false}
+                scaleBarEnabled={false}
+                onDidFinishLoadingStyle={() => setStyleReady(true)}
+            >
                 <Mapbox.Camera
                     ref={cameraRef}
                     defaultSettings={{
@@ -187,64 +189,46 @@ export default function DriverMap() {
                     followPitch={60}
                 />
 
-                {/* Load from Native Assets */}
-                <Mapbox.Models models={{ truck: truckModelUri }} />
+                {/* Линия маршрута — под маркерами и под точкой «я здесь».
+                    Слой стоит на карте всегда, без рейса — пустой: карта
+                    кладёт новый слой поверх прежних, и линия, появившаяся
+                    позже точки, легла бы на неё — водитель ведь на маршруте. */}
+                <Mapbox.ShapeSource id="routeSource" shape={routeFeature ?? NO_ROUTE}>
+                    <Mapbox.LineLayer
+                        id="routeCasing"
+                        style={{
+                            lineColor: 'rgba(11, 13, 18, 0.35)',
+                            lineWidth: 7,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                        }}
+                    />
+                    <Mapbox.LineLayer
+                        id="routeFill"
+                        style={{
+                            lineColor: '#1677ff',
+                            lineWidth: 4,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                        }}
+                    />
+                </Mapbox.ShapeSource>
 
-                {/* Light - Noon position to minimize shadows */}
-                <Mapbox.Light style={{ position: [2, 0, 0], anchor: 'map', color: '#ffffff', intensity: 0.8 } as any} />
-
-                <Mapbox.UserLocation
-                    visible={true}
-                    onUpdate={onUserLocationUpdate}
-                    renderMode={UserLocationRenderMode.Normal}
-                >
-                    <View style={{ width: 0, height: 0, opacity: 0 }} />
-                </Mapbox.UserLocation>
-
-                {/* 3D Truck Model Layer */}
-                {truckFeature && (
-                    <Mapbox.ShapeSource id="truckSource" shape={truckFeature}>
-                        <Mapbox.ModelLayer
-                            id="truckModel"
-                            style={{
-                                modelId: 'truck',
-                                modelScale: [
-                                    "interpolate",
-                                    ["linear"],
-                                    ["zoom"],
-                                    10, [20, 20, 20],   // Far out: Huge
-                                    16, [0.8, 0.8, 0.8] // Close up: Real size
-                                ],
-                                modelTranslation: [0, 0, 0],
-                                modelRotation: [0, 0, 90 - heading],
-                                modelOpacity: 1
-                            } as any}
+                {/* «Я здесь» — синяя точка со стрелкой по ходу движения.
+                    Раньше обычную точку прятали ради 3D-грузовика, а файл
+                    грузовика в установленном приложении карта не находит
+                    (он лежит в ресурсах, а не по адресу), — и водитель не
+                    видел себя вовсе. Координаты для кнопок «где я» и «весь
+                    маршрут» берём у невидимого слушателя рядом. */}
+                {locationAllowed && styleReady && (
+                    <>
+                        <Mapbox.LocationPuck
+                            puckBearingEnabled
+                            puckBearing="course"
+                            pulsing={{ isEnabled: true, color: '#1677ff' }}
                         />
-                    </Mapbox.ShapeSource>
-                )}
-
-                {/* Route Line — под маркерами */}
-                {routeFeature && (
-                    <Mapbox.ShapeSource id="routeSource" shape={routeFeature}>
-                        <Mapbox.LineLayer
-                            id="routeCasing"
-                            style={{
-                                lineColor: 'rgba(11, 13, 18, 0.35)',
-                                lineWidth: 7,
-                                lineCap: 'round',
-                                lineJoin: 'round',
-                            }}
-                        />
-                        <Mapbox.LineLayer
-                            id="routeFill"
-                            style={{
-                                lineColor: '#1677ff',
-                                lineWidth: 4,
-                                lineCap: 'round',
-                                lineJoin: 'round',
-                            }}
-                        />
-                    </Mapbox.ShapeSource>
+                        <Mapbox.UserLocation visible={false} onUpdate={onUserLocationUpdate} />
+                    </>
                 )}
 
                 {/* Route Markers — фирменные пилюли */}
