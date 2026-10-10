@@ -321,3 +321,21 @@ describe('Биржа: вступить в парк по коду', () => {
         await expect(service.joinParkByCode('u-1', 'ABC234')).rejects.toThrow(/на проверке/);
     });
 });
+
+describe('Биржа: отметка «парк» в админке', () => {
+    it('сделать парком — биржа открывается сама: без неё нет ни кабинета парка, ни вступления водителей', async () => {
+        const { service, prisma } = build();
+        prisma.company.findFirst.mockResolvedValue({ id: 'c-1' });
+        prisma.company.update = jest.fn();
+        await service.setPark('c-1', true);
+        expect(prisma.company.update.mock.calls[0][0].data).toEqual({ isPark: true, exchangeAccess: true });
+    });
+
+    it('снять отметку — биржа остаётся как была: компания может работать на ней дальше', async () => {
+        const { service, prisma } = build();
+        prisma.company.findFirst.mockResolvedValue({ id: 'c-1' });
+        prisma.company.update = jest.fn();
+        await service.setPark('c-1', false);
+        expect(prisma.company.update.mock.calls[0][0].data).toEqual({ isPark: false });
+    });
+});

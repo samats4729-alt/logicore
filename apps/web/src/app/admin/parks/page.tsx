@@ -57,7 +57,10 @@ export default function AdminParksPage() {
         try {
             const { data } = await api.put(`/exchange/admin/companies/${row.id}/access`, { exchangeAccess: !row.exchangeAccess });
             setRows((list) => list?.map((r) => (r.id === row.id ? { ...r, exchangeAccess: data.exchangeAccess } : r)) ?? null);
-            toast.success(data.exchangeAccess ? `${row.name} видит биржу` : `${row.name} больше не видит биржу`);
+            if (data.exchangeAccess) toast.success(`${row.name} видит биржу`);
+            else toast.success(row.isPark
+                ? `${row.name} больше не видит биржу — кабинет парка закрыт, водители его не видят`
+                : `${row.name} больше не видит биржу`);
         } catch (e) {
             toast.error(ответСервера(e, 'Не удалось сохранить'));
         } finally {
@@ -69,8 +72,11 @@ export default function AdminParksPage() {
         setBusy(`${row.id}:park`);
         try {
             const { data } = await api.put(`/exchange/admin/companies/${row.id}/park`, { isPark: !row.isPark });
-            setRows((list) => list?.map((r) => (r.id === row.id ? { ...r, isPark: data.isPark } : r)) ?? null);
-            toast.success(data.isPark ? `${row.name} теперь парк` : `${row.name} больше не парк`);
+            // «Сделать парком» открывает и биржу — сервер вернёт обе отметки.
+            setRows((list) => list?.map((r) => (r.id === row.id ? { ...r, isPark: data.isPark, exchangeAccess: data.exchangeAccess } : r)) ?? null);
+            toast.success(data.isPark
+                ? `${row.name} теперь парк. Кабинет парка появится у компании, когда она обновит страницу`
+                : `${row.name} больше не парк`);
         } catch (e) {
             toast.error(ответСервера(e, 'Не удалось сохранить'));
         } finally {
@@ -90,7 +96,7 @@ export default function AdminParksPage() {
                     </p>
                     <p className={styles.subtitle}>
                         Парки — компании-посредники: через них работают водители без ИП. Парк регистрируется на платформе как организация, а здесь вы
-                        подтверждаете его как парк. После этого у него свой кабинет — водители, их рейсы и приглашение; заявок, биржи и денег
+                        подтверждаете его как парк — биржа при этом открывается сама: без неё парк не работает. После этого у него свой кабинет — водители, их рейсы и приглашение; заявок, биржи и денег
                         перевозчика у парка нет: он сам не возит.
                     </p>
                 </div>
@@ -128,6 +134,10 @@ export default function AdminParksPage() {
                                     <TableCell className="py-2.5 font-medium">
                                         {r.name}
                                         {!r.isActive && <span className={`${styles.chip} ml-2`}>отключена</span>}
+                                        {/* Парк без биржи — пустая отметка: кабинета парка нет, водители его не видят. */}
+                                        {r.isPark && !r.exchangeAccess && (
+                                            <div className="mt-0.5 text-[12px] font-normal text-destructive">Кабинет парка закрыт — откройте биржу</div>
+                                        )}
                                     </TableCell>
                                     <TableCell className="tabular-nums text-muted-foreground">{r.bin || '—'}</TableCell>
                                     <TableCell className="text-right tabular-nums">{r._count.exchangeDrivers || '—'}</TableCell>
