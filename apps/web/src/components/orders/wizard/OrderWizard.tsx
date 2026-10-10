@@ -56,6 +56,7 @@ import { clearDraft, formValuesEmpty, readDraft, reviveFormValues, serializeForm
 import { NEW_DRIVER } from '@/components/orders/DriverPoolSelect';
 import { DriverPicker } from '@/components/orders/DriverPicker';
 import { PartnerPicker } from './PartnerPicker';
+import { ExchangeCarrierCheckbox, ExchangeCarrierSlot, publishNewOrder, useExchangeForNewOrder } from './ExchangeOption';
 import { ChoiceField } from './ChoiceField';
 import { DRIVER_CARD_FIELDS, alreadyExistsMessage, fetchDriverPool, tripVehicle, type PoolDriver } from '@/lib/driver-pool';
 
@@ -397,7 +398,29 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     const isMeCarrier = selectedCarrier === MY_COMPANY_VALUE;
     const isMarketplace = selectedCarrier === MARKETPLACE_VALUE;
 
-    const showCustomerPriceField = !isMeCustomer || (isMeCustomer && isMeCarrier);
+    // «Найти перевозчика на бирже» (владелец, 10.10.2026) — только новой
+    // заявке, от лица текущей организации: выставляет на биржу она, и
+    // заявку от другой своей организации сервер ей выставить не даст.
+    const exchangeAvailable = useExchangeForNewOrder() && !editIdProp && selectedMyCompanyId === user?.companyId;
+    const exchangeChecked = Form.useWatch('onExchange', { form, preserve: true }) === true;
+    /** Перевозчика ищем на бирже: в заявке им записана наша компания, водителя нет. */
+    const exchangeActive = exchangeAvailable && exchangeChecked && isMeCarrier;
+    const toggleExchange = (on: boolean) => {
+        form.setFieldValue('onExchange', on);
+        // Как при выборе перевозчика в поле: прежний водитель к новому выбору не относится.
+        setSelectedCarrier(on ? MY_COMPANY_VALUE : '');
+        setSelectedDriverId('');
+        form.setFieldsValue({
+            driverId: undefined,
+            lastName: '', firstName: '', middleName: '', phone: '', iin: '',
+            vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
+            docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: ''
+        });
+    };
+
+    // На бирже «Ставка» своей же компании-заказчику смысла не имеет — нужна
+    // только цена для исполнителя; ставка от внешнего заказчика остаётся.
+    const showCustomerPriceField = exchangeActive ? !isMeCustomer : (!isMeCustomer || (isMeCustomer && isMeCarrier));
     const showDriverCostField = (isMeCustomer && !isMeCarrier) || (!isMeCustomer && !isMeCarrier);
 
     // Знак валюты из подписи убран: валюта теперь выбирается рядом с суммой
@@ -897,6 +920,12 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
 
     // Determine role description for the user
     const getRoleDescription = (): { text: string; tone: RoleTone } => {
+        if (exchangeActive) {
+            if (isMeCustomer) return { text: 'Вы — заказчик. Перевозчика найдёте на бирже', tone: 'info' };
+            return selectedCustomer
+                ? { text: 'Вы — экспедитор. Перевозчика найдёте на бирже', tone: 'info' }
+                : { text: 'Укажите заказчика', tone: 'warn' };
+        }
         if (isMeCustomer && isMeCarrier) return { text: 'Вы и заказчик, и перевозчик — перевозка своими силами', tone: 'info' };
         if (isMeCustomer && isMarketplace) return { text: 'Вы — заказчик. Заявка будет опубликована на бирже', tone: 'info' };
         if (isMeCustomer && selectedCarrier) return { text: 'Вы — заказчик. Перевозку выполняет контрагент', tone: 'ok' };
@@ -917,6 +946,14 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
             if (!selectedCarrier) {
                 toast.error('Укажите перевозчика');
                 return false;
+            }
+            if (exchangeActive) {
+                try {
+                    await form.validateFields(['exchangePrice']);
+                    return true;
+                } catch {
+                    return false;
+                }
             }
             if (isOwnOrExternalCarrier && selectedDriverId === NEW_DRIVER) {
                 try {
@@ -969,9 +1006,10 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 ? (dayjs.isDayjs(values.pickupDate) ? values.pickupDate.toISOString() : new Date(values.pickupDate).toISOString()) 
                 : undefined;
 
-            let finalDriverId: string | undefined = selectedDriverId || undefined;
+            // На бирже водителя нет: исполнителя выберут из откликов.
+            let finalDriverId: string | undefined = exchangeActive ? undefined : (selectedDriverId || undefined);
 
-            if (isOwnOrExternalCarrier) {
+            if (isOwnOrExternalCarrier && !exchangeActive) {
                 const targetCompanyId = selectedCarrier === MY_COMPANY_VALUE 
                     ? selectedMyCompanyId 
                     : selectedCarrier;
@@ -1076,7 +1114,11 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
             }
 
             // Build order payload based on selected parties
-            const finalCustomerPrice = showCustomerPriceField ? values.customerPrice : values.driverCost;
+            // На бирже цена для исполнителя уходит не в заявку, а в выставление —
+            // как кнопкой в карточке; ставка заказчика — только от внешнего.
+            const finalCustomerPrice = exchangeActive
+                ? (showCustomerPriceField ? values.customerPrice : undefined)
+                : (showCustomerPriceField ? values.customerPrice : values.driverCost);
             const finalDriverCost = showDriverCostField ? values.driverCost : null;
 
             const orderData: any = {
@@ -1169,12 +1211,16 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 toast.success('Заявка сохранена');
                 onSaved(editingId);
             } else {
-                await api.post('/orders', orderData);
+                const { data: created } = await api.post('/orders', orderData);
                 // Заявка заведена — черновик своё отслужил. Иначе следующая
                 // новая заявка открылась бы с данными этой.
                 черновикЗакрыт.current = true;
                 if (черновикКлюч) clearDraft(черновикКлюч);
-                toast.success('Заявка создана!');
+                if (exchangeActive) {
+                    await publishNewOrder(created, Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`));
+                } else {
+                    toast.success('Заявка создана!');
+                }
                 onCreated();
             }
         } catch (error: any) {
@@ -1245,6 +1291,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     </div>
                     <div className="grid gap-1.5" data-guide="wizard-carrier">
                         <Label className={LABEL}>{REQUIRED}Перевозчик</Label>
+                        {exchangeActive ? <ExchangeCarrierSlot /> : (
                         <PartnerPicker
                             role="CARRIER"
                             value={selectedCarrier || undefined}
@@ -1265,7 +1312,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                             scope={user?.companyId}
                             onAdd={() => открытьЗаведениеКонтрагента('CARRIER')}
                         />
-                        {/* Биржа временно отключена до запуска (перевёрнутая цепочка ролей при takeOrder) */}
+                        )}
+                        {exchangeAvailable && <ExchangeCarrierCheckbox checked={exchangeActive} onChange={toggleExchange} />}
                     </div>
                 </div>
 
@@ -1344,6 +1392,22 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                     <CircleCheck className="size-3.5" /> Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
                                 </div>
                             )}
+                        </div>
+                    )}
+                    {exchangeActive && (
+                        <div className="min-w-[200px] flex-1">
+                            {/* Та же цена, что спрашивает кнопка «Выставить на биржу» в карточке. */}
+                            <Form.Item
+                                name="exchangePrice"
+                                label="Цена для исполнителя на бирже"
+                                rules={[{
+                                    validator: (_, v) => (Number(v) > 0
+                                        ? Promise.resolve()
+                                        : Promise.reject(new Error('Укажите цену — исполнители согласятся на неё или предложат свою'))),
+                                }]}
+                            >
+                                <MoneyInput addonAfter="KZT" aria-label="Цена для исполнителя на бирже" />
+                            </Form.Item>
                         </div>
                     )}
                     {showDriverCostField && (
@@ -1444,7 +1508,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 </Form.Item>
             </Section>
 
-            {isOwnOrExternalCarrier && (
+            {isOwnOrExternalCarrier && !exchangeActive && (
                 <Section title="Водитель и транспорт" aside={<Optional />}>
                     {selectedCarrier === MY_COMPANY_VALUE && vehicles.length > 0 && (
                         <Form.Item label="Машина из автопарка">
