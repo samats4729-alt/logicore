@@ -548,12 +548,20 @@ export class ExchangeDriversService {
         });
     }
 
+    /**
+     * Отметка «парк». Ставя её, открываем и биржу: без биржи парка не
+     * существует — кабинет парка не открывается, водители не видят его в
+     * списке и не могут вступить по коду. Раньше это были две отдельные
+     * кнопки, и компания, которую сделали только парком, видела обычный
+     * кабинет — непонятно почему. Снимая отметку, биржу не трогаем: компания
+     * может работать на ней дальше уже как обычная.
+     */
     async setPark(companyId: string, isPark: boolean) {
         const company = await this.prisma.company.findFirst({ where: { id: companyId, isExternal: false }, select: { id: true } });
         if (!company) throw new NotFoundException('Компания не найдена');
         return this.prisma.company.update({
             where: { id: companyId },
-            data: { isPark },
+            data: isPark ? { isPark, exchangeAccess: true } : { isPark },
             select: { id: true, name: true, bin: true, isPark: true, exchangeAccess: true },
         });
     }
