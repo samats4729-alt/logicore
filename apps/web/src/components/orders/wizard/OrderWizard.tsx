@@ -1275,7 +1275,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
             >
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-1.5" data-guide="wizard-customer">
+                    {/* content-start: под перевозчиком бывает галочка биржи — колонка выше, а поля сторон должны стоять вровень. */}
+                    <div className="grid content-start gap-1.5" data-guide="wizard-customer">
                         <Label className={LABEL}>{REQUIRED}Заказчик</Label>
                         <PartnerPicker
                             role="CUSTOMER"
@@ -1289,7 +1290,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                             onAdd={() => открытьЗаведениеКонтрагента('CUSTOMER')}
                         />
                     </div>
-                    <div className="grid gap-1.5" data-guide="wizard-carrier">
+                    <div className="grid content-start gap-1.5" data-guide="wizard-carrier">
                         <Label className={LABEL}>{REQUIRED}Перевозчик</Label>
                         {exchangeActive ? <ExchangeCarrierSlot /> : (
                         <PartnerPicker
