@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Store } from 'lucide-react';
+import { PickerField } from '@/components/pickers/ListPicker';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { exchangeStatus, ответСервера } from '@/lib/exchange';
@@ -39,13 +39,19 @@ export function ExchangeCarrierCheckbox({ checked, onChange }: { checked: boolea
     );
 }
 
-/** На месте выбора перевозчика, пока стоит галочка. */
+/**
+ * Поле «Перевозчик», пока стоит галочка: то же поле, только серое и не
+ * нажимается (владелец, 10.10.2026) — перевозчика выберут из откликов.
+ */
 export function ExchangeCarrierSlot() {
     return (
-        <div className="flex h-8 items-center gap-2 rounded-lg border border-dashed border-input px-3 text-[13px] text-muted-foreground">
-            <Store className="size-3.5 shrink-0" />
-            <span className="truncate">Выберете из откликов на бирже</span>
-        </div>
+        <PickerField
+            label="Перевозчик"
+            placeholder="Выберете из откликов на бирже"
+            onOpen={() => { /* недоступно, пока стоит галочка */ }}
+            disabled
+            className="bg-muted"
+        />
     );
 }
 
