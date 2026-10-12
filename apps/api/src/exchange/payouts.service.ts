@@ -81,7 +81,7 @@ function sumLines(lines: PayoutLine[]) {
 }
 
 const STATUS_TEXT: Record<DriverPayoutStatus, string> = {
-    REQUESTED: 'Запрошена', EXPORTED: 'В 1С', PAID: 'Выплачено', REJECTED: 'Отклонена',
+    REQUESTED: 'Запрошена', EXPORTED: 'Реестр выгружен', PAID: 'Выплачено', REJECTED: 'Отклонена',
 };
 
 /**

@@ -15,19 +15,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import StatusPill from '@/components/ui/StatusPill';
 import styles from '@/components/nova/nova.module.css';
 
-type Filter = PayoutStatus | 'all';
+/**
+ * «Ждут выплаты» — запрошенные и те, по которым реестр уже выгружен: отдельной
+ * вкладки «В 1С» нет (владелец, 12.10.2026) — для парка это одно и то же,
+ * деньги ещё не ушли.
+ */
+type Filter = 'open' | 'PAID' | 'REJECTED' | 'all';
 
 const FILTERS: { key: Filter; label: string }[] = [
-    { key: 'REQUESTED', label: 'Запрошены' },
-    { key: 'EXPORTED', label: 'В 1С' },
+    { key: 'open', label: 'Ждут выплаты' },
     { key: 'PAID', label: 'Выплачено' },
     { key: 'REJECTED', label: 'Отклонены' },
     { key: 'all', label: 'Все' },
 ];
 
 const EMPTY: Record<Filter, string> = {
-    REQUESTED: 'Новых запросов на выплату нет. Водитель запрашивает выплату в приложении за довезённые рейсы.',
-    EXPORTED: 'Выгруженных в 1С и ещё не выплаченных нет.',
+    open: 'Новых запросов на выплату нет. Водитель запрашивает выплату в приложении за довезённые рейсы.',
     PAID: 'Выплат пока не было.',
     REJECTED: 'Отклонённых выплат нет.',
     all: 'Выплат пока не было.',
@@ -40,13 +43,13 @@ const PILL: Record<PayoutStatus, string> = { REQUESTED: 'PENDING', EXPORTED: 'IN
  * Выплаты водителям парка.
  *
  * Работа бухгалтера парка: водитель запросил — отмечаете нужные, выгружаете
- * реестр в 1С (Excel), платите из 1С и отмечаете «Выплачено». Не туда счёт
+ * реестр (Excel), переводите деньги и отмечаете «Выплачено». Не туда счёт
  * или что-то не сходится — «Отклонить» с причиной: водитель увидит её, а
  * рейсы снова станут доступны к выплате. Ниже — ставки удержаний.
  */
 export default function ParkPayoutsPage() {
     const router = useRouter();
-    const [filter, setFilter] = useState<Filter>('REQUESTED');
+    const [filter, setFilter] = useState<Filter>('open');
     const [rows, setRows] = useState<ParkPayout[] | null>(null);
     const [failed, setFailed] = useState(false);
     const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -58,7 +61,12 @@ export default function ParkPayoutsPage() {
         setRows(null);
         setFailed(false);
         setPicked(new Set());
-        api.get(`/exchange/park/payouts?status=${filter}`).then((r) => setRows(r.data)).catch(() => setFailed(true));
+        // «Ждут выплаты» — запрошенные и с выгруженным реестром: берём все и отбираем здесь.
+        api.get(`/exchange/park/payouts?status=${filter === 'open' ? 'all' : filter}`)
+            .then((r) => setRows(filter === 'open'
+                ? (r.data as ParkPayout[]).filter((p) => p.status === 'REQUESTED' || p.status === 'EXPORTED')
+                : r.data))
+            .catch(() => setFailed(true));
     }, [filter]);
 
     useEffect(() => { load(); }, [load]);
@@ -83,7 +91,7 @@ export default function ParkPayoutsPage() {
             a.download = `Реестр выплат ${dayjs().format('DD.MM.YYYY')}.xlsx`;
             a.click();
             URL.revokeObjectURL(url);
-            toast.success('Реестр скачан — загрузите его в 1С. Выплаты теперь «В 1С»');
+            toast.success('Реестр скачан — переведите деньги по нему и отметьте «Выплачено»');
             load();
         } catch (e) {
             toast.error(ответСервера(e, 'Не удалось выгрузить реестр'));
@@ -99,7 +107,7 @@ export default function ParkPayoutsPage() {
                     <div className={styles.eyebrow}>Кабинет парка</div>
                     <h1 className={styles.title}>Выплаты водителям</h1>
                     <p className={styles.subtitle}>
-                        Водитель запрашивает выплату в приложении. Выгрузите реестр в 1С, заплатите из 1С и отметьте «Выплачено».
+                        Водитель запрашивает выплату в приложении. Выгрузите реестр, переведите деньги и отметьте «Выплачено».
                     </p>
                 </div>
                 <div className={styles.heroActions}>
@@ -134,7 +142,7 @@ export default function ParkPayoutsPage() {
                     <div className="flex flex-wrap items-center gap-2 border-0 border-b border-solid border-border px-4 py-2.5">
                         <Button size="sm" onClick={exportFile} disabled={exporting || !picked.size}>
                             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                            Выгрузить в 1С{picked.size ? ` · ${picked.size}` : ''}
+                            Выгрузить реестр{picked.size ? ` · ${picked.size}` : ''}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setPicked(new Set(exportable.map((r) => r.id)))}>Отметить все</Button>
                         <span className="text-[12px] text-muted-foreground">Реестр — Excel: кому, ИИН, счёт, начислено, удержано, к выплате; второй лист — по рейсам.</span>
@@ -232,7 +240,7 @@ export default function ParkPayoutsPage() {
     );
 }
 
-/** «Выплачено» — после оплаты из 1С. */
+/** «Выплачено» — после перевода денег. */
 function PaidDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; onClose: () => void; onDone: () => void }) {
     const [saving, setSaving] = useState(false);
     const submit = async () => {
@@ -254,7 +262,7 @@ function PaidDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; on
             <DialogContent className="max-w-md">
                 <DialogHeader><DialogTitle className="text-[15px]">Выплатили {payout?.driver.name} {payout ? moneyShort(payout.net) : ''}?</DialogTitle></DialogHeader>
                 <p className="m-0 text-[13px] text-muted-foreground">
-                    Отмечайте, когда деньги уже отправлены из 1С на счёт {payout?.iban ?? ''}. Водитель увидит в приложении «Выплачено».
+                    Отмечайте, когда деньги уже отправлены на счёт {payout?.iban ?? ''}. Водитель увидит в приложении «Выплачено».
                 </p>
                 <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={onClose}>Отмена</Button>

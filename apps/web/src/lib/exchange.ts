@@ -308,7 +308,7 @@ export interface ParkOverview {
     monthTrips: number;
     monthSum: number;
     inviteCode: string;
-    /** Выплаты, которые ждут парка: запрошены или в 1С. */
+    /** Выплаты, которые ждут парка: запрошены или реестр уже выгружен. */
     pendingPayouts: { count: number; net: number };
 }
 
@@ -363,7 +363,7 @@ export type PayoutStatus = 'REQUESTED' | 'EXPORTED' | 'PAID' | 'REJECTED';
 
 export const PAYOUT_STATUS_TEXT: Record<PayoutStatus, string> = {
     REQUESTED: 'Запрошена',
-    EXPORTED: 'В 1С',
+    EXPORTED: 'Реестр выгружен',
     PAID: 'Выплачено',
     REJECTED: 'Отклонена',
 };
