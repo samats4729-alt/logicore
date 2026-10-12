@@ -47,7 +47,10 @@ function build(driver: any = { id: 'd-1', userId: 'u-1', kind: 'PARK', parkCompa
         $transaction: jest.fn(async (cb: any) => cb(tx)),
     };
     const drivers: any = { assertPark: jest.fn() };
-    return { service: new ExchangePayoutsService(prisma, drivers), prisma, tx };
+    // Топливо по рейсам: по умолчанию ничего не выдавали и чеков нет.
+    const fuel: any = { totals: jest.fn(async (ids: string[]) => new Map(ids.map((id) => [id, { issued: 0, receipts: 0 }]))) };
+    const settlement: any = { platformPct: jest.fn().mockResolvedValue(5) };
+    return { service: new ExchangePayoutsService(prisma, drivers, fuel, settlement), prisma, tx, fuel };
 }
 
 describe('Выплата водителю парка: запрос', () => {
@@ -107,7 +110,7 @@ describe('Выплата водителю парка: парк', () => {
         const book = XLSX.read(buffer, { type: 'buffer' });
         expect(book.SheetNames).toEqual(['Реестр выплат', 'По рейсам']);
         const row = XLSX.utils.sheet_to_json<any>(book.Sheets['Реестр выплат'])[0];
-        expect(row).toMatchObject({ 'ФИО': 'Сериков Серик', 'ИИН': '900101300123', 'К выплате': 75240 });
+        expect(row).toMatchObject({ 'ФИО': 'Сериков Серик', 'ИИН': '900101300123', 'К перечислению': 75240 });
         expect(prisma.driverPayout.updateMany.mock.calls[0][0]).toMatchObject({ where: { status: 'REQUESTED' }, data: { status: 'EXPORTED' } });
     });
 
@@ -127,5 +130,39 @@ describe('Выплата водителю парка: парк', () => {
     it('ставки — от 0 до 100 %', async () => {
         const { service } = build();
         await expect(service.setRates('park-1', 'user-1', { ...RATES, ipnPct: 150 })).rejects.toBeInstanceOf(BadRequestException);
+    });
+});
+
+describe('Выплата водителю парка: рейс по расчёту «на руки» (12.10.2026)', () => {
+    const SETTLEMENT = {
+        driverTotal: 400000, deductionApplied: true,
+        rates: { opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, platformPct: 5, parkPct: 5, deductionMrp: 30, mrp: 4325 },
+    };
+
+    it('договорились на 400 000, парк дал на топливо 120 000 (чеков на 100 000) — перечислить 280 000, налоги с 300 000', async () => {
+        const { service, prisma, fuel } = build();
+        prisma.order.findMany.mockResolvedValue([
+            { id: 'o-1', orderNumber: '000000013', driverCost: 508437.93, completedAt: new Date(), routePoints: [], exchangeSettlement: SETTLEMENT },
+        ]);
+        fuel.totals.mockResolvedValue(new Map([['o-1', { issued: 120000, receipts: 100000 }]]));
+        prisma.driverPayout.create.mockImplementation(async (args: any) => ({ id: 'p-1', net: args.data.net, toPay: args.data.toPay }));
+        const result = await service.request('u-1');
+        expect(result.net).toBe(280000);
+        const data = prisma.driverPayout.create.mock.calls[0][0].data;
+        expect(data).toMatchObject({ toPay: 280000, fuelIssued: 120000, commission: 0, net: 300000 });
+        expect(data.items.create[0]).toMatchObject({
+            orderId: 'o-1', driverTotal: 400000, fuelIssued: 120000, fuelReceipts: 100000, toPay: 280000, net: 300000, commissionPct: 5,
+        });
+    });
+
+    it('в приложении «к выплате» — сколько перечислят, а не доход за работу', async () => {
+        const { service, prisma, fuel } = build();
+        prisma.order.findMany.mockResolvedValue([
+            { id: 'o-1', orderNumber: '000000013', driverCost: 508437.93, completedAt: new Date(), routePoints: [], exchangeSettlement: SETTLEMENT },
+        ]);
+        fuel.totals.mockResolvedValue(new Map([['o-1', { issued: 120000, receipts: 120000 }]]));
+        const e = await service.earnings('u-1');
+        expect(e.trips[0]).toMatchObject({ net: 280000, workNet: 280000, driverTotal: 400000, fuelIssued: 120000 });
+        expect(e.available.net).toBe(280000);
     });
 });

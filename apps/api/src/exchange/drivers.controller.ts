@@ -26,6 +26,8 @@ import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import { ParkContractService } from './park-contract.service';
 import { ExchangeFuelService } from './fuel.service';
+import { ExchangeSettlementService } from './settlement.service';
+import { PlatformFeeDto } from './dto/fuel.dto';
 import { FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
 
 /**
@@ -531,7 +533,22 @@ export class ExchangeParkController {
 @Roles(UserRole.ADMIN)
 @ApiBearerAuth()
 export class ExchangeAdminController {
-    constructor(private readonly drivers: ExchangeDriversService) {}
+    constructor(
+        private readonly drivers: ExchangeDriversService,
+        private readonly settlement: ExchangeSettlementService,
+    ) {}
+
+    @Get('platform-fee')
+    @ApiOperation({ summary: 'Комиссия LogiCore с рейса водителя парка, %' })
+    async platformFee() {
+        return { platformPct: await this.settlement.platformPct() };
+    }
+
+    @Put('platform-fee')
+    @ApiOperation({ summary: 'Поменять комиссию LogiCore — действует на новые отклики' })
+    async setPlatformFee(@Body() dto: PlatformFeeDto) {
+        return { platformPct: await this.settlement.setPlatformPct(dto.platformPct) };
+    }
 
     @Get('companies')
     @ApiOperation({ summary: 'Компании платформы — кому быть парком' })

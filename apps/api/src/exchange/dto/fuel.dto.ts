@@ -49,3 +49,11 @@ export class FuelDecisionDto {
     @MaxLength(300)
     reason?: string;
 }
+
+/** Комиссия LogiCore с рейса водителя парка, % — меняет владелец платформы. */
+export class PlatformFeeDto {
+    @ApiProperty()
+    @IsNumber({}, { message: 'Комиссия — числом' })
+    @Min(0)
+    platformPct: number;
+}

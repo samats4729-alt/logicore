@@ -21,6 +21,9 @@ export function newInviteCode(): string {
 const TRIP_SELECT = {
     id: true, orderNumber: true, status: true, driverCost: true, createdAt: true, completedAt: true,
     assignedDriverName: true, assignedDriverPlate: true,
+    // Расчёт «на руки»: итог водителю, топливо по оценке, доля парка и LogiCore.
+    exchangeSettlement: { select: { driverTotal: true, fuelEstimate: true, parkFee: true, platformFee: true } },
+    _count: { select: { exchangeFuelReceipts: { where: { status: 'PENDING' } } } },
     forwarder: { select: { name: true } },
     subForwarder: { select: { name: true } },
     customerCompany: { select: { name: true } },
@@ -99,6 +102,15 @@ export class ExchangeParkService {
                 to: city(delivery),
                 loadingDate: pickup?.expectedDate ?? null,
                 customerName: r.subForwarder?.name || r.forwarder?.name || r.customerCompany?.name || null,
+                /** Расчёт «на руки» — у рейсов после 12.10.2026; у прежних — пусто. */
+                settlement: r.exchangeSettlement ? {
+                    driverTotal: Number(r.exchangeSettlement.driverTotal),
+                    fuelEstimate: Number(r.exchangeSettlement.fuelEstimate),
+                    parkFee: Number(r.exchangeSettlement.parkFee),
+                    platformFee: Number(r.exchangeSettlement.platformFee),
+                } : null,
+                /** Чеков на топливо ждут решения парка. */
+                fuelReceiptsPending: r._count.exchangeFuelReceipts,
                 createdAt: r.createdAt,
                 completedAt: r.completedAt,
             };
@@ -107,12 +119,13 @@ export class ExchangeParkService {
 
     /** Выплаты, которые ждут парка: запрошены или выгружены в 1С, но не проведены. */
     private async payoutsPending(companyId: string) {
-        const agg = await this.prisma.driverPayout.aggregate({
+        const rows = await this.prisma.driverPayout.findMany({
             where: { parkCompanyId: companyId, status: { in: ['REQUESTED', 'EXPORTED'] } },
-            _count: true,
-            _sum: { net: true },
+            select: { net: true, toPay: true },
         });
-        return { count: agg._count, net: Number(agg._sum.net ?? 0) };
+        // Сколько перечислить: по расчёту «на руки» — toPay, у прежних — net.
+        const sum = rows.reduce((s, r) => s + Number(r.toPay ?? r.net), 0);
+        return { count: rows.length, net: Math.round(sum * 100) / 100 };
     }
 
     /** Код приглашения парка; нет — заводим. */
