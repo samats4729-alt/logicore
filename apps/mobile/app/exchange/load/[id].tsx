@@ -18,7 +18,8 @@ const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
  * Заявка с биржи.
  *
  * Всё, чтобы решить «повезу или нет»: маршрут по точкам с датами, груз,
- * цена и что ещё важно компании. Точные адреса компания откроет тому, кого
+ * сколько получите на руки и что ещё важно компании. Сумма на руки — вместе
+ * с топливом; налоги и комиссии парк досчитывает сверху (12.10.2026). Точные адреса компания откроет тому, кого
  * выберет. Внизу — отклик: «согласен за цену компании» одной кнопкой или
  * своя цена. Решает компания; пока не решила, отклик можно отозвать.
  */
@@ -62,7 +63,7 @@ export default function OrderScreen() {
     const agree = () => {
         if (!order || order.price == null) return;
         Alert.alert(
-            `Согласны за ${деньги(order.price)}?`,
+            `Согласны за ${деньги(order.price)} на руки?`,
             'Компания увидит ваш отклик и решит, кто повезёт. Пока не решила — отклик можно отозвать.',
             [{ text: 'Отмена', style: 'cancel' }, { text: 'Откликнуться', onPress: () => send({ agree: true }) }],
         );
@@ -125,11 +126,14 @@ export default function OrderScreen() {
                 </Card>
 
                 <Card>
-                    <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>КОМПАНИЯ ПРЕДЛАГАЕТ</Text>
+                    <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>ВЫ ПОЛУЧИТЕ НА РУКИ</Text>
                     <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'Цена договорная'}</Text>
-                    {me.kind === 'PARK' && order.price != null && (
-                        <Text style={{ color: colors.textSecondary, fontSize: 12.5, marginTop: 4 }}>
-                            Через парк вы получите эту сумму за вычетом комиссии парка и налогов.
+                    {me.kind === 'PARK' && (
+                        <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
+                            {order.fuelEstimate
+                                ? `Вместе с топливом: по расчёту около ${деньги(order.fuelEstimate)}${order.distanceKm ? ` на ${Math.round(order.distanceKm).toLocaleString('ru-RU')} км` : ''}. Заправка через парк, чек — на БИН парка. `
+                                : 'Вместе с топливом: заправка через парк, чек — на БИН парка. '}
+                            Налоги за вас платит парк — из этой суммы они не вычитаются.
                         </Text>
                     )}
                 </Card>
@@ -156,14 +160,14 @@ export default function OrderScreen() {
                 {mine && mine.status === 'ACTIVE' ? (
                     <>
                         <Text style={[styles.footerStatus, { color: colors.text }]}>
-                            Вы откликнулись: {деньги(mine.price)}{mine.agreed ? ' — по цене компании' : ''}
+                            Вы откликнулись: {деньги(mine.price)} на руки{mine.agreed ? ' — по цене компании' : ''}
                         </Text>
                         <Text style={[styles.footerNote, { color: colors.textSecondary }]}>
                             Ждём решения компании. Если выберут вас — рейс появится во вкладке «Мой рейс».
                         </Text>
                         <View style={styles.footerRow}>
                             <Button title="Отозвать" variant="danger" onPress={withdraw} style={{ flex: 1 }} />
-                            <Button title="Изменить цену" variant="secondary" onPress={() => setSheet(true)} style={{ flex: 1.4 }} />
+                            <Button title="Изменить сумму" variant="secondary" onPress={() => setSheet(true)} style={{ flex: 1.4 }} />
                         </View>
                     </>
                 ) : mine && mine.status === 'ACCEPTED' ? (
@@ -178,10 +182,10 @@ export default function OrderScreen() {
                 ) : (
                     <>
                         {order.price != null && (
-                            <Button title={`Согласен за ${деньги(order.price)}`} icon="checkmark" loading={busy} onPress={agree} />
+                            <Button title={`Согласен за ${деньги(order.price)} на руки`} icon="checkmark" loading={busy} onPress={agree} />
                         )}
                         <Button
-                            title={order.price != null ? 'Предложить свою цену' : 'Предложить цену'}
+                            title={order.price != null ? 'Предложить свою сумму' : 'Предложить сумму'}
                             variant={order.price != null ? 'secondary' : 'primary'}
                             onPress={() => setSheet(true)}
                             style={{ marginTop: order.price != null ? 8 : 0 }}
@@ -190,7 +194,7 @@ export default function OrderScreen() {
                 )}
             </View>
 
-            <OfferSheet visible={sheet} mine={mine} busy={busy} onSubmit={send} onClose={() => setSheet(false)} />
+            <OfferSheet visible={sheet} mine={mine} busy={busy} fuelEstimate={order.fuelEstimate ?? null} onSubmit={send} onClose={() => setSheet(false)} />
         </View>
     );
 }

@@ -108,8 +108,16 @@ export interface ExchangeOrder {
     adr: boolean | null;
     adrClass: string | null;
     requirements: string | null;
-    /** Цена, которую компания предлагает исполнителю; нет — договорная. */
+    /**
+     * Сколько водитель парка получит на руки вместе с топливом (налоги и
+     * комиссии парк досчитывает сверху — решение владельца 12.10.2026);
+     * нет — договорная. Цену компании водитель не видит.
+     */
     price: number | null;
+    /** Топливо по оценке, ₸ — входит в сумму на руки; заправка через парк, чек на БИН парка. */
+    fuelEstimate?: number | null;
+    /** Расстояние маршрута, км — оценка. */
+    distanceKm?: number | null;
     note: string | null;
     publishedAt: string | null;
     /** Свой отклик: в ленте — только статус, в карточке — целиком. */
@@ -119,7 +127,7 @@ export interface ExchangeOrder {
 
 export type OfferStatus = 'ACTIVE' | 'WITHDRAWN' | 'ACCEPTED' | 'REJECTED';
 
-/** Свой отклик на заявку. */
+/** Свой отклик на заявку. Цена — сумма на руки вместе с топливом. */
 export interface OwnOffer {
     id: string;
     status: OfferStatus;
@@ -138,7 +146,11 @@ export interface MyOffer extends OwnOffer {
     to: string;
 }
 
-/** Суммы выплаты: начислено, удержано, на руки. */
+/**
+ * Суммы выплаты. `net` — сколько перечислят на счёт. По расчёту «на руки»
+ * (рейсы с 12.10.2026) есть ещё итог по договорённости и сколько парк дал на
+ * топливо: перечислят итог минус топливо; налоги парк платит сверху.
+ */
 export interface PayoutAmounts {
     gross: number;
     commission: number;
@@ -147,7 +159,34 @@ export interface PayoutAmounts {
     ipn: number;
     net: number;
     so: number;
+    toPay?: number;
+    workNet?: number;
+    driverTotal?: number | null;
+    fuelIssued?: number | null;
+    fuelReceipts?: number | null;
 }
+
+/** Топливо рейса: БИН парка, сколько парк дал, чеки, сколько останется. */
+export interface TripFuel {
+    orderId: string;
+    orderNumber: string;
+    park: { name: string; bin: string | null; phone: string | null } | null;
+    driverTotal: number | null;
+    fuelEstimate: number | null;
+    distanceKm: number | null;
+    issued: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string }[] };
+    receipts: {
+        accepted: number;
+        pending: number;
+        items: { id: string; amount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rejectReason: string | null; createdAt: string }[];
+    };
+    toPay: number | null;
+    withoutReceipt: number;
+    locked: boolean;
+}
+
+/** Фото чека на топливо — отдаёт только сервер и только самому водителю. */
+export const fuelReceiptPath = (id: string) => `/exchange/driver/fuel-receipts/${id}/file`;
 
 export type PayoutStatus = 'REQUESTED' | 'EXPORTED' | 'PAID' | 'REJECTED';
 
@@ -319,6 +358,18 @@ export const exchangeApi = {
     withdraw: (id: string) => api.post(`/exchange/driver/loads/${id}/offer/withdraw`),
     myOffers: () => api.get<MyOffer[]>('/exchange/driver/offers').then((r) => r.data),
     earnings: () => api.get<Earnings>('/exchange/driver/earnings').then((r) => r.data),
+    /** Топливо рейса через парк. Рейс по прежнему расчёту — сервер скажет, что топлива нет. */
+    tripFuel: (orderId: string) => api.get<TripFuel>(`/exchange/driver/trips/${orderId}/fuel`).then((r) => r.data),
+    addFuelReceipt: (orderId: string, amount: number, uri: string) => {
+        const form = new FormData();
+        form.append('amount', String(amount));
+        form.append('file', { uri, name: 'fuel-check.jpg', type: 'image/jpeg' } as any);
+        return api.post<TripFuel>(`/exchange/driver/trips/${orderId}/fuel/receipts`, form, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 60000,
+        }).then((r) => r.data);
+    },
+    removeFuelReceipt: (id: string) => api.delete<TripFuel>(`/exchange/driver/fuel-receipts/${id}`).then((r) => r.data),
     setPayoutAccount: (iban: string, bank?: string) => api.put('/exchange/driver/me/payout-account', { iban, bank }).then((r) => r.data),
     requestPayout: () => api.post<{ id: string; net: number; trips: number }>('/exchange/driver/payouts/request').then((r) => r.data),
 };

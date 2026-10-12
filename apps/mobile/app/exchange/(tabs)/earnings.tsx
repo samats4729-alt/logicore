@@ -25,7 +25,10 @@ const date = (d: string | null) => (d ? new Date(d).toLocaleDateString('ru-RU') 
  * Баланс водителя парка (был «Заработок»).
  *
  * Крупно — «Начислено»: сколько придёт на карту за довезённые рейсы. Под
- * ним — откуда эта цифра: начислено, комиссия парка, ОПВ, ВОСМС, ИПН, и
+ * ним — откуда эта цифра. По расчёту «на руки» (рейсы с 12.10.2026):
+ * договорились, минус что парк дал на топливо; налоги парк платит сверху и
+ * из суммы не вычитает. По прежнему расчёту: начислено, комиссия парка, ОПВ,
+ * ВОСМС, ИПН. И
  * ещё две суммы: сколько ждёт выплаты и сколько уже выплачено. Ниже — счёт
  * (IBAN), «Запросить выплату» и история выплат. Платит парк — так решил
  * владелец; другого способа вывода экран не обещает.
@@ -101,6 +104,10 @@ export default function EarningsScreen() {
     const open = waiting.length > 0;
     const waitingSum = waiting.reduce((s, p) => s + p.net, 0);
     const paidSum = data.payouts.filter((p) => p.status === 'PAID').reduce((s, p) => s + p.net, 0);
+    // Все рейсы к выплате — по расчёту «на руки»: показываем его расшифровку.
+    const onHand = data.trips.length > 0 && data.trips.every((t) => t.driverTotal != null);
+    const agreedSum = data.trips.reduce((s, t) => s + (t.driverTotal ?? 0), 0);
+    const fuelSum = data.trips.reduce((s, t) => s + (t.fuelIssued ?? 0), 0);
 
     return (
         <ScrollView
@@ -114,7 +121,16 @@ export default function EarningsScreen() {
                 <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
                     {data.trips.length ? `за довезённых рейсов: ${data.trips.length}` : 'Довезите рейс — здесь появится сумма к выплате'}
                 </Text>
-                {data.trips.length > 0 && (
+                {onHand && (
+                    <View style={[styles.breakdown, { borderTopColor: colors.border }]}>
+                        <Line label="Договорились, на руки" value={деньги(agreedSum)} colors={colors} />
+                        <Line label="Парк дал на топливо" value={`− ${деньги(fuelSum)}`} colors={colors} />
+                        <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6, lineHeight: 17 }}>
+                            Налоги и взносы за вас парк платит сверху — из вашей суммы они не вычитаются и идут в ваш пенсионный счёт и медстраховку.
+                        </Text>
+                    </View>
+                )}
+                {data.trips.length > 0 && !onHand && (
                     <View style={[styles.breakdown, { borderTopColor: colors.border }]}>
                         <Line label="Начислено за рейсы" value={деньги(a.gross)} colors={colors} />
                         <Line label={`Комиссия парка ${data.rates.commissionPct}%`} value={`− ${деньги(a.commission)}`} colors={colors} />
@@ -181,7 +197,10 @@ export default function EarningsScreen() {
                                 <Text style={{ color: colors.text, fontWeight: '800' }}>{деньги(t.net)}</Text>
                             </View>
                             <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>
-                                Заявка {t.orderNumber}{t.completedAt ? ` · довёз ${date(t.completedAt)}` : ''} · начислено {деньги(t.gross)}
+                                Заявка {t.orderNumber}{t.completedAt ? ` · довёз ${date(t.completedAt)}` : ''}
+                                {t.driverTotal != null
+                                    ? ` · договорились ${деньги(t.driverTotal)}${t.fuelIssued ? `, на топливо ${деньги(t.fuelIssued)}` : ''}`
+                                    : ` · начислено ${деньги(t.gross)}`}
                             </Text>
                         </Card>
                     ))}
@@ -202,7 +221,9 @@ export default function EarningsScreen() {
                             </Text>
                             {p.status !== 'REJECTED' && (
                                 <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
-                                    Начислено {деньги(p.gross)} · удержано {деньги(p.gross - p.net)} — комиссия и налоги
+                                    {p.fuelIssued != null
+                                        ? `На топливо парк дал ${деньги(p.fuelIssued)} · налоги за вас платит парк`
+                                        : `Начислено ${деньги(p.gross)} · удержано ${деньги(p.gross - p.net)} — комиссия и налоги`}
                                 </Text>
                             )}
                             {!!p.rejectReason && (

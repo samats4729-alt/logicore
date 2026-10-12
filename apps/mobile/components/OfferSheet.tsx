@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { OfferInput, OwnOffer } from '@/lib/exchange';
+import { OfferInput, OwnOffer, деньги } from '@/lib/exchange';
 import { Button, Chip } from '@/components/kit';
 
 /** Дата YYYY-MM-DD через n дней от сегодня — по часам телефона. */
@@ -20,13 +20,17 @@ const READY = [
 ];
 
 /**
- * Своя цена — панелью снизу: сумма, когда подадите машину, комментарий.
- * Цифры — крупно и числовой клавиатурой: водитель набирает одной рукой.
+ * Своя сумма — панелью снизу: сколько хотите на руки, когда подадите машину,
+ * комментарий. Цифры — крупно и числовой клавиатурой: водитель набирает одной
+ * рукой. Сумма — вместе с топливом: топливо оплачивает парк по ходу рейса и
+ * засчитывает в эту сумму; налоги парк платит сверху (12.10.2026).
  */
-export function OfferSheet({ visible, mine, busy, onSubmit, onClose }: {
+export function OfferSheet({ visible, mine, busy, fuelEstimate, onSubmit, onClose }: {
     visible: boolean;
     mine: OwnOffer | null | undefined;
     busy: boolean;
+    /** Топливо по оценке, ₸: сумма должна быть больше. */
+    fuelEstimate?: number | null;
     onSubmit: (input: OfferInput) => void;
     onClose: () => void;
 }) {
@@ -49,7 +53,11 @@ export function OfferSheet({ visible, mine, busy, onSubmit, onClose }: {
 
     const submit = () => {
         const amount = Number(price);
-        if (!(amount > 0)) { setError('Впишите свою цену в тенге'); return; }
+        if (!(amount > 0)) { setError('Впишите сумму в тенге'); return; }
+        if (fuelEstimate && amount <= fuelEstimate) {
+            setError(`Сумма должна быть больше топлива — по расчёту ${деньги(fuelEstimate)}`);
+            return;
+        }
         onSubmit({ price: amount, readyDate: ready ?? undefined, comment: comment.trim() || undefined });
     };
 
@@ -59,9 +67,9 @@ export function OfferSheet({ visible, mine, busy, onSubmit, onClose }: {
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) }]}>
                     <View style={[styles.grabber, { backgroundColor: colors.border }]} />
-                    <Text style={[styles.title, { color: colors.text }]}>Своя цена</Text>
+                    <Text style={[styles.title, { color: colors.text }]}>Своя сумма</Text>
 
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>Сколько хотите за рейс, ₸</Text>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>Сколько хотите получить на руки, ₸</Text>
                     <TextInput
                         value={pretty}
                         onChangeText={(v: string) => { setPrice(v.replace(/\D/g, '').slice(0, 10)); setError(null); }}
@@ -71,6 +79,12 @@ export function OfferSheet({ visible, mine, busy, onSubmit, onClose }: {
                         style={[styles.price, { color: colors.text, borderColor: error ? colors.danger : colors.border, backgroundColor: colors.background }]}
                     />
                     {!!error && <Text style={{ color: colors.danger, fontSize: 12.5, marginTop: 4 }}>{error}</Text>}
+                    <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
+                        {fuelEstimate
+                            ? `Вместе с топливом — по расчёту около ${деньги(fuelEstimate)}: парк оплатит его на заправке и засчитает в эту сумму. `
+                            : 'Вместе с топливом: парк оплатит его на заправке и засчитает в эту сумму. '}
+                        Налоги платит парк сверху.
+                    </Text>
 
                     <Text style={[styles.label, { color: colors.textSecondary, marginTop: 14 }]}>Когда подадите машину</Text>
                     <View style={styles.chips}>
