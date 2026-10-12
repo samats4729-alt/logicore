@@ -4,7 +4,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { ExchangeOrder, груз, деньги, когдаПросто, черезТочки } from '@/lib/exchange';
 import { Badge, Card, Route } from '@/components/kit';
 
-/** Заявка в ленте: маршрут, когда, что везём, цена. Нажатие — карточка. */
+/** Заявка в ленте: маршрут, когда, что везём, сколько получите на руки. Нажатие — карточка. */
 export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: () => void }) {
     const { colors } = useAppTheme();
     const via = черезТочки(order);
@@ -15,7 +15,10 @@ export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: ()
                     <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
                     <Text style={[styles.dateText, { color: colors.textSecondary }]}>{когдаПросто(order.loadingDate)}</Text>
                 </View>
-                <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'договорная'}</Text>
+                <View style={styles.priceBox}>
+                    <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'договорная'}</Text>
+                    {order.price != null && <Text style={[styles.priceNote, { color: colors.textTertiary }]}>на руки</Text>}
+                </View>
             </View>
             <Route from={order.from} fromAddress={via} to={order.to} />
             <View style={[styles.bottom, { borderTopColor: colors.border }]}>
@@ -33,7 +36,9 @@ const styles = StyleSheet.create({
     top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     date: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     dateText: { fontSize: 13.5, fontWeight: '600' },
+    priceBox: { alignItems: 'flex-end' },
     price: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4 },
+    priceNote: { fontSize: 11.5, fontWeight: '600', marginTop: -1 },
     bottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
     cargo: { flex: 1, fontSize: 13.5 },
 });

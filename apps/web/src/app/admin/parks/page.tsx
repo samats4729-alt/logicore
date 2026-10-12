@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Loader2, Search } from 'lucide-react';
+import { Building2, Loader2, Percent, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ответСервера } from '@/lib/exchange';
@@ -102,6 +102,8 @@ export default function AdminParksPage() {
                 </div>
             </div>
 
+            <PlatformFeeCard />
+
             <section className={styles.card}>
                 <div className={styles.cardHead}>
                     <Building2 size={14} />
@@ -172,5 +174,54 @@ export default function AdminParksPage() {
                 )}
             </section>
         </div>
+    );
+}
+
+/**
+ * Комиссия LogiCore с рейса водителя парка (решение владельца 12.10.2026):
+ * досчитывается сверху к цене для компании вместе с налогами и долей парка.
+ * Меняется здесь; действует на новые отклики — прошлые рейсы посчитаны.
+ */
+function PlatformFeeCard() {
+    const [value, setValue] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        api.get('/exchange/admin/platform-fee').then((r) => setValue(String(r.data.platformPct))).catch(() => setValue(null));
+    }, []);
+
+    const save = async () => {
+        const pct = Number(String(value).replace(',', '.'));
+        if (!Number.isFinite(pct) || pct < 0 || pct > 100) { toast.error('Комиссия — число от 0 до 100'); return; }
+        setSaving(true);
+        try {
+            const { data } = await api.put('/exchange/admin/platform-fee', { platformPct: pct });
+            setValue(String(data.platformPct));
+            toast.success(`Комиссия LogiCore — ${data.platformPct}%: для новых откликов водителей парков`);
+        } catch (e) {
+            toast.error(ответСервера(e, 'Не удалось сохранить'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (value == null) return null;
+    return (
+        <section className={styles.card}>
+            <div className={styles.cardHead}>
+                <Percent size={14} />
+                <h2 className={styles.cardTitle}>Комиссия LogiCore</h2>
+            </div>
+            <div className={`${styles.cardBody} flex flex-wrap items-end gap-3`}>
+                <label className="flex flex-col gap-1">
+                    <span className="text-[12px] font-medium text-muted-foreground">С рейса водителя парка, %</span>
+                    <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" aria-label="Комиссия LogiCore, %" className="h-9 w-28 text-[13px] tabular-nums" />
+                </label>
+                <Button onClick={save} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Сохранить</Button>
+                <p className="m-0 basis-full text-[12px] text-muted-foreground">
+                    Досчитывается сверху к цене для компании вместе с налогами водителя и долей парка. Действует на новые отклики.
+                </p>
+            </div>
+        </section>
     );
 }

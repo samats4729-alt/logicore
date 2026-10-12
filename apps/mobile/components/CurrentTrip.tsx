@@ -23,6 +23,7 @@ import { SwipeConfirm } from '@/components/SwipeConfirm';
 import { ProblemSheet } from '@/components/ProblemSheet';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
 import { useTabBarSpace } from '@/components/TabBar';
+import { TripFuel } from '@/components/TripFuel';
 
 /** Шагов у рейса от «Назначен» до «Завершён» — столько делений у полосы прогресса. */
 const STEPS = 8;
@@ -45,7 +46,13 @@ const точек = (n: number) => {
 export default function CurrentTrip({
     emptyText = 'Как только диспетчер назначит вам рейс, он появится здесь. Потяните вниз, чтобы обновить.',
     showHeader = true,
-}: { emptyText?: string; showHeader?: boolean }) {
+    fuel = false,
+}: {
+    emptyText?: string;
+    showHeader?: boolean;
+    /** Водитель парка на бирже: раздел «Топливо» — БИН парка, чеки, сколько останется. */
+    fuel?: boolean;
+}) {
     const { currentOrder, fetchCurrentOrder, updateOrderStatus, reportProblem } = useStore();
     const { colors, isDark } = useAppTheme();
     const [refreshing, setRefreshing] = useState(false);
@@ -407,6 +414,9 @@ export default function CurrentTrip({
                         </View>
                     )}
                 </Section>
+
+                {/* ===== Топливо (водитель парка) ===== */}
+                {fuel && <TripFuel orderId={currentOrder.id} />}
             </View>
         </ScrollView>
 

@@ -71,7 +71,7 @@ export default function ParkHome() {
         { icon: UsersRound, label: 'Водителей работает', value: String(data.approvedDrivers), hint: 'Допущены к бирже', href: '/company/park/drivers?status=approved', accent: false },
         { icon: Route, label: 'Сейчас в рейсе', value: String(data.activeTrips), hint: 'Рейсы водителей парка', href: '/company/park/trips', accent: false },
         { icon: Wallet, label: 'Довезли в этом месяце', value: moneyShort(data.monthSum), hint: `рейсов: ${data.monthTrips}`, href: '/company/park/trips?status=done', accent: false },
-        { icon: HandCoins, label: 'Выплаты ждут', value: moneyShort(data.pendingPayouts.net), hint: data.pendingPayouts.count ? `запросов: ${data.pendingPayouts.count} — выгрузите в 1С` : 'Запросов нет', href: '/company/park/payouts', accent: data.pendingPayouts.count > 0 },
+        { icon: HandCoins, label: 'Выплаты ждут', value: moneyShort(data.pendingPayouts.net), hint: data.pendingPayouts.count ? `запросов: ${data.pendingPayouts.count} — выгрузите реестр` : 'Запросов нет', href: '/company/park/payouts', accent: data.pendingPayouts.count > 0 },
     ] : [];
 
     return (

@@ -14,7 +14,7 @@ function build(isPark = true) {
             aggregate: jest.fn().mockResolvedValue({ _count: 3, _sum: { driverCost: 1200000 } }),
             findMany: jest.fn().mockResolvedValue([]),
         },
-        driverPayout: { aggregate: jest.fn().mockResolvedValue({ _count: 1, _sum: { net: 300000 } }) },
+        driverPayout: { findMany: jest.fn().mockResolvedValue([{ net: 300000, toPay: null }]) },
     };
     const drivers: any = {
         assertPark: jest.fn(async () => { if (!isPark) throw new ForbiddenException('Ваша компания не парк биржи'); }),

@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { API_URL, getAuthHeader, getDeviceId } from '@/lib/api';
 import {
-    DOCUMENTS, DocumentKind, DriverProfile, Park, documentPath, exchangeApi, PARK_INVITE_KEY, вКавычках, иинВерный, телефонВерный, телефонКрасиво, ответ,
+    ContractState, DOCUMENTS, DocumentKind, DriverProfile, Park, documentPath, exchangeApi, PARK_INVITE_KEY, вКавычках, иинВерный, телефонВерный, телефонКрасиво, ответ,
     датаРожденияПоИин, деньВвод, деньИзСервера, деньНаСервер,
 } from '@/lib/exchange';
 import { CONSENT_TEXT, CONSENT_TITLE } from '@/lib/consent';
@@ -19,7 +19,7 @@ import * as SecureStore from '@/lib/secure';
 import { BRAND, RADIUS, selectedColors } from '@/lib/theme';
 import { Button, Card, Choice, Field, Title } from '@/components/kit';
 import { BodyTypePicker } from '@/components/BodyTypePicker';
-import { ParkContractSummary } from '@/components/ParkContract';
+import { ContractText, OpenContractPdf } from '@/components/ParkContract';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
 
 /** Адрес сайта платформы — для ссылки на политику конфиденциальности рядом с согласием. */
@@ -67,6 +67,7 @@ export default function Onboarding() {
         lastName: '', firstName: '', middleName: '', iin: '', phone: '+7',
         ipName: '', ipIin: '', vehiclePlate: '', vehicleBodyType: '', capacityTons: '',
         idNumber: '', idIssuedBy: '', idIssuedAt: '', idExpiresAt: '',
+        registrationAddress: '', vehicleModel: '', vehicleRegNumber: '',
     });
     type FieldKey = keyof typeof form;
     // Ошибки показываем под полем, общую — плашкой над кнопками.
@@ -120,6 +121,7 @@ export default function Onboarding() {
                 capacityTons: d.vehicleCapacityKg ? String(d.vehicleCapacityKg / 1000) : '',
                 idNumber: d.idNumber ?? '', idIssuedBy: d.idIssuedBy ?? '',
                 idIssuedAt: деньИзСервера(d.idIssuedAt), idExpiresAt: деньИзСервера(d.idExpiresAt),
+                registrationAddress: d.registrationAddress ?? '', vehicleModel: d.vehicleModel ?? '', vehicleRegNumber: d.vehicleRegNumber ?? '',
             });
             // Исправление после отказа — сразу ко второму шагу: вид работы уже выбран.
             if (d.kind) setIndex(1);
@@ -161,6 +163,7 @@ export default function Onboarding() {
                 if (!form.idIssuedBy.trim()) e.idIssuedBy = 'Впишите, кем выдано — как на обороте удостоверения';
                 if (деньНаСервер(form.idIssuedAt) === null) e.idIssuedAt = 'День, месяц и год — например 15.03.2020';
                 if (деньНаСервер(form.idExpiresAt) === null) e.idExpiresAt = 'День, месяц и год — например 15.03.2030';
+                if (!form.registrationAddress.trim()) e.registrationAddress = 'Впишите адрес прописки — он пойдёт в договор с парком';
             }
         }
         if (step === 'vehicle') {
@@ -168,6 +171,10 @@ export default function Onboarding() {
             if (!form.vehicleBodyType) e.vehicleBodyType = 'Выберите тип кузова';
             const tons = Number(form.capacityTons.replace(',', '.'));
             if (form.capacityTons && !(Number.isFinite(tons) && tons > 0)) e.capacityTons = 'Число тонн, например 20 или 1,5';
+            if (driver?.kind === 'PARK') {
+                if (!form.vehicleModel.trim()) e.vehicleModel = 'Впишите марку и модель, например MAN TGX';
+                if (!form.vehicleRegNumber.trim()) e.vehicleRegNumber = 'Впишите номер техпаспорта — он на лицевой стороне';
+            }
         }
         return e;
     };
@@ -201,6 +208,7 @@ export default function Onboarding() {
                     ...(driver.kind === 'PARK' ? {
                         idNumber: form.idNumber, idIssuedBy: form.idIssuedBy,
                         idIssuedAt: деньНаСервер(form.idIssuedAt) ?? '', idExpiresAt: деньНаСервер(form.idExpiresAt) ?? '',
+                        registrationAddress: form.registrationAddress,
                     } : {}),
                 });
             }
@@ -209,6 +217,7 @@ export default function Onboarding() {
                 await save({
                     vehiclePlate: form.vehiclePlate,
                     vehicleBodyType: form.vehicleBodyType,
+                    ...(driver.kind === 'PARK' ? { vehicleModel: form.vehicleModel, vehicleRegNumber: form.vehicleRegNumber } : {}),
                     ...(form.capacityTons && Number.isFinite(tons) && tons > 0 ? { vehicleCapacityKg: Math.round(tons * 1000) } : {}),
                 });
             }
@@ -298,6 +307,18 @@ export default function Onboarding() {
             setUploading(null);
         }
     };
+
+    /**
+     * Договор — полный текст с сервера: читает до подписи, после подписи —
+     * тот же экземпляр. Грузим, когда водитель дошёл до шага: к этому
+     * времени анкета и парк уже сохранены, и текст собран из них.
+     */
+    const [contract, setContract] = useState<ContractState | null>(null);
+    useEffect(() => {
+        if (step !== 'contract') return;
+        setContract(null);
+        exchangeApi.contract().then(setContract).catch((e) => setStepError(ответ(e, 'Не удалось загрузить договор — проверьте интернет')));
+    }, [step, driver?.contractSignedAt]);
 
     const sign = async () => {
         setBusy(true);
@@ -406,6 +427,7 @@ export default function Onboarding() {
                                     <Field style={{ flex: 1 }} label="Дата выдачи" error={errors.idIssuedAt} hint="Если есть" placeholder="ДД.ММ.ГГГГ" value={form.idIssuedAt} onChangeText={(v: string) => set('idIssuedAt', деньВвод(v))} keyboardType="number-pad" />
                                     <Field style={{ flex: 1 }} label="Действует до" error={errors.idExpiresAt} hint="Если есть" placeholder="ДД.ММ.ГГГГ" value={form.idExpiresAt} onChangeText={(v: string) => set('idExpiresAt', деньВвод(v))} keyboardType="number-pad" />
                                 </View>
+                                <Field label="Адрес прописки" error={errors.registrationAddress} hint="Как в удостоверении или справке о регистрации — для договора" placeholder="г. Алматы, ул. Абая, 1, кв. 2" value={form.registrationAddress} onChangeText={(v: string) => set('registrationAddress', v)} />
                             </>
                         )}
                     </>
@@ -417,6 +439,12 @@ export default function Onboarding() {
                         <Text style={[styles.label, { color: colors.textSecondary }]}>Тип кузова</Text>
                         <BodyTypePicker value={form.vehicleBodyType || null} onChange={(v) => set('vehicleBodyType', v)} />
                         {!!errors.vehicleBodyType && <Text style={[styles.fieldError, { color: colors.danger }]}>{errors.vehicleBodyType}</Text>}
+                        {driver.kind === 'PARK' && (
+                            <>
+                                <Field style={{ marginTop: 14 }} label="Марка и модель" error={errors.vehicleModel} placeholder="MAN TGX 18.440" value={form.vehicleModel} onChangeText={(v: string) => set('vehicleModel', v)} />
+                                <Field label="Номер техпаспорта" error={errors.vehicleRegNumber} hint="Свидетельство о регистрации — для договора с парком" placeholder="AB1234567" value={form.vehicleRegNumber} onChangeText={(v: string) => set('vehicleRegNumber', v.toUpperCase())} autoCapitalize="characters" />
+                            </>
+                        )}
                         <Field style={{ marginTop: 14 }} label="Грузоподъёмность, т" error={errors.capacityTons} hint="Сколько тонн берёте" placeholder="20" value={form.capacityTons} onChangeText={(v: string) => set('capacityTons', v)} keyboardType="decimal-pad" />
                         {driver.kind === 'PARK' && (
                             <>
@@ -518,16 +546,44 @@ export default function Onboarding() {
 
                 {step === 'contract' && (
                     <>
-                        <ParkContractSummary driver={driver} />
+                        {!contract ? (
+                            <ActivityIndicator style={{ marginVertical: 24 }} color={BRAND.primary} />
+                        ) : (
+                            <>
+                                {/* Чего не хватает — над текстом: иначе водитель увидит
+                                    погашенную «Подписываю» под длинным договором раньше,
+                                    чем узнает почему. */}
+                                {contract.gaps.length > 0 && (
+                                    <Card style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb' }}>
+                                        <Text style={{ color: '#92400e', fontWeight: '700', marginBottom: 4 }}>Подписать пока нельзя — не хватает</Text>
+                                        {contract.gaps.map((g) => <Text key={g} style={{ color: '#92400e', fontSize: 13.5, lineHeight: 20 }}>• {g}</Text>)}
+                                        <Text style={{ color: '#92400e', fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
+                                            Своё — допишите на прошлых шагах. Что не указал парк — напишите парку: договор собирается из его реквизитов.
+                                        </Text>
+                                    </Card>
+                                )}
+                                {(contract.signed?.content || contract.draft) && <ContractText content={(contract.signed?.content || contract.draft)!} />}
+                            </>
+                        )}
                         {driver.contractSignedAt ? (
-                            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <Ionicons name="checkmark-circle" size={22} color="#15803d" />
-                                <Text style={{ color: colors.text, fontWeight: '700' }}>
-                                    Подписано {new Date(driver.contractSignedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                </Text>
+                            <Card style={{ gap: 6 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <Ionicons name="checkmark-circle" size={22} color="#15803d" />
+                                    <Text style={{ color: colors.text, fontWeight: '700' }}>
+                                        Подписано {new Date(driver.contractSignedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                </View>
+                                {contract?.signed && <OpenContractPdf />}
                             </Card>
                         ) : (
-                            <Button title="Подписываю" icon="create-outline" variant="dark" loading={busy} onPress={sign} />
+                            <Button
+                                title="Подписываю"
+                                icon="create-outline"
+                                variant="dark"
+                                loading={busy}
+                                disabled={!contract || !contract.draft || contract.gaps.length > 0}
+                                onPress={sign}
+                            />
                         )}
                     </>
                 )}

@@ -240,6 +240,12 @@ export interface ExchangeDriver {
     idIssuedBy: string | null;
     idIssuedAt: string | null;
     idExpiresAt: string | null;
+    /** Для договора с парком: адрес прописки, марка и модель, номер техпаспорта. */
+    registrationAddress: string | null;
+    vehicleModel: string | null;
+    vehicleRegNumber: string | null;
+    /** Подписанный договор с этим парком — только в карточке парка. */
+    contract?: { number: string; signedAt: string } | null;
     /** Когда водитель дал согласие на обработку персональных данных и на какой текст. */
     consentAt: string | null;
     consentVersion: string | null;
@@ -302,7 +308,7 @@ export interface ParkOverview {
     monthTrips: number;
     monthSum: number;
     inviteCode: string;
-    /** Выплаты, которые ждут парка: запрошены или в 1С. */
+    /** Выплаты, которые ждут парка: запрошены или реестр уже выгружен. */
     pendingPayouts: { count: number; net: number };
 }
 
@@ -320,8 +326,31 @@ export interface ParkTrip {
     to: string;
     loadingDate: string | null;
     customerName: string | null;
+    /** Расчёт «на руки» (рейсы с 12.10.2026): итог водителю, топливо, доли парка и LogiCore. */
+    settlement?: { driverTotal: number; fuelEstimate: number; parkFee: number; platformFee: number } | null;
+    /** Чеков на топливо ждут решения парка. */
+    fuelReceiptsPending?: number;
     createdAt: string;
     completedAt: string | null;
+}
+
+/** Топливо рейса водителя парка: сколько дали, чеки, сколько перечислить в конце. */
+export interface ParkTripFuel {
+    orderId: string;
+    orderNumber: string;
+    park: { name: string; bin: string | null; phone: string | null } | null;
+    driverTotal: number | null;
+    fuelEstimate: number | null;
+    distanceKm: number | null;
+    issued: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string }[] };
+    receipts: {
+        accepted: number;
+        pending: number;
+        items: { id: string; amount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rejectReason: string | null; createdAt: string }[];
+    };
+    toPay: number | null;
+    withoutReceipt: number;
+    locked: boolean;
 }
 
 /** Ссылка-приглашение парка: её отправляют водителю в WhatsApp. */
@@ -334,7 +363,7 @@ export type PayoutStatus = 'REQUESTED' | 'EXPORTED' | 'PAID' | 'REJECTED';
 
 export const PAYOUT_STATUS_TEXT: Record<PayoutStatus, string> = {
     REQUESTED: 'Запрошена',
-    EXPORTED: 'В 1С',
+    EXPORTED: 'Реестр выгружен',
     PAID: 'Выплачено',
     REJECTED: 'Отклонена',
 };
@@ -348,8 +377,11 @@ export interface ParkPayout {
     opv: number;
     vosms: number;
     ipn: number;
+    /** Сколько перечислить: по расчёту «на руки» — итог минус выданное на топливо. */
     net: number;
     so: number;
+    /** Расчёт «на руки»: выдано на топливо по рейсам выплаты. */
+    fuelIssued?: number | null;
     trips: number;
     iban: string | null;
     bank: string | null;
@@ -367,6 +399,12 @@ export interface PayoutRates {
     vosmsPct: number;
     ipnPct: number;
     soPct: number;
+    /** Расчёт «на руки» (12.10.2026): топливо на км, вычет по ИПН; комиссия LogiCore — для сведения. */
+    fuelPerKm?: number;
+    applyDeduction?: boolean;
+    deductionMrp?: number;
+    mrp?: number;
+    platformPct?: number;
     updatedAt?: string | null;
     isDefault?: boolean;
 }

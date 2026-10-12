@@ -1,13 +1,14 @@
 import { ForbiddenException } from '@nestjs/common';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
+import { ExchangeSettlementService } from './settlement.service';
 
 function boardRow(overrides: Record<string, any> = {}) {
     return {
         id: 'order-1', orderNumber: '7A-0042',
         cargoDescription: 'Напитки', cargoWeight: 20000, cargoVolume: null, cargoType: 'Тент', natureOfCargo: null,
         palletCount: null, loadingTypes: [], packagingTypes: [], tempMin: null, tempMax: null, adr: null, adrClass: null,
-        requirements: null, exchangePrice: 420000, exchangeNote: null, exchangePublishedAt: new Date(),
+        requirements: null, exchangePrice: 508437.93, exchangeNote: null, exchangePublishedAt: new Date(), exchangeDistanceKm: 1200,
         forwarder: { name: 'ТОО Экспедитор' }, customerCompany: null, subForwarder: null, subForwarderId: null, forwarderId: 'fwd',
         routePoints: [
             { pointType: 'PICKUP', sequence: 1, expectedDate: new Date('2099-01-10T03:00:00Z'), location: { city: 'Шымкент', region: null, cityRecord: null } },
@@ -17,7 +18,7 @@ function boardRow(overrides: Record<string, any> = {}) {
     };
 }
 
-function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', tripsCompleted: 0, park: { exchangeAccess: true } }) {
+function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', tripsCompleted: 0, parkCompanyId: 'park-1', park: { exchangeAccess: true } }) {
     const prisma: any = {
         exchangeDriver: {
             findUnique: jest.fn().mockResolvedValue(driver),
@@ -30,10 +31,14 @@ function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', trip
         exchangeDriverDocument: { deleteMany: jest.fn() },
         session: { deleteMany: jest.fn() },
         user: { update: jest.fn() },
+        // Ставки парка по умолчанию (как в калькуляции шефа), вычет в месяце ещё не брали.
+        parkPayoutRates: { findUnique: jest.fn().mockResolvedValue(null) },
+        platformSetting: { findUnique: jest.fn().mockResolvedValue(null) },
+        exchangeTripSettlement: { findMany: jest.fn().mockResolvedValue([]) },
         $transaction: jest.fn(async (ops: any[]) => ops),
     };
     const s3: any = { isS3Enabled: () => true, deleteFile: jest.fn() };
-    return { service: new ExchangeDriverLoadsService(prisma, s3), prisma };
+    return { service: new ExchangeDriverLoadsService(prisma, s3, new ExchangeSettlementService(prisma)), prisma };
 }
 
 describe('Биржа · водитель: допуск', () => {
@@ -65,11 +70,18 @@ describe('Биржа · водитель: допуск', () => {
 });
 
 describe('Биржа · водитель: лента', () => {
-    it('только заявки на бирже без исполнителя, с городами и ценой', async () => {
+    it('только заявки на бирже без исполнителя, с городами и суммой водителю на руки', async () => {
         const { service, prisma } = build();
         const feed = await service.feed('u-1');
         expect(prisma.order.findMany.mock.calls[0][0].where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
-        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 420000, orderNumber: '7A-0042' });
+        // Компания выставила 508 437,93; 1 200 км × 100 ₸ = 120 000 топлива → на руки 400 000.
+        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 400000, fuelEstimate: 120000, orderNumber: '7A-0042' });
+    });
+
+    it('договорная цена — суммы на руки нет', async () => {
+        const { service, prisma } = build();
+        prisma.order.findMany.mockResolvedValue([boardRow({ exchangePrice: null })]);
+        expect((await service.feed('u-1'))[0].price).toBeNull();
     });
 
     it('«мой кузов» — без учёта регистра', async () => {

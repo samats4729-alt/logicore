@@ -6,6 +6,7 @@ import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ON_EXCHANGE, managerOf } from './exchange-orders';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
+import { ExchangeSettlementService, SettlementCalc } from './settlement.service';
 
 /** Что о водителе видит компания в отклике — чтобы решить, кого выбрать. */
 const DRIVER_IN_OFFER = {
@@ -18,6 +19,7 @@ const DRIVER_IN_OFFER = {
 
 const OFFER_SELECT = {
     id: true, orderId: true, status: true, price: true, agreed: true, readyDate: true, comment: true,
+    driverTotal: true, calc: true,
     createdAt: true, updatedAt: true, decidedAt: true,
     driver: { select: DRIVER_IN_OFFER },
     company: { select: { id: true, name: true, bin: true, phone: true } },
@@ -64,6 +66,14 @@ function ownOfferView(o: { id: string; status: string; price: Prisma.Decimal; ag
     };
 }
 
+/**
+ * Свой отклик глазами водителя парка: его цена — сумма на руки, а не цена
+ * для компании (у отклика по прежнему расчёту суммы на руки нет — цена как есть).
+ */
+function driverOwnView(o: Parameters<typeof ownOfferView>[0] & { driverTotal: Prisma.Decimal | null }) {
+    return { ...ownOfferView(o), price: o.driverTotal != null ? Number(o.driverTotal) : Number(o.price) };
+}
+
 /** Заявка, на которую можно откликнуться: на бирже, без исполнителя. */
 const ORDER_FOR_OFFER = {
     id: true, orderNumber: true, exchangePrice: true,
@@ -88,6 +98,7 @@ export class ExchangeOffersService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly drivers: ExchangeDriverLoadsService,
+        private readonly settlement: ExchangeSettlementService,
     ) {}
 
     private async openOrder(orderId: string) {
@@ -117,12 +128,33 @@ export class ExchangeOffersService {
 
     // ==================== водитель ====================
 
+    /**
+     * Водитель парка откликается суммой на руки (вместе с топливом) или
+     * соглашается на цену компании — тогда сумму на руки считаем от неё.
+     * В отклик пишем цену для компании и весь расчёт на этот момент.
+     */
+    private async driverCalc(driver: { id: string; parkCompanyId: string }, order: { id: string; exchangePrice: Prisma.Decimal | null }, dto: MakeOfferDto): Promise<SettlementCalc> {
+        const ctx = await this.settlement.context(driver, order.id);
+        if (dto.agree) {
+            if (order.exchangePrice == null) throw new BadRequestException('У заявки цена договорная — предложите свою');
+            const calc = this.settlement.byCustomerPrice(ctx, Number(order.exchangePrice));
+            if (!calc) throw new BadRequestException('Цена компании не покрывает топливо по расчёту — предложите свою сумму');
+            return calc;
+        }
+        if (!dto.price || dto.price <= 0) throw new BadRequestException('Укажите, сколько хотите получить на руки');
+        return this.settlement.byDriverTotal(ctx, dto.price);
+    }
+
     async offerAsDriver(userId: string, orderId: string, dto: MakeOfferDto) {
         const driver = await this.drivers.approvedDriver(userId);
         const order = await this.openOrder(orderId);
+        // Водитель парка — по новому расчёту; со своим ИП — цена как названа.
+        const calc = driver.kind === 'PARK' && driver.parkCompanyId ? await this.driverCalc(driver, order, dto) : null;
         const data = {
             status: 'ACTIVE' as const,
-            price: this.priceOf(order, dto),
+            price: calc ? calc.customerPrice : this.priceOf(order, dto),
+            driverTotal: calc ? calc.driverTotal : null,
+            calc: calc ? (calc as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
             agreed: !!dto.agree,
             readyDate: this.readyDateOf(dto),
             comment: dto.comment?.trim() || null,
@@ -134,7 +166,7 @@ export class ExchangeOffersService {
             create: { orderId: order.id, driverId: driver.id, ...data },
             update: data,
         });
-        return ownOfferView(offer);
+        return driverOwnView(offer);
     }
 
     async withdrawAsDriver(userId: string, orderId: string) {
@@ -152,7 +184,7 @@ export class ExchangeOffersService {
         const driver = await this.prisma.exchangeDriver.findUnique({ where: { userId }, select: { id: true } });
         if (!driver) return null;
         const offer = await this.prisma.exchangeOffer.findUnique({ where: { orderId_driverId: { orderId, driverId: driver.id } } });
-        return offer ? ownOfferView(offer) : null;
+        return offer ? driverOwnView(offer) : null;
     }
 
     /** Свои отклики водителя — на какие заявки откликнулся и что решили. */
@@ -163,7 +195,7 @@ export class ExchangeOffersService {
             orderBy: { updatedAt: 'desc' },
             take: 50,
             select: {
-                id: true, status: true, price: true, agreed: true, readyDate: true, comment: true, updatedAt: true,
+                id: true, status: true, price: true, driverTotal: true, agreed: true, readyDate: true, comment: true, updatedAt: true,
                 order: {
                     select: {
                         id: true, orderNumber: true,
@@ -178,7 +210,7 @@ export class ExchangeOffersService {
         const city = (p?: { location: { city: string | null; cityRecord: { name: string } | null } }) =>
             p ? p.location.cityRecord?.name || p.location.city || '—' : '—';
         return rows.map((r) => ({
-            ...ownOfferView(r),
+            ...driverOwnView(r),
             orderId: r.order.id,
             orderNumber: r.order.orderNumber,
             from: city(r.order.routePoints.find((p) => p.pointType !== 'DELIVERY')),
@@ -281,6 +313,8 @@ export class ExchangeOffersService {
         const price = Number(offer.price);
         let orderData: Prisma.OrderUpdateManyMutationInput & { subForwarderId?: string; partnerId?: string | null; driverId?: string };
         let comment: string;
+        /** Водитель парка — расчёт рейса фиксируется вместе с выбором. */
+        let settlementData: Prisma.ExchangeTripSettlementUncheckedCreateInput | null = null;
 
         if (offer.company) {
             // Перевозчик — как при передаче рейса партнёру: видит заявку у
@@ -305,6 +339,16 @@ export class ExchangeOffersService {
             comment = d.kind === 'PARK'
                 ? `С биржи выбран водитель ${view.name} (через парк ${d.park?.name ?? ''}) за ${price.toLocaleString('ru-RU')} ₸`
                 : `С биржи выбран водитель ${view.name} (свой ИП) за ${price.toLocaleString('ru-RU')} ₸`;
+            if (d.kind === 'PARK' && d.parkCompanyId) {
+                const driver = { id: d.id, parkCompanyId: d.parkCompanyId };
+                // Отклик до нового расчёта — считаем от цены, которую видит компания.
+                const calc = (offer.calc as unknown as SettlementCalc | null)
+                    ?? this.settlement.byCustomerPrice(await this.settlement.context(driver, order.id), price);
+                if (calc) {
+                    settlementData = this.settlement.fixData(order.id, driver, calc);
+                    comment += ` — водителю на руки ${Math.round(calc.driverTotal).toLocaleString('ru-RU')} ₸ с топливом`;
+                }
+            }
         } else {
             throw new BadRequestException('Отклик без исполнителя');
         }
@@ -317,6 +361,11 @@ export class ExchangeOffersService {
                 data: { ...orderData, exchangeClosedAt: now, exchangeCloseReason: `Выбран исполнитель: ${view.name}` } as any,
             });
             if (!count) throw new BadRequestException('У заявки уже появился исполнитель — обновите страницу');
+            if (settlementData) {
+                // Заявку могли снять с водителя и выставить снова — расчёт рейса один, последний.
+                const { orderId: _orderId, ...rest } = settlementData;
+                await tx.exchangeTripSettlement.upsert({ where: { orderId: order.id }, create: settlementData, update: rest });
+            }
             await tx.exchangeOffer.update({ where: { id: offer.id }, data: { status: 'ACCEPTED', decidedAt: now } });
             await tx.exchangeOffer.updateMany({
                 where: { orderId: order.id, status: 'ACTIVE', id: { not: offer.id } },

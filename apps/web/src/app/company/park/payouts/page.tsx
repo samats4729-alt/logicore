@@ -15,19 +15,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import StatusPill from '@/components/ui/StatusPill';
 import styles from '@/components/nova/nova.module.css';
 
-type Filter = PayoutStatus | 'all';
+/**
+ * «Ждут выплаты» — запрошенные и те, по которым реестр уже выгружен: отдельной
+ * вкладки «В 1С» нет (владелец, 12.10.2026) — для парка это одно и то же,
+ * деньги ещё не ушли.
+ */
+type Filter = 'open' | 'PAID' | 'REJECTED' | 'all';
 
 const FILTERS: { key: Filter; label: string }[] = [
-    { key: 'REQUESTED', label: 'Запрошены' },
-    { key: 'EXPORTED', label: 'В 1С' },
+    { key: 'open', label: 'Ждут выплаты' },
     { key: 'PAID', label: 'Выплачено' },
     { key: 'REJECTED', label: 'Отклонены' },
     { key: 'all', label: 'Все' },
 ];
 
 const EMPTY: Record<Filter, string> = {
-    REQUESTED: 'Новых запросов на выплату нет. Водитель запрашивает выплату в приложении за довезённые рейсы.',
-    EXPORTED: 'Выгруженных в 1С и ещё не выплаченных нет.',
+    open: 'Новых запросов на выплату нет. Водитель запрашивает выплату в приложении за довезённые рейсы.',
     PAID: 'Выплат пока не было.',
     REJECTED: 'Отклонённых выплат нет.',
     all: 'Выплат пока не было.',
@@ -40,13 +43,13 @@ const PILL: Record<PayoutStatus, string> = { REQUESTED: 'PENDING', EXPORTED: 'IN
  * Выплаты водителям парка.
  *
  * Работа бухгалтера парка: водитель запросил — отмечаете нужные, выгружаете
- * реестр в 1С (Excel), платите из 1С и отмечаете «Выплачено». Не туда счёт
+ * реестр (Excel), переводите деньги и отмечаете «Выплачено». Не туда счёт
  * или что-то не сходится — «Отклонить» с причиной: водитель увидит её, а
  * рейсы снова станут доступны к выплате. Ниже — ставки удержаний.
  */
 export default function ParkPayoutsPage() {
     const router = useRouter();
-    const [filter, setFilter] = useState<Filter>('REQUESTED');
+    const [filter, setFilter] = useState<Filter>('open');
     const [rows, setRows] = useState<ParkPayout[] | null>(null);
     const [failed, setFailed] = useState(false);
     const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -58,7 +61,12 @@ export default function ParkPayoutsPage() {
         setRows(null);
         setFailed(false);
         setPicked(new Set());
-        api.get(`/exchange/park/payouts?status=${filter}`).then((r) => setRows(r.data)).catch(() => setFailed(true));
+        // «Ждут выплаты» — запрошенные и с выгруженным реестром: берём все и отбираем здесь.
+        api.get(`/exchange/park/payouts?status=${filter === 'open' ? 'all' : filter}`)
+            .then((r) => setRows(filter === 'open'
+                ? (r.data as ParkPayout[]).filter((p) => p.status === 'REQUESTED' || p.status === 'EXPORTED')
+                : r.data))
+            .catch(() => setFailed(true));
     }, [filter]);
 
     useEffect(() => { load(); }, [load]);
@@ -83,7 +91,7 @@ export default function ParkPayoutsPage() {
             a.download = `Реестр выплат ${dayjs().format('DD.MM.YYYY')}.xlsx`;
             a.click();
             URL.revokeObjectURL(url);
-            toast.success('Реестр скачан — загрузите его в 1С. Выплаты теперь «В 1С»');
+            toast.success('Реестр скачан — переведите деньги по нему и отметьте «Выплачено»');
             load();
         } catch (e) {
             toast.error(ответСервера(e, 'Не удалось выгрузить реестр'));
@@ -99,7 +107,7 @@ export default function ParkPayoutsPage() {
                     <div className={styles.eyebrow}>Кабинет парка</div>
                     <h1 className={styles.title}>Выплаты водителям</h1>
                     <p className={styles.subtitle}>
-                        Водитель запрашивает выплату в приложении. Выгрузите реестр в 1С, заплатите из 1С и отметьте «Выплачено».
+                        Водитель запрашивает выплату в приложении. Выгрузите реестр, переведите деньги и отметьте «Выплачено».
                     </p>
                 </div>
                 <div className={styles.heroActions}>
@@ -134,7 +142,7 @@ export default function ParkPayoutsPage() {
                     <div className="flex flex-wrap items-center gap-2 border-0 border-b border-solid border-border px-4 py-2.5">
                         <Button size="sm" onClick={exportFile} disabled={exporting || !picked.size}>
                             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                            Выгрузить в 1С{picked.size ? ` · ${picked.size}` : ''}
+                            Выгрузить реестр{picked.size ? ` · ${picked.size}` : ''}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setPicked(new Set(exportable.map((r) => r.id)))}>Отметить все</Button>
                         <span className="text-[12px] text-muted-foreground">Реестр — Excel: кому, ИИН, счёт, начислено, удержано, к выплате; второй лист — по рейсам.</span>
@@ -158,7 +166,7 @@ export default function ParkPayoutsPage() {
                                     <TableHead className="h-9 text-[12.5px]">Счёт</TableHead>
                                     <TableHead className="h-9 text-right text-[12.5px]">Начислено</TableHead>
                                     <TableHead className="h-9 text-right text-[12.5px]">Удержано</TableHead>
-                                    <TableHead className="h-9 text-right text-[12.5px]">На руки</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">К перечислению</TableHead>
                                     <TableHead className="h-9 text-[12.5px]">Статус</TableHead>
                                     <TableHead className="h-9" />
                                 </TableRow>
@@ -197,7 +205,12 @@ export default function ParkPayoutsPage() {
                                                     комиссия {moneyShort(r.commission)} · ОПВ {moneyShort(r.opv)} · ВОСМС {moneyShort(r.vosms)} · ИПН {moneyShort(r.ipn)}
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-right font-bold tabular-nums">{moneyShort(r.net)}</TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                                <div className="font-bold">{moneyShort(r.net)}</div>
+                                                {r.fuelIssued != null && r.fuelIssued > 0 && (
+                                                    <div className="text-[11px] text-muted-foreground">на топливо уже дали {moneyShort(r.fuelIssued)}</div>
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 <StatusPill status={PILL[r.status]} label={PAYOUT_STATUS_TEXT[r.status]} />
                                                 {r.paidAt && <div className="mt-1 text-[11px] text-muted-foreground">{dayjs(r.paidAt).format('DD.MM.YYYY')}</div>}
@@ -227,7 +240,7 @@ export default function ParkPayoutsPage() {
     );
 }
 
-/** «Выплачено» — после оплаты из 1С. */
+/** «Выплачено» — после перевода денег. */
 function PaidDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; onClose: () => void; onDone: () => void }) {
     const [saving, setSaving] = useState(false);
     const submit = async () => {
@@ -249,7 +262,7 @@ function PaidDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; on
             <DialogContent className="max-w-md">
                 <DialogHeader><DialogTitle className="text-[15px]">Выплатили {payout?.driver.name} {payout ? moneyShort(payout.net) : ''}?</DialogTitle></DialogHeader>
                 <p className="m-0 text-[13px] text-muted-foreground">
-                    Отмечайте, когда деньги уже отправлены из 1С на счёт {payout?.iban ?? ''}. Водитель увидит в приложении «Выплачено».
+                    Отмечайте, когда деньги уже отправлены на счёт {payout?.iban ?? ''}. Водитель увидит в приложении «Выплачено».
                 </p>
                 <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={onClose}>Отмена</Button>
@@ -314,8 +327,8 @@ function RejectDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; 
     );
 }
 
-const RATE_FIELDS: { key: keyof Omit<PayoutRates, 'updatedAt' | 'isDefault'>; label: string; hint: string }[] = [
-    { key: 'commissionPct', label: 'Комиссия парка', hint: 'от суммы за рейс' },
+const RATE_FIELDS: { key: 'commissionPct' | 'opvPct' | 'vosmsPct' | 'ipnPct' | 'soPct'; label: string; hint: string }[] = [
+    { key: 'commissionPct', label: 'Комиссия парка', hint: 'сверху к цене компании (рейсы «на руки»)' },
     { key: 'opvPct', label: 'ОПВ', hint: 'удерживается с дохода' },
     { key: 'vosmsPct', label: 'ВОСМС', hint: 'удерживается с дохода' },
     { key: 'ipnPct', label: 'ИПН', hint: 'с дохода за вычетом ОПВ и ВОСМС' },
@@ -328,10 +341,19 @@ function RatesCard() {
     const [draft, setDraft] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
 
+    // Расчёт «на руки» (12.10.2026): топливо на км и вычет по ИПН.
+    const [extra, setExtra] = useState({ fuelPerKm: '', applyDeduction: true, deductionMrp: '', mrp: '' });
+
     useEffect(() => {
         api.get('/exchange/park/rates').then((r) => {
             setRates(r.data);
             setDraft(Object.fromEntries(RATE_FIELDS.map((f) => [f.key, String(r.data[f.key])])));
+            setExtra({
+                fuelPerKm: String(r.data.fuelPerKm ?? 100),
+                applyDeduction: r.data.applyDeduction ?? true,
+                deductionMrp: String(r.data.deductionMrp ?? 30),
+                mrp: String(r.data.mrp ?? 4325),
+            });
         }).catch(() => setRates(null));
     }, []);
 
@@ -341,9 +363,17 @@ function RatesCard() {
             toast.error('Ставка — число от 0 до 100');
             return;
         }
+        const fuelPerKm = Number(extra.fuelPerKm.replace(',', '.'));
+        const deductionMrp = Number(extra.deductionMrp);
+        const mrp = Number(extra.mrp);
+        if (!Number.isFinite(fuelPerKm) || fuelPerKm < 0) { toast.error('Топливо на км — число, ₸'); return; }
+        if (!Number.isInteger(deductionMrp) || deductionMrp < 0 || !Number.isInteger(mrp) || mrp < 1) {
+            toast.error('Вычет и МРП — целые числа');
+            return;
+        }
         setSaving(true);
         try {
-            const { data } = await api.put('/exchange/park/rates', body);
+            const { data } = await api.put('/exchange/park/rates', { ...body, fuelPerKm, applyDeduction: extra.applyDeduction, deductionMrp, mrp });
             setRates(data);
             toast.success('Ставки сохранены — новые выплаты посчитаются по ним, прошлые останутся как были');
         } catch (e) {
@@ -358,7 +388,7 @@ function RatesCard() {
         <section className={styles.card}>
             <div className={styles.cardHead}>
                 <Percent size={14} />
-                <h2 className={styles.cardTitle}>Ставки удержаний</h2>
+                <h2 className={styles.cardTitle}>Ставки и расчёт рейса</h2>
             </div>
             <div className={`${styles.cardBody} space-y-3`}>
                 <p className="m-0 text-[12px] text-muted-foreground">
@@ -379,6 +409,35 @@ function RatesCard() {
                             <span className="text-[11px] text-muted-foreground">{f.hint}</span>
                         </label>
                     ))}
+                </div>
+                <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+                    <div className="text-[12.5px] font-semibold">Расчёт «на руки»</div>
+                    <p className="m-0 text-[12px] text-muted-foreground">
+                        Водитель называет сумму на руки вместе с топливом. Программа оценивает топливо по расстоянию и досчитывает сверху
+                        налоги, комиссию LogiCore{rates.platformPct != null ? ` (${rates.platformPct}%)` : ''} и вашу — так получается цена для компании.
+                        Водителю за топливо платите по чекам на БИН парка.
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">Топливо на 1 км, ₸</span>
+                            <Input value={extra.fuelPerKm} onChange={(e) => setExtra((x) => ({ ...x, fuelPerKm: e.target.value }))} inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
+                            <span className="text-[11px] text-muted-foreground">оценка для цены заранее</span>
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">Вычет по ИПН, МРП</span>
+                            <Input value={extra.deductionMrp} onChange={(e) => setExtra((x) => ({ ...x, deductionMrp: e.target.value }))} inputMode="numeric" className="h-9 text-[13px] tabular-nums" />
+                            <span className="text-[11px] text-muted-foreground">раз в месяц, на первый рейс водителя</span>
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">МРП, ₸</span>
+                            <Input value={extra.mrp} onChange={(e) => setExtra((x) => ({ ...x, mrp: e.target.value }))} inputMode="numeric" className="h-9 text-[13px] tabular-nums" />
+                            <span className="text-[11px] text-muted-foreground">2026 год — 4 325</span>
+                        </label>
+                    </div>
+                    <label className="flex cursor-pointer items-center gap-2 text-[12.5px]">
+                        <input type="checkbox" checked={extra.applyDeduction} onChange={(e) => setExtra((x) => ({ ...x, applyDeduction: e.target.checked }))} />
+                        Учитывать вычет по ИПН в цене — выключите, если водители получают его по основному месту работы
+                    </label>
                 </div>
                 <Button onClick={save} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Сохранить ставки</Button>
             </div>

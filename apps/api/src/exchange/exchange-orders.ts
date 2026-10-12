@@ -30,6 +30,7 @@ export const EXCHANGE_ORDER_SELECT = {
     exchangePrice: true,
     exchangeNote: true,
     exchangePublishedAt: true,
+    exchangeDistanceKm: true,
     forwarder: { select: { name: true } },
     customerCompany: { select: { name: true } },
     subForwarder: { select: { name: true } },
@@ -40,7 +41,8 @@ export const EXCHANGE_ORDER_SELECT = {
             pointType: true,
             sequence: true,
             expectedDate: true,
-            location: { select: { city: true, region: true, cityRecord: { select: { name: true } } } },
+            // Координаты — только для оценки топлива водителю парка; в ответ не уходят.
+            location: { select: { city: true, region: true, latitude: true, longitude: true, cityRecord: { select: { name: true, latitude: true, longitude: true } } } },
         },
         orderBy: { sequence: 'asc' as const },
     },

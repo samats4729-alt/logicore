@@ -28,6 +28,7 @@ const PUBLIC_ROUTES: Record<string, string> = {
     'PublicAccountingController.getSharedReport': 'акт сверки по ссылке — контрагент не заводит логин',
     'ExchangePublicController.status': 'включена ли биржа — одно да/нет для экрана входа приложения',
     'ExchangePublicController.invite': 'чьё приглашение парка — отдаёт только название парка по коду',
+    'ExchangePublicController.contractPdf': 'договор водителя в PDF для браузера телефона — замок: ссылка подписана секретом сервера и живёт десять минут',
     'ExchangeDriverAuthController.google': 'вход водителя биржи через Google — замок: проверка токена у Google',
     'PublicAccountingController.getClientPortal': 'счета заказчику по постоянной ссылке — он не заводит логин',
     'PublicAccountingDocumentController.createFromSharedReport': 'счёт из присланной сверки',
