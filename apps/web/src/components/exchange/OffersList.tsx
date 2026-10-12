@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 function whoIs(o: ExchangeOffer): string {
     if (o.kind === 'COMPANY') return o.company?.bin ? `перевозчик · БИН ${o.company.bin}` : 'перевозчик';
     if (o.kind === 'DRIVER_IP') return o.driver?.ipName ? `водитель, свой ИП · ${o.driver.ipName}` : 'водитель, свой ИП';
-    return `водитель через парк ${вКавычках(o.driver?.parkName)}`;
+    // Цена водителя парка — полная: с налогами за водителя, топливом и комиссиями (12.10.2026).
+    return `водитель через парк ${вКавычках(o.driver?.parkName)} · цена с налогами и топливом`;
 }
 
 /** Что будет после выбора — для вопроса перед необратимым. */

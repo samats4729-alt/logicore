@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Route } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Fuel, Route } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
@@ -10,6 +10,7 @@ import { ParkTrip, ParkTripFilter, день } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusPill from '@/components/ui/StatusPill';
+import { TripFuelDialog } from '@/components/park/TripFuelDialog';
 import styles from '@/components/nova/nova.module.css';
 
 const FILTERS: { key: ParkTripFilter; label: string }[] = [
@@ -30,12 +31,18 @@ const EMPTY: Record<ParkTripFilter, string> = {
  * Парк — перевозчик по документам, поэтому видит рейс целиком со своей
  * стороны: кто везёт, откуда и куда, для какой компании, статус и сумму за
  * рейс. Цену заказчика не видит — это не его сделка.
+ *
+ * По расчёту «на руки» (12.10.2026) под суммой — сколько водителю на руки
+ * и доля парка, а кнопка «Топливо» открывает, что дали на топливо, и чеки
+ * водителя на проверку.
  */
 export default function ParkTripsPage() {
     const router = useRouter();
     const [filter, setFilter] = useState<ParkTripFilter>('active');
     const [trips, setTrips] = useState<ParkTrip[] | null>(null);
     const [failed, setFailed] = useState(false);
+    const [fuelTrip, setFuelTrip] = useState<ParkTrip | null>(null);
+    const [reload, setReload] = useState(0);
 
     useEffect(() => {
         const wanted = new URLSearchParams(window.location.search).get('status');
@@ -50,7 +57,7 @@ export default function ParkTripsPage() {
             .then((r) => { if (alive) setTrips(r.data); })
             .catch(() => { if (alive) setFailed(true); });
         return () => { alive = false; };
-    }, [filter]);
+    }, [filter, reload]);
 
     const total = (trips ?? []).reduce((sum, t) => sum + (t.price ?? 0), 0);
 
@@ -109,6 +116,7 @@ export default function ParkTripsPage() {
                                     <TableHead className="h-9 text-[12.5px]">Для компании</TableHead>
                                     <TableHead className="h-9 text-[12.5px]">Статус</TableHead>
                                     <TableHead className="h-9 text-right text-[12.5px]">За рейс</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">Топливо</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -125,7 +133,17 @@ export default function ParkTripsPage() {
                                         <TableCell className="whitespace-nowrap">{день(t.loadingDate)}</TableCell>
                                         <TableCell className="text-muted-foreground">{t.customerName ?? '—'}</TableCell>
                                         <TableCell><StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} /></TableCell>
-                                        <TableCell className="text-right font-semibold tabular-nums">{t.price != null ? moneyShort(t.price) : '—'}</TableCell>
+                                        <TableCell className="text-right tabular-nums">
+                                            <div className="font-semibold">{t.price != null ? moneyShort(t.price) : '—'}</div>
+                                            {t.settlement && (
+                                                <div className="text-[11.5px] text-muted-foreground">
+                                                    водителю {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}
+                                                </div>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {t.settlement ? <FuelButton trip={t} onOpen={setFuelTrip} /> : <span className="text-muted-foreground">—</span>}
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -138,13 +156,38 @@ export default function ParkTripsPage() {
                                         <span className="shrink-0 text-[15px] font-bold tabular-nums">{t.price != null ? moneyShort(t.price) : '—'}</span>
                                     </div>
                                     <div className="text-[12px] text-muted-foreground">{t.driverName ?? '—'}{t.vehiclePlate ? ` · ${t.vehiclePlate}` : ''} · {день(t.loadingDate)}</div>
-                                    <div><StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} /></div>
+                                    {t.settlement && (
+                                        <div className="text-[12px] text-muted-foreground">водителю {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}</div>
+                                    )}
+                                    <div className="flex items-center justify-between gap-2">
+                                        <StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} />
+                                        {t.settlement && <FuelButton trip={t} onOpen={setFuelTrip} />}
+                                    </div>
                                 </li>
                             ))}
                         </ul>
                     </>
                 )}
             </section>
+
+            <TripFuelDialog
+                orderId={fuelTrip?.id ?? null}
+                orderNumber={fuelTrip?.orderNumber}
+                open={!!fuelTrip}
+                onOpenChange={(o) => { if (!o) setFuelTrip(null); }}
+                onChanged={() => setReload((n) => n + 1)}
+            />
         </div>
+    );
+}
+
+/** «Топливо» у рейса: сколько чеков ждут решения — сразу на кнопке. */
+function FuelButton({ trip, onOpen }: { trip: ParkTrip; onOpen: (t: ParkTrip) => void }) {
+    const pending = trip.fuelReceiptsPending ?? 0;
+    return (
+        <Button variant="outline" size="sm" onClick={() => onOpen(trip)}>
+            <Fuel className="h-3.5 w-3.5" /> Топливо
+            {pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">{pending}</span>}
+        </Button>
     );
 }
