@@ -47,6 +47,13 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     'ExchangeDriverController.earnings': 'свой заработок через парк',
     'ExchangeDriverController.setPayoutAccount': 'свой счёт для выплат',
     'ExchangeDriverController.requestPayout': 'запросить свою выплату',
+    'ExchangeDriverController.contract': 'свой договор с парком — текст и подписанный экземпляр',
+    'ExchangeDriverController.contractPdf': 'свой договор с парком — PDF',
+    'ExchangeDriverController.contractLink': 'ссылка на свой PDF договора на 10 минут',
+    'ExchangeDriverController.tripFuel': 'топливо своего рейса через парк: БИН парка, выдано, чеки',
+    'ExchangeDriverController.addFuelReceipt': 'свой чек на топливо по своему рейсу',
+    'ExchangeDriverController.removeFuelReceipt': 'убрать свой непроверенный чек',
+    'ExchangeDriverController.fuelReceiptFile': 'фото своего чека',
     // Рейс водителя биржи — те же адреса, что у водителя компании, но без
     // организации пускают только водителя (@AllowDriverWithoutCompany), и
     // каждый отбирает по самому водителю: заявка, где он водитель.
