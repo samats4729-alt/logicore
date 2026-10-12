@@ -16,7 +16,6 @@ const input = (over: Partial<ParkContractInput> = {}): ParkContractInput => ({
         registrationAddress: 'г. Алматы, ул. Абая, 1', phone: '+77011234567', payoutIban: null, payoutBank: null,
     },
     vehicle: { model: 'MAN TGX', plate: '123ABC02', regNumber: 'AB1234567', bodyType: 'тент', capacityKg: 20000, isOwn: true },
-    commissionPct: 5,
     ...over,
 });
 
@@ -35,7 +34,9 @@ describe('Договор водителя с парком: текст', () => {
         expect(all).toContain('MAN TGX');
         expect(all).toContain('123ABC02');
         expect(all).toContain('техпаспорт) № AB1234567');
-        expect(all).toContain('5% от цены Рейса');
+        // Расчёт «на руки» (12.10.2026): налоги сверху, топливо — по чекам на БИН парка.
+        expect(all).toContain('сумма на руки');
+        expect(all).toContain('указывается БИН Арендатора');
         expect(all).toContain('статьи 585–591');
         expect(c.lessor.lines.find((l) => l.label === 'Удостоверение личности')?.value).toBe('№ 045123456, выдано МВД РК 15.03.2016');
     });

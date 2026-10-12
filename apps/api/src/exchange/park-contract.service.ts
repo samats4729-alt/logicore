@@ -9,7 +9,6 @@ import {
 import { renderParkContractPdf } from './park-contract-pdf';
 
 /** Доля парка по умолчанию — та же, что у выплат, пока парк не задал свою. */
-const DEFAULT_COMMISSION_PCT = 5;
 /** Ссылка на PDF для приложения живёт десять минут: открыть — да, пересылать — нет. */
 const LINK_TTL_MS = 10 * 60 * 1000;
 
@@ -40,17 +39,14 @@ export class ParkContractService {
         private readonly config: ConfigService,
     ) {}
 
-    /** Данные для договора на сегодня: анкета, реквизиты парка, его доля. */
+    /** Данные для договора на сегодня: анкета и реквизиты парка. */
     async inputFor(driverId: string, at: Date): Promise<ParkContractInput | null> {
         const driver = await this.prisma.exchangeDriver.findUnique({ where: { id: driverId }, select: DRIVER_FOR_CONTRACT });
         if (!driver || driver.kind !== 'PARK' || !driver.parkCompanyId) return null;
-        const [park, rates] = await Promise.all([
-            this.prisma.company.findUnique({
-                where: { id: driver.parkCompanyId },
-                select: { name: true, bin: true, address: true, directorName: true, bankAccount: true, bankName: true, bankBic: true, kbe: true, phone: true },
-            }),
-            this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: driver.parkCompanyId }, select: { commissionPct: true } }),
-        ]);
+        const park = await this.prisma.company.findUnique({
+            where: { id: driver.parkCompanyId },
+            select: { name: true, bin: true, address: true, directorName: true, bankAccount: true, bankName: true, bankBic: true, kbe: true, phone: true },
+        });
         if (!park) return null;
         return {
             number: contractNumber(driver.id, at),
@@ -66,7 +62,6 @@ export class ParkContractService {
                 model: driver.vehicleModel, plate: driver.vehiclePlate, regNumber: driver.vehicleRegNumber,
                 bodyType: driver.vehicleBodyType, capacityKg: driver.vehicleCapacityKg, isOwn: driver.vehicleIsOwn,
             },
-            commissionPct: rates ? Number(rates.commissionPct) : DEFAULT_COMMISSION_PCT,
         };
     }
 
