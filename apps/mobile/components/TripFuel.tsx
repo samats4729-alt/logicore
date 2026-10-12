@@ -70,6 +70,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
 
     const bin = fuel.park?.bin;
     const phone = fuel.park?.phone;
+    const noReceipt = Math.max(0, fuel.issued.total - fuel.receipts.accepted - fuel.receipts.pending);
 
     return (
         <Section title="Топливо" icon="speedometer-outline" right={fuel.fuelEstimate ? `≈ ${деньги(fuel.fuelEstimate)}` : undefined}>
@@ -82,12 +83,13 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 </Text>
             </View>
 
+            {/* Друг под другом: в половину ширины телефона подписи не помещаются. */}
             <View style={styles.actions}>
-                {!!phone && (
-                    <Button title="Позвонить в парк" icon="call-outline" variant="secondary" onPress={() => Linking.openURL(`tel:${phone}`)} style={{ flex: 1 }} />
-                )}
                 {!fuel.locked && (
-                    <Button title="Сфотографировать чек" icon="camera-outline" onPress={() => setCapture(true)} style={{ flex: 1 }} />
+                    <Button title="Сфотографировать чек" icon="camera-outline" onPress={() => setCapture(true)} />
+                )}
+                {!!phone && (
+                    <Button title="Позвонить в парк" icon="call-outline" variant="secondary" onPress={() => Linking.openURL(`tel:${phone}`)} />
                 )}
             </View>
 
@@ -95,9 +97,15 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 {fuel.driverTotal != null && <Line label="Договорились, на руки" value={деньги(fuel.driverTotal)} />}
                 <Line label="Парк дал на топливо" value={fuel.issued.total ? деньги(fuel.issued.total) : '—'} />
                 {fuel.toPay != null && <Line label="Вам останется" value={деньги(fuel.toPay)} strong />}
-                {fuel.withoutReceipt > 0 && (
+                {fuel.receipts.pending > 0 && (
+                    <Text style={[styles.note, { color: colors.textSecondary }]}>
+                        Чеки на {деньги(fuel.receipts.pending)} — на проверке у парка.
+                    </Text>
+                )}
+                {/* Тревожно — только то, на что чека нет вовсе: ждущие проверки — не в счёт. */}
+                {noReceipt > 0 && (
                     <Text style={[styles.warn, { color: colors.danger }]}>
-                        Без принятого чека {деньги(fuel.withoutReceipt)} — с этой суммы будет налог. Отправьте чеки.
+                        Нет чека на {деньги(noReceipt)} — с этой суммы будет налог. Отправьте чек.
                     </Text>
                 )}
                 {fuel.locked && (
@@ -194,7 +202,7 @@ const styles = StyleSheet.create({
     binLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1 },
     bin: { fontSize: 26, fontWeight: '800', letterSpacing: 1.5, marginTop: 2, fontVariant: ['tabular-nums'] },
     note: { fontSize: 12.5, lineHeight: 18, marginTop: 4 },
-    actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+    actions: { gap: 8, marginTop: 10 },
     sums: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, gap: 6 },
     line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     warn: { fontSize: 12.5, lineHeight: 18, marginTop: 4 },
