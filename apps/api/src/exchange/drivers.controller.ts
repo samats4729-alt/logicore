@@ -25,6 +25,8 @@ import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import { ParkContractService } from './park-contract.service';
+import { ExchangeFuelService } from './fuel.service';
+import { FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
 
 /**
  * Отдать PDF договора. В браузере телефона — открыть на месте, а не
@@ -90,7 +92,39 @@ export class ExchangeDriverController {
         private readonly payouts: ExchangePayoutsService,
         private readonly s3: S3Service,
         private readonly contracts: ParkContractService,
+        private readonly fuel: ExchangeFuelService,
     ) {}
+
+    // ==================== топливо рейса ====================
+    // Водитель доезжает до заправки, звонит в парк, чек пробивают на БИН парка —
+    // здесь он видит БИН, сколько парк дал на топливо и сколько ему останется,
+    // и отправляет фото чека с суммой.
+
+    @Get('trips/:orderId/fuel')
+    @ApiOperation({ summary: 'Топливо рейса: БИН парка, выдано, чеки, сколько останется' })
+    tripFuel(@Request() req: any, @Param('orderId') orderId: string) {
+        return this.fuel.forDriver(req.user.sub, orderId);
+    }
+
+    @Post('trips/:orderId/fuel/receipts')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE } }))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Чек на топливо: фото и сумма' })
+    addFuelReceipt(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: FuelReceiptDto, @UploadedFile() file: Express.Multer.File) {
+        return this.fuel.addReceipt(req.user.sub, orderId, dto.amount, file);
+    }
+
+    @Delete('fuel-receipts/:id')
+    @ApiOperation({ summary: 'Убрать свой чек, пока парк его не рассмотрел' })
+    removeFuelReceipt(@Request() req: any, @Param('id') id: string) {
+        return this.fuel.removeReceipt(req.user.sub, id);
+    }
+
+    @Get('fuel-receipts/:id/file')
+    @ApiOperation({ summary: 'Фото своего чека' })
+    async fuelReceiptFile(@Request() req: any, @Param('id') id: string, @Res() res: Response) {
+        return sendExchangeFile(this.s3, res, await this.fuel.driverReceiptFile(req.user.sub, id));
+    }
 
     @Get('me')
     @ApiOperation({ summary: 'Моя анкета водителя' })
@@ -306,6 +340,7 @@ export class ExchangeParkController {
         private readonly s3: S3Service,
         private readonly audit: AuditService,
         private readonly contracts: ParkContractService,
+        private readonly fuel: ExchangeFuelService,
     ) {}
 
     @Get('overview')
@@ -318,6 +353,43 @@ export class ExchangeParkController {
     @ApiOperation({ summary: 'Рейсы водителей парка' })
     trips(@Request() req: any, @Query() query: ParkTripsQueryDto) {
         return this.park.trips(req.user.companyId, query.status);
+    }
+
+    // ==================== топливо рейса ====================
+
+    @Get('trips/:orderId/fuel')
+    @ApiOperation({ summary: 'Топливо рейса: выдано на топливо, чеки водителя, к выплате' })
+    async tripFuel(@Request() req: any, @Param('orderId') orderId: string) {
+        await this.drivers.assertPark(req.user.companyId);
+        return this.fuel.forPark(req.user.companyId, orderId);
+    }
+
+    @Post('trips/:orderId/fuel/issues')
+    @ApiOperation({ summary: 'Дали на топливо: оплатили на заправке или перевели водителю' })
+    async addFuelIssue(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: FuelIssueDto) {
+        await this.drivers.assertPark(req.user.companyId);
+        return this.fuel.addIssue(req.user.companyId, req.user.sub, orderId, dto);
+    }
+
+    @Delete('fuel-issues/:id')
+    @ApiOperation({ summary: 'Убрать запись «дали на топливо» — внесли по ошибке' })
+    async removeFuelIssue(@Request() req: any, @Param('id') id: string) {
+        await this.drivers.assertPark(req.user.companyId);
+        return this.fuel.removeIssue(req.user.companyId, id);
+    }
+
+    @Put('fuel-receipts/:id/decision')
+    @ApiOperation({ summary: 'Чек водителя: принять (можно поправить сумму) или отклонить с причиной' })
+    async decideFuelReceipt(@Request() req: any, @Param('id') id: string, @Body() dto: FuelDecisionDto) {
+        await this.drivers.assertPark(req.user.companyId);
+        return this.fuel.decideReceipt(req.user.companyId, req.user.sub, id, dto);
+    }
+
+    @Get('fuel-receipts/:id/file')
+    @ApiOperation({ summary: 'Фото чека водителя' })
+    async fuelReceiptFile(@Request() req: any, @Param('id') id: string, @Res() res: Response) {
+        await this.drivers.assertPark(req.user.companyId);
+        return sendExchangeFile(this.s3, res, await this.fuel.parkReceiptFile(req.user.companyId, id));
     }
 
     @Get('payouts')
