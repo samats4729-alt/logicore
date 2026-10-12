@@ -992,6 +992,14 @@ model Order {
   exchangeOffers        ExchangeOffer[]
   /// Строка выплаты водителю парка за этот рейс — рейс оплачивается один раз.
   driverPayoutItem      DriverPayoutItem?
+  /// Расстояние маршрута по дорогам, км — считается при выставлении на биржу:
+  /// по нему оценивается топливо в цене для водителя парка.
+  exchangeDistanceKm    Float?
+  /// Расчёт рейса водителя парка: на руки, топливо, налоги, комиссии — фиксируется при выборе.
+  exchangeSettlement    ExchangeTripSettlement?
+  /// Топливо рейса: что парк оплатил или перевёл и чеки водителя.
+  exchangeFuelIssues    ExchangeFuelIssue[]
+  exchangeFuelReceipts  ExchangeFuelReceipt[]
 
   // Relations
   routePoints               OrderRoutePoint[]
@@ -3133,6 +3141,8 @@ model ExchangeDriver {
   offers    ExchangeOffer[]
   payouts   DriverPayout[]
   contracts ExchangeDriverContract[]
+  settlements   ExchangeTripSettlement[]
+  fuelReceipts  ExchangeFuelReceipt[]
 
   /// Счёт для выплат через парк: IBAN и банк. Без счёта выплату не запросить.
   payoutIban String?
@@ -3177,6 +3187,90 @@ model ExchangeDriverDocument {
 /// подписал, со всеми реквизитами на ту минуту. Поменял парк банк или
 /// водитель машину — подписанный экземпляр от этого не меняется; новая
 /// подпись — новая запись. PDF собирается из `content` по запросу.
+/// Расчёт рейса водителя парка (решение владельца 12.10.2026).
+///
+/// Водитель называет сумму на руки вместе с топливом; парк досчитывает сверху
+/// налоги, которые платит за него, и комиссии LogiCore и парка — получается цена
+/// для компании. Фиксируется, когда компания выбирает водителя, и дальше не
+/// пересчитывается: на него опираются выплата и топливо.
+model ExchangeTripSettlement {
+  id            String         @id @default(cuid())
+  orderId       String         @unique
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driverId      String
+  driver        ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  parkCompanyId String
+  /// Месяц дохода «ГГГГ-ММ» — вычет по ИПН положен один раз в месяц.
+  taxMonth      String
+
+  distanceKm    Float?
+  fuelPerKm     Decimal @db.Decimal(10, 2)
+  fuelEstimate  Decimal @db.Decimal(18, 2)
+  /// На руки вместе с топливом — как договорились.
+  driverTotal   Decimal @db.Decimal(18, 2)
+  /// За работу на руки (по оценке топлива).
+  workNet       Decimal @db.Decimal(18, 2)
+  gross         Decimal @db.Decimal(18, 2)
+  opv           Decimal @db.Decimal(18, 2)
+  vosms         Decimal @db.Decimal(18, 2)
+  ipn           Decimal @db.Decimal(18, 2)
+  so            Decimal @db.Decimal(18, 2)
+  parkCost      Decimal @db.Decimal(18, 2)
+  platformFee   Decimal @db.Decimal(18, 2)
+  parkFee       Decimal @db.Decimal(18, 2)
+  customerPrice Decimal @db.Decimal(18, 2)
+  deductionApplied Boolean
+  deductionAmount  Decimal @db.Decimal(18, 2)
+  /// Ставки на момент расчёта.
+  rates         Json
+
+  createdAt DateTime @default(now())
+
+  @@index([driverId, taxMonth])
+  @@index([parkCompanyId])
+}
+
+/// Деньги парка на топливо рейса: оплатили на заправке сами или перевели водителю.
+model ExchangeFuelIssue {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  parkCompanyId String
+  /// STATION — оплатили на заправке сами; TO_DRIVER — перевели водителю.
+  method        String
+  amount        Decimal  @db.Decimal(18, 2)
+  note          String?
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@index([orderId])
+  @@index([parkCompanyId])
+}
+
+/// Чек на топливо — фото от водителя; чек пробит на БИН парка. Парк принимает или отклоняет.
+model ExchangeFuelReceipt {
+  id            String         @id @default(cuid())
+  orderId       String
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driverId      String
+  driver        ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  parkCompanyId String
+  amount        Decimal        @db.Decimal(18, 2)
+  fileKey       String
+  fileName      String
+  mimeType      String
+  /// PENDING — ждёт парк; ACCEPTED — принят; REJECTED — отклонён (rejectReason).
+  status        String         @default("PENDING")
+  rejectReason  String?
+  decidedById   String?
+  decidedAt     DateTime?
+  createdAt     DateTime       @default(now())
+
+  @@index([orderId])
+  @@index([parkCompanyId, status])
+  @@index([driverId])
+}
+
 model ExchangeDriverContract {
   id            String         @id @default(cuid())
   driverId      String
@@ -3241,8 +3335,12 @@ model ExchangeOffer {
   createdById String
 
   status ExchangeOfferStatus @default(ACTIVE)
-  /// Цена исполнителя, ₸.
+  /// Цена исполнителя, ₸. У водителя парка — цена для компании (с налогами, топливом и комиссиями).
   price  Decimal             @db.Decimal(18, 2)
+  /// Водитель парка: сколько он получит на руки вместе с топливом, ₸.
+  driverTotal Decimal?          @db.Decimal(18, 2)
+  /// Водитель парка: весь расчёт на момент отклика (топливо, налоги, комиссии).
+  calc        Json?
   /// Согласился на цену компании, а не назвал свою.
   agreed Boolean             @default(false)
   /// Когда подаст машину.
@@ -3280,6 +3378,13 @@ model ParkPayoutRates {
   ipnPct        Decimal @default(10) @db.Decimal(5, 2)
   /// Социальные отчисления (СО), % — платит парк сверху, из выплаты не удерживаются.
   soPct         Decimal @default(5) @db.Decimal(5, 2)
+  /// Топливо на 1 км, ₸ — оценка для цены заранее; водителю платят по чекам.
+  fuelPerKm      Decimal @default(100) @db.Decimal(10, 2)
+  /// Стандартный вычет по ИПН водителю — раз в месяц, на первый рейс.
+  applyDeduction Boolean @default(true)
+  /// Вычет в МРП и сам МРП, ₸ (2026: 30 × 4 325).
+  deductionMrp   Int     @default(30)
+  mrp            Int     @default(4325)
 
   updatedById String?
   updatedAt   DateTime @updatedAt
@@ -3316,6 +3421,10 @@ model DriverPayout {
   net        Decimal @db.Decimal(18, 2)
   /// СО — платит парк сверху, для сведения бухгалтеру.
   so         Decimal @db.Decimal(18, 2)
+  /// Новый расчёт (12.10.2026): выдано на топливо по рейсам и сколько перечислить.
+  /// Пусто у выплат по прежнему расчёту — там перечисляется net.
+  fuelIssued Decimal? @db.Decimal(18, 2)
+  toPay      Decimal? @db.Decimal(18, 2)
 
   /// Счёт, на который просили, — на момент запроса.
   iban String?
@@ -3352,6 +3461,11 @@ model DriverPayoutItem {
   ipn        Decimal @db.Decimal(18, 2)
   net        Decimal @db.Decimal(18, 2)
   so         Decimal @db.Decimal(18, 2)
+  /// Новый расчёт: сумма на руки по договорённости, топливо (выдано / по чекам), к выплате.
+  driverTotal  Decimal? @db.Decimal(18, 2)
+  fuelIssued   Decimal? @db.Decimal(18, 2)
+  fuelReceipts Decimal? @db.Decimal(18, 2)
+  toPay        Decimal? @db.Decimal(18, 2)
 
   /// Ставки, по которым посчитано, — на момент запроса.
   commissionPct Decimal @db.Decimal(5, 2)
