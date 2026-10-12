@@ -20,6 +20,10 @@ export interface DriverProfile {
     idExpiresAt: string | null;
     /** Когда дано согласие на обработку персональных данных. */
     consentAt: string | null;
+    /** Для договора с парком: адрес прописки, марка и модель, номер техпаспорта. */
+    registrationAddress: string | null;
+    vehicleModel: string | null;
+    vehicleRegNumber: string | null;
     email: string | null;
     ipName: string | null;
     ipIin: string | null;
@@ -47,6 +51,26 @@ export const DOCUMENTS: { kind: DocumentKind; title: string; hint: string }[] = 
     { kind: 'VEHICLE_REGISTRATION', title: 'Техпаспорт машины', hint: 'Видно госномер и владельца' },
     { kind: 'POWER_OF_ATTORNEY', title: 'Доверенность от владельца', hint: 'Если машина не ваша' },
 ];
+
+/** Договор с парком — полный текст, как его собирает сервер (`park-contract.ts`). */
+export interface ContractContent {
+    version: string;
+    number: string;
+    date: string;
+    title: string;
+    preamble: string;
+    sections: { title: string; items: { n: string; text: string }[] }[];
+    lessee: { role: string; name: string; lines: { label: string; value: string }[] };
+    lessor: { role: string; name: string; lines: { label: string; value: string }[] };
+    lesseeSigner: string | null;
+}
+
+/** Шаг «Договор»: подписанный экземпляр, либо текст к подписи и чего не хватает. */
+export interface ContractState {
+    signed: { id: string; number: string; version: string; signedAt: string; content: ContractContent } | null;
+    draft: ContractContent | null;
+    gaps: string[];
+}
 
 export interface Park {
     id: string;
@@ -276,6 +300,9 @@ export const exchangeApi = {
         }).then((r) => r.data);
     },
     removeDocument: (id: string) => api.delete<DriverProfile>(`/exchange/driver/me/documents/${id}`).then((r) => r.data),
+    contract: () => api.get<ContractState>('/exchange/driver/me/contract').then((r) => r.data),
+    /** Ссылка на PDF своего договора на десять минут — открыть в браузере телефона. */
+    contractLink: () => api.post<{ path: string; expiresAt: string }>('/exchange/driver/me/contract/link').then((r) => r.data),
     signContract: (deviceId: string) =>
         api.post<DriverProfile>('/exchange/driver/me/sign-contract', {}, { headers: { 'X-Device-Id': deviceId } }).then((r) => r.data),
     submit: () => api.post<DriverProfile>('/exchange/driver/me/submit').then((r) => r.data),

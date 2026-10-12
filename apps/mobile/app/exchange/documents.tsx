@@ -5,10 +5,10 @@ import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { API_URL, getAuthHeader } from '@/lib/api';
-import { DOCUMENTS, DriverProfile, documentPath, exchangeApi, вКавычках, ответ } from '@/lib/exchange';
+import { ContractState, DOCUMENTS, DriverProfile, documentPath, exchangeApi, вКавычках, ответ } from '@/lib/exchange';
 import { BRAND } from '@/lib/theme';
 import { Badge, Button, Card, Empty } from '@/components/kit';
-import { ParkContractSummary } from '@/components/ParkContract';
+import { ContractText, OpenContractPdf } from '@/components/ParkContract';
 
 type Doc = DriverProfile['documents'][number];
 type Tone = 'green' | 'orange' | 'red' | 'gray';
@@ -45,10 +45,15 @@ export default function MyDocuments() {
     const [me, setMe] = useState<DriverProfile | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [open, setOpen] = useState<Doc | null>(null);
+    const [contract, setContract] = useState<ContractState | null>(null);
 
     const load = useCallback(() => {
         setError(null);
-        exchangeApi.me().then(setMe).catch((e) => setError(ответ(e, 'Не удалось загрузить документы')));
+        exchangeApi.me().then((d) => {
+            setMe(d);
+            // Подписанный договор — полный текст и PDF; без парка грузить нечего.
+            if (d.kind === 'PARK') exchangeApi.contract().then(setContract).catch(() => setContract(null));
+        }).catch((e) => setError(ответ(e, 'Не удалось загрузить документы')));
     }, []);
     useFocusEffect(load);
 
@@ -124,13 +129,22 @@ export default function MyDocuments() {
                     <Text style={[styles.section, { color: colors.textTertiary }]}>ДОГОВОР С ПАРКОМ</Text>
                     {me.contractSignedAt ? (
                         <>
-                            <Card style={styles.signed}>
-                                <Ionicons name="checkmark-circle" size={20} color={colors.pos} />
-                                <Text style={{ color: colors.text, fontWeight: '700', flex: 1 }}>
-                                    Подписан {new Date(me.contractSignedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                </Text>
+                            <Card style={{ gap: 6 }}>
+                                <View style={styles.signed}>
+                                    <Ionicons name="checkmark-circle" size={20} color={colors.pos} />
+                                    <Text style={{ color: colors.text, fontWeight: '700', flex: 1 }}>
+                                        {contract?.signed ? `№ ${contract.signed.number} · ` : ''}подписан {new Date(me.contractSignedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                </View>
+                                {contract?.signed && <OpenContractPdf />}
+                                {contract && !contract.signed && (
+                                    // Подписан до того, как появился полный текст: экземпляра нет.
+                                    <Text style={[styles.note, { color: colors.textSecondary }]}>
+                                        Подписан до появления полного текста договора — экземпляра нет. Парк попросит подписать заново.
+                                    </Text>
+                                )}
                             </Card>
-                            <ParkContractSummary driver={me} />
+                            {contract?.signed && <ContractText content={contract.signed.content} />}
                         </>
                     ) : (
                         <Card>

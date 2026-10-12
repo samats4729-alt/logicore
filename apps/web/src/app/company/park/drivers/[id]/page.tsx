@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { ArrowLeft, Ban, Check, FileSignature, Images, Loader2, Truck, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Ban, Check, Download, FileSignature, Images, Loader2, Truck, UserRound, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { EXCHANGE_DRIVER_STATUS_LABELS } from '@/lib/vocabulary';
@@ -28,6 +28,7 @@ export default function ParkDriverPage() {
     const [failed, setFailed] = useState<string | null>(null);
     const [decision, setDecision] = useState<'reject' | 'block' | null>(null);
     const [approving, setApproving] = useState(false);
+    const [downloading, setDownloading] = useState(false);
 
     const reload = useCallback(() => {
         api.get(`/exchange/park/drivers/${id}`)
@@ -47,6 +48,25 @@ export default function ParkDriverPage() {
             toast.error(ответСервера(e, 'Не удалось допустить'));
         } finally {
             setApproving(false);
+        }
+    };
+
+    /** Подписанный экземпляр в PDF — с печатью и подписью парка из «Печать и подпись». */
+    const downloadContract = async () => {
+        if (!driver?.contract) return;
+        setDownloading(true);
+        try {
+            const res = await api.get(`/exchange/park/drivers/${driver.id}/contract/pdf`, { responseType: 'blob' });
+            const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Договор ${driver.contract.number}.pdf`;
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            toast.error(ответСервера(e, 'Не удалось скачать договор'));
+        } finally {
+            setDownloading(false);
         }
     };
 
@@ -132,6 +152,7 @@ export default function ParkDriverPage() {
                                 value={`${driver.idIssuedAt ? dayjs(driver.idIssuedAt).format('DD.MM.YYYY') : '—'} — ${driver.idExpiresAt ? `до ${dayjs(driver.idExpiresAt).format('DD.MM.YYYY')}` : 'срок не указан'}`}
                             />
                         )}
+                        <Row label="Адрес прописки" value={driver.registrationAddress || '—'} />
                         <Row label="Телефон" value={driver.phone ? <a className="lc-link" href={`tel:${driver.phone}`}>{телефонКрасиво(driver.phone)}</a> : '—'} />
                         <Row label="Почта Google" value={driver.email || '—'} />
                         <Row label="Рейсов довёз" value={String(driver.tripsCompleted)} />
@@ -147,7 +168,9 @@ export default function ParkDriverPage() {
                         <h2 className={styles.cardTitle}>Машина</h2>
                     </div>
                     <div className={`${styles.cardBody} space-y-2 text-[13px]`}>
+                        <Row label="Марка и модель" value={driver.vehicleModel || '—'} />
                         <Row label="Госномер" value={driver.vehiclePlate || '—'} />
+                        <Row label="Техпаспорт" value={driver.vehicleRegNumber ? `№ ${driver.vehicleRegNumber}` : '—'} />
                         <Row label="Кузов" value={driver.vehicleBodyType || '—'} />
                         <Row label="Грузоподъёмность" value={driver.vehicleCapacityKg ? `${driver.vehicleCapacityKg / 1000} т` : '—'} />
                         <Row label="Владелец" value={driver.vehicleIsOwn ? 'сам водитель' : 'другой человек — нужна доверенность'} />
@@ -170,10 +193,22 @@ export default function ParkDriverPage() {
                     <FileSignature size={14} />
                     <h2 className={styles.cardTitle}>Договор с парком</h2>
                 </div>
-                <div className={`${styles.cardBody} text-[13px]`}>
-                    {driver.contractSignedAt
-                        ? `Подписан в приложении ${dayjs(driver.contractSignedAt).format('DD.MM.YYYY HH:mm')}. Подпись через eGov подключим отдельно.`
-                        : 'Не подписан.'}
+                <div className={`${styles.cardBody} flex flex-wrap items-center justify-between gap-3 text-[13px]`}>
+                    {/* Полный текст, подписанный водителем, хранится неизменным; PDF
+                        собирается из него с печатью и подписью парка. */}
+                    <span>
+                        {driver.contract
+                            ? `№ ${driver.contract.number}, подписан водителем в приложении ${dayjs(driver.contract.signedAt).format('DD.MM.YYYY HH:mm')}. Подпись через eGov подключим отдельно.`
+                            : driver.contractSignedAt
+                                ? `Подписан в приложении ${dayjs(driver.contractSignedAt).format('DD.MM.YYYY HH:mm')} — до появления полного текста договора, экземпляра нет. Попросите водителя подписать заново.`
+                                : 'Не подписан.'}
+                    </span>
+                    {driver.contract && (
+                        <Button variant="outline" size="sm" onClick={downloadContract} disabled={downloading}>
+                            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                            Скачать договор (PDF)
+                        </Button>
+                    )}
                 </div>
             </section>
 

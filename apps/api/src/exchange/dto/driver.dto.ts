@@ -61,6 +61,11 @@ export class UpdateDriverProfileDto {
     @ApiProperty({ required: false, description: 'ГГГГ-ММ-ДД; пустая строка — стереть' }) @IsString() @IsOptional() @MaxLength(10) idIssuedAt?: string;
     @ApiProperty({ required: false, description: 'ГГГГ-ММ-ДД; пустая строка — стереть' }) @IsString() @IsOptional() @MaxLength(10) idExpiresAt?: string;
 
+    /** Для договора с парком: адрес прописки, марка и модель машины, номер техпаспорта. */
+    @ApiProperty({ required: false }) @IsString() @IsOptional() @MaxLength(300) registrationAddress?: string;
+    @ApiProperty({ required: false }) @IsString() @IsOptional() @MaxLength(100) vehicleModel?: string;
+    @ApiProperty({ required: false }) @IsString() @IsOptional() @MaxLength(30) vehicleRegNumber?: string;
+
     /** Согласие на обработку персональных данных: да — запомнить время и версию текста, нет — отозвать. */
     @ApiProperty({ required: false })
     @IsBoolean()

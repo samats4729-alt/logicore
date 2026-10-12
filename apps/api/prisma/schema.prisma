@@ -3093,6 +3093,8 @@ model ExchangeDriver {
   idIssuedBy  String?
   idIssuedAt  DateTime? @db.Date
   idExpiresAt DateTime? @db.Date
+  /// Адрес регистрации (прописки) — для договора с парком.
+  registrationAddress String?
 
   /// Согласие на сбор и обработку персональных данных (в том числе фото
   /// документов и лица): когда дано и какой текст водителю показали.
@@ -3106,6 +3108,9 @@ model ExchangeDriver {
   vehiclePlate      String?
   vehicleBodyType   String?
   vehicleCapacityKg Int?
+  /// Марка и модель и номер техпаспорта — чтобы договор аренды называл машину точно.
+  vehicleModel      String?
+  vehicleRegNumber  String?
   /// Машина записана на водителя. Нет — нужна доверенность от владельца.
   vehicleIsOwn      Boolean @default(true)
 
@@ -3127,6 +3132,7 @@ model ExchangeDriver {
   documents ExchangeDriverDocument[]
   offers    ExchangeOffer[]
   payouts   DriverPayout[]
+  contracts ExchangeDriverContract[]
 
   /// Счёт для выплат через парк: IBAN и банк. Без счёта выплату не запросить.
   payoutIban String?
@@ -3163,6 +3169,33 @@ model ExchangeDriverDocument {
   createdAt DateTime @default(now())
 
   @@index([driverId])
+}
+
+/// Подписанный экземпляр договора водителя с парком (аренда ТС с экипажем).
+///
+/// Текст замораживается в момент подписи — ровно то, что водитель прочёл и
+/// подписал, со всеми реквизитами на ту минуту. Поменял парк банк или
+/// водитель машину — подписанный экземпляр от этого не меняется; новая
+/// подпись — новая запись. PDF собирается из `content` по запросу.
+model ExchangeDriverContract {
+  id            String         @id @default(cuid())
+  driverId      String
+  driver        ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  parkCompanyId String
+  /// Номер договора: «ПА-ГГММДД-xxxxxx».
+  number        String
+  /// Версия шаблона текста (`PARK_CONTRACT_VERSION`).
+  version       String
+  /// Замороженный текст: разделы, пункты, реквизиты сторон.
+  content       Json
+  signedAt      DateTime
+  signedDevice  String?
+  signedIp      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([driverId, signedAt])
+  @@index([parkCompanyId])
 }
 
 /// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с

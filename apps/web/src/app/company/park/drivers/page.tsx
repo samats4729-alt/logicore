@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { ArrowLeft, UsersRound } from 'lucide-react';
+import { ArrowLeft, FileWarning, UsersRound } from 'lucide-react';
 import { api } from '@/lib/api';
 import { EXCHANGE_DRIVER_STATUS_LABELS } from '@/lib/vocabulary';
 import { ParkDriverFilter, ParkDriverList, иинКрасиво, фиоВодителя, телефонКрасиво } from '@/lib/exchange';
@@ -36,6 +36,26 @@ export default function ParkDriversPage() {
     }, []);
     const [data, setData] = useState<ParkDriverList | null>(null);
     const [failed, setFailed] = useState<string | null>(null);
+    /**
+     * Чего не хватает в реквизитах парка для договора с водителями. Договор
+     * собирается из «Кабинет → Организация»; без БИН, адреса и директора
+     * водитель его подписать не сможет — и анкету не отправит.
+     */
+    const [requisitesGaps, setRequisitesGaps] = useState<string[]>([]);
+    useEffect(() => {
+        api.get('/my-company')
+            .then((r) => {
+                const c = r.data?.company;
+                // Нет компании в ответе — не пугаем зря: предупреждение только по делу.
+                if (!c) { setRequisitesGaps([]); return; }
+                setRequisitesGaps([
+                    !c.bin && 'БИН',
+                    !c.address && 'юридический адрес',
+                    !c.directorName && 'ФИО директора',
+                ].filter(Boolean) as string[]);
+            })
+            .catch(() => setRequisitesGaps([]));
+    }, []);
 
     useEffect(() => {
         let alive = true;
@@ -67,6 +87,19 @@ export default function ParkDriversPage() {
                     </Button>
                 </div>
             </div>
+
+            {requisitesGaps.length > 0 && (
+                <div className={styles.card} role="alert">
+                    <div className={`${styles.cardBody} flex flex-wrap items-center gap-3 text-[13px]`}>
+                        <FileWarning className="h-4 w-4 shrink-0 text-amber-600" />
+                        <span className="flex-1">
+                            Водители не смогут подписать договор с парком: в реквизитах не хватает — {requisitesGaps.join(', ')}.
+                            Договор собирается из них сам.
+                        </span>
+                        <Button variant="outline" size="sm" onClick={() => router.push('/company/settings')}>Заполнить реквизиты</Button>
+                    </div>
+                </div>
+            )}
 
             <div className={styles.pills} role="tablist" style={{ marginBottom: 12 }}>
                 {FILTERS.map((f) => (

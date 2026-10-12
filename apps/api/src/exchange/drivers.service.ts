@@ -7,6 +7,7 @@ import { assertAllowedUpload } from '../documents/allowed-files';
 import { birthDateFromIin, digitsOnly, isValidIin, normalizeIdNumber, normalizePhone, normalizePlate, parseDay } from './driver-identity';
 import { removeExchangeFile, safeExtension, storeExchangeFile } from './exchange-files';
 import { PARK_FILTER_STATUSES, ParkDriverFilter, UpdateDriverProfileDto } from './dto/driver.dto';
+import { ParkContractService } from './park-contract.service';
 
 /** Подписи документов — ими же сервер говорит, чего не хватает. */
 export const DOCUMENT_TITLES: Record<ExchangeDriverDocumentKind, string> = {
@@ -33,10 +34,11 @@ const DRIVER_SELECT = {
     id: true, userId: true, kind: true, status: true,
     parkCompanyId: true, park: { select: { id: true, name: true } },
     lastName: true, firstName: true, middleName: true, iin: true, phone: true, birthDate: true,
-    idNumber: true, idIssuedBy: true, idIssuedAt: true, idExpiresAt: true,
+    idNumber: true, idIssuedBy: true, idIssuedAt: true, idExpiresAt: true, registrationAddress: true,
     consentAt: true, consentVersion: true,
     ipName: true, ipIin: true,
     vehiclePlate: true, vehicleBodyType: true, vehicleCapacityKg: true, vehicleIsOwn: true,
+    vehicleModel: true, vehicleRegNumber: true,
     contractSignedAt: true,
     submittedAt: true, reviewedAt: true, rejectReason: true, blockedAt: true, blockedReason: true,
     tripsCompleted: true, createdAt: true,
@@ -60,7 +62,7 @@ type DriverRow = Prisma.ExchangeDriverGetPayload<{ select: typeof DRIVER_SELECT 
  */
 export function missingFor(d: Pick<DriverRow, 'kind' | 'parkCompanyId' | 'lastName' | 'firstName' | 'iin' | 'phone'
     | 'ipName' | 'ipIin' | 'vehiclePlate' | 'vehicleBodyType' | 'vehicleIsOwn' | 'contractSignedAt'
-    | 'idNumber' | 'idIssuedBy' | 'consentAt'> & {
+    | 'idNumber' | 'idIssuedBy' | 'consentAt' | 'registrationAddress' | 'vehicleModel' | 'vehicleRegNumber'> & {
     documents: { kind: ExchangeDriverDocumentKind }[];
 }): string[] {
     const missing: string[] = [];
@@ -79,6 +81,10 @@ export function missingFor(d: Pick<DriverRow, 'kind' | 'parkCompanyId' | 'lastNa
     }
     if (!d.idNumber) missing.push('номер удостоверения личности');
     if (!d.idIssuedBy) missing.push('кем выдано удостоверение');
+    // Без них договор аренды не назовёт ни водителя, ни машину (владелец, 09.10).
+    if (!d.registrationAddress) missing.push('адрес прописки');
+    if (!d.vehicleModel) missing.push('марка и модель машины');
+    if (!d.vehicleRegNumber) missing.push('номер техпаспорта');
     if (!d.parkCompanyId) missing.push('парк');
     const has = new Set(d.documents.map((x) => x.kind));
     const needed: ExchangeDriverDocumentKind[] = ['ID_FRONT', 'ID_BACK', 'SELFIE_WITH_ID', 'LICENSE', 'VEHICLE_REGISTRATION'];
@@ -89,6 +95,21 @@ export function missingFor(d: Pick<DriverRow, 'kind' | 'parkCompanyId' | 'lastNa
 }
 
 /**
+ * Поля, которые входят в договор с парком. Поменялось любое после подписи —
+ * подписанный текст уже не про этого водителя или не про эту машину, и
+ * договор надо подписать заново.
+ */
+const CONTRACT_FIELDS = [
+    'lastName', 'firstName', 'middleName', 'iin', 'idNumber', 'idIssuedBy', 'idIssuedAt', 'registrationAddress',
+    'vehiclePlate', 'vehicleModel', 'vehicleRegNumber', 'vehicleIsOwn',
+] as const;
+
+const same = (a: unknown, b: unknown) =>
+    a instanceof Date || b instanceof Date
+        ? (a instanceof Date ? a.getTime() : a ?? null) === (b instanceof Date ? b.getTime() : b ?? null)
+        : (a ?? null) === (b ?? null);
+
+/**
  * Водители биржи: анкета в приложении, проверка парком, чёрный список.
  */
 @Injectable()
@@ -96,6 +117,7 @@ export class ExchangeDriversService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly s3: S3Service,
+        private readonly contracts: ParkContractService,
     ) {}
 
     private view(d: DriverRow) {
@@ -251,6 +273,15 @@ export class ExchangeDriversService {
             data.consentAt = dto.consent ? new Date() : null;
             data.consentVersion = dto.consent ? CONSENT_VERSION : null;
         }
+        if (dto.registrationAddress !== undefined) data.registrationAddress = text(dto.registrationAddress);
+        if (dto.vehicleModel !== undefined) data.vehicleModel = text(dto.vehicleModel);
+        if (dto.vehicleRegNumber !== undefined) data.vehicleRegNumber = text(dto.vehicleRegNumber)?.toUpperCase().replace(/\s+/g, '') ?? null;
+
+        // Подписанный договор называет водителя и машину. Поменялось что-то
+        // из этого — подпись снимается, договор подписывается заново.
+        if (driver.contractSignedAt && CONTRACT_FIELDS.some((k) => k in data && !same((data as any)[k], (driver as any)[k]))) {
+            data.contractSignedAt = null;
+        }
 
         const updated = await this.prisma.exchangeDriver.update({ where: { id: driver.id }, data, select: DRIVER_SELECT });
         return this.view(updated);
@@ -269,6 +300,10 @@ export class ExchangeDriversService {
     /**
      * Подписать договор с парком. До подписи через eGov — подтверждение в
      * приложении: запоминаем, кто, когда и с какого устройства и адреса.
+     *
+     * Подписывается полный текст (`park-contract.ts`), а не пересказ: он
+     * собирается из анкеты и реквизитов парка и замораживается — этот
+     * экземпляр потом видят и водитель, и парк, хоть бы данные и менялись.
      */
     async signContract(userId: string, deviceId: string | undefined, ip: string | undefined) {
         const driver = await this.ownDriver(userId);
@@ -276,15 +311,23 @@ export class ExchangeDriversService {
         if (driver.kind !== 'PARK' || !driver.parkCompanyId) {
             throw new BadRequestException('Сначала выберите парк — договор подписывается с ним');
         }
-        const updated = await this.prisma.exchangeDriver.update({
-            where: { id: driver.id },
-            data: {
-                contractSignedAt: new Date(),
-                contractSignedDevice: deviceId?.slice(0, 200) || null,
-                contractSignedIp: ip?.slice(0, 64) || null,
-            },
-            select: DRIVER_SELECT,
-        });
+        const now = new Date();
+        const content = await this.contracts.contentToSign(driver.id, now);
+        const signedDevice = deviceId?.slice(0, 200) || null;
+        const signedIp = ip?.slice(0, 64) || null;
+        const [, updated] = await this.prisma.$transaction([
+            this.prisma.exchangeDriverContract.create({
+                data: {
+                    driverId: driver.id, parkCompanyId: driver.parkCompanyId, number: content.number, version: content.version,
+                    content: content as unknown as Prisma.InputJsonValue, signedAt: now, signedDevice, signedIp,
+                },
+            }),
+            this.prisma.exchangeDriver.update({
+                where: { id: driver.id },
+                data: { contractSignedAt: now, contractSignedDevice: signedDevice, contractSignedIp: signedIp },
+                select: DRIVER_SELECT,
+            }),
+        ]);
         return this.view(updated);
     }
 
@@ -470,7 +513,16 @@ export class ExchangeDriversService {
     }
 
     async parkDriverCard(companyId: string, driverId: string) {
-        return this.view(await this.parkDriver(companyId, driverId));
+        const driver = await this.parkDriver(companyId, driverId);
+        const signed = driver.contractSignedAt ? await this.contracts.latestSigned(driver.id, companyId) : null;
+        // Номер и дата договора — парку в карточку; сам текст — в PDF.
+        return { ...this.view(driver), contract: signed ? { number: signed.number, signedAt: signed.signedAt } : null };
+    }
+
+    /** Шаг «Договор» в приложении: подписанный экземпляр или текст к подписи. */
+    async contract(userId: string) {
+        const driver = await this.ownDriver(userId);
+        return this.contracts.forDriver(driver.id, driver.parkCompanyId, driver.contractSignedAt);
     }
 
     /** Допустить. Только из «на проверке»: условное обновление, двое не допустят разом. */
