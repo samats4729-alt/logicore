@@ -380,7 +380,7 @@ function RatesCard() {
         <section className={styles.card}>
             <div className={styles.cardHead}>
                 <Percent size={14} />
-                <h2 className={styles.cardTitle}>Ставки удержаний</h2>
+                <h2 className={styles.cardTitle}>Ставки и расчёт рейса</h2>
             </div>
             <div className={`${styles.cardBody} space-y-3`}>
                 <p className="m-0 text-[12px] text-muted-foreground">

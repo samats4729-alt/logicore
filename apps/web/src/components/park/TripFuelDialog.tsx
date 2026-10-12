@@ -150,9 +150,15 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
                             <Stat label="Дали на топливо" value={moneyShort(fuel.issued.total)} hint={`чеков принято на ${moneyShort(fuel.receipts.accepted)}`} />
                             <Stat label="Перечислить в конце" value={fuel.toPay != null ? moneyShort(fuel.toPay) : '—'} strong />
                         </div>
-                        {fuel.withoutReceipt > 0 && (
+                        {fuel.receipts.pending > 0 && (
+                            <div className="rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">
+                                Чеки на {moneyShort(fuel.receipts.pending)} ждут вашей проверки — примите их, чтобы они засчитались в топливо.
+                            </div>
+                        )}
+                        {/* Тревожно — только то, на что чека нет вовсе: ждущие проверки — не в счёт. */}
+                        {fuel.issued.total - fuel.receipts.accepted - fuel.receipts.pending > 0 && (
                             <div className="rounded-lg border border-solid border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                                На {moneyShort(fuel.withoutReceipt)} денег на топливо нет принятого чека — с этой суммы при выплате удержится налог как с оплаты водителю.
+                                На {moneyShort(fuel.issued.total - fuel.receipts.accepted - fuel.receipts.pending)} денег на топливо чека нет — с этой суммы при выплате удержится налог как с оплаты водителю.
                             </div>
                         )}
                         {fuel.locked && (
