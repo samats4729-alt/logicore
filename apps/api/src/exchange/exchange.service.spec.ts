@@ -53,7 +53,8 @@ function build(state = order()) {
         company: { findUnique: jest.fn().mockResolvedValue({ isPark: false }) },
         $transaction: jest.fn(async (ops: any[]) => ops),
     };
-    return { service: new ExchangeService(prisma), prisma };
+    const settlement: any = { measure: jest.fn().mockResolvedValue(1200) };
+    return { service: new ExchangeService(prisma, settlement), prisma, settlement };
 }
 
 describe('Биржа: кто выставляет заявку', () => {

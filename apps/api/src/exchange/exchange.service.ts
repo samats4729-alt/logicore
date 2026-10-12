@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
+import { ExchangeSettlementService } from './settlement.service';
 import { cityKey } from '../cities/city-key';
 import { ExchangeBoardQueryDto, PublishOrderDto, RoutePricesQueryDto } from './dto/exchange-order.dto';
 import {
@@ -54,7 +55,10 @@ const cityName = (p?: { location: { city: string | null; cityRecord: { name: str
  */
 @Injectable()
 export class ExchangeService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly settlement: ExchangeSettlementService,
+    ) {}
 
     /** Заявка, в которой компания участвует, — иначе её для компании нет. */
     private async participantOrder(companyId: string, orderId: string): Promise<StateRow> {
@@ -145,6 +149,9 @@ export class ExchangeService {
             },
         });
         if (!count) throw new BadRequestException('У заявки уже появился исполнитель — обновите страницу');
+        // Расстояние по дорогам — для оценки топлива водителям парков. Не ждём:
+        // пока не посчиталось, лента берёт оценку по прямой.
+        void this.settlement.measure(order.id).catch(() => undefined);
         return this.state(companyId, orderId);
     }
 

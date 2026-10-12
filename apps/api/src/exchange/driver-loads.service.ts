@@ -3,8 +3,9 @@ import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { removeExchangeFile } from './exchange-files';
-import { EXCHANGE_ORDER_SELECT, ON_EXCHANGE, byLoadingDate, exchangeView, matches, notPast } from './exchange-orders';
+import { EXCHANGE_ORDER_SELECT, ExchangeOrderRow, ON_EXCHANGE, byLoadingDate, exchangeView, matches, notPast } from './exchange-orders';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
+import { ExchangeSettlementService } from './settlement.service';
 
 /** Рейс идёт: водитель назначен и ещё не довёз. */
 const ACTIVE_ORDER: OrderStatus[] = [
@@ -23,13 +24,14 @@ export class ExchangeDriverLoadsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly s3: S3Service,
+        private readonly settlement: ExchangeSettlementService,
     ) {}
 
     /** Водитель допущен к бирже — иначе объясняем, что мешает. */
     async approvedDriver(userId: string) {
         const driver = await this.prisma.exchangeDriver.findUnique({
             where: { userId },
-            select: { id: true, status: true, kind: true, tripsCompleted: true, park: { select: { exchangeAccess: true } } },
+            select: { id: true, status: true, kind: true, tripsCompleted: true, parkCompanyId: true, park: { select: { exchangeAccess: true } } },
         });
         if (!driver) throw new ForbiddenException('Сначала заполните анкету водителя');
         if (driver.status === 'BLOCKED') throw new ForbiddenException('Вы заблокированы на бирже');
@@ -44,27 +46,46 @@ export class ExchangeDriverLoadsService {
         if (driver.kind !== 'PARK' || !driver.park?.exchangeAccess) {
             throw new ForbiddenException('Биржа пока работает в тестовом режиме — заявки видят водители подключённых парков');
         }
-        return driver;
+        return driver as typeof driver & { parkCompanyId: string };
+    }
+
+    /**
+     * Заявка глазами водителя парка: вместо цены компании — сколько он получит
+     * на руки вместе с топливом (налоги и комиссии парк досчитывает сверху,
+     * решение владельца 12.10.2026). Цену компании водитель не видит.
+     */
+    private forDriver(base: Awaited<ReturnType<ExchangeSettlementService['driverBase']>>, row: ExchangeOrderRow) {
+        const view = exchangeView(row);
+        const ctx = this.settlement.contextFromRow(base, row);
+        const calc = view.price != null ? this.settlement.byCustomerPrice(ctx, view.price) : null;
+        return {
+            ...view,
+            price: calc ? calc.driverTotal : null,
+            /** Топливо по оценке — входит в сумму на руки; заправка через парк, чеки на БИН парка. */
+            fuelEstimate: ctx.fuel || null,
+            distanceKm: ctx.distanceKm,
+        };
     }
 
     /** Лента: заявки на бирже с сегодняшней погрузкой и дальше, ближайшие сверху. */
     async feed(userId: string, bodyType?: string) {
-        await this.approvedDriver(userId);
+        const driver = await this.approvedDriver(userId);
+        const base = await this.settlement.driverBase(driver);
         const rows = await this.prisma.order.findMany({
             where: { ...ON_EXCHANGE, AND: [PUBLISHER_HAS_ACCESS] },
             select: EXCHANGE_ORDER_SELECT,
             orderBy: { exchangePublishedAt: 'desc' },
             take: 300,
         });
-        return rows.filter((r) => notPast(r)).map(exchangeView).filter((v) => matches(v, { bodyType })).sort(byLoadingDate);
+        return rows.filter((r) => notPast(r)).map((r) => this.forDriver(base, r)).filter((v) => matches(v, { bodyType })).sort(byLoadingDate);
     }
 
     /** Заявка с биржи. Сняли или нашли исполнителя — говорим прямо. */
     async card(userId: string, orderId: string) {
-        await this.approvedDriver(userId);
+        const driver = await this.approvedDriver(userId);
         const row = await this.prisma.order.findFirst({ where: { id: orderId, ...ON_EXCHANGE, AND: [PUBLISHER_HAS_ACCESS] }, select: EXCHANGE_ORDER_SELECT });
         if (!row) throw new NotFoundException('Заявка уже снята с биржи или у неё появился исполнитель');
-        return exchangeView(row);
+        return this.forDriver(await this.settlement.driverBase(driver), row);
     }
 
     /**
