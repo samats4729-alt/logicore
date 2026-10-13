@@ -124,7 +124,9 @@ export default function Onboarding() {
                 registrationAddress: d.registrationAddress ?? '', vehicleModel: d.vehicleModel ?? '', vehicleRegNumber: d.vehicleRegNumber ?? '',
             });
             // Исправление после отказа — сразу ко второму шагу: вид работы уже выбран.
-            if (d.kind) setIndex(1);
+            // Только если согласие уже дано: после экрана «Регистрация» вид работы
+            // выбран, а согласие — на первом шаге; без него анкету не отправить.
+            if (d.kind && d.consentAt) setIndex(1);
         }).catch((e) => Alert.alert('Не удалось загрузить анкету', ответ(e, 'Проверьте интернет')));
         exchangeApi.parks().then(setParks).catch(() => setParks([]));
     }, []);
