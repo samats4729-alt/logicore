@@ -141,7 +141,7 @@ export default function LoginScreen() {
                 {/* Карточка входа */}
                 <Animated.View style={[styles.card, rise(0.32, 0.9, 56)]}>
                     <Text style={styles.cardTitle}>Вход для водителя</Text>
-                    <Text style={styles.cardSub}>Телефон и пароль выдаёт ваша компания</Text>
+                    <Text style={styles.cardSub}>По телефону и паролю — для водителей компаний, пароль выдаёт диспетчер</Text>
 
                     <Text style={styles.fieldLabel}>Телефон</Text>
                     <View style={styles.inputWrap}>
@@ -195,37 +195,56 @@ export default function LoginScreen() {
                         )}
                     </TouchableOpacity>
 
+                    {/* Регистрация и вход через Google — в той же карточке, сразу под
+                        «Войти» (владелец, 13.10.2026): отдельным блоком внизу экрана их не
+                        находили. Регистрация — для тех, кто работает сам: со своим ИП или
+                        через парк; водителю компании она не нужна. */}
+                    {exchangeOn && !!GOOGLE_WEB_CLIENT_ID && (
+                        <>
+                            <TouchableOpacity
+                                style={styles.secondaryButton}
+                                onPress={() => router.push('/register')}
+                                accessibilityRole="button"
+                                accessibilityLabel="Регистрация"
+                                activeOpacity={0.88}
+                            >
+                                <Ionicons name="person-add-outline" size={18} color="#0b0d12" />
+                                <Text style={styles.secondaryText}>Регистрация</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.orRow}>
+                                <View style={styles.orLine} />
+                                <Text style={styles.orText}>или</Text>
+                                <View style={styles.orLine} />
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.secondaryButton, { marginTop: 0 }, googleBusy && { opacity: 0.7 }]}
+                                onPress={handleGoogle}
+                                disabled={googleBusy}
+                                accessibilityRole="button"
+                                accessibilityLabel="Войти через Google"
+                                activeOpacity={0.88}
+                            >
+                                {googleBusy ? <ActivityIndicator color="#0b0d12" /> : (
+                                    <>
+                                        <Ionicons name="logo-google" size={18} color="#0b0d12" />
+                                        <Text style={styles.secondaryText}>Войти через Google</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </>
+                    )}
+
                     <View style={styles.hintRow}>
                         <Ionicons name="information-circle-outline" size={16} color="#868e9c" />
                         <Text style={styles.hint}>
-                            Нет доступа? Обратитесь к диспетчеру вашей компании — он выдаст пароль в карточке водителя.
+                            {exchangeOn && !!GOOGLE_WEB_CLIENT_ID
+                                ? 'Работаете сами — со своим ИП или через парк? Нажмите «Регистрация»: 5 минут. Водитель компании? Пароль выдаёт диспетчер в карточке водителя.'
+                                : 'Нет доступа? Обратитесь к диспетчеру вашей компании — он выдаст пароль в карточке водителя.'}
                         </Text>
                     </View>
                 </Animated.View>
-
-                {exchangeOn && !!GOOGLE_WEB_CLIENT_ID && (
-                    <Animated.View style={[styles.exchangeCard, rise(0.45, 0.95, 28)]}>
-                        <Text style={styles.exchangeEyebrow}>(02 — Биржа грузов)</Text>
-                        <Text style={styles.exchangeTitle}>Работаете сами?</Text>
-                        <Text style={styles.exchangeText}>
-                            Со своим ИП или через парк — берите грузы с биржи. Регистрация займёт 5 минут.
-                        </Text>
-                        <TouchableOpacity
-                            style={[styles.googleButton, googleBusy && { opacity: 0.7 }]}
-                            onPress={handleGoogle}
-                            disabled={googleBusy}
-                            accessibilityLabel="Войти через Google"
-                            activeOpacity={0.88}
-                        >
-                            {googleBusy ? <ActivityIndicator color="#0b0d12" /> : (
-                                <>
-                                    <Ionicons name="logo-google" size={18} color="#0b0d12" />
-                                    <Text style={styles.googleText}>Войти через Google</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </Animated.View>
-                )}
 
                 {__DEV__ && (
                     <View style={styles.devBox}>
@@ -390,27 +409,23 @@ const styles = StyleSheet.create({
         lineHeight: 18,
         color: '#4c5460',
     },
-    exchangeCard: {
-        marginTop: 14,
-        borderRadius: 26,
-        padding: 22,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
-    },
-    exchangeEyebrow: { fontFamily: FONT.displayMedium, fontSize: 10.5, letterSpacing: 0.6, color: 'rgba(255,255,255,0.45)' },
-    exchangeTitle: { fontFamily: FONT.display, fontSize: 20, color: '#ffffff', marginTop: 10, letterSpacing: -0.8 },
-    exchangeText: { fontFamily: FONT.regular, fontSize: 14, lineHeight: 20, color: 'rgba(255,255,255,0.6)', marginTop: 6, marginBottom: 16 },
-    googleButton: {
+    /** Вторые кнопки карточки — «Регистрация», «Войти через Google»: белые с рамкой. */
+    secondaryButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 10,
         height: 54,
+        marginTop: 10,
         borderRadius: RADIUS.button,
+        borderWidth: 1,
+        borderColor: '#dfe2e7',
         backgroundColor: '#ffffff',
     },
-    googleText: { fontFamily: FONT.semibold, color: '#0b0d12', fontSize: 16 },
+    secondaryText: { fontFamily: FONT.semibold, color: '#0b0d12', fontSize: 16 },
+    orRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 12 },
+    orLine: { flex: 1, height: 1, backgroundColor: '#eceef2' },
+    orText: { fontFamily: FONT.regular, fontSize: 12.5, color: '#9aa1ad' },
     devBox: { marginTop: 14, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#374151', borderStyle: 'dashed' },
     devTitle: { fontFamily: FONT.regular, color: '#9ca3af', fontSize: 12, marginBottom: 8 },
     devInput: { height: 44, borderRadius: 10, borderWidth: 1, borderColor: '#374151', color: '#fff', paddingHorizontal: 10, fontSize: 12 },
