@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>LogiCore — ключевой визуал</title>
+<style>
+/*FONTS*/
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#07080a}
+body{font-family:Inter,system-ui,sans-serif;color:#0b0d12;-webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01"}
+.ic{display:block;flex:none}
+.num{font-variant-numeric:tabular-nums}
+
+/* ───────── сцена ───────── */
+.scene{position:relative;width:1080px;height:1920px;overflow:hidden;
+  background:
+    radial-gradient(900px 620px at 78% 38%, rgba(255,255,255,.07), transparent 62%),
+    radial-gradient(700px 520px at 18% 92%, rgba(255,255,255,.04), transparent 60%),
+    radial-gradient(1200px 800px at 60% 120%, rgba(255,255,255,.06), transparent 60%),
+    #07080a}
+.grid{position:absolute;inset:0;
+  background-image:radial-gradient(rgba(255,255,255,.075) 1px, transparent 1.2px);
+  background-size:28px 28px;
+  -webkit-mask-image:radial-gradient(1100px 760px at 62% 46%, #000 30%, transparent 78%)}
+.net{position:absolute;inset:0}
+.grain{position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+/* ───────── левая колонка ───────── */
+.copy{position:absolute;left:104px;top:0;bottom:0;width:640px;display:flex;flex-direction:column;justify-content:center;color:#fff;z-index:5}
+.brand{position:absolute;left:104px;top:72px;z-index:6;font:700 30px/1 Unbounded;color:#fff;letter-spacing:-.02em}
+.brand span{color:rgba(255,255,255,.42)}
+.idx{position:absolute;right:96px;top:80px;z-index:6;font:500 13px/1 Inter;color:rgba(255,255,255,.42);letter-spacing:.14em;text-transform:uppercase}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;align-self:flex-start;height:36px;padding:0 16px 0 8px;border-radius:999px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);font:500 14px/1 Inter;color:rgba(255,255,255,.82)}
+.eyebrow b{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:#fff;color:#0b0d12;font:600 12px/1 Inter}
+h1{margin-top:30px;font:700 74px/1.04 Unbounded;letter-spacing:-.035em;color:#fff}
+h1 .soft{color:rgba(255,255,255,.38)}
+h1 .acc{background:linear-gradient(180deg,#fff 0%,#c9cbd0 55%,#7d828c 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{margin-top:28px;max-width:540px;font:400 21px/1.5 Inter;color:rgba(255,255,255,.62);letter-spacing:-.005em}
+.lead strong{color:#fff;font-weight:500}
+.cta{margin-top:40px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:999px;font:600 17px/1 Inter;letter-spacing:-.01em}
+.btn.pri{background:#fff;color:#0b0d12;box-shadow:0 10px 40px rgba(255,255,255,.16)}
+.btn.sec{color:#fff;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04)}
+.stats{margin-top:64px;display:grid;grid-template-columns:repeat(3,auto);gap:0;align-self:flex-start;border-top:1px solid rgba(255,255,255,.12);padding-top:26px}
+.stat{padding-right:32px;margin-right:32px;border-right:1px solid rgba(255,255,255,.10)}
+.stat:last-child{border:0;margin:0;padding:0}
+.stat .v{font:700 40px/1 Unbounded;color:#fff;letter-spacing:-.03em}
+.stat .v small{font-size:20px;color:rgba(255,255,255,.55);margin-left:4px;letter-spacing:0}
+.stat .l{margin-top:12px;font:400 14px/1.35 Inter;color:rgba(255,255,255,.5)}
+
+/* ───────── 3D-сцена справа ───────── */
+.stage{position:absolute;inset:0;perspective:2600px;perspective-origin:70% 45%;z-index:2}
+.win{position:absolute;left:800px;top:160px;width:1300px;height:820px;border-radius:22px;overflow:hidden;background:#fff;
+  transform:rotateY(-14deg) rotateX(5deg) rotateZ(.6deg);transform-origin:100% 50%;
+  box-shadow:0 0 0 1px rgba(255,255,255,.14),0 60px 140px -20px rgba(0,0,0,.85),0 30px 80px rgba(255,255,255,.05);
+  display:grid;grid-template-columns:232px 1fr}
+.win:after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,rgba(255,255,255,0) 40%,rgba(255,255,255,.18) 52%,rgba(255,255,255,0) 64%),
+             linear-gradient(180deg,rgba(7,8,10,0) 72%,rgba(7,8,10,.5) 100%)}
+
+/* боковое меню */
+.side{background:#f9fafb;border-right:1px solid #eceef1;padding:16px 10px;display:flex;flex-direction:column;font-size:13.5px}
+.org{display:flex;gap:10px;align-items:center;padding:4px 6px 18px}
+.org .lg{width:34px;height:34px;border-radius:10px;background:#0b0d12;color:#fff;display:grid;place-items:center;font:700 15px Inter}
+.org .n{font-weight:600;font-size:13.5px;letter-spacing:-.01em}
+.org .s{font-size:11.5px;color:#5f6672;margin-top:2px}
+.sl{font-size:11.5px;color:#8a909b;padding:6px 8px 8px}
+.mi{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:9px;color:#0b0d12}
+.mi .ic{color:#3c414b}
+.mi .ch{margin-left:auto;color:#a2a7b0}
+.mi.on{background:#eceef1;font-weight:600}
+.mi .bd{margin-left:auto;font-size:11px;font-weight:600;color:#5f6672;background:#fff;border:1px solid #e7e8ec;border-radius:6px;padding:1px 6px}
+.sub{padding-left:30px}
+.sub .mi{height:30px;font-size:13px;color:#3c414b}
+.side .sp{flex:1}
+.me{display:flex;gap:10px;align-items:center;padding:10px 6px 2px;border-top:1px solid #eceef1}
+.av{width:32px;height:32px;border-radius:50%;background:#e9ebef;display:grid;place-items:center;font:600 12px Inter;color:#3c414b;flex:none}
+.me .n{font-weight:600;font-size:13px}
+.me .s{font-size:11.5px;color:#5f6672}
+
+/* основная часть */
+.main{display:flex;flex-direction:column;min-width:0;background:#fff}
+.top{height:52px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid #eceef1;font-size:13.5px}
+.top .crumb{color:#0b0d12;font-weight:500;padding-left:12px;border-left:1px solid #e7e8ec}
+.top .r{margin-left:auto;display:flex;gap:6px}
+.rb{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#3c414b;position:relative}
+.rb.ai{background:#fff;box-shadow:0 2px 10px rgba(11,13,18,.10);color:#0b0d12}
+.rb .dot{position:absolute;top:7px;right:8px;width:6px;height:6px;border-radius:50%;background:#ef4444;border:1.5px solid #fff}
+.tick{height:34px;display:flex;align-items:center;gap:28px;padding:0 20px;border-bottom:1px solid #eceef1;font-size:12.5px;color:#5f6672;white-space:nowrap;overflow:hidden}
+.tick b{color:#0b0d12;font-weight:600;margin-right:6px}
+.tick i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;vertical-align:1px}
+.body{padding:22px 24px;display:flex;flex-direction:column;gap:16px}
+.ph{display:flex;align-items:flex-end}
+.ph h2{font:600 26px/1.1 Inter;letter-spacing:-.025em}
+.ph p{font-size:13px;color:#5f6672;margin-top:6px}
+.ph .r{margin-left:auto;display:flex;gap:8px}
+.ob{height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 13px;border-radius:9px;border:1px solid #e7e8ec;font-size:13px;font-weight:500;background:#fff}
+.ob .k{font-size:11px;color:#5f6672;background:#f1f2f4;border-radius:5px;padding:1px 6px}
+.pb{height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 15px;border-radius:9px;background:#0b0d12;color:#fff;font-size:13px;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.kp{height:46px;display:flex;align-items:center;gap:9px;padding:0 14px;border:1px solid #e7e8ec;border-radius:11px;font-size:13px;color:#5f6672;box-shadow:0 1px 2px rgba(11,13,18,.04)}
+.kp b{color:#0b0d12;font-size:16px;font-weight:600;margin-left:2px;letter-spacing:-.01em}
+.kp .up{margin-left:auto;font-size:11.5px;font-weight:600;color:#16a34a}
+.row{display:grid;gap:14px}
+.card{border:1px solid #e7e8ec;border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(11,13,18,.04);overflow:hidden}
+.ch{height:46px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid #f0f1f3;font-size:14px;font-weight:600;letter-spacing:-.01em}
+.ch .g{color:#b6bac2}
+.ch span.m{font-weight:400;color:#5f6672;font-size:12.5px}
+.ch .r{margin-left:auto;display:flex;gap:12px;color:#8a909b}
+.chart{padding:14px 16px 10px;position:relative}
+.bars{height:236px;display:flex;align-items:flex-end;gap:14px;padding-left:34px;border-bottom:1px solid #eceef1;position:relative}
+.bars .gl{position:absolute;left:34px;right:0;border-top:1px dashed #eef0f2}
+.bars .yl{position:absolute;left:0;font-size:10.5px;color:#8a909b;transform:translateY(-50%)}
+.bw{flex:1;display:flex;gap:4px;align-items:flex-end;height:100%;position:relative}
+.bw .a{flex:1;background:#0b0d12;border-radius:5px 5px 2px 2px}
+.bw .b{flex:1;background:#d4d6db;border-radius:5px 5px 2px 2px}
+.bw.hl .a{background:#0b0d12;box-shadow:0 0 0 3px rgba(11,13,18,.08)}
+.bw.hl .b{background:#9aa0aa}
+.xl{display:flex;gap:14px;padding:8px 0 0 34px;font-size:10.5px;color:#8a909b}
+.xl span{flex:1;text-align:center}
+.tip{position:absolute;right:30px;top:20px;background:#fff;border:1px solid #e7e8ec;border-radius:10px;padding:9px 12px;box-shadow:0 10px 30px rgba(11,13,18,.12);font-size:12px;min-width:170px}
+.tip .t{font-weight:600;margin-bottom:6px}
+.tip .l{display:flex;align-items:center;gap:6px;color:#5f6672;margin-top:3px}
+.tip .l b{margin-left:auto;color:#0b0d12}
+.tip .sq{width:8px;height:8px;border-radius:2px}
+.lg2{display:flex;gap:18px;justify-content:center;font-size:11.5px;color:#5f6672;padding-top:8px}
+.lg2 i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.list .it{display:flex;align-items:center;gap:10px;height:52px;padding:0 14px;border-bottom:1px solid #f3f4f6;font-size:13px}
+.list .it:last-child{border:0}
+.list .no{font-weight:600;width:70px}
+.list .rt{flex:1;min-width:0}
+.list .rt b{font-weight:500}
+.list .rt div{font-size:11.5px;color:#8a909b;margin-top:2px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px 0 6px;border:1px solid #e7e8ec;border-radius:999px;font-size:12px;color:#3c414b;white-space:nowrap;background:#fff}
+.pill .ic{color:#8a909b}
+.pill.ok .ic{color:#16a34a}
+.pill.wait .ic{color:#ea8a0c}
+.pill.bad .ic{color:#dc2626}
+.prog{height:3px;border-radius:2px;background:#eef0f2;margin-top:6px;overflow:hidden}
+.prog i{display:block;height:100%;background:#0b0d12;border-radius:2px}
+
+/* ───────── плавающие элементы ───────── */
+.float{position:absolute;z-index:4}
+.glass{background:rgba(18,20,26,.72);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);
+  border-radius:22px;color:#fff;box-shadow:0 40px 90px -10px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.08)}
+.wcard{background:#fff;border-radius:20px;box-shadow:0 0 0 1px rgba(11,13,18,.06),0 40px 90px -16px rgba(0,0,0,.65),0 12px 30px rgba(0,0,0,.25)}
+
+/* карточка мониторинга */
+.mon{left:700px;top:640px;width:460px;padding:18px;transform:rotate(-1.5deg)}
+.mon .hd{display:flex;align-items:center;gap:10px}
+.mon .no{font:600 17px/1 Inter;letter-spacing:-.01em}
+.mon .gp{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font-size:12px;font-weight:600}
+.mon .gp i{width:6px;height:6px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.18)}
+.mon .live{margin-left:auto;font-size:12px;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:6px}
+.mon .live i{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.2)}
+.map{position:relative;height:156px;margin:14px 0 14px;border-radius:14px;overflow:hidden;background:#0d0f14;border:1px solid rgba(255,255,255,.06)}
+.mon .rt{display:flex;align-items:center;gap:12px}
+.mon .rt .c{font:600 15px Inter}
+.mon .rt .c div{font:400 12px Inter;color:rgba(255,255,255,.5);margin-top:4px}
+.mon .rt .ar{flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.4),rgba(255,255,255,.1));position:relative}
+.mon .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.mon .meta div{background:rgba(255,255,255,.05);border-radius:12px;padding:10px 12px;font-size:11.5px;color:rgba(255,255,255,.5)}
+.mon .meta b{display:block;font:600 15px Inter;color:#fff;margin-top:5px;letter-spacing:-.01em}
+
+/* финансы */
+.fin{left:1528px;top:96px;width:300px;padding:18px 18px 14px;transform:rotate(2deg)}
+.fin .t{display:flex;align-items:center;font-size:13px;color:#5f6672}
+.fin .t .bg{margin-left:auto;font-size:11.5px;font-weight:600;color:#16a34a;background:#ecfdf3;border-radius:999px;padding:3px 8px;display:flex;align-items:center;gap:4px}
+.fin .v{font:700 32px/1 Inter;letter-spacing:-.03em;margin-top:12px}
+.fin .s{font-size:12.5px;color:#8a909b;margin-top:6px}
+.fin svg.sp{display:block;margin-top:12px}
+
+/* уведомление */
+.toast{left:930px;top:76px;width:400px;padding:14px 16px;display:flex;gap:12px;align-items:center;transform:rotate(-1deg)}
+.toast .ico{width:40px;height:40px;border-radius:12px;background:#0b0d12;color:#fff;display:grid;place-items:center;flex:none}
+.toast .t{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.toast .s{font-size:12.5px;color:#5f6672;margin-top:3px}
+.toast .tm{margin-left:auto;align-self:flex-start;font-size:11.5px;color:#a2a7b0}
+
+/* ИИ-помощник */
+.ai{left:1590px;top:862px;width:292px;padding:14px 14px 12px;border-radius:18px;transform:rotate(-2deg)}
+.ai .q{display:flex;gap:8px;align-items:center;font-size:12.5px;color:rgba(255,255,255,.62)}
+.ai .q .ic{color:#fff}
+.ai .a{margin-top:9px;font-size:13.5px;line-height:1.45;color:#fff}
+.ai .a b{font-weight:600}
+
+/* телефон водителя */
+.phone{left:1336px;top:330px;width:316px;height:660px;border-radius:52px;background:#0b0d12;padding:10px;
+  box-shadow:0 0 0 1.5px #2a2d35,0 0 0 4px #0b0d12,0 70px 120px -20px rgba(0,0,0,.9),0 30px 60px rgba(0,0,0,.45);transform:rotate(4deg)}
+.scr{position:relative;width:100%;height:100%;border-radius:43px;overflow:hidden;background:#fff;color:#0b0d12;padding:46px 14px 0}
+.notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:96px;height:28px;border-radius:20px;background:#0b0d12}
+.sbar{position:absolute;top:16px;left:26px;right:24px;display:flex;font:600 13px Inter}
+.sbar .r{margin-left:auto;display:flex;gap:5px;align-items:center}
+.hi{display:flex;align-items:center;gap:10px;padding:2px 4px 12px}
+.hi .t{font:700 20px/1.1 Inter;letter-spacing:-.025em}
+.hi .s{font-size:11.5px;color:#8a909b;margin-top:3px}
+.hi .rb2{margin-left:auto;width:36px;height:36px;border-radius:50%;background:#f2f3f5;display:grid;place-items:center;color:#3c414b}
+.hero{background:#0b0d12;color:#fff;border-radius:24px;padding:16px 16px 14px}
+.hero .ey{font-size:11.5px;opacity:.55}
+.hero .nw{font:600 14px Inter;margin-top:3px;letter-spacing:-.01em}
+.rail{display:grid;grid-template-columns:14px 1fr;column-gap:12px;margin-top:14px}
+.rail .d{width:9px;height:9px;border-radius:50%;background:#fff;margin:4px auto 0}
+.rail .d.o{background:transparent;border:2px solid #fff}
+.rail .ln{width:1.5px;background:rgba(255,255,255,.35);margin:3px auto;height:30px}
+.rail .p{font:600 15px Inter;letter-spacing:-.01em}
+.rail .p div{font:400 11px Inter;opacity:.5;margin-top:2px}
+.hb{display:flex;gap:8px;margin-top:14px}
+.hb span{flex:1;height:36px;border-radius:999px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;gap:7px;font-size:12.5px;font-weight:600}
+.hb span.w{background:#fff;color:#0b0d12}
+.trk{background:#f2f3f5;border-radius:20px;padding:14px;margin-top:10px}
+.trk .r1{display:flex;align-items:flex-end}
+.trk .l{font-size:11px;color:#8a909b}
+.trk .v{font:600 14px Inter;margin-top:2px}
+.trk .pc{margin-left:auto;font:700 22px/1 Inter;letter-spacing:-.03em}
+.steps{display:flex;gap:4px;margin-top:12px}
+.steps i{flex:1;height:5px;border-radius:3px;background:#dfe1e5}
+.steps i.on{background:#0b0d12}
+.steps i.half{background:linear-gradient(90deg,#0b0d12 50%,#dfe1e5 50%)}
+.sl3{display:flex;justify-content:space-between;font-size:10.5px;color:#8a909b;margin-top:7px}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.acts div{background:#f2f3f5;border-radius:18px;padding:12px}
+.acts .ic{color:#0b0d12;margin-bottom:12px}
+.acts b{display:block;font-size:12.5px;font-weight:600}
+.acts span{font-size:10.5px;color:#8a909b}
+.acts .bad b{color:#dc2626}.acts .bad .ic{color:#dc2626}
+.nav{position:absolute;left:18px;right:18px;bottom:16px;height:58px;border-radius:999px;background:#0b0d12;display:flex;align-items:center;justify-content:space-around;padding:0 8px}
+.nav span{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:rgba(255,255,255,.55)}
+.nav span.on{background:#fff;color:#0b0d12}
+
+/* подпись внизу */
+.foot{position:absolute;left:104px;right:96px;bottom:48px;display:flex;align-items:center;gap:26px;z-index:6;font-size:13px;color:rgba(255,255,255,.4)}
+.foot .ch2{display:flex;gap:10px}
+.foot .ch2 span{height:30px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.7);background:rgba(255,255,255,.03)}
+.foot .ch2 .ic{color:rgba(255,255,255,.5)}
+.feat{position:absolute;left:104px;bottom:56px;z-index:6;display:flex;align-items:center;gap:12px;font:500 13px/1 Inter;color:rgba(255,255,255,.42);letter-spacing:.01em}
+.feat i{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.3)}
+
+/* ───────── вертикаль 9:16 ───────── */
+.scene{background:
+    radial-gradient(760px 620px at 70% 52%, rgba(255,255,255,.075), transparent 64%),
+    radial-gradient(900px 500px at 20% 0%, rgba(255,255,255,.05), transparent 60%),
+    radial-gradient(1000px 700px at 50% 112%, rgba(255,255,255,.06), transparent 60%),
+    #070708}
+.grid{-webkit-mask-image:radial-gradient(900px 1000px at 55% 58%, #000 25%, transparent 75%)}
+.brand{left:72px;top:80px;font-size:30px}
+.idx{right:72px;top:90px}
+.copy{left:72px;right:72px;width:auto;top:180px;bottom:auto;display:block}
+h1{margin-top:34px;font-size:104px;line-height:1.0;letter-spacing:-.04em}
+.lead{margin-top:30px;max-width:860px;font-size:25px;line-height:1.45}
+.lead strong{display:block;margin-top:6px}
+.cta{margin-top:38px}
+.btn{height:60px;font-size:18px;padding:0 28px}
+.stats{position:absolute;left:72px;right:72px;bottom:118px;margin:0;z-index:6;display:grid;grid-template-columns:repeat(3,1fr);
+  border-top:1px solid rgba(255,255,255,.14);padding-top:30px}
+.stat{padding-right:24px;margin-right:24px}
+.stat .v{font-size:46px}
+.stat .l{font-size:15px}
+.feat{left:72px;right:72px;bottom:58px;justify-content:space-between;font-size:13.5px}
+
+.stage{perspective:2200px;perspective-origin:60% 55%}
+.win{left:150px;top:870px;width:1180px;height:760px;transform:rotateY(-12deg) rotateX(6deg) rotateZ(-2deg);transform-origin:100% 50%}
+.toast{left:40px;top:830px;width:410px;transform:rotate(-2deg)}
+.fin{left:700px;top:800px;width:310px;transform:rotate(3deg)}
+.phone{left:584px;top:1000px;transform:rotate(5deg) scale(1.02)}
+.mon{left:36px;top:1250px;width:480px;transform:rotate(-2deg)}
+.net{display:none}
+.ai{left:40px;top:1106px;width:300px;transform:rotate(-3deg);z-index:5}
+</style></head>
+<body><div class="scene">
+<div class="grid"></div>
+
+<!-- сеть рейсов по Казахстану -->
+<svg class="net" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <defs>
+    <linearGradient id="arc" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    
+  </defs>
+  <path d="M-40 1780 C 260 1700, 380 1820, 620 1660 S 900 1220, 1120 1120" fill="none" stroke="url(#arc)" stroke-width="1.4" stroke-dasharray="1 9" stroke-linecap="round"/><path d="M-40 1780 C 260 1700, 380 1820, 620 1660 S 900 1220, 1120 1120" fill="none" stroke="url(#arc)" stroke-width=".8" opacity=".6"/>
+</svg>
+
+<div class="brand">Logi<span>Core</span></div>
+<div class="idx">(01 — Платформа)</div>
+
+<!-- текст -->
+<div class="copy">
+  <div class="eyebrow"><b>2026</b>Для экспедиторов, грузовладельцев и перевозчиков</div>
+  <h1>Логистика<br><span class="acc">без хаоса</span></h1>
+  <p class="lead">От заявки до подписанного акта — в&nbsp;одной системе. <strong>Рейс на карте, деньги по каждой перевозке, документы сами.</strong></p>
+  <div class="cta">
+    <span class="btn pri">Начать работу {{i:arrow-right:18:2}}</span>
+    <span class="btn sec">{{i:map-pinned:18}} Рейс на карте</span>
+  </div>
+</div>
+
+<div class="stage">
+  <!-- окно кабинета -->
+  <div class="win">
+    <aside class="side">
+      <div class="org"><div class="lg">Е</div><div><div class="n">Евразия Карго</div><div class="s">Руководитель · ТОО</div></div></div>
+      <div class="sl">Разделы</div>
+      <div class="mi on">{{i:panel-top}} Дашборд</div>
+      <div class="mi">{{i:file-text}} Заявки <span class="bd">186</span></div>
+      <div class="mi">{{i:calculator}} Запросы {{i:chevron-right:14}}</div>
+      <div class="mi">{{i:map-pinned}} Мониторинг {{i:chevron-right:14}}</div>
+      <div class="mi">{{i:wallet}} Деньги {{i:chevron-down:14}}</div>
+      <div class="sub">
+        <div class="mi">Счета</div><div class="mi">Акты</div><div class="mi">Платёжный календарь</div><div class="mi">Долги и остатки</div>
+      </div>
+      <div class="mi">{{i:chart-column}} Отчёты {{i:chevron-right:14}}</div>
+      <div class="mi">{{i:building-2}} Кабинет {{i:chevron-right:14}}</div>
+      <div class="sp"></div>
+      <div class="me"><div class="av">АС</div><div><div class="n">Айгерим Сейтова</div><div class="s">a.seitova@eurasia.kz</div></div></div>
+    </aside>
+    <section class="main">
+      <div class="top">{{i:panel-top}}<span class="crumb">Дашборд</span>
+        <div class="r"><span class="rb ai">{{i:sparkles}}</span><span class="rb">{{i:search}}</span><span class="rb">{{i:bell}}<i class="dot"></i></span><span class="rb">{{i:moon}}</span></div></div>
+      <div class="tick">
+        <span><i style="background:#0b0d12"></i><b>ЗК-2607</b>В пути · Алматы → Астана</span>
+        <span><i style="background:#16a34a"></i><b>ЗК-2601</b>Завершён · акт сформирован</span>
+        <span><i style="background:#ea8a0c"></i><b>ЗК-2612</b>Ожидает исполнителя</span>
+        <span><i style="background:#0b0d12"></i><b>ЗК-2610</b>Погрузка · Шымкент</span>
+        <span><i style="background:#16a34a"></i><b>ЗК-2598</b>Оплачен</span>
+      </div>
+      <div class="body">
+        <div class="ph"><div><h2>Дашборд</h2><p>Среда, 14 октября · обновлено только что</p></div>
+          <div class="r"><span class="ob">{{i:layers}} Блоки <span class="k">13</span></span><span class="ob">Этот месяц {{i:chevron-down:14}}</span><span class="pb">{{i:plus:15:2}} Создать заявку</span></div></div>
+        <div class="kpis">
+          <div class="kp">{{i:truck}} В работе <b class="num">27</b></div>
+          <div class="kp">{{i:clock}} Ожидают <b class="num">4</b></div>
+          <div class="kp">{{i:circle-alert}} Проблемы <b class="num">1</b></div>
+          <div class="kp">{{i:file-text}} За месяц <b class="num">186</b></div>
+          <div class="kp">{{i:trending-up}} Выручка <b class="num">48,6 млн ₸</b></div>
+        </div>
+        <div class="row" style="grid-template-columns:1.55fr 1fr">
+          <div class="card">
+            <div class="ch"><span class="g">⠿</span>Выручка и маржа по неделям <span class="m">последние 12 недель, ₸</span><span class="r">{{i:arrow-up-right:15}}{{i:ellipsis:15}}</span></div>
+            <div class="chart">
+              <div class="bars">
+                <div class="gl" style="top:0"></div><div class="gl" style="top:25%"></div><div class="gl" style="top:50%"></div><div class="gl" style="top:75%"></div>
+                <span class="yl" style="top:0">16</span><span class="yl" style="top:25%">12</span><span class="yl" style="top:50%">8</span><span class="yl" style="top:75%">4</span>
+                <div class="bw"><i class="a" style="height:38%"></i><i class="b" style="height:9%"></i></div>
+                <div class="bw"><i class="a" style="height:44%"></i><i class="b" style="height:11%"></i></div>
+                <div class="bw"><i class="a" style="height:41%"></i><i class="b" style="height:10%"></i></div>
+                <div class="bw"><i class="a" style="height:52%"></i><i class="b" style="height:13%"></i></div>
+                <div class="bw"><i class="a" style="height:49%"></i><i class="b" style="height:12%"></i></div>
+                <div class="bw"><i class="a" style="height:58%"></i><i class="b" style="height:15%"></i></div>
+                <div class="bw"><i class="a" style="height:55%"></i><i class="b" style="height:14%"></i></div>
+                <div class="bw"><i class="a" style="height:66%"></i><i class="b" style="height:17%"></i></div>
+                <div class="bw"><i class="a" style="height:63%"></i><i class="b" style="height:16%"></i></div>
+                <div class="bw"><i class="a" style="height:74%"></i><i class="b" style="height:19%"></i></div>
+                <div class="bw"><i class="a" style="height:71%"></i><i class="b" style="height:18%"></i></div>
+                <div class="bw hl"><i class="a" style="height:86%"></i><i class="b" style="height:22%"></i></div>
+              </div>
+              <div class="xl"><span>4 нед. июл</span><span>1 нед. авг</span><span>2</span><span>3</span><span>4</span><span>1 нед. сен</span><span>2</span><span>3</span><span>4</span><span>5</span><span>1 нед. окт</span><span>2 нед.</span></div>
+              <div class="tip"><div class="t">2 нед. окт</div>
+                <div class="l"><i class="sq" style="background:#0b0d12"></i>Выручка<b class="num">13,8 млн ₸</b></div>
+                <div class="l"><i class="sq" style="background:#9aa0aa"></i>Маржа<b class="num">2,6 млн ₸</b></div></div>
+              <div class="lg2"><span><i style="background:#0b0d12"></i>Выручка, млн ₸</span><span><i style="background:#d4d6db"></i>Маржа, млн ₸</span></div>
+            </div>
+          </div>
+          <div class="card list">
+            <div class="ch"><span class="g">⠿</span>Ближайшие погрузки<span class="r" style="color:#0b0d12;font-weight:500;font-size:12.5px">Все заявки →</span></div>
+            <div class="it"><span class="no">ЗК-2610</span><div class="rt"><b>Шымкент → Алматы</b><div>сегодня, 14:00 · Тент 20 т</div></div><span class="pill">{{i:loader:13}}Погрузка</span></div>
+            <div class="it"><span class="no">ЗК-2611</span><div class="rt"><b>Астана → Караганда</b><div>завтра, 09:30 · Реф 18 т</div></div><span class="pill">{{i:user-round:13}}Назначен</span></div>
+            <div class="it"><span class="no">ЗК-2612</span><div class="rt"><b>Актобе → Атырау</b><div>16.10, 08:00 · Борт 10 т</div></div><span class="pill wait">{{i:clock:13}}Ожидает</span></div>
+            <div class="it"><span class="no">ЗК-2613</span><div class="rt"><b>Павлодар → Алматы</b><div>16.10, 11:00 · Тент 20 т</div></div><span class="pill">{{i:user-round:13}}Назначен</span></div>
+            <div class="it"><span class="no">ЗК-2601</span><div class="rt"><b>Алматы → Астана</b><div>акт № 2601 · 620 000 ₸</div></div><span class="pill ok">{{i:circle-check:13}}Завершён</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- телефон водителя -->
+  <div class="float phone"><div class="scr">
+    <div class="notch"></div>
+    <div class="sbar"><span>9:41</span><span class="r">●●● ▮</span></div>
+    <div class="hi"><div><div class="t">Добрый день, Ерлан</div><div class="s">Евразия Карго · 123 ABC 02</div></div><span class="rb2">{{i:settings-2:17}}</span></div>
+    <div class="hero">
+      <div class="ey">Рейс № ЗК-2607</div><div class="nw">Дальше — выгрузка</div>
+      <div class="rail">
+        <div><div class="d"></div><div class="ln"></div></div><div class="p">Алматы<div>ул. Рыскулова, 12 · склад №3</div></div>
+        <div><div class="d o"></div></div><div class="p">Астана<div>пр. Кабанбай батыра, 1</div></div>
+      </div>
+      <div class="hb"><span class="w">{{i:route:15:2}} Навигатор</span><span>{{i:phone:15:2}} Позвонить</span></div>
+    </div>
+    <div class="trk">
+      <div class="r1"><div><div class="l">Сейчас</div><div class="v">В пути</div></div><div class="pc num">60%</div></div>
+      <div class="steps"><i class="on"></i><i class="half"></i><i></i></div>
+      <div class="sl3"><span>Погрузка 13.10</span><span>В пути</span><span>Выгрузка 16.10</span></div>
+    </div>
+    <div class="acts">
+      <div>{{i:file-check-2:20}}<b>Фото документа</b><span>ТТН, накладная, акт</span></div>
+      <div class="bad">{{i:circle-alert:20}}<b>Проблема</b><span>Сообщить диспетчеру</span></div>
+    </div>
+    <div class="nav"><span class="on">{{i:truck:20}}</span><span>{{i:package-open:20}}</span><span>{{i:wallet:20}}</span><span>{{i:user-round:20}}</span></div>
+  </div></div>
+
+  <!-- рейс на карте -->
+  <div class="float glass mon">
+    <div class="hd"><span class="no">ЗК-2607</span><span class="gp"><i></i>В пути</span><span class="live"><i></i>GPS · сейчас</span></div>
+    <div class="map">
+      <svg width="424" height="156" viewBox="0 0 424 156">
+        <defs>
+          <linearGradient id="rt" x1="0" x2="1"><stop offset="0" stop-color="#8d929b"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+          <pattern id="dots" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".9" fill="rgba(255,255,255,.12)"/></pattern>
+          <radialGradient id="glow"><stop offset="0" stop-color="#ffffff" stop-opacity=".45"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+        </defs>
+        <rect width="424" height="156" fill="url(#dots)"/>
+        <path d="M0 120 C 60 112, 90 140, 150 128 S 260 96, 424 104" stroke="rgba(255,255,255,.07)" stroke-width="6" fill="none"/>
+        <path d="M40 0 C 70 40, 120 50, 160 156" stroke="rgba(255,255,255,.05)" stroke-width="4" fill="none"/>
+        <path d="M300 0 C 290 50, 330 90, 360 156" stroke="rgba(255,255,255,.05)" stroke-width="4" fill="none"/>
+        <path d="M44 128 C 110 120, 150 70, 222 74 S 330 40, 384 28" stroke="rgba(255,255,255,.18)" stroke-width="2.5" stroke-dasharray="2 7" stroke-linecap="round" fill="none"/>
+        <path d="M44 128 C 110 120, 150 70, 222 74" stroke="url(#rt)" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+        <circle cx="44" cy="128" r="5" fill="#fff"/>
+        <circle cx="384" cy="28" r="9" fill="none" stroke="#fff" stroke-opacity=".25" stroke-width="5"/>
+        <circle cx="384" cy="28" r="5" fill="#0b0d12" stroke="#fff" stroke-width="2.5"/>
+        <circle cx="222" cy="74" r="30" fill="url(#glow)"/>
+        <circle cx="222" cy="74" r="15" fill="#fff"/>
+        <g transform="translate(213 65)" stroke="#0b0d12" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.5 13.5V4.5a1.5 1.5 0 0 0-1.5-1.5H3a1.5 1.5 0 0 0-1.5 1.5v8.25a.75.75 0 0 0 .75.75h1.5"/><path d="M11.25 13.5H6.75"/><path d="M14.25 13.5h1.5a.75.75 0 0 0 .75-.75v-2.74a.75.75 0 0 0-.16-.47l-2.6-3.26a.75.75 0 0 0-.59-.28H10.5"/><circle cx="12.75" cy="13.5" r="1.5"/><circle cx="5.25" cy="13.5" r="1.5"/>
+        </g>
+        <text x="34" y="150" fill="rgba(255,255,255,.55)" font-family="Inter" font-size="11">Алматы</text>
+        <text x="344" y="18" fill="rgba(255,255,255,.55)" font-family="Inter" font-size="11">Астана</text>
+        <g transform="translate(238 92)"><rect width="104" height="24" rx="12" fill="rgba(11,13,18,.85)" stroke="rgba(255,255,255,.12)"/><text x="12" y="16" fill="#fff" font-family="Inter" font-size="11.5" font-weight="600">78 км/ч · Балхаш</text></g>
+      </svg>
+    </div>
+    <div class="rt"><div class="c">Алматы<div>погружено 13.10, 09:40</div></div><div class="ar"></div><div class="c" style="text-align:right">Астана<div>16.10 к 14:00</div></div></div>
+    <div class="meta"><div>Пройдено<b class="num">60%</b></div><div>Осталось<b class="num">≈ 480 км</b></div><div>Водитель<b>Ерлан К.</b></div></div>
+  </div>
+
+  <!-- уведомление: документ -->
+  <div class="float wcard toast">
+    <span class="ico">{{i:file-check-2:19}}</span>
+    <div><div class="t">Акт выполненных работ готов</div><div class="s">ЗК-2601 · Алматы → Астана · <b style="color:#0b0d12">620 000 ₸</b></div></div>
+    <span class="tm">сейчас</span>
+  </div>
+
+  <!-- деньги -->
+  <div class="float wcard fin">
+    <div class="t">Маржа за месяц <span class="bg">{{i:arrow-up-right:12:2.2}}18,7%</span></div>
+    <div class="v num">9 120 000 ₸</div>
+    <div class="s">заработок по 186 рейсам</div>
+    <svg class="sp" width="264" height="56" viewBox="0 0 264 56">
+      <defs><linearGradient id="fa" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#0b0d12" stop-opacity=".12"/><stop offset="1" stop-color="#0b0d12" stop-opacity="0"/></linearGradient></defs>
+      <path d="M0 46 L24 42 L48 44 L72 36 L96 38 L120 30 L144 32 L168 22 L192 25 L216 16 L240 14 L264 5 L264 56 L0 56Z" fill="url(#fa)"/>
+      <path d="M0 46 L24 42 L48 44 L72 36 L96 38 L120 30 L144 32 L168 22 L192 25 L216 16 L240 14 L264 5" fill="none" stroke="#0b0d12" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="262" cy="5.5" r="4" fill="#fff" stroke="#0b0d12" stroke-width="2.2"/>
+    </svg>
+  </div>
+
+  <!-- помощник -->
+  <div class="float glass ai">
+    <div class="q">{{i:sparkles:15}} Где машина по ЗК-2607?</div>
+    <div class="a">Под <b>Балхашом</b>, идёт по графику. Прибытие в Астану — <b>16.10 к 14:00</b>.</div>
+  </div>
+</div>
+
+<div class="stats">
+    <div class="stat"><div class="v">1<small>день</small></div><div class="l">на запуск<br>компании</div></div>
+    <div class="stat"><div class="v">3<small>роли</small></div><div class="l">экспедитор, заказчик<br>и перевозчик</div></div>
+    <div class="stat"><div class="v">0</div><div class="l">звонков водителю,<br>чтобы узнать, где груз</div></div>
+  </div>
+<div class="feat">Заявки<i></i>Биржа грузов<i></i>GPS-мониторинг<i></i>Финансы<i></i>Документы<i></i>Приложение водителя</div>
+<div class="grain"></div>
+</div></body></html>
