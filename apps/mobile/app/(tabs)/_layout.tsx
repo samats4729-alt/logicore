@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { TabIcon, useTabScreenOptions } from '@/components/TabBar';
+import { PillTabBar, TabIcon, useTabScreenOptions } from '@/components/TabBar';
 
 export default function TabsLayout() {
     const screenOptions = useTabScreenOptions();
@@ -7,19 +7,19 @@ export default function TabsLayout() {
     // Заголовки экранов — внутри самих экранов (крупный заголовок Unbounded,
     // как в кабинете), поэтому стандартная шапка скрыта.
     return (
-        <Tabs screenOptions={{ ...screenOptions, headerShown: false }}>
+        <Tabs screenOptions={{ ...screenOptions, headerShown: false }} tabBar={(props: any) => <PillTabBar {...props} />}>
             <Tabs.Screen
                 name="index"
                 options={{
                     title: 'Рейс',
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="car" focused={focused} />,
+                    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => <TabIcon name="car" focused={focused} color={color} />,
                 }}
             />
             <Tabs.Screen
                 name="map"
                 options={{
                     title: 'Карта',
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="map" focused={focused} />,
+                    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => <TabIcon name="map" focused={focused} color={color} />,
                 }}
             />
             {/* «История», а не «Рейсы»: рядом с вкладкой «Рейс» водитель путал,
@@ -28,14 +28,14 @@ export default function TabsLayout() {
                 name="orders"
                 options={{
                     title: 'История',
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="time" focused={focused} />,
+                    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => <TabIcon name="time" focused={focused} color={color} />,
                 }}
             />
             <Tabs.Screen
                 name="profile"
                 options={{
                     title: 'Профиль',
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="person" focused={focused} />,
+                    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => <TabIcon name="person" focused={focused} color={color} />,
                 }}
             />
         </Tabs>
