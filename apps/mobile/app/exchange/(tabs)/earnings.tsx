@@ -3,8 +3,9 @@ import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text,
 import { useFocusEffect } from 'expo-router';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { Earnings, PayoutStatus, exchangeApi, деньги, ответ, вКавычках } from '@/lib/exchange';
-import { BRAND } from '@/lib/theme';
-import { Badge, Button, Card, Empty, Field } from '@/components/kit';
+import { BRAND, FONT } from '@/lib/theme';
+import { Badge, Button, Card, Empty, Field, HeroCard, HeroPill, Section } from '@/components/kit';
+import { useTabBarSpace } from '@/components/TabBar';
 
 /**
  * Три состояния денег — словами задачи владельца (09.10.2026): «Начислено»
@@ -35,6 +36,7 @@ const date = (d: string | null) => (d ? new Date(d).toLocaleDateString('ru-RU') 
  */
 export default function EarningsScreen() {
     const { colors } = useAppTheme();
+    const tabBarSpace = useTabBarSpace();
     const [data, setData] = useState<Earnings | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
@@ -112,17 +114,33 @@ export default function EarningsScreen() {
     return (
         <ScrollView
             style={{ backgroundColor: colors.background }}
-            contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+            contentContainerStyle={{ padding: 16, paddingBottom: tabBarSpace + 24 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         >
-            <Card>
-                <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>НАЧИСЛЕНО — МОЖНО ЗАПРОСИТЬ</Text>
-                <Text style={[styles.big, { color: colors.text }]}>{деньги(a.net)}</Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            {/* Сумма к выплате — на чёрной карточке, как баланс на образце владельца;
+                «Запросить» — пилюлей на ней же. */}
+            <HeroCard>
+                <Text style={[styles.eyebrow, { color: colors.featureFg }]}>Начислено — можно запросить</Text>
+                <Text style={[styles.big, { color: colors.featureFg }]}>{деньги(a.net)}</Text>
+                <Text style={[styles.heroSub, { color: colors.featureFg }]}>
                     {data.trips.length ? `за довезённых рейсов: ${data.trips.length}` : 'Довезите рейс — здесь появится сумма к выплате'}
                 </Text>
+                {data.trips.length > 0 && !editAccount && (
+                    <View style={styles.heroActions}>
+                        <HeroPill
+                            title={open ? 'Прошлая выплата ещё идёт' : 'Запросить выплату'}
+                            icon="wallet-outline"
+                            loading={busy}
+                            disabled={open}
+                            onPress={request}
+                        />
+                    </View>
+                )}
+            </HeroCard>
+
+            <Section title={data.trips.length ? 'Откуда сумма' : 'Выплаты'} icon="receipt-outline">
                 {onHand && (
-                    <View style={[styles.breakdown, { borderTopColor: colors.border }]}>
+                    <View>
                         <Line label="Договорились, на руки" value={деньги(agreedSum)} colors={colors} />
                         <Line label="Парк дал на топливо" value={`− ${деньги(fuelSum)}`} colors={colors} />
                         <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6, lineHeight: 17 }}>
@@ -131,7 +149,7 @@ export default function EarningsScreen() {
                     </View>
                 )}
                 {data.trips.length > 0 && !onHand && (
-                    <View style={[styles.breakdown, { borderTopColor: colors.border }]}>
+                    <View>
                         <Line label="Начислено за рейсы" value={деньги(a.gross)} colors={colors} />
                         <Line label={`Комиссия парка ${data.rates.commissionPct}%`} value={`− ${деньги(a.commission)}`} colors={colors} />
                         <Line label={`Пенсионные (ОПВ) ${data.rates.opvPct}%`} value={`− ${деньги(a.opv)}`} colors={colors} />
@@ -144,14 +162,13 @@ export default function EarningsScreen() {
                 )}
                 {/* Два других состояния денег — под расшифровкой, чтобы она
                     осталась рядом со своей суммой. */}
-                <View style={[styles.states, { borderTopColor: colors.border }]}>
+                <View style={[styles.states, data.trips.length > 0 && { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border2 }]}>
                     <StateLine label="Ожидает выплаты" value={деньги(waitingSum)} hint={open ? `запрошено выплат: ${waiting.length}` : 'запросов нет'} colors={colors} />
                     <StateLine label="Выплачено" value={деньги(paidSum)} hint="за всё время" colors={colors} />
                 </View>
-            </Card>
+            </Section>
 
-            <Card>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Счёт для выплаты</Text>
+            <Section title="Счёт для выплаты" icon="card-outline">
                 {editAccount ? (
                     <>
                         <Field
@@ -168,33 +185,22 @@ export default function EarningsScreen() {
                 ) : (
                     <View style={styles.accountRow}>
                         <View style={{ flex: 1 }}>
-                            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{data.iban}</Text>
+                            <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>{data.iban}</Text>
                             {!!data.bank && <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{data.bank}</Text>}
                         </View>
                         <Button title="Изменить" variant="secondary" onPress={() => setEditAccount(true)} style={{ height: 40, paddingHorizontal: 14 }} />
                     </View>
                 )}
-            </Card>
-
-            {data.trips.length > 0 && !editAccount && (
-                <Button
-                    title={open ? 'Прошлая выплата ещё идёт' : `Запросить ${деньги(a.net)}`}
-                    icon="wallet-outline"
-                    loading={busy}
-                    disabled={open}
-                    onPress={request}
-                    style={{ marginBottom: 12 }}
-                />
-            )}
+            </Section>
 
             {data.trips.length > 0 && (
                 <>
-                    <Text style={[styles.section, { color: colors.textTertiary }]}>НАЧИСЛЕНО ЗА РЕЙСЫ</Text>
+                    <Text style={[styles.section, { color: colors.text }]}>Начислено за рейсы</Text>
                     {data.trips.map((t) => (
                         <Card key={t.orderId} style={{ paddingVertical: 12 }}>
                             <View style={styles.row}>
-                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15, flex: 1 }}>{t.route}</Text>
-                                <Text style={{ color: colors.text, fontWeight: '800' }}>{деньги(t.net)}</Text>
+                                <Text style={{ color: colors.text, fontFamily: FONT.semibold, fontSize: 15, flex: 1 }}>{t.route}</Text>
+                                <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 15, fontVariant: ['tabular-nums'] }}>{деньги(t.net)}</Text>
                             </View>
                             <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>
                                 Заявка {t.orderNumber}{t.completedAt ? ` · довёз ${date(t.completedAt)}` : ''}
@@ -209,11 +215,11 @@ export default function EarningsScreen() {
 
             {data.payouts.length > 0 && (
                 <>
-                    <Text style={[styles.section, { color: colors.textTertiary }]}>ИСТОРИЯ ВЫПЛАТ</Text>
+                    <Text style={[styles.section, { color: colors.text }]}>История выплат</Text>
                     {data.payouts.map((p) => (
                         <Card key={p.id} style={{ paddingVertical: 12 }}>
                             <View style={styles.row}>
-                                <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16, flex: 1 }}>{деньги(p.net)}</Text>
+                                <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 16, flex: 1, fontVariant: ['tabular-nums'] }}>{деньги(p.net)}</Text>
                                 <Badge label={STATUS[p.status].label} tone={STATUS[p.status].tone} />
                             </View>
                             <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>
@@ -244,10 +250,10 @@ function StateLine({ label, value, hint, colors }: { label: string; value: strin
     return (
         <View style={styles.stateLine}>
             <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{label}</Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{hint}</Text>
+                <Text style={{ color: colors.text, fontSize: 14, fontFamily: FONT.medium }}>{label}</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 12, fontFamily: FONT.regular }}>{hint}</Text>
             </View>
-            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{value}</Text>
+            <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold, fontVariant: ['tabular-nums'] }}>{value}</Text>
         </View>
     );
 }
@@ -255,21 +261,21 @@ function StateLine({ label, value, hint, colors }: { label: string; value: strin
 function Line({ label, value, colors }: { label: string; value: string; colors: { text: string; textSecondary: string } }) {
     return (
         <View style={styles.line}>
-            <Text style={{ color: colors.textSecondary, fontSize: 13.5, flex: 1 }}>{label}</Text>
-            <Text style={{ color: colors.text, fontSize: 13.5, fontWeight: '600' }}>{value}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13.5, flex: 1, fontFamily: FONT.regular }}>{label}</Text>
+            <Text style={{ color: colors.text, fontSize: 13.5, fontFamily: FONT.semibold, fontVariant: ['tabular-nums'] }}>{value}</Text>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
-    big: { fontSize: 32, fontWeight: '800', letterSpacing: -0.8, marginTop: 2 },
-    breakdown: { marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
-    states: { marginTop: 12, paddingTop: 8, borderTopWidth: 1, gap: 6 },
+    eyebrow: { fontFamily: FONT.regular, fontSize: 13.5, opacity: 0.65 },
+    big: { fontFamily: FONT.display, fontSize: 34, letterSpacing: -1.4, marginTop: 8, fontVariant: ['tabular-nums'] },
+    heroSub: { fontFamily: FONT.regular, fontSize: 13, opacity: 0.6, marginTop: 4 },
+    heroActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+    states: { gap: 6 },
     stateLine: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
     line: { flexDirection: 'row', paddingVertical: 3 },
-    cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 10 },
     accountRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    section: { fontSize: 11.5, fontWeight: '700', letterSpacing: 1.2, marginTop: 12, marginBottom: 10 },
+    section: { fontFamily: FONT.medium, fontSize: 15.5, marginTop: 12, marginBottom: 10, marginLeft: 4 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
 });

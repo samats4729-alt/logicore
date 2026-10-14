@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-blank.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F0F2F4"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -56,7 +56,6 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-video",
       [
         "expo-location",
         {
@@ -81,7 +80,17 @@
         }
       ],
       "@rnmapbox/maps",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "# Сжатие кода (R8) включено по требованию Google Play (оптимизация DEX, 14.10.2026).\n# Библиотеки, которые находят свой код по имени, оставляем как есть, иначе они падают на запуске.\n-keep class com.shopify.reactnative.skia.** { *; }\n-keep class com.swmansion.** { *; }\n-keep class com.mapbox.** { *; }\n-keep class com.rnmapbox.** { *; }"
+          }
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "http://localhost:3001",

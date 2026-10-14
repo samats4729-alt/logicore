@@ -68,7 +68,7 @@ export default function ProfileScreen() {
 
             <View style={styles.body}>
                 {/* Кто вы: фото, имя, телефон, компания */}
-                <View style={[styles.identity, { backgroundColor: colors.card, borderColor: colors.border }, !isDark && SHADOW]}>
+                <View style={[styles.identity, { backgroundColor: colors.card, borderColor: colors.card }]}>
                     <TouchableOpacity onPress={pickAvatar} disabled={uploading} style={styles.avatarWrap} accessibilityLabel="Сменить фото профиля">
                         {!avatarFailed ? (
                             <Image
@@ -129,7 +129,7 @@ export default function ProfileScreen() {
                 )}
 
                 {/* Меню */}
-                <View style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.border }, !isDark && SHADOW]}>
+                <View style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.card }]}>
                     <ListRow icon="documents-outline" label="История рейсов" desc="Все ваши рейсы и их статусы" onPress={() => router.push('/(tabs)/orders')} />
                     <ListRow icon="settings-outline" label="Настройки" desc="Тема оформления, проверка GPS" onPress={() => router.push('/settings')} last />
                 </View>

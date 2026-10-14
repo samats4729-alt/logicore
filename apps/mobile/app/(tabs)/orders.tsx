@@ -67,7 +67,7 @@ export default function OrdersScreen() {
                     style={({ pressed }: { pressed: boolean }) => [
                         styles.card,
                         isActive
-                            ? [{ backgroundColor: colors.card, borderColor: isCurrent ? colors.text : colors.border }, !isDark && SHADOW]
+                            ? { backgroundColor: colors.card, borderColor: isCurrent ? colors.text : colors.card }
                             : { backgroundColor: 'transparent', borderColor: colors.border },
                         isCurrent && { borderWidth: 1.5 },
                         pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },

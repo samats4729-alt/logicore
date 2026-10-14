@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
     View,
     Text,
@@ -18,17 +18,19 @@ import { startBackgroundTracking, stopBackgroundTracking, getCurrentLocation } f
 import { api } from '@/lib/api';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { statusMeta, FONT, RADIUS, SHADOW } from '@/lib/theme';
-import { Empty, IconTile, ScreenHeader, Section, StatusPill } from '@/components/kit';
+import { Empty, Greeting, HeroCard, HeroPill, IconTile, RoundButton, Row, Section, StatusPill, TripStepper } from '@/components/kit';
 import { SwipeConfirm } from '@/components/SwipeConfirm';
 import { ProblemSheet } from '@/components/ProblemSheet';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
 import { useTabBarSpace } from '@/components/TabBar';
 import { TripFuel } from '@/components/TripFuel';
 
-/** Шагов у рейса от «Назначен» до «Завершён» — столько делений у полосы прогресса. */
-const STEPS = 8;
 /** Высота ползунка «смахните вправо» (кружок 54 + поля). */
 const SWIPE_HEIGHT = 64;
+
+/** «16 окт» — дата погрузки или выгрузки под шагом рейса. */
+const деньМесяц = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '') : null;
 
 const точек = (n: number) => {
     const d = n % 10;
@@ -53,7 +55,7 @@ export default function CurrentTrip({
     /** Водитель парка на бирже: раздел «Топливо» — БИН парка, чеки, сколько останется. */
     fuel?: boolean;
 }) {
-    const { currentOrder, fetchCurrentOrder, updateOrderStatus, reportProblem } = useStore();
+    const { currentOrder, fetchCurrentOrder, updateOrderStatus, reportProblem, user } = useStore();
     const { colors, isDark } = useAppTheme();
     const [refreshing, setRefreshing] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -164,6 +166,18 @@ export default function CurrentTrip({
 
     const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.text} />;
 
+    // Приветствие — у водителя компании на главной вкладке; у водителя биржи
+    // над экраном своя шапка «Мой рейс».
+    const greeting = showHeader && (
+        <Greeting
+            firstName={user?.firstName}
+            lastName={user?.lastName}
+            sub={[user?.company?.name, user?.vehiclePlate].filter(Boolean).join(' · ') || 'Водитель'}
+            subIcon={user?.company?.name ? 'business-outline' : 'car-outline'}
+            right={<RoundButton icon="settings-outline" label="Настройки" onPress={() => router.push('/settings')} />}
+        />
+    );
+
     // ==================== Пустое состояние ====================
     if (!currentOrder) {
         return (
@@ -172,7 +186,7 @@ export default function CurrentTrip({
                 contentContainerStyle={{ flexGrow: 1, paddingBottom: tabBarSpace + 28 }}
                 refreshControl={refreshControl}
             >
-                {showHeader && <ScreenHeader eyebrow="Водитель" title="Рейс" />}
+                {greeting}
                 <View style={styles.emptyWrap}>
                     <Empty icon="car-outline" title="Нет активных рейсов" text={emptyText} />
                 </View>
@@ -185,7 +199,6 @@ export default function CurrentTrip({
     const deliveries = currentOrder.routePoints?.filter(p => p.pointType === 'DELIVERY') || [];
     const fromPoint = pickups[0]?.location;
     const toPoint = deliveries[deliveries.length - 1]?.location;
-    const filledSteps = Math.max(1, Math.round((meta.progress / 100) * STEPS));
     // Куда ехать сейчас: до погрузки, пока груз не взят, потом — до выгрузки.
     const loaded = ['IN_TRANSIT', 'AT_DELIVERY', 'UNLOADING'].includes(currentOrder.status);
     const target = loaded ? deliveries[0] : pickups[0];
@@ -204,25 +217,22 @@ export default function CurrentTrip({
             contentContainerStyle={{ paddingBottom: tabBarSpace + dockSpace + 28 }}
             refreshControl={refreshControl}
         >
-            {showHeader && <ScreenHeader eyebrow="Активный рейс" title={`№ ${currentOrder.orderNumber}`} />}
+            {greeting}
 
             <View style={[styles.body, !showHeader && { paddingTop: 14 }]}>
-                {/* ===== Главная карточка: откуда — куда, статус, прогресс ===== */}
-                <View style={[styles.hero, { backgroundColor: colors.feature }, isDark && { borderWidth: 1, borderColor: colors.border }]}>
+                {/* ===== Главная карточка: откуда — куда и что делать сейчас =====
+                    Чёрная, как карточка баланса на образце владельца; действия —
+                    светлые пилюли внизу. */}
+                <HeroCard>
                     <View style={styles.heroTop}>
-                        <Text style={[styles.heroEyebrow, { color: onFeature }]}>
-                            {showHeader ? 'МАРШРУТ' : `РЕЙС № ${currentOrder.orderNumber}`}
-                        </Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.heroEyebrow, { color: onFeature }]}>Рейс № {currentOrder.orderNumber}</Text>
+                            <Text style={[styles.heroNow, { color: onFeature }]} numberOfLines={1}>
+                                {isProblem ? 'Ждём ответа диспетчера' : loaded ? 'Дальше — выгрузка' : 'Дальше — погрузка'}
+                            </Text>
+                        </View>
                         <StatusPill status={currentOrder.status} />
                     </View>
-
-                    {!!currentOrder.customerCompany?.name && (
-                        <View style={[styles.customer, { borderColor: 'rgba(255,255,255,0.12)' }]}>
-                            <Ionicons name="business-outline" size={15} color={onFeature} style={{ opacity: 0.6 }} />
-                            <Text style={[styles.customerLabel, { color: onFeature }]}>Заказчик</Text>
-                            <Text style={[styles.customerName, { color: onFeature }]} numberOfLines={1}>{currentOrder.customerCompany.name}</Text>
-                        </View>
-                    )}
 
                     {/* Откуда — куда: погрузка — закрашенная точка, выгрузка — полая */}
                     <View style={styles.heroRow}>
@@ -258,46 +268,50 @@ export default function CurrentTrip({
                     {!!target && (targetHasPoint || !!target.location.contactPhone) && (
                         <View style={styles.heroActions}>
                             {targetHasPoint && (
-                                <Pressable
-                                    accessibilityRole="button"
+                                <HeroPill
+                                    title="Навигатор"
+                                    icon="navigate"
+                                    label={loaded ? 'Навигатор до выгрузки' : 'Навигатор до погрузки'}
                                     onPress={() => showNavigationOptions(
                                         target.location.latitude,
                                         target.location.longitude,
                                         target.location.address,
                                     )}
-                                    style={({ pressed }: { pressed: boolean }) => [styles.heroNav, { backgroundColor: onFeature, opacity: pressed ? 0.85 : 1 }]}
-                                >
-                                    <Ionicons name="navigate" size={17} color={colors.feature} />
-                                    <Text style={[styles.heroNavText, { color: colors.feature }]}>
-                                        {loaded ? 'Навигатор до выгрузки' : 'Навигатор до погрузки'}
-                                    </Text>
-                                </Pressable>
+                                />
                             )}
                             {!!target.location.contactPhone && (
-                                <Pressable
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`Позвонить: ${target.location.contactName || target.location.name}`}
+                                <HeroPill
+                                    title="Позвонить"
+                                    icon="call"
+                                    label={`Позвонить: ${target.location.contactName || target.location.name}`}
                                     onPress={() => Linking.openURL(`tel:${target.location.contactPhone}`)}
-                                    style={({ pressed }: { pressed: boolean }) => [styles.heroCall, { borderColor: 'rgba(255,255,255,0.2)', opacity: pressed ? 0.7 : 1 }]}
-                                >
-                                    <Ionicons name="call" size={17} color={onFeature} />
-                                </Pressable>
+                                />
                             )}
                         </View>
                     )}
+                </HeroCard>
 
-                    <View style={styles.steps}>
-                        {Array.from({ length: STEPS }).map((_, i) => (
-                            <View
-                                key={i}
-                                style={[styles.step, { backgroundColor: onFeature, opacity: i < filledSteps ? 1 : 0.16 }]}
-                            />
-                        ))}
+                {/* ===== Ход рейса: три шага, как трекинг посылки на образце ===== */}
+                <View style={[styles.track, { backgroundColor: colors.card }]}>
+                    <View style={styles.trackTop}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.trackLabel, { color: colors.textTertiary }]}>Сейчас</Text>
+                            <Text style={[styles.trackValue, { color: colors.text }]}>{meta.label}</Text>
+                        </View>
+                        <Text style={[styles.trackPercent, { color: colors.text }]}>{meta.progress}%</Text>
                     </View>
-                    <View style={styles.heroFoot}>
-                        <Text style={[styles.heroFootText, { color: onFeature }]}>{meta.label}</Text>
-                        <Text style={[styles.heroFootValue, { color: onFeature }]}>{meta.progress}%</Text>
-                    </View>
+                    <TripStepper
+                        status={currentOrder.status}
+                        from={деньМесяц(pickups[0]?.expectedDate)}
+                        to={деньМесяц(deliveries[deliveries.length - 1]?.expectedDate)}
+                    />
+                    {!!currentOrder.customerCompany?.name && (
+                        <View style={[styles.customer, { borderTopColor: colors.border }]}>
+                            <Ionicons name="business-outline" size={15} color={colors.textTertiary} />
+                            <Text style={[styles.customerLabel, { color: colors.textTertiary }]}>Заказчик</Text>
+                            <Text style={[styles.customerName, { color: colors.text }]} numberOfLines={1}>{currentOrder.customerCompany.name}</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* ===== Документ и проблема ===== */}
@@ -307,8 +321,7 @@ export default function CurrentTrip({
                         disabled={uploading}
                         style={({ pressed }: { pressed: boolean }) => [
                             styles.action,
-                            { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
-                            !isDark && SHADOW,
+                            { backgroundColor: colors.card, opacity: pressed ? 0.85 : 1 },
                         ]}
                     >
                         {uploading
@@ -321,8 +334,7 @@ export default function CurrentTrip({
                         onPress={handleReportProblem}
                         style={({ pressed }: { pressed: boolean }) => [
                             styles.action,
-                            { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
-                            !isDark && SHADOW,
+                            { backgroundColor: colors.card, opacity: pressed ? 0.85 : 1 },
                         ]}
                     >
                         <IconTile icon="warning-outline" tone="danger" size={40} />
@@ -349,11 +361,11 @@ export default function CurrentTrip({
                                         style={[
                                             styles.timelineDot,
                                             isDelivery
-                                                ? { borderWidth: 2, borderColor: colors.text, backgroundColor: colors.card }
+                                                ? { borderWidth: 2, borderColor: colors.text, backgroundColor: colors.surface2 }
                                                 : { backgroundColor: colors.text },
                                         ]}
                                     >
-                                        <Text style={[styles.timelineDotText, { color: isDelivery ? colors.text : colors.card }]}>{index + 1}</Text>
+                                        <Text style={[styles.timelineDotText, { color: isDelivery ? colors.text : colors.surface2 }]}>{index + 1}</Text>
                                     </View>
                                     {!isLast && <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />}
                                 </View>
@@ -373,7 +385,7 @@ export default function CurrentTrip({
                                         {typeof point.location.latitude === 'number'
                                             && typeof point.location.longitude === 'number' && (
                                             <Pressable
-                                                style={({ pressed }: { pressed: boolean }) => [styles.pointButton, { borderColor: colors.border, backgroundColor: pressed ? colors.hover : colors.card }]}
+                                                style={({ pressed }: { pressed: boolean }) => [styles.pointButton, { borderColor: colors.card, backgroundColor: pressed ? colors.hover : colors.card }]}
                                                 onPress={() => showNavigationOptions(
                                                     point.location.latitude,
                                                     point.location.longitude,
@@ -386,7 +398,7 @@ export default function CurrentTrip({
                                         )}
                                         {!!point.location.contactPhone && (
                                             <Pressable
-                                                style={({ pressed }: { pressed: boolean }) => [styles.pointButton, { borderColor: colors.border, backgroundColor: pressed ? colors.hover : colors.card }]}
+                                                style={({ pressed }: { pressed: boolean }) => [styles.pointButton, { borderColor: colors.card, backgroundColor: pressed ? colors.hover : colors.card }]}
                                                 onPress={() => Linking.openURL(`tel:${point.location.contactPhone}`)}
                                             >
                                                 <Ionicons name="call-outline" size={15} color={colors.pos} />
@@ -404,14 +416,9 @@ export default function CurrentTrip({
 
                 {/* ===== Груз ===== */}
                 <Section title="Груз" icon="cube-outline">
-                    <Text style={[styles.cargoText, { color: colors.text }]}>{currentOrder.cargoDescription || '—'}</Text>
+                    <Row label="Что везём" value={currentOrder.cargoDescription || '—'} />
                     {!!currentOrder.cargoWeight && (
-                        <View style={[styles.cargoChip, { backgroundColor: colors.surface2, borderColor: colors.border2 }]}>
-                            <Ionicons name="barbell-outline" size={14} color={colors.textSecondary} />
-                            <Text style={[styles.cargoWeight, { color: colors.textSecondary }]}>
-                                Вес: {(currentOrder.cargoWeight / 1000).toLocaleString('ru-RU')} т
-                            </Text>
-                        </View>
+                        <Row label="Вес" value={`${(currentOrder.cargoWeight / 1000).toLocaleString('ru-RU')} т`} />
                     )}
                 </Section>
 
@@ -467,9 +474,9 @@ const styles = StyleSheet.create({
     emptyWrap: { flex: 1, justifyContent: 'center', paddingBottom: 40 },
     body: { paddingHorizontal: 16 },
 
-    hero: { borderRadius: 24, padding: 20, marginBottom: 12, overflow: 'hidden' },
-    heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    heroEyebrow: { fontFamily: FONT.displayMedium, fontSize: 10, letterSpacing: 0.8, opacity: 0.55 },
+    heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 22 },
+    heroEyebrow: { fontFamily: FONT.regular, fontSize: 13, opacity: 0.6 },
+    heroNow: { fontFamily: FONT.semibold, fontSize: 15, marginTop: 3, letterSpacing: -0.2 },
     heroRow: { flexDirection: 'row', gap: 14 },
     heroRowText: { flex: 1, paddingBottom: 16 },
     heroRail: { alignItems: 'center', width: 11, paddingTop: 8 },
@@ -477,32 +484,23 @@ const styles = StyleSheet.create({
     heroRailLine: { width: 1.5, flex: 1, marginTop: 6, marginBottom: -6, opacity: 0.3 },
     heroPlace: { fontFamily: FONT.display, fontSize: 21, letterSpacing: -0.8, lineHeight: 27 },
     heroAddress: { fontFamily: FONT.regular, fontSize: 13, marginTop: 3, opacity: 0.6 },
-    heroActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
-    heroNav: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        height: 48,
-        borderRadius: 24,
-    },
-    heroNavText: { fontFamily: FONT.semibold, fontSize: 15, letterSpacing: -0.2 },
-    heroCall: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    steps: { flexDirection: 'row', gap: 4, marginTop: 22 },
-    step: { flex: 1, height: 4, borderRadius: 2 },
-    heroFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-    heroFootText: { fontFamily: FONT.medium, fontSize: 12.5, opacity: 0.65 },
-    heroFootValue: { fontFamily: FONT.semibold, fontSize: 12.5, fontVariant: ['tabular-nums'] },
+    heroActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+
+    track: { borderRadius: RADIUS.card, padding: 18, marginBottom: 12 },
+    trackTop: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 16 },
+    trackLabel: { fontFamily: FONT.regular, fontSize: 12.5 },
+    trackValue: { fontFamily: FONT.semibold, fontSize: 16, marginTop: 3, letterSpacing: -0.2 },
+    trackPercent: { fontFamily: FONT.display, fontSize: 22, letterSpacing: -0.8, fontVariant: ['tabular-nums'] },
+    trackPlaces: { flexDirection: 'row', gap: 16, marginBottom: 18 },
+    trackPlace: { fontFamily: FONT.semibold, fontSize: 14.5, marginTop: 3, letterSpacing: -0.2 },
 
     customer: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        marginTop: -6,
-        marginBottom: 18,
-        paddingBottom: 14,
-        borderBottomWidth: 1,
+        marginTop: 16,
+        paddingTop: 14,
+        borderTopWidth: 1,
     },
     customerLabel: { fontFamily: FONT.medium, fontSize: 12.5, opacity: 0.55 },
     customerName: { flex: 1, fontFamily: FONT.semibold, fontSize: 14, letterSpacing: -0.2 },
@@ -513,7 +511,7 @@ const styles = StyleSheet.create({
     dockPlate: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 
     actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-    action: { flex: 1, borderRadius: RADIUS.card, borderWidth: 1, padding: 14 },
+    action: { flex: 1, borderRadius: RADIUS.card, padding: 16 },
     actionSpinner: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     actionTitle: { fontFamily: FONT.semibold, fontSize: 14.5, letterSpacing: -0.2, marginTop: 12 },
     actionSub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 2 },

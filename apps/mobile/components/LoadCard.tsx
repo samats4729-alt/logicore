@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { ExchangeOrder, груз, деньги, когдаПросто, черезТочки } from '@/lib/exchange';
 import { Badge, Card, Route } from '@/components/kit';
+import { FONT } from '@/lib/theme';
 
 /** Заявка в ленте: маршрут, когда, что везём, сколько получите на руки. Нажатие — карточка. */
 export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: () => void }) {
@@ -35,10 +36,10 @@ export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: ()
 const styles = StyleSheet.create({
     top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     date: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    dateText: { fontSize: 13.5, fontWeight: '600' },
+    dateText: { fontFamily: FONT.medium, fontSize: 13.5 },
     priceBox: { alignItems: 'flex-end' },
-    price: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4 },
-    priceNote: { fontSize: 11.5, fontWeight: '600', marginTop: -1 },
+    price: { fontFamily: FONT.bold, fontSize: 19, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
+    priceNote: { fontFamily: FONT.medium, fontSize: 11.5, marginTop: -1 },
     bottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
-    cargo: { flex: 1, fontSize: 13.5 },
+    cargo: { flex: 1, fontFamily: FONT.regular, fontSize: 13.5 },
 });

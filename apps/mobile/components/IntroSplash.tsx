@@ -1,127 +1,67 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useEventListener } from 'expo';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { useIntro, type Measurable } from '@/lib/intro';
+import { ACCENT, INK, LOGO_BOX, SPLASH_BG } from '@/lib/cargo-splash';
+import { FONT } from '@/lib/theme';
 import { useStore } from '@/store';
+import { CargoMark } from '@/components/CargoMark';
 
-/** У VideoView в проекте не видно поля style (типы react-native отключены) — добавляем его. */
-const Video = VideoView as unknown as React.ComponentType<React.ComponentProps<typeof VideoView> & { style?: object }>;
+const MARK = require('../assets/logo-mark-white.png');
+/** Ширина знака на заставке. */
+const MARK_W = 118;
+const MARK_H = (MARK_W * LOGO_BOX.h) / LOGO_BOX.w;
 
-const VIDEO = require('../assets/intro.mp4');
-const MARK = require('../assets/logo-mark-intro.png');
-
-/**
- * Последний кадр ролика (1080×1920): фон #FAFAFA, по центру чёрный знак шириной 178 px.
- * Наш знак ставим ровно туда же, чтобы смена ролика на анимацию была незаметна.
- */
-const FRAME = { w: 1080, h: 1920, markW: 178 };
-/** Цвет первого кадра — им же залита системная заставка, пока ролик загружается. */
-const START_BG = '#F0F2F4';
-const END_BG = '#FAFAFA';
-/** Фон экрана входа: заставка темнеет ровно до него. */
-const DARK = '#030712';
-const MARK_BLACK = '#09090b';
-/** Если ролик почему-то не доиграл (нет кодека, сбой), заставка не держит водителя дольше этого. */
-const VIDEO_TIMEOUT_MS = 8000;
-/** Сколько ждать, пока приложение решит, куда вести (вход или рейс), после перехода в чёрное. */
+/** Когда появляется название: груз уже почти на месте. */
+const NAME_AT = 1650;
+/** Сколько заставка видна как минимум: вся «погрузка» и пауза, чтобы прочитать название. */
+const MIN_SHOW_MS = 2700;
+/** Сколько ждать, пока приложение решит, куда вести (вход или рейс). */
 const READY_TIMEOUT_MS = 2500;
 
-type Phase = 'video' | 'invert' | 'handoff';
-
 /**
- * Заставка при запуске.
+ * Заставка при запуске — «Погрузка» (выбор владельца, 14.10.2026).
  *
- * 1. Ролик: камера едет по Алматы, в конце остаётся чёрный знак на белом. Нажатие — пропустить.
- * 2. Из-под знака расходится тёмный круг и закрывает экран; когда край круга проходит знак, знак белеет.
- * 3. Знак летит на своё место в шапке экрана входа, а сам экран входа проявляется сверху вниз.
- *    Если водитель уже вошёл — знак мягко уходит, открывается его рейс.
+ * 1. Белый экран. Знак LogiCore рисуется контуром, как кузов, заливается,
+ *    справа заезжает груз, загорается синяя точка; появляется «LogiCore
+ *    Driver · Приложение водителя». Под заставкой тем временем грузятся
+ *    шрифты, проверяется вход и открывается нужный экран.
+ * 2. Передача экрану входа (он тёмный): знак летит на своё место в шапке и
+ *    из чёрного становится белым, белый фон растворяется. Если водитель уже
+ *    вошёл — знак и название мягко уходят, открывается его рейс.
  */
-export function IntroSplash({ onDone }: { onDone: () => void }) {
-    const win = useWindowDimensions();
-    const rootRef = useRef<Measurable>(null);
-    const [box, setBox] = useState({ w: win.width, h: win.height });
-    const W = box.w;
-    const H = box.h;
-    const [phase, setPhase] = useState<Phase>('video');
-    const finished = useRef(false);
-    const shown = useRef(false);
-
-    const player = useVideoPlayer(VIDEO, (p) => {
-        p.muted = true;
-        p.loop = false;
-        p.play();
-    });
-
-    // Ролик появляется из цвета системной заставки, а не вспыхивает.
-    const videoIn = useRef(new Animated.Value(0)).current;
-    // Тёмный круг: 0 — точка под знаком, 1 — закрыл весь экран.
-    const reveal = useRef(new Animated.Value(0)).current;
-    const pulse = useRef(new Animated.Value(1)).current;
-    // Перелёт знака в шапку входа: 0 — по центру, 1 — на месте знака входа.
-    const fly = useRef(new Animated.Value(0)).current;
-    // Прозрачность фона заставки — уходит, открывая экран под ней.
-    const veil = useRef(new Animated.Value(1)).current;
-    const markFade = useRef(new Animated.Value(1)).current;
+export function IntroSplash({ onDone, fontsReady }: { onDone: () => void; fontsReady: boolean }) {
+    const { width: W, height: H } = useWindowDimensions();
+    const cx = W / 2;
+    const cy = Math.round(H * 0.42);
+    const markRef = useRef<Measurable>(null);
+    const [handing, setHanding] = useState(false);
     const [flight, setFlight] = useState({ dx: 0, dy: 0, scale: 1 });
 
-    // Знак ролика на экране телефона: ролик растянут на весь экран (cover), центр совпадает.
-    const scale = Math.max(W / FRAME.w, H / FRAME.h);
-    const markW = FRAME.markW * scale;
-    const markH = markW * (559 / 602);
-    // Радиус круга, который из центра закрывает экран целиком, и где его край проходит знак.
-    const R = Math.hypot(W, H) / 2 + 4;
-    const edgeIn = Math.min(0.2, (markH / 2 / R) * 0.8);
-    const edgeOut = Math.min(0.3, Math.hypot(markW, markH) / 2 / R);
-
-    const showVideo = () => {
-        if (shown.current) return;
-        shown.current = true;
-        Animated.timing(videoIn, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-    };
-
-    const endVideo = () => {
-        if (finished.current) return;
-        finished.current = true;
-        setPhase('invert');
-    };
-
-    useEventListener(player, 'playToEnd', endVideo);
-    useEventListener(player, 'statusChange', ({ status }) => {
-        if (status === 'error') endVideo();
-        // Команда «играть» могла прийти раньше, чем ролик загрузился, — повторяем, когда он готов.
-        if (status === 'readyToPlay' && !finished.current && !player.playing) player.play();
-    });
-    // Не везде приходит сигнал «первый кадр готов» — тогда показываем ролик, как только он пошёл.
-    useEventListener(player, 'playingChange', ({ isPlaying }) => {
-        if (isPlaying) setTimeout(showVideo, 120);
-    });
+    const name = useRef(new Animated.Value(0)).current;
+    const floor = useRef(new Animated.Value(1)).current;
+    // Перелёт знака: 0 — на месте, 1 — в шапке экрана входа.
+    const fly = useRef(new Animated.Value(0)).current;
+    // Знак из чёрного в белый — на тёмном экране входа он белый.
+    const invert = useRef(new Animated.Value(0)).current;
+    // Белый фон и всё, кроме знака, — растворяются при передаче.
+    const veil = useRef(new Animated.Value(1)).current;
+    const markFade = useRef(new Animated.Value(1)).current;
+    const mountedAt = useRef(Date.now()).current;
 
     useEffect(() => {
-        const t = setTimeout(endVideo, VIDEO_TIMEOUT_MS);
+        Animated.timing(floor, { toValue: 0, duration: 400, delay: 1500, useNativeDriver: true }).start();
+        const t = setTimeout(waitAndHandoff, MIN_SHOW_MS);
         return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Шаг 2: тёмный круг расходится из-под знака, знак белеет.
+    // Название — когда загрузились шрифты, иначе мелькнёт системный шрифт.
     useEffect(() => {
-        if (phase !== 'invert') return;
-        try {
-            player.pause();
-        } catch {
-            /* плеер уже остановлен */
-        }
-        Animated.parallel([
-            Animated.timing(reveal, { toValue: 1, duration: 900, delay: 220, easing: Easing.bezier(0.55, 0, 0.25, 1), useNativeDriver: true }),
-            Animated.sequence([
-                Animated.delay(260),
-                Animated.timing(pulse, { toValue: 1.08, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-                Animated.timing(pulse, { toValue: 1, duration: 460, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-            ]),
-        ]).start(() => waitAndHandoff());
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [phase]);
+        if (!fontsReady) return;
+        const delay = Math.max(0, NAME_AT - (Date.now() - mountedAt));
+        Animated.timing(name, { toValue: 1, duration: 650, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }, [fontsReady, name, mountedAt]);
 
     /** Ждём, пока приложение поймёт, куда вести, и экран входа сообщит, где у него знак. */
     const waitAndHandoff = () => {
@@ -136,44 +76,44 @@ export function IntroSplash({ onDone }: { onDone: () => void }) {
         tick();
     };
 
-    // Шаг 3: передача экрану входа (или рейсу).
     const handoff = () => {
         const { target } = useIntro.getState();
         const loggedIn = useStore.getState().isAuthenticated;
         useIntro.getState().setState('handoff');
-        setPhase('handoff');
+        // Знак из анимации меняется на картинку того же размера и места — она умеет лететь и белеть.
+        setHanding(true);
 
         if (target && !loggedIn) {
-            // Знак летит из центра в шапку входа и там уменьшается до своего размера.
-            // Полёт запускаем, когда точка назначения посчитана и попала в разметку.
-            const start = () =>
-                Animated.parallel([
-                    Animated.timing(fly, { toValue: 1, duration: 720, easing: Easing.bezier(0.65, 0, 0.25, 1), useNativeDriver: true }),
-                    Animated.timing(veil, { toValue: 0, duration: 520, delay: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-                ]).start(() => finish());
-            const root = rootRef.current;
-            if (!root) return start();
-            // Координаты знака входа — относительно окна; переводим их в координаты слоя заставки.
-            root.measureInWindow((ox: number, oy: number) => {
+            const go = (x: number, y: number, w: number, h: number) => {
                 setFlight({
-                    dx: target.x - ox + target.width / 2 - W / 2,
-                    dy: target.y - oy + target.height / 2 - H / 2,
-                    scale: target.width / markW,
+                    dx: target.x + target.width / 2 - (x + w / 2),
+                    dy: target.y + target.height / 2 - (y + h / 2),
+                    scale: w > 0 ? target.width / w : 1,
                 });
-                requestAnimationFrame(() => requestAnimationFrame(start));
+                requestAnimationFrame(() => requestAnimationFrame(() =>
+                    Animated.parallel([
+                        Animated.timing(fly, { toValue: 1, duration: 760, easing: Easing.bezier(0.65, 0, 0.25, 1), useNativeDriver: true }),
+                        Animated.timing(invert, { toValue: 1, duration: 420, delay: 120, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+                        Animated.timing(veil, { toValue: 0, duration: 520, delay: 80, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+                    ]).start(finish),
+                ));
+            };
+            // Картинка знака появится в следующем кадре — тогда и меряем, где она.
+            requestAnimationFrame(() => {
+                const mark = markRef.current;
+                if (mark) mark.measureInWindow(go);
+                else go(cx - MARK_W / 2, cy - MARK_H / 2, MARK_W, MARK_H);
             });
         } else {
-            // Водитель уже вошёл: знак уменьшается и тает, заставка растворяется.
-            setFlight({ dx: 0, dy: 0, scale: 0.6 });
-            requestAnimationFrame(() =>
-                requestAnimationFrame(() =>
-                    Animated.parallel([
-                        Animated.timing(fly, { toValue: 1, duration: 520, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-                        Animated.timing(markFade, { toValue: 0, duration: 420, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-                        Animated.timing(veil, { toValue: 0, duration: 560, delay: 120, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-                    ]).start(() => finish()),
-                ),
-            );
+            // Водитель уже вошёл: под заставкой светлый экран рейса — знак и название просто уходят.
+            setFlight({ dx: 0, dy: 0, scale: 0.8 });
+            requestAnimationFrame(() => requestAnimationFrame(() =>
+                Animated.parallel([
+                    Animated.timing(fly, { toValue: 1, duration: 500, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+                    Animated.timing(markFade, { toValue: 0, duration: 380, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+                    Animated.timing(veil, { toValue: 0, duration: 520, delay: 120, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+                ]).start(finish),
+            ));
         }
     };
 
@@ -182,81 +122,74 @@ export function IntroSplash({ onDone }: { onDone: () => void }) {
         onDone();
     };
 
-    const flyX = fly.interpolate({ inputRange: [0, 1], outputRange: [0, flight.dx] });
-    const flyY = fly.interpolate({ inputRange: [0, 1], outputRange: [0, flight.dy] });
-    const flyScale = fly.interpolate({ inputRange: [0, 1], outputRange: [1, flight.scale] });
-    const circle = reveal.interpolate({ inputRange: [0, 1], outputRange: [0.001, 1] });
-    const black = reveal.interpolate({ inputRange: [0, edgeIn, edgeOut, 1], outputRange: [1, 1, 0, 0] });
-    const white = reveal.interpolate({ inputRange: [0, edgeIn, edgeOut, 1], outputRange: [0, 0, 1, 1] });
+    const markMove = {
+        transform: [
+            { translateX: fly.interpolate({ inputRange: [0, 1], outputRange: [0, flight.dx] }) },
+            { translateY: fly.interpolate({ inputRange: [0, 1], outputRange: [0, flight.dy] }) },
+            { scale: fly.interpolate({ inputRange: [0, 1], outputRange: [1, flight.scale] }) },
+        ],
+    };
 
     return (
-        <View
-            ref={rootRef}
-            style={StyleSheet.absoluteFill}
-            pointerEvents={phase === 'handoff' ? 'none' : 'auto'}
-            onLayout={(e: { nativeEvent: { layout: { width: number; height: number } } }) =>
-                setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
-            }
-        >
-            <StatusBar style={phase === 'video' ? 'dark' : 'light'} />
+        <View style={StyleSheet.absoluteFill} pointerEvents={handing ? 'none' : 'auto'}>
+            <StatusBar style={handing ? 'light' : 'dark'} />
+            <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: SPLASH_BG, opacity: veil }]} />
 
-            {/* Фон заставки: светлый, тёмный круг поверх него, потом всё растворяется */}
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: veil, overflow: 'hidden' }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: phase === 'video' ? START_BG : END_BG }]} />
-                {phase !== 'video' && (
-                    <Animated.View
-                        style={{
-                            position: 'absolute',
-                            left: W / 2 - R,
-                            top: H / 2 - R,
-                            width: R * 2,
-                            height: R * 2,
-                            borderRadius: R,
-                            backgroundColor: DARK,
-                            transform: [{ scale: circle }],
-                        }}
-                    />
-                )}
-            </Animated.View>
+            {/* Пол «склада» под знаком — уходит, когда груз встал на место. */}
+            <Animated.View style={[styles.floor, { top: cy + 70, left: cx - 135, opacity: floor }]} />
 
-            {phase === 'video' && (
-                <Pressable style={StyleSheet.absoluteFill} onPress={endVideo} accessibilityLabel="Пропустить заставку">
-                    <Animated.View style={[StyleSheet.absoluteFill, { opacity: videoIn }]}>
-                        <Video
-                            player={player}
-                            // Ширина и высота явно: в веб-версии видео иначе рисуется в своём размере, а не во весь экран.
-                            style={styles.video}
-                            contentFit="cover"
-                            nativeControls={false}
-                            surfaceType="textureView"
-                            onFirstFrameRender={showVideo}
-                        />
-                    </Animated.View>
-                </Pressable>
-            )}
+            {!handing && <CargoMark cx={cx} cy={cy} width={MARK_W} screenWidth={W} screenHeight={H} />}
 
-            {phase !== 'video' && (
+            {handing && (
                 <Animated.View
                     pointerEvents="none"
-                    style={{
-                        position: 'absolute',
-                        left: (W - markW) / 2,
-                        top: (H - markH) / 2,
-                        width: markW,
-                        height: markH,
-                        opacity: markFade,
-                        transform: [{ translateX: flyX }, { translateY: flyY }, { scale: flyScale }, { scale: pulse }],
-                    }}
+                    style={[styles.mark, { left: cx - MARK_W / 2, top: cy - MARK_H / 2, opacity: markFade }, markMove]}
                 >
-                    <Animated.Image source={MARK} style={[styles.mark, { tintColor: MARK_BLACK, opacity: black }]} resizeMode="contain" />
-                    <Animated.Image source={MARK} style={[styles.mark, { tintColor: '#ffffff', opacity: white }]} resizeMode="contain" />
+                    <View ref={markRef} collapsable={false} style={StyleSheet.absoluteFill}>
+                        <Animated.Image
+                            source={MARK}
+                            resizeMode="contain"
+                            style={[styles.markImg, { tintColor: INK, opacity: invert.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}
+                        />
+                        <Animated.Image source={MARK} resizeMode="contain" style={[styles.markImg, { tintColor: '#ffffff', opacity: invert }]} />
+                    </View>
+                    {/* Синяя точка с «погрузки» — тает вместе с белым фоном, а не пропадает рывком. */}
+                    <Animated.View style={[styles.dot, { opacity: veil }]} />
                 </Animated.View>
             )}
+
+            <Animated.View
+                pointerEvents="none"
+                style={[styles.nameBlock, {
+                    top: cy + MARK_H / 2 + 44,
+                    opacity: Animated.multiply(name, veil),
+                    transform: [{ translateY: name.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+                }]}
+            >
+                <Text style={styles.name}>LogiCore</Text>
+                <Text style={styles.driver}>DRIVER</Text>
+                <Text style={styles.tagline}>Приложение водителя</Text>
+            </Animated.View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    video: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
-    mark: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+    floor: { position: 'absolute', width: 270, height: 2, borderRadius: 1, backgroundColor: '#e6e8ec' },
+    mark: { position: 'absolute', width: MARK_W, height: MARK_H },
+    markImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+    // Там же, где точка рисуется в анимации знака (CargoMark): 0,49 и 0,347 ширины от центра.
+    dot: {
+        position: 'absolute',
+        width: (10 * MARK_W) / 118,
+        height: (10 * MARK_W) / 118,
+        borderRadius: (5 * MARK_W) / 118,
+        left: MARK_W / 2 + 0.49 * MARK_W - (5 * MARK_W) / 118,
+        top: MARK_H / 2 - 0.347 * MARK_W - (5 * MARK_W) / 118,
+        backgroundColor: ACCENT,
+    },
+    nameBlock: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+    name: { fontFamily: FONT.displayBold, fontSize: 27, letterSpacing: -0.6, color: INK },
+    driver: { fontFamily: FONT.displayMedium, fontSize: 15, letterSpacing: 6, marginRight: -6, color: INK, marginTop: 6 },
+    tagline: { fontFamily: FONT.regular, fontSize: 13.5, color: '#868e9c', marginTop: 14 },
 });

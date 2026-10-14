@@ -8,6 +8,7 @@ import { useStore } from '@/store';
 import { featureCollection, lineString } from '@turf/helpers';
 import { FONT } from '@/lib/theme';
 import { StatusPill } from '@/components/kit';
+import { useTabBarSpace } from '@/components/TabBar';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoicG9udGlwaWxhdCIsImEiOiJjbWtybWQ1b3UwemdhM2NzOWkxZjJqeGZ6In0.iKSM05aqs4Wpx4B-CBscjg';
 Mapbox.setAccessToken(MAPBOX_TOKEN);
@@ -30,6 +31,8 @@ const hasPoint = (p: any) =>
     typeof p?.location?.latitude === 'number' && typeof p?.location?.longitude === 'number';
 
 export default function DriverMap() {
+    // Карточка рейса — над капсулой вкладок, а та — над системной полосой телефона.
+    const tabBarSpace = useTabBarSpace();
     const { currentOrder, mapTheme } = useStore();
     const cameraRef = useRef<Mapbox.Camera>(null);
     const [userLocation, setUserLocation] = useState<number[] | null>(null);
@@ -272,7 +275,7 @@ export default function DriverMap() {
 
             {/* Bottom info card */}
             {currentOrder && (
-                <View style={styles.infoCard}>
+                <View style={[styles.infoCard, { bottom: tabBarSpace + 12 }]}>
                     <View style={styles.infoTop}>
                         <Text style={styles.infoTitle}>№ {currentOrder.orderNumber}</Text>
                         <StatusPill status={currentOrder.status} />

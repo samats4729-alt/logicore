@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { DriverProfile, ExchangeOrder, OfferInput, exchangeApi, груз, деньги, когда, ответ } from '@/lib/exchange';
-import { BRAND } from '@/lib/theme';
+import { BRAND, FONT } from '@/lib/theme';
 import { Button, Card, Empty, Row } from '@/components/kit';
 import { OfferSheet } from '@/components/OfferSheet';
 
@@ -156,7 +156,7 @@ export default function OrderScreen() {
                 )}
             </ScrollView>
 
-            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border2, paddingBottom: Math.max(insets.bottom, 12) }]}>
                 {mine && mine.status === 'ACTIVE' ? (
                     <>
                         <Text style={[styles.footerStatus, { color: colors.text }]}>
@@ -201,17 +201,17 @@ export default function OrderScreen() {
 
 const styles = StyleSheet.create({
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    head: { fontWeight: '700', marginBottom: 10 },
+    head: { fontFamily: FONT.bold, marginBottom: 10 },
     point: { flexDirection: 'row', gap: 12 },
     pointRail: { alignItems: 'center', width: 12 },
     dot: { width: 12, height: 12, borderRadius: 6, marginTop: 5 },
     line: { width: 2, flex: 1, marginTop: 2 },
-    city: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+    city: { fontSize: 17, fontFamily: FONT.bold, letterSpacing: -0.3 },
     addrNote: { fontSize: 12.5, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
-    priceLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
-    price: { fontSize: 30, fontWeight: '800', letterSpacing: -0.8, marginTop: 2 },
+    priceLabel: { fontSize: 11, fontFamily: FONT.bold, letterSpacing: 1.2 },
+    price: { fontSize: 30, fontFamily: FONT.bold, letterSpacing: -0.8, marginTop: 2 },
     footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
     footerNote: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
-    footerStatus: { fontSize: 15, fontWeight: '800', marginBottom: 4 },
+    footerStatus: { fontSize: 15, fontFamily: FONT.bold, marginBottom: 4 },
     footerRow: { flexDirection: 'row', gap: 10 },
 });

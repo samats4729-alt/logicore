@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { exchangeApi } from '@/lib/exchange';
-import { TabIcon, useTabScreenOptions } from '@/components/TabBar';
+import { PillTabBar, TabIcon, useTabScreenOptions } from '@/components/TabBar';
 
 /** Допущенный водитель биржи: лента грузов, свой рейс, профиль. */
 export default function ExchangeTabs() {
@@ -11,15 +11,13 @@ export default function ExchangeTabs() {
     const [viaPark, setViaPark] = useState(false);
     useEffect(() => { exchangeApi.me().then((d) => setViaPark(d.kind === 'PARK')).catch(() => undefined); }, []);
     return (
-        <Tabs
-            screenOptions={screenOptions}
-        >
+        <Tabs screenOptions={screenOptions} tabBar={(props: any) => <PillTabBar {...props} />}>
             <Tabs.Screen
                 name="loads"
                 options={{
                     title: 'Грузы',
                     headerTitle: 'Биржа грузов',
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="cube" focused={focused} />,
+                    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => <TabIcon name="cube" focused={focused} color={color} />,
                 }}
             />
             <Tabs.Screen
@@ -27,7 +25,7 @@ export default function ExchangeTabs() {
                 options={{
                     title: 'Мой рейс',
                     headerTitle: 'Мой рейс',
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="navigate" focused={focused} />,
+                    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => <TabIcon name="navigate" focused={focused} color={color} />,
                 }}
             />
             <Tabs.Screen
@@ -36,7 +34,7 @@ export default function ExchangeTabs() {
                     title: 'Баланс',
                     headerTitle: 'Баланс',
                     href: viaPark ? undefined : null,
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="wallet" focused={focused} />,
+                    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => <TabIcon name="wallet" focused={focused} color={color} />,
                 }}
             />
             <Tabs.Screen
@@ -44,7 +42,7 @@ export default function ExchangeTabs() {
                 options={{
                     title: 'Профиль',
                     headerTitle: 'Профиль',
-                    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="person" focused={focused} />,
+                    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => <TabIcon name="person" focused={focused} color={color} />,
                 }}
             />
         </Tabs>

@@ -20,7 +20,7 @@ import { IntroSplash } from '@/components/IntroSplash';
 export default function RootLayout() {
     const checkAuth = useStore((state) => state.checkAuth);
     const { isDark, colors } = useAppTheme();
-    // Заставка с роликом — только при запуске приложения.
+    // Заставка — только при запуске приложения.
     const [introOn, setIntroOn] = useState(true);
     // Шрифты платформы: Inter — текст, Unbounded — заголовки. Не загрузились
     // (нет места, сбой) — приложение всё равно открывается, на системном шрифте.
@@ -77,7 +77,7 @@ export default function RootLayout() {
                 </>
             )}
             {/* Заставка лежит поверх: под ней тем временем загружаются шрифты, проверяется вход и открывается нужный экран */}
-            {introOn && <IntroSplash onDone={() => setIntroOn(false)} />}
+            {introOn && <IntroSplash fontsReady={fontsReady} onDone={() => setIntroOn(false)} />}
         </View>
     );
 }

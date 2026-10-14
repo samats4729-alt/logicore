@@ -1,94 +1,119 @@
-import { View } from 'react-native';
+import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Platform } from 'react-native';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { FONT, type AppColors } from '@/lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-const TAB_BAR_HEIGHT = 76;
-const tabBarBottom = (bottomInset: number) => (Platform.OS === 'android' ? 16 : bottomInset + 6);
+/** Высота капсулы вкладок. */
+const TAB_BAR_HEIGHT = 64;
 
-/** Сколько места снизу занимает плавающая панель вкладок: от края экрана до её верха. */
+/**
+ * Отступ капсулы от низа экрана — над системной полосой телефона.
+ *
+ * Раньше на Android он был постоянным (16 точек) и не учитывал полосу кнопок
+ * «назад / домой / недавние»: на телефонах с кнопками, а не жестами, меню
+ * приложения ложилось под неё (жалоба владельца, 14.10.2026). Теперь высота
+ * системной полосы прибавляется всегда — и на Android, и на iPhone.
+ */
+const tabBarBottom = (bottomInset: number) => Math.max(bottomInset, Platform.OS === 'android' ? 8 : 0) + 10;
+
+/** Сколько места снизу занимает плавающая капсула вкладок: от края экрана до её верха. */
 export function useTabBarSpace() {
     const insets = useSafeAreaInsets();
     return tabBarBottom(insets.bottom) + TAB_BAR_HEIGHT;
 }
 
-/**
- * Значок вкладки. Выбранная — графитовая пилюля с белым значком, как
- * активный пункт верхнего меню кабинета; остальные — контурные, серые.
- */
-export function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
-    const { colors } = useAppTheme();
+/** Значок вкладки: у выбранной — залитый, у остальных — контурный. */
+export function TabIcon({ name, focused, color }: { name: IconName; focused: boolean; color?: string }) {
     const outline = `${name}-outline` as IconName;
+    return <Ionicons name={focused ? name : outline} size={21} color={color} />;
+}
+
+/* Описания навигатора вкладок — только то, что нужно капсуле (типы
+   @react-navigation/bottom-tabs из приложения не видны). */
+type TabRoute = { key: string; name: string; params?: object };
+type TabOptions = {
+    title?: string;
+    tabBarIcon?: (p: { focused: boolean; color: string; size: number }) => React.ReactNode;
+    tabBarItemStyle?: { display?: string } | unknown;
+    tabBarAccessibilityLabel?: string;
+};
+type TabBarProps = {
+    state: { index: number; routes: TabRoute[] };
+    descriptors: Record<string, { options: TabOptions }>;
+    navigation: {
+        emit: (e: { type: 'tabPress'; target: string; canPreventDefault: true }) => { defaultPrevented: boolean };
+        navigate: (name: string, params?: object) => void;
+    };
+};
+
+/**
+ * Плавающая капсула вкладок (по образцу владельца, 14.10.2026): белая
+ * капсула над экраном, выбранный раздел — чёрная пилюля со значком и
+ * подписью, остальные — только значки. Общая для водителя компании и
+ * водителя биржи. Скрытые вкладки (`href: null`) не показываются.
+ */
+export function PillTabBar({ state, descriptors, navigation }: TabBarProps) {
+    const { colors, isDark } = useAppTheme();
+    const insets = useSafeAreaInsets();
+    const visible = state.routes
+        .map((route, index) => ({ route, index, options: descriptors[route.key].options }))
+        .filter(({ options }) => (options.tabBarItemStyle as { display?: string } | undefined)?.display !== 'none');
+
     return (
-        <View
-            style={{
-                width: 54,
-                height: 30,
-                borderRadius: 15,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: focused ? colors.primary : 'transparent',
-            }}
-        >
-            <Ionicons name={focused ? name : outline} size={19} color={focused ? colors.primaryFg : colors.textTertiary} />
+        <View pointerEvents="box-none" style={[styles.wrap, { bottom: tabBarBottom(insets.bottom) }]}>
+            <View
+                style={[
+                    styles.bar,
+                    // Светлая тема — белая капсула с тенью, как на образце; тёмная — чуть светлее фона, с тонкой рамкой.
+                    { backgroundColor: colors.surface2, borderColor: isDark ? colors.border : colors.surface2 },
+                    isDark ? null : styles.barShadow,
+                ]}
+            >
+                {visible.map(({ route, index, options }) => {
+                    const focused = state.index === index;
+                    const label = options.title ?? route.name;
+                    const fg = focused ? colors.primaryFg : colors.textTertiary;
+                    const press = () => {
+                        const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                        if (focused || event.defaultPrevented) return;
+                        LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
+                        navigation.navigate(route.name, route.params);
+                    };
+                    return (
+                        <Pressable
+                            key={route.key}
+                            onPress={press}
+                            accessibilityRole="tab"
+                            accessibilityState={{ selected: focused }}
+                            accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
+                            hitSlop={4}
+                            style={({ pressed }: { pressed: boolean }) => [
+                                styles.item,
+                                focused && [styles.itemOn, { backgroundColor: colors.primary }],
+                                { opacity: pressed && !focused ? 0.6 : 1 },
+                            ]}
+                        >
+                            {options.tabBarIcon?.({ focused, color: fg, size: 21 })}
+                            {focused && <Text style={[styles.label, { color: fg }]} numberOfLines={1}>{label}</Text>}
+                        </Pressable>
+                    );
+                })}
+            </View>
         </View>
     );
 }
 
-/** Плавающая панель вкладок — общая для водителя компании и водителя биржи. */
+/** Общие настройки вкладок: шапки и фон экранов. Саму капсулу рисует `PillTabBar`. */
 export function useTabScreenOptions() {
-    const { colors, isDark } = useAppTheme();
-    const insets = useSafeAreaInsets();
-    return tabScreenOptions(colors, isDark, insets.bottom);
+    const { colors } = useAppTheme();
+    return tabScreenOptions(colors);
 }
 
-function tabScreenOptions(colors: AppColors, isDark: boolean, bottomInset: number) {
+function tabScreenOptions(colors: AppColors) {
     return {
-        tabBarActiveTintColor: colors.text,
-        tabBarInactiveTintColor: colors.textTertiary,
-        tabBarStyle: {
-            position: 'absolute' as const,
-            bottom: tabBarBottom(bottomInset),
-            marginHorizontal: 16,
-            height: TAB_BAR_HEIGHT,
-            backgroundColor: colors.card,
-            borderRadius: 26,
-            borderTopWidth: 1,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderTopColor: colors.border,
-            elevation: 8,
-            shadowColor: '#101828',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: isDark ? 0.4 : 0.12,
-            shadowRadius: 24,
-            paddingTop: 0,
-            paddingBottom: 0,
-        },
-        // Отступы у пункта небольшие: внутри у самой кнопки ещё свои 5 px, и
-        // при больших отступах подпись под пилюлей сжималась и обрезалась.
-        tabBarItemStyle: {
-            paddingTop: 5,
-            paddingBottom: 5,
-            height: 74,
-        },
-        // Пилюля выбранной вкладки шире и выше стандартного места под значок.
-        tabBarIconStyle: {
-            width: 54,
-            height: 30,
-        },
-        // Подпись под значком должна помещаться целиком: со старыми
-        // отступами она сжималась до пары пикселей и не читалась.
-        tabBarLabelStyle: {
-            fontSize: 11,
-            lineHeight: 14,
-            fontFamily: FONT.semibold,
-            marginTop: 4,
-        },
         headerStyle: {
             backgroundColor: colors.background,
             elevation: 0,
@@ -104,3 +129,34 @@ function tabScreenOptions(colors: AppColors, isDark: boolean, bottomInset: numbe
         sceneStyle: { backgroundColor: colors.background },
     };
 }
+
+const styles = StyleSheet.create({
+    wrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+    bar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        height: TAB_BAR_HEIGHT,
+        padding: 6,
+        borderRadius: TAB_BAR_HEIGHT / 2,
+        borderWidth: 1,
+    },
+    barShadow: {
+        shadowColor: '#101828',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.14,
+        shadowRadius: 28,
+        elevation: 10,
+    },
+    item: {
+        height: TAB_BAR_HEIGHT - 12,
+        minWidth: 56,
+        borderRadius: (TAB_BAR_HEIGHT - 12) / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 8,
+    },
+    itemOn: { paddingHorizontal: 20 },
+    label: { fontFamily: FONT.semibold, fontSize: 14, letterSpacing: -0.2 },
+});

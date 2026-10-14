@@ -53,7 +53,7 @@ export default function SettingsScreen() {
 
             <View style={styles.body}>
                 <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Оформление и карта</Text>
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, !isDark && SHADOW]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.card }]}>
                     {options.map((option, index) => (
                         <ListRow
                             key={option.value}
@@ -70,7 +70,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Диагностика</Text>
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, !isDark && SHADOW]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.card }]}>
                     <ListRow icon="navigate-circle-outline" label="Проверить GPS" desc="Получить координаты и отправить диспетчеру" onPress={checkGps} last />
                 </View>
             </View>
