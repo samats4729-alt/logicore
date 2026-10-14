@@ -133,9 +133,10 @@ export default function OrderScreen() {
                             {order.fuelEstimate
                                 ? `Вместе с топливом: по расчёту около ${деньги(order.fuelEstimate)}${order.distanceKm ? ` на ${Math.round(order.distanceKm).toLocaleString('ru-RU')} км` : ''}. Заправка через парк, чек — на БИН парка. `
                                 : 'Вместе с топливом: заправка через парк, чек — на БИН парка. '}
-                            Налоги за вас платит парк — из этой суммы они не вычитаются.
+                            Налоги за вас платит парк из цены рейса — из суммы на руки они не вычитаются.
                         </Text>
                     )}
+                    {me.kind === 'PARK' && order.breakdown && <Breakdown b={order.breakdown} />}
                 </Card>
 
                 <Card>
@@ -199,7 +200,51 @@ export default function OrderScreen() {
     );
 }
 
+/**
+ * Из чего сложилась сумма на руки (владелец, 15.10.2026: «комиссия и общая
+ * сумма — чтобы было понятно, за что высчитывают»). Суммы — до тенге, и
+ * сходятся до тенге: налоги считаются остатком от округлённых строк, иначе
+ * при сложении «на глаз» вылезал бы лишний тенге.
+ */
+function Breakdown({ b }: { b: NonNullable<ExchangeOrder['breakdown']> }) {
+    const { colors } = useAppTheme();
+    const total = Math.round(b.customerPrice);
+    const platform = Math.round(b.platformFee);
+    const park = Math.round(b.parkFee);
+    const onHand = Math.round(b.driverTotal);
+    const taxes = total - platform - park - onHand;
+    // Без процентов в подписях: комиссии считаются от стоимости работы без
+    // топлива, а не от всей цены рейса, — «5 % от 508 000» не сошлось бы.
+    const line = (label: string, value: string, strong = false) => (
+        <View style={styles.bLine}>
+            <Text style={[styles.bLabel, { color: strong ? colors.text : colors.textSecondary }, strong && { fontFamily: FONT.semibold }]}>{label}</Text>
+            <Text style={[styles.bValue, { color: colors.text }, strong && { fontFamily: FONT.bold }]}>{value}</Text>
+        </View>
+    );
+    return (
+        <View style={[styles.breakdown, { borderTopColor: colors.border2 }]}>
+            <Text style={[styles.priceLabel, { color: colors.textTertiary, marginBottom: 6 }]}>ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА</Text>
+            {line('Компания платит за рейс', деньги(total))}
+            {line('Комиссия LogiCore', `− ${деньги(platform)}`)}
+            {line('Комиссия парка', `− ${деньги(park)}`)}
+            {line('Налоги и взносы за вас', `− ${деньги(taxes)}`)}
+            <View style={[styles.bRule, { backgroundColor: colors.border2 }]} />
+            {line('Вам на руки', деньги(onHand), true)}
+            <Text style={[styles.bNote, { color: colors.textTertiary }]}>
+                {b.fuel > 0 ? `В том числе топливо — около ${деньги(Math.round(b.fuel))}. ` : ''}
+                Налоги и взносы — пенсионные (ОПВ), медстраховка (ВОСМС), подоходный налог (ИПН) и социальные отчисления. Их платит парк в бюджет, на ваш пенсионный счёт и медстраховку.
+            </Text>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
+    breakdown: { marginTop: 14, paddingTop: 12, borderTopWidth: 1 },
+    bLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingVertical: 4 },
+    bLabel: { flex: 1, fontFamily: FONT.regular, fontSize: 14 },
+    bValue: { fontFamily: FONT.semibold, fontSize: 14.5, fontVariant: ['tabular-nums'] },
+    bRule: { height: 1, marginVertical: 6 },
+    bNote: { fontFamily: FONT.regular, fontSize: 12, lineHeight: 17, marginTop: 8 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     head: { fontFamily: FONT.bold, marginBottom: 10 },
     point: { flexDirection: 'row', gap: 12 },
