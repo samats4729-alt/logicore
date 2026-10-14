@@ -314,6 +314,52 @@ describe('Биржа: вход водителя через Google', () => {
     });
 });
 
+describe('Биржа: регистрация водителя по номеру', () => {
+    it('новый номер — водитель биржи с паролем; номер и выбор уже в анкете', async () => {
+        const { service, prisma } = build();
+        prisma.user.findFirst.mockResolvedValue(null);
+        prisma.user.create.mockImplementation(async (args: any) => ({ id: 'u-7', ...args.data }));
+        await service.registerByPhone({ phone: '8 701 123 45 67', password: 'пароль-водителя', kind: 'PARK' });
+        const data = prisma.user.create.mock.calls[0][0].data;
+        expect(data).toMatchObject({ role: 'DRIVER', phone: '+77011234567' });
+        expect(data.passwordHash).toBeTruthy();
+        expect(data.passwordHash).not.toBe('пароль-водителя');
+        expect(data.exchangeDriver.create).toEqual({ phone: '+77011234567', kind: 'PARK' });
+        expect(data.companyId).toBeUndefined();
+    });
+
+    it('номер ищется в обоих видах — «+7…» и «8…»', async () => {
+        const { service, prisma } = build();
+        prisma.user.findFirst.mockResolvedValue(null);
+        prisma.user.create.mockResolvedValue({ id: 'u-7' });
+        await service.registerByPhone({ phone: '+7 701 123 45 67', password: 'пароль-водителя' });
+        expect(prisma.user.findFirst.mock.calls[0][0].where.phone.in).toEqual(['+77011234567', '87011234567']);
+    });
+
+    it('номер водителя компании — не регистрируется, подсказка про диспетчера', async () => {
+        const { service, prisma } = build();
+        prisma.user.findFirst.mockResolvedValue({ role: 'DRIVER', companyId: 'c-1' });
+        await expect(service.registerByPhone({ phone: '+77011234567', password: 'пароль-водителя' }))
+            .rejects.toThrow(/диспетчер/);
+        expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('занятый номер второй раз не регистрируется', async () => {
+        const { service, prisma } = build();
+        prisma.user.findFirst.mockResolvedValue({ role: 'DRIVER', companyId: null });
+        await expect(service.registerByPhone({ phone: '+77011234567', password: 'пароль-водителя' }))
+            .rejects.toThrow(/уже зарегистрирован/);
+        expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('не казахстанский мобильный — понятная ошибка', async () => {
+        const { service, prisma } = build();
+        await expect(service.registerByPhone({ phone: '12345', password: 'пароль-водителя' }))
+            .rejects.toBeInstanceOf(BadRequestException);
+        expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+});
+
 describe('Биржа: вступить в парк по коду', () => {
     it('код подходит — водитель «через парк» этого парка, договор с новым парком — заново', async () => {
         const { service, prisma } = build(driverRow({ kind: null, parkCompanyId: null }));

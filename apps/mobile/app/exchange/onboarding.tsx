@@ -18,6 +18,7 @@ import { useStore } from '@/store';
 import * as SecureStore from '@/lib/secure';
 import { BRAND, RADIUS, selectedColors } from '@/lib/theme';
 import { Button, Card, Choice, Field, Title } from '@/components/kit';
+import { DRIVER_KINDS } from '@/lib/driver-kinds';
 import { BodyTypePicker } from '@/components/BodyTypePicker';
 import { ContractText, OpenContractPdf } from '@/components/ParkContract';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
@@ -361,20 +362,16 @@ export default function Onboarding() {
 
                 {step === 'kind' && (
                     <>
-                        <Choice
-                            icon="briefcase-outline"
-                            title="У меня есть ИП"
-                            text="Вы сами перевозчик: берёте грузы и работаете с заказчиком напрямую. Проверки нет."
-                            selected={driver.kind === 'IP'}
-                            onPress={() => chooseKind('IP')}
-                        />
-                        <Choice
-                            icon="people-outline"
-                            title="Без ИП — через парк"
-                            text="Парк оформит договор аренды вашей машины с вами за рулём, и перевозка будет законной. Парк проверит документы."
-                            selected={driver.kind === 'PARK'}
-                            onPress={() => chooseKind('PARK')}
-                        />
+                        {DRIVER_KINDS.map((k) => (
+                            <Choice
+                                key={k.kind}
+                                icon={k.icon}
+                                title={k.title}
+                                text={k.text}
+                                selected={driver.kind === k.kind}
+                                onPress={() => chooseKind(k.kind)}
+                            />
+                        ))}
 
                         {/* Согласие — до того, как человек впишет ИИН и снимет документы. */}
                         <Pressable

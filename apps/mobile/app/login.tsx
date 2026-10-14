@@ -97,14 +97,15 @@ export default function LoginScreen() {
             return;
         }
         if (!password) {
-            Alert.alert('Введите пароль', 'Пароль для входа выдаёт ваша компания');
+            Alert.alert('Введите пароль', 'Водителю компании пароль выдаёт диспетчер. Регистрировались сами — тот, что придумали.');
             return;
         }
 
         setLoading(true);
         try {
             await login(cleanPhone, password);
-            router.replace('/(tabs)');
+            // Водитель биржи (зарегистрировался по номеру) — на биржу, водитель компании — к рейсу.
+            router.replace(isExchangeDriver(useStore.getState().user) ? '/exchange' : '/(tabs)');
         } catch (error: any) {
             Alert.alert(
                 'Не удалось войти',
@@ -141,7 +142,7 @@ export default function LoginScreen() {
                 {/* Карточка входа */}
                 <Animated.View style={[styles.card, rise(0.32, 0.9, 56)]}>
                     <Text style={styles.cardTitle}>Вход для водителя</Text>
-                    <Text style={styles.cardSub}>По телефону и паролю — для водителей компаний, пароль выдаёт диспетчер</Text>
+                    <Text style={styles.cardSub}>По номеру телефона и паролю</Text>
 
                     <Text style={styles.fieldLabel}>Телефон</Text>
                     <View style={styles.inputWrap}>
@@ -198,8 +199,9 @@ export default function LoginScreen() {
                     {/* Регистрация и вход через Google — в той же карточке, сразу под
                         «Войти» (владелец, 13.10.2026): отдельным блоком внизу экрана их не
                         находили. Регистрация — для тех, кто работает сам: со своим ИП или
-                        через парк; водителю компании она не нужна. */}
-                    {exchangeOn && !!GOOGLE_WEB_CLIENT_ID && (
+                        через парк; водителю компании она не нужна. Регистрация идёт по
+                        номеру (14.10.2026), поэтому видна и без входа через Google. */}
+                    {exchangeOn && (
                         <>
                             <TouchableOpacity
                                 style={styles.secondaryButton}
@@ -211,7 +213,10 @@ export default function LoginScreen() {
                                 <Ionicons name="person-add-outline" size={18} color="#0b0d12" />
                                 <Text style={styles.secondaryText}>Регистрация</Text>
                             </TouchableOpacity>
-
+                        </>
+                    )}
+                    {exchangeOn && !!GOOGLE_WEB_CLIENT_ID && (
+                        <>
                             <View style={styles.orRow}>
                                 <View style={styles.orLine} />
                                 <Text style={styles.orText}>или</Text>
@@ -239,7 +244,7 @@ export default function LoginScreen() {
                     <View style={styles.hintRow}>
                         <Ionicons name="information-circle-outline" size={16} color="#868e9c" />
                         <Text style={styles.hint}>
-                            {exchangeOn && !!GOOGLE_WEB_CLIENT_ID
+                            {exchangeOn
                                 ? 'Работаете сами — со своим ИП или через парк? Нажмите «Регистрация»: 5 минут. Водитель компании? Пароль выдаёт диспетчер в карточке водителя.'
                                 : 'Нет доступа? Обратитесь к диспетчеру вашей компании — он выдаст пароль в карточке водителя.'}
                         </Text>

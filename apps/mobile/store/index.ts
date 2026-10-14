@@ -64,6 +64,8 @@ interface AppState {
     login: (phone: string, password: string) => Promise<void>;
     /** Вход водителя биржи через Google. Отменил выбор аккаунта — false. */
     loginWithGoogle: () => Promise<boolean>;
+    /** Регистрация водителя биржи по номеру и паролю — сразу и вход. Пока без СМС. */
+    registerByPhone: (phone: string, password: string, kind: 'PARK' | 'IP') => Promise<void>;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
 
@@ -103,12 +105,30 @@ export const useStore = create<AppState>((set, get) => ({
         const token = result.data.idToken;
         if (!token) throw new Error('Google не выдал пропуск. Попробуйте ещё раз.');
         const deviceId = await getDeviceId();
-        const response = await api.post('/exchange/driver/auth/google', { token, deviceId });
+        let response;
+        try {
+            response = await api.post('/exchange/driver/auth/google', { token, deviceId });
+        } catch (error) {
+            // Сервер не пустил (например, почта уже у кабинета компании) — забыть
+            // выбранный аккаунт, иначе следующее нажатие молча возьмёт его же и
+            // окно выбора другой почты не появится.
+            try { await GoogleSignin.signOut(); } catch { }
+            throw error;
+        }
         const { accessToken, user } = response.data;
         await setAuthToken(accessToken);
         await SecureStore.setItemAsync('user', JSON.stringify(user));
         set({ user, isAuthenticated: true });
         return true;
+    },
+
+    registerByPhone: async (phone, password, kind) => {
+        const deviceId = await getDeviceId();
+        const response = await api.post('/exchange/driver/auth/phone/register', { phone, password, kind, deviceId });
+        const { accessToken, user } = response.data;
+        await setAuthToken(accessToken);
+        await SecureStore.setItemAsync('user', JSON.stringify(user));
+        set({ user, isAuthenticated: true });
     },
 
     logout: async () => {

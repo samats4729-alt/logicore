@@ -46,7 +46,7 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
     res.send(file.pdf);
 }
 import {
-    AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverReasonDto, ParkDriversQueryDto,
+    AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
     ExportPayoutsDto, ParkCodeDto, ParkPayoutsQueryDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
@@ -76,6 +76,23 @@ export class ExchangeDriverAuthController {
         const result = await this.auth.loginWithGoogle(dto.token, dto.deviceId);
         if ('accessToken' in result && result.accessToken) setAuthCookie(response, result.accessToken);
         return result;
+    }
+
+    /**
+     * Регистрация водителя биржи по номеру и паролю. Пока без СМС: номер
+     * проверяет парк звонком перед допуском (см. registerByPhone). Дальше
+     * человек входит обычным входом водителя — по номеру и паролю.
+     */
+    @Post('phone/register')
+    @Throttle({ default: { limit: LOGIN_ATTEMPTS_PER_MINUTE, ttl: 60000 } })
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Регистрация водителя биржи по номеру телефона' })
+    async registerByPhone(@Body() dto: DriverPhoneRegisterDto, @Res({ passthrough: true }) response: Response) {
+        const user = await this.drivers.registerByPhone(dto);
+        const accessToken = await this.auth.issueSession(user.id, { sub: user.id, email: null, role: user.role, companyId: null }, dto.deviceId);
+        setAuthCookie(response, accessToken);
+        const { passwordHash: _hidden, ...safeUser } = user;
+        return { accessToken, user: safeUser };
     }
 }
 

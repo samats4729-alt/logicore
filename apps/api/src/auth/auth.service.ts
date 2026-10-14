@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { нормализоватьПочту } from '../common/utils/email';
+import { normalizePhone } from '../exchange/driver-identity';
 
 @Injectable()
 export class AuthService {
@@ -142,10 +143,13 @@ export class AuthService {
         deviceId: string,
     ): Promise<{ accessToken: string; user: any }> {
         const normalizedPhone = (phone || '').replace(/[\s\-()]/g, '');
+        // «8 701…» и «+7 701…» — один номер: водитель биржи регистрируется с
+        // номером в виде «+7…», а набрать его при входе может как привык.
+        const варианты = [...new Set([normalizedPhone, normalizePhone(normalizedPhone)].filter(Boolean))];
 
         const кандидаты = await this.prisma.user.findMany({
             where: {
-                phone: normalizedPhone,
+                phone: { in: варианты },
                 role: 'DRIVER',
                 isActive: true,
             },
@@ -153,7 +157,7 @@ export class AuthService {
         });
 
         if (!кандидаты.some((к) => !!к.passwordHash)) {
-            throw new UnauthorizedException('Неверный телефон или пароль. Пароль выдаёт ваша компания.');
+            throw new UnauthorizedException('Неверный телефон или пароль. Водителю компании пароль выдаёт диспетчер; работаете сами — нажмите «Регистрация».');
         }
 
         const user = await this.водительДляВхода(кандидаты, password);
