@@ -32,6 +32,9 @@ export interface JournalOrder {
     accountingDocuments?: { document: { id: string; number: string; status: string } }[];
     subForwarderPrice?: number;
     partnerId?: string;
+    /** Выставлена на биржу и когда снята — исполнителя ищут на бирже, пока снятия нет. */
+    exchangePublishedAt?: string | null;
+    exchangeClosedAt?: string | null;
     isConfirmed?: boolean;
     driverId?: string;
     responsibleManager?: { firstName: string; lastName: string; };

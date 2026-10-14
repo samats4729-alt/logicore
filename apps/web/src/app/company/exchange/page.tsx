@@ -149,7 +149,7 @@ export default function ExchangePage() {
                                     <TableHead className="h-9 text-[12.5px]">Маршрут</TableHead>
                                     <TableHead className="h-9 text-[12.5px]">Погрузка</TableHead>
                                     <TableHead className="h-9 text-[12.5px]">Груз</TableHead>
-                                    <TableHead className="h-9 text-[12.5px]">{tab === 'board' ? 'Компания' : 'Заявка'}</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">{tab === 'board' ? 'Компания' : 'Заказчик'}</TableHead>
                                     <TableHead className="h-9 text-right text-[12.5px]">Цена</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -174,7 +174,12 @@ export default function ExchangePage() {
                                         </TableCell>
                                         <TableCell className="max-w-[280px] truncate text-muted-foreground">{грузКратко(o)}</TableCell>
                                         <TableCell className="whitespace-nowrap">
-                                            {tab === 'board' ? (o.companyName ?? '—') : o.orderNumber}
+                                            {tab === 'board' ? (o.companyName ?? '—') : (
+                                                <>
+                                                    {o.customerName ?? '—'}
+                                                    <div className="text-[11px] text-muted-foreground">заявка {o.orderNumber}</div>
+                                                </>
+                                            )}
                                             {o.myOfferStatus === 'ACTIVE' && <div className="text-[11px] font-medium text-[var(--nova-accent)]">вы откликнулись</div>}
                                             {o.myOfferStatus === 'ACCEPTED' && <div className="text-[11px] font-medium text-emerald-600">вас выбрали</div>}
                                         </TableCell>
@@ -202,7 +207,7 @@ export default function ExchangePage() {
                                         <div className="text-[12px] text-muted-foreground">
                                             {день(o.loadingDate)}{черезТочки(o) ? ` · ${черезТочки(o)}` : ''} · {грузКратко(o)}
                                         </div>
-                                        <div className="text-[12px] text-muted-foreground">{tab === 'board' ? o.companyName : `Заявка ${o.orderNumber}`}</div>
+                                        <div className="text-[12px] text-muted-foreground">{tab === 'board' ? o.companyName : `${o.customerName ?? 'Заказчик не указан'} · заявка ${o.orderNumber}`}</div>
                                     </button>
                                 </li>
                             ))}

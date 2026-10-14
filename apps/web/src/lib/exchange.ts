@@ -16,6 +16,8 @@ export interface ExchangeOrder {
     orderNumber: string;
     /** Компания, которая ищет исполнителя. */
     companyName: string | null;
+    /** Заказчик — только в своих заявках («Мои»); в общей ленте чужого клиента не показывают. */
+    customerName?: string | null;
     from: string;
     to: string;
     loadingDate: string | null;

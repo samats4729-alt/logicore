@@ -30,6 +30,16 @@ import type { JournalOrder as Order } from './types';
 
 const Dash = () => <span className="text-muted-foreground">—</span>;
 
+/**
+ * Исполнителя ищут на бирже: выставлена, не снята, ни перевозчика, ни
+ * водителя ещё нет. В заявке тогда записано «своими силами», и журнал
+ * показывал перевозчиком свою компанию (владелец, 15.10.2026) — а должен
+ * прочерк, пока исполнителя не выбрали.
+ */
+const searchingOnExchange = (r: Order) =>
+    !!r.exchangePublishedAt && !r.exchangeClosedAt
+    && !r.subForwarderId && !r.partnerId && !r.driverId && !r.assignedDriverName;
+
 /** Подсказка на значке: чем меньше элементов в строке, тем легче читать. */
 function Hint({ text, children }: { text: string; children: React.ReactElement }) {
     return (
@@ -161,7 +171,9 @@ export function buildColumns(ctx: ColumnContext): { active: JournalColumn<Order>
     };
     const carrier: JournalColumn<Order> = {
         key: 'forwarder', title: 'Перевозчик', width: 122, ellipsis: true,
-        render: (r) => (
+        render: (r) => searchingOnExchange(r) ? (
+            <span className="text-muted-foreground" title="Исполнителя ищут на бирже">— · на бирже</span>
+        ) : (
             <Party
                 name={(r.forwarderId === userCompanyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—')}
                 debt={!isExecutorSettled(r)}

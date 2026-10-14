@@ -219,7 +219,11 @@ export class ExchangeService {
             orderBy: { exchangePublishedAt: 'desc' },
             take: 300,
         });
-        return rows.map((r) => ({ ...exchangeView(r), stale: !notPast(r) })).sort(byLoadingDate);
+        // Заказчик — только в своих заявках: в общей ленте это чужой клиент, его
+        // другим компаниям не показываем.
+        return rows
+            .map((r) => ({ ...exchangeView(r), customerName: r.customerCompany?.name ?? null, stale: !notPast(r) }))
+            .sort(byLoadingDate);
     }
 
     /**
