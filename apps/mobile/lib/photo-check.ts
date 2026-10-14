@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as jpeg from 'jpeg-js';
 import { base64ToBytes } from './base64';
@@ -16,7 +17,12 @@ import { assessPhoto, PhotoVerdict } from './photo-quality';
  */
 export const CHECK_SIZE = 960;
 
+/** Выключена только на тестовом стенде (app.config.js → photoCheck). */
+const PHOTO_CHECK_ON = Constants.expoConfig?.extra?.photoCheck !== false;
+
 export async function checkPhoto(uri: string, width?: number, height?: number): Promise<PhotoVerdict | null> {
+    // Без проверки снимок принимается как есть — так же, как если бы она не сработала.
+    if (!PHOTO_CHECK_ON) return null;
     try {
         const context = ImageManipulator.manipulate(uri);
         // Маленький снимок (из галереи, уже ужатый) не растягиваем: растяжка
