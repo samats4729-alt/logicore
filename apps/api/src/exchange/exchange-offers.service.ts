@@ -3,7 +3,7 @@ import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { kzToday } from '../common/utils/business-date';
 import { MakeOfferDto } from './dto/exchange-order.dto';
-import { ON_EXCHANGE, managerOf } from './exchange-orders';
+import { EXCHANGE_ORDER_SELECT, ON_EXCHANGE, exchangeView, managerOf } from './exchange-orders';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeSettlementService, SettlementCalc } from './settlement.service';
@@ -300,6 +300,38 @@ export class ExchangeOffersService {
             orderBy: [{ price: 'asc' }, { createdAt: 'asc' }],
         });
         return rows.map(offerView);
+    }
+
+    /**
+     * Отклики на все свои заявки на бирже — новые сверху (владелец, 15.10.2026:
+     * вкладка «Предложения» на бирже и уведомления о новых откликах). Только
+     * ждущие решения: выбранные и отклонённые уже не предложение.
+     */
+    async incomingOffers(companyId: string) {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                ...ON_EXCHANGE,
+                OR: [
+                    { subForwarderId: companyId },
+                    { subForwarderId: null, forwarderId: companyId },
+                    { subForwarderId: null, forwarderId: null, customerCompanyId: companyId },
+                ],
+            },
+            select: EXCHANGE_ORDER_SELECT,
+            take: 300,
+        });
+        if (!orders.length) return [];
+        const byId = new Map(orders.map((o) => [o.id, exchangeView(o)]));
+        const rows = await this.prisma.exchangeOffer.findMany({
+            where: { orderId: { in: [...byId.keys()] }, status: 'ACTIVE' },
+            select: OFFER_SELECT,
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+        });
+        return rows.map((o) => {
+            const order = byId.get(o.orderId)!;
+            return { ...offerView(o), orderId: o.orderId, orderNumber: order.orderNumber, from: order.from, to: order.to, orderPrice: order.price };
+        });
     }
 
     async accept(companyId: string, userId: string, orderId: string, offerId: string) {

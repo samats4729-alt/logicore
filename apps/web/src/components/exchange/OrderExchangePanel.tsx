@@ -14,6 +14,23 @@ import { RoutePricesPanel } from './RoutePricesPanel';
 import OffersList from './OffersList';
 import nova from '@/components/nova/nova.module.css';
 
+/**
+ * Состояние биржи у заявки — для вкладки «Предложения» в карточке: показывать
+ * ли её и сколько откликов ждут решения. Биржа выключена — null.
+ */
+export function useOrderExchange(orderId: string, reloadKey?: unknown): ExchangeOrderState | null {
+    const [state, setState] = useState<ExchangeOrderState | null>(null);
+    useEffect(() => {
+        let alive = true;
+        exchangeEnabled().then((on) => {
+            if (!on || !alive) return;
+            api.get(`/exchange/orders/${orderId}`).then((r) => { if (alive) setState(r.data); }).catch(() => { if (alive) setState(null); });
+        });
+        return () => { alive = false; };
+    }, [orderId, reloadKey]);
+    return state;
+}
+
 /** Частые причины снять — одним нажатием. Своя — словами в поле. */
 const CLOSE_REASONS = ['Нашли исполнителя сами', 'Клиент отменил перевозку', 'Перенесли на другой день'];
 

@@ -86,6 +86,15 @@ export interface ExchangeOffer {
 }
 
 /** Биржа в карточке заявки: на бирже ли и можно ли выставить. */
+/** Отклик на свою заявку — в «Предложениях» биржи и в колокольчике: с заявкой, к которой он относится. */
+export type IncomingOffer = ExchangeOffer & {
+    orderId: string;
+    orderNumber: string;
+    from: string;
+    to: string;
+    orderPrice: number | null;
+};
+
 export interface ExchangeOrderState {
     orderId: string;
     orderNumber: string;

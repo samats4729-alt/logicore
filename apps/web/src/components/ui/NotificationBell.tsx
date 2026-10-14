@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { BellOutlined, NotificationOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { exchangeStatus, type IncomingOffer } from '@/lib/exchange';
+import { moneyShort } from '@/lib/money-format';
 import { STATUS_LABELS, STATUS_PILL } from '@/components/ui/StatusPill';
 import dayjs from 'dayjs';
 
@@ -26,22 +28,30 @@ function usePolledData() {
     const [events, setEvents] = useState<OrderEvent[]>([]);
     const [pending, setPending] = useState<PendingItem[]>([]);
     const [answers, setAnswers] = useState<SupportAnswer[]>([]);
+    const [offers, setOffers] = useState<IncomingOffer[]>([]);
     const [loading, setLoading] = useState(true);
     const mountedRef = useRef(true);
 
     const fetchAll = useCallback(async () => {
         try {
-            const [evRes, pendRes, ansRes] = await Promise.all([
+            const [evRes, pendRes, ansRes, offRes] = await Promise.all([
                 api.get('/company/orders/events', { params: { limit: 15 } }),
                 api.get('/company/orders/pending-confirmations'),
                 // Ответ поддержки — событие того же рода: человек ждал и
                 // должен узнать сразу, а не открывать раздел наугад.
                 api.get('/assistant/support/my/answers').catch(() => ({ data: [] })),
+                // Отклики на свои заявки на бирже (владелец, 15.10.2026: «если
+                // новые предложения поступают — уведомления»). Без биржи и у
+                // парка — не спрашиваем вовсе.
+                exchangeStatus()
+                    .then(async (s): Promise<IncomingOffer[]> => (s.enabled && !s.isPark ? (await api.get('/exchange/incoming-offers')).data : []))
+                    .catch((): IncomingOffer[] => []),
             ]);
             if (mountedRef.current) {
                 setEvents(evRes.data);
                 setPending(pendRes.data);
                 setAnswers(ansRes.data || []);
+                setOffers(offRes);
                 setLoading(false);
             }
         } catch {
@@ -56,14 +66,14 @@ function usePolledData() {
         return () => { mountedRef.current = false; clearInterval(timer); };
     }, [fetchAll]);
 
-    return { events, pending, answers, loading };
+    return { events, pending, answers, offers, loading };
 }
 
 export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boolean }) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const { events, pending, answers, loading } = usePolledData();
+    const { events, pending, answers, offers, loading } = usePolledData();
 
     /* Новые ответы поддержки — те, что появились после последнего открытия
        колокольчика. Метка местная: сервер про «прочитано» ничего не знает,
@@ -86,7 +96,9 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
     // Новые события (новее lastSeen)
     const newEventCount = lastSeen ? events.filter(e => e.changedAt > lastSeen).length : events.length;
     const hasPending = pending.length > 0;
-    const showDot = hasNewUpdates || hasPending || newEventCount > 0 || freshAnswers.length > 0;
+    // Новые отклики — пришедшие после последнего открытия колокольчика.
+    const newOffers = lastSeen ? offers.filter((o) => o.createdAt > lastSeen) : offers;
+    const showDot = hasNewUpdates || hasPending || newEventCount > 0 || freshAnswers.length > 0 || newOffers.length > 0;
 
     // При открытии — отметить прочитанным
     useEffect(() => {
@@ -173,6 +185,44 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                         </div>
                     )}
 
+                    {/* Отклики на свои заявки на бирже — кто и за сколько. */}
+                    {offers.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '6px 8px 4px' }}>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--nova-fg-3)', textTransform: 'uppercase' }}>
+                                    Отклики на биржу{newOffers.length > 0 ? ` · новых ${newOffers.length}` : ''}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => { router.push('/company/exchange?tab=offers'); setOpen(false); }}
+                                    style={{ fontSize: 12, color: 'var(--nova-fg-2)', background: 'none', border: 0, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                                >
+                                    Все предложения
+                                </button>
+                            </div>
+                            {offers.slice(0, 5).map((o) => (
+                                <div
+                                    key={o.id}
+                                    onClick={() => { router.push(`/company/orders/${o.orderId}?tab=offers`); setOpen(false); }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                                        cursor: 'pointer', borderRadius: 8, transition: 'background 0.12s',
+                                    }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--nova-hover)')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                    <i style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: newOffers.some((n) => n.id === o.id) ? 'var(--nova-accent)' : 'transparent' }} />
+                                    <span style={{ fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <b style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{moneyShort(o.price)}</b> · {o.from} → {o.to} · {o.name}
+                                    </span>
+                                    <span style={{ fontSize: 11, color: 'var(--nova-fg-3)', whiteSpace: 'nowrap' }}>
+                                        {dayjs(o.createdAt).format('DD.MM HH:mm')}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     {/* Ожидающие подтверждения */}
                     {hasPending && (
                         <div style={{ marginBottom: 8 }}>
@@ -242,7 +292,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                     )}
 
                     {/* Пусто */}
-                    {!loading && !hasPending && events.length === 0 && (
+                    {!loading && !hasPending && events.length === 0 && offers.length === 0 && (
                         <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--nova-fg-3)', fontSize: 13 }}>
                             Пока нет уведомлений
                         </div>
