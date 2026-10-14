@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import { useStore } from '@/store';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { DriverProfile, exchangeApi, телефонКрасиво, ответ } from '@/lib/exchange';
-import { BRAND } from '@/lib/theme';
+import { BRAND, FONT } from '@/lib/theme';
 import { Badge, Button, Card, Row } from '@/components/kit';
 
 /** Адрес сайта платформы — для политики конфиденциальности. */
@@ -99,7 +99,7 @@ export default function ExchangeProfile() {
             <Card onPress={() => router.push('/exchange/documents')} style={styles.menuItem}>
                 <Ionicons name="document-text-outline" size={20} color={colors.text} />
                 <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>Мои документы</Text>
+                    <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>Мои документы</Text>
                     <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
                         {me.kind === 'PARK' ? 'Удостоверение, права, техпаспорт, договор с парком' : 'Что загружено и проверено'}
                     </Text>
@@ -110,7 +110,7 @@ export default function ExchangeProfile() {
             <Card onPress={edit} style={styles.menuItem}>
                 <Ionicons name="create-outline" size={20} color={colors.text} />
                 <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>Изменить данные</Text>
+                    <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>Изменить данные</Text>
                     <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
                         {me.kind === 'PARK' ? 'Новая машина или телефон — парк проверит заново' : 'Новая машина или телефон'}
                     </Text>
@@ -138,9 +138,9 @@ export default function ExchangeProfile() {
 
 const styles = StyleSheet.create({
     avatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: BRAND.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-    initials: { color: '#fff', fontSize: 26, fontWeight: '800' },
-    name: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+    initials: { color: '#fff', fontSize: 26, fontFamily: FONT.bold },
+    name: { fontSize: 20, fontFamily: FONT.bold, letterSpacing: -0.4 },
     menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
-    menuText: { flex: 1, fontSize: 15, fontWeight: '600' },
+    menuText: { flex: 1, fontSize: 15, fontFamily: FONT.semibold },
     version: { textAlign: 'center', fontSize: 11.5, marginTop: 16 },
 });

@@ -16,7 +16,7 @@ import {
 import { CONSENT_TEXT, CONSENT_TITLE } from '@/lib/consent';
 import { useStore } from '@/store';
 import * as SecureStore from '@/lib/secure';
-import { BRAND, RADIUS, selectedColors } from '@/lib/theme';
+import { BRAND, RADIUS, selectedColors, FONT } from '@/lib/theme';
 import { Button, Card, Choice, Field, Title } from '@/components/kit';
 import { DRIVER_KINDS } from '@/lib/driver-kinds';
 import { BodyTypePicker } from '@/components/BodyTypePicker';
@@ -383,7 +383,7 @@ export default function Onboarding() {
                         >
                             <Ionicons name={driver.consentAt ? 'checkbox' : 'square-outline'} size={24} color={colors.text} />
                             <View style={{ flex: 1 }}>
-                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14.5 }}>{CONSENT_TITLE}</Text>
+                                <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 14.5 }}>{CONSENT_TITLE}</Text>
                                 <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 4 }}>{CONSENT_TEXT}</Text>
                                 {!!SITE_URL && (
                                     <Text onPress={() => Linking.openURL(`${SITE_URL}/privacy`)} style={[styles.link, { fontSize: 13, marginTop: 6 }]}>
@@ -458,7 +458,7 @@ export default function Onboarding() {
                                                 borderColor: driver.vehicleIsOwn === o.own ? sel.bg : colors.border,
                                             }]}
                                         >
-                                            <Text style={{ color: driver.vehicleIsOwn === o.own ? sel.fg : colors.text, fontWeight: '600', fontSize: 13.5, textAlign: 'center' }}>{o.label}</Text>
+                                            <Text style={{ color: driver.vehicleIsOwn === o.own ? sel.fg : colors.text, fontFamily: FONT.semibold, fontSize: 13.5, textAlign: 'center' }}>{o.label}</Text>
                                         </Pressable>
                                     ))}
                                 </View>
@@ -469,13 +469,13 @@ export default function Onboarding() {
 
                 {step === 'park' && !!joinedBy && (
                     <Card style={{ backgroundColor: '#e7f8ef', borderColor: '#bbf7d0' }}>
-                        <Text style={{ color: '#14532d', fontWeight: '700' }}>Вы в парке {вКавычках(joinedBy)} по приглашению</Text>
+                        <Text style={{ color: '#14532d', fontFamily: FONT.bold }}>Вы в парке {вКавычках(joinedBy)} по приглашению</Text>
                         <Text style={{ color: '#166534', fontSize: 13, marginTop: 2 }}>Можно идти дальше — к фото документов.</Text>
                     </Card>
                 )}
                 {step === 'park' && (
                     <Card>
-                        <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 6 }}>Есть код от парка?</Text>
+                        <Text style={{ color: colors.text, fontFamily: FONT.bold, marginBottom: 6 }}>Есть код от парка?</Text>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <View style={{ flex: 1 }}>
                                 <Field
@@ -523,7 +523,7 @@ export default function Onboarding() {
                                                     : <Ionicons name="camera-outline" size={24} color={colors.textTertiary} />}
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14.5 }}>{d.title}</Text>
+                                            <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 14.5 }}>{d.title}</Text>
                                             <Text style={{ color: doc ? '#15803d' : colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
                                                 {doc ? 'Загружено — можно переснять' : d.hint}
                                             </Text>
@@ -554,7 +554,7 @@ export default function Onboarding() {
                                     чем узнает почему. */}
                                 {contract.gaps.length > 0 && (
                                     <Card style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb' }}>
-                                        <Text style={{ color: '#92400e', fontWeight: '700', marginBottom: 4 }}>Подписать пока нельзя — не хватает</Text>
+                                        <Text style={{ color: '#92400e', fontFamily: FONT.bold, marginBottom: 4 }}>Подписать пока нельзя — не хватает</Text>
                                         {contract.gaps.map((g) => <Text key={g} style={{ color: '#92400e', fontSize: 13.5, lineHeight: 20 }}>• {g}</Text>)}
                                         <Text style={{ color: '#92400e', fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
                                             Своё — допишите на прошлых шагах. Что не указал парк — напишите парку: договор собирается из его реквизитов.
@@ -568,7 +568,7 @@ export default function Onboarding() {
                             <Card style={{ gap: 6 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                     <Ionicons name="checkmark-circle" size={22} color="#15803d" />
-                                    <Text style={{ color: colors.text, fontWeight: '700' }}>
+                                    <Text style={{ color: colors.text, fontFamily: FONT.bold }}>
                                         Подписано {new Date(driver.contractSignedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                     </Text>
                                 </View>
@@ -603,13 +603,13 @@ export default function Onboarding() {
                             ].map(([label, value]) => (
                                 <View key={label} style={styles.reviewRow}>
                                     <Text style={{ color: colors.textTertiary, width: 100, fontSize: 13.5 }}>{label}</Text>
-                                    <Text style={{ color: colors.text, flex: 1, fontSize: 14.5, fontWeight: '600' }}>{value}</Text>
+                                    <Text style={{ color: colors.text, flex: 1, fontSize: 14.5, fontFamily: FONT.semibold }}>{value}</Text>
                                 </View>
                             ))}
                         </Card>
                         {driver.missing.length > 0 ? (
                             <Card style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb' }}>
-                                <Text style={{ color: '#92400e', fontWeight: '700', marginBottom: 4 }}>Осталось заполнить</Text>
+                                <Text style={{ color: '#92400e', fontFamily: FONT.bold, marginBottom: 4 }}>Осталось заполнить</Text>
                                 {driver.missing.map((m) => <Text key={m} style={{ color: '#92400e', fontSize: 13.5, lineHeight: 20 }}>• {m}</Text>)}
                             </Card>
                         ) : (
@@ -634,7 +634,7 @@ export default function Onboarding() {
                 onDone={uploadCaptured}
             />
 
-            <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border2, paddingBottom: Math.max(insets.bottom, 12) }]}>
                 {!!stepError && (
                     <View style={styles.stepError} accessibilityLiveRegion="polite">
                         <Ionicons name="alert-circle" size={18} color="#b91c1c" />
@@ -655,19 +655,19 @@ export default function Onboarding() {
 const styles = StyleSheet.create({
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     progressWrap: { paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
-    progressText: { fontSize: 12.5, fontWeight: '600', marginBottom: 6 },
+    progressText: { fontSize: 12.5, fontFamily: FONT.semibold, marginBottom: 6 },
     progressTrack: { height: 5, borderRadius: 3, overflow: 'hidden' },
     progressFill: { height: 5, borderRadius: 3, backgroundColor: BRAND.primary },
-    label: { fontSize: 12.5, fontWeight: '600', marginBottom: 8, marginTop: 4 },
+    label: { fontSize: 12.5, fontFamily: FONT.semibold, marginBottom: 8, marginTop: 4 },
     toggle: { flex: 1, minHeight: 46, borderRadius: RADIUS.button, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
     thumb: { width: 64, height: 64, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     thumbImage: { width: 64, height: 64 },
-    link: { color: BRAND.primary, fontWeight: '700', fontSize: 14 },
+    link: { color: BRAND.primary, fontFamily: FONT.bold, fontSize: 14 },
     reviewRow: { flexDirection: 'row', paddingVertical: 7 },
     footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
     stepError: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#fef2f2', borderRadius: 12, padding: 10, marginBottom: 10 },
-    stepErrorText: { flex: 1, color: '#b91c1c', fontSize: 13.5, lineHeight: 19, fontWeight: '600' },
+    stepErrorText: { flex: 1, color: '#b91c1c', fontSize: 13.5, lineHeight: 19, fontFamily: FONT.semibold },
     fieldError: { fontSize: 12, marginTop: 6, lineHeight: 16 },
     consent: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', borderWidth: 1, borderRadius: RADIUS.card, padding: 14, marginTop: 6 },
-    groupLabel: { fontSize: 15, fontWeight: '800', marginTop: 10, marginBottom: 10 },
+    groupLabel: { fontSize: 15, fontFamily: FONT.bold, marginTop: 10, marginBottom: 10 },
 });

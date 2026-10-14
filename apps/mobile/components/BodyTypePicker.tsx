@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BODY_TYPES } from '@/lib/exchange';
-import { BRAND, RADIUS, selectedColors } from '@/lib/theme';
+import { BRAND, RADIUS, selectedColors, FONT } from '@/lib/theme';
 
 /** Самые частые — кнопками сразу, остальные — в списке с поиском. */
 const POPULAR = ['тент', 'рефрижератор', 'изотерм', 'бортовая', 'контейнеровоз', 'самосвал'];
@@ -27,14 +27,14 @@ export function BodyTypePicker({ value, onChange }: { value: string | null; onCh
                         onPress={() => onChange(t)}
                         style={[styles.option, { backgroundColor: value === t ? sel.bg : colors.card, borderColor: value === t ? sel.bg : colors.border }]}
                     >
-                        <Text style={{ color: value === t ? sel.fg : colors.text, fontWeight: '600', fontSize: 14 }}>{t}</Text>
+                        <Text style={{ color: value === t ? sel.fg : colors.text, fontFamily: FONT.semibold, fontSize: 14 }}>{t}</Text>
                     </Pressable>
                 ))}
                 <Pressable
                     onPress={() => setOpen(true)}
                     style={[styles.option, { backgroundColor: other ? sel.bg : colors.card, borderColor: other ? sel.bg : colors.border }]}
                 >
-                    <Text style={{ color: other ? sel.fg : colors.text, fontWeight: '600', fontSize: 14 }}>{other || 'другой…'}</Text>
+                    <Text style={{ color: other ? sel.fg : colors.text, fontFamily: FONT.semibold, fontSize: 14 }}>{other || 'другой…'}</Text>
                 </Pressable>
             </View>
 
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     option: { paddingHorizontal: 14, height: 42, borderRadius: RADIUS.button, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12 },
-    modalTitle: { fontSize: 22, fontWeight: '800' },
+    modalTitle: { fontSize: 22, fontFamily: FONT.bold },
     search: { marginHorizontal: 20, marginBottom: 8, height: 46, borderRadius: RADIUS.button, borderWidth: 1, paddingHorizontal: 14, fontSize: 16 },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1 },
 });

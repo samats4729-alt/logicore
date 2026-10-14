@@ -38,20 +38,27 @@ export function selectedColors(isDark: boolean) {
     return isDark ? { bg: '#f1f0ec', fg: '#20201f' } : { bg: BRAND.dark, fg: '#ffffff' };
 }
 
+/**
+ * Светлая тема — по образцу владельца (14.10.2026): белый экран, серые
+ * карточки-контейнеры без рамок, внутри них белые блоки (`surface2`),
+ * чёрная главная карточка и чёрные пилюли действий.
+ */
 export const lightColors = {
-    background: '#f4f5f7',
-    card: '#ffffff',
-    surface2: '#f7f8fa',
+    background: '#ffffff',
+    /** Карточка-контейнер на белом экране. */
+    card: '#f4f5f7',
+    /** Блок внутри карточки: строки деталей, значки, поля. */
+    surface2: '#ffffff',
     text: '#0b0d12',
     textSecondary: '#4c5460',
     textTertiary: '#868e9c',
-    border: '#e6e8ec',
-    border2: '#eff0f3',
-    hover: '#f1f2f4',
+    border: '#e7e9ed',
+    border2: '#eceef2',
+    hover: '#eceef2',
     primary: '#0b0d12',
     primaryFg: '#ffffff',
     accent: '#1677ff',
-    accentSoft: '#eef4ff',
+    accentSoft: '#e8f0ff',
     /** Тёмный акцент-блок (главная карточка рейса): глубокий графит платформы. */
     feature: '#0b0d12',
     featureFg: '#ffffff',
@@ -66,9 +73,9 @@ export const lightColors = {
 };
 
 export const darkColors: typeof lightColors = {
-    background: '#171716',
-    card: '#20201f',
-    surface2: '#1a1a19',
+    background: '#141413',
+    card: '#1f1f1d',
+    surface2: '#2a2a27',
     text: '#f1f0ec',
     textSecondary: '#b2b1aa',
     textTertiary: '#8b8a83',
@@ -94,9 +101,12 @@ export const darkColors: typeof lightColors = {
 export type AppColors = typeof lightColors;
 
 export const RADIUS = {
-    card: 18,
-    button: 16,
-    input: 14,
+    /** Карточка-контейнер. */
+    card: 24,
+    /** Блок внутри карточки. */
+    inner: 18,
+    button: 18,
+    input: 16,
     pill: 999,
 };
 

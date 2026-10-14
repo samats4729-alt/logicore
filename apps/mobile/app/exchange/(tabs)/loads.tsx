@@ -3,7 +3,8 @@ import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Te
 import { router, useFocusEffect } from 'expo-router';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { DriverProfile, ExchangeOrder, MyOffer, exchangeApi, грузов, ответ } from '@/lib/exchange';
-import { BRAND } from '@/lib/theme';
+import { BRAND, FONT } from '@/lib/theme';
+import { useTabBarSpace } from '@/components/TabBar';
 import { Button, Card, Chip, Empty } from '@/components/kit';
 import { LoadCard } from '@/components/LoadCard';
 
@@ -16,6 +17,7 @@ import { LoadCard } from '@/components/LoadCard';
  */
 export default function LoadsScreen() {
     const { colors } = useAppTheme();
+    const tabBarSpace = useTabBarSpace();
     const [me, setMe] = useState<DriverProfile | null>(null);
     const [onlyMine, setOnlyMine] = useState(true);
     const [from, setFrom] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export default function LoadsScreen() {
                 <FlatList
                     data={shown}
                     keyExtractor={(l: ExchangeOrder) => l.id}
-                    contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 120, flexGrow: 1 }}
+                    contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: tabBarSpace + 24, flexGrow: 1 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                     ListHeaderComponent={
                         <>
@@ -122,9 +124,9 @@ function OffersStrip({ offers }: { offers: MyOffer[] }) {
     return (
         <View style={{ marginBottom: 10 }}>
             {accepted && (
-                <Card onPress={() => router.push('/exchange/(tabs)/trip')} style={{ backgroundColor: '#e7f8ef', borderColor: '#bbf7d0' }}>
-                    <Text style={{ color: '#14532d', fontWeight: '800', fontSize: 15 }}>Вас выбрали: {accepted.from} → {accepted.to}</Text>
-                    <Text style={{ color: '#166534', fontSize: 13, marginTop: 2 }}>Заявка {accepted.orderNumber}. Откройте «Мой рейс» — там адреса и шаги.</Text>
+                <Card onPress={() => router.push('/exchange/(tabs)/trip')} style={{ backgroundColor: colors.posSoft }}>
+                    <Text style={{ color: colors.pos, fontFamily: FONT.bold, fontSize: 15 }}>Вас выбрали: {accepted.from} → {accepted.to}</Text>
+                    <Text style={{ color: colors.text, fontFamily: FONT.regular, fontSize: 13, marginTop: 2 }}>Заявка {accepted.orderNumber}. Откройте «Мой рейс» — там адреса и шаги.</Text>
                 </Card>
             )}
             {waiting > 0 && (
@@ -142,5 +144,5 @@ function OffersStrip({ offers }: { offers: MyOffer[] }) {
 const styles = StyleSheet.create({
     chipsBar: { flexGrow: 0 },
     chips: { gap: 8, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 2 },
-    count: { fontSize: 12.5, fontWeight: '600', marginBottom: 10, marginLeft: 2 },
+    count: { fontFamily: FONT.medium, fontSize: 12.5, marginBottom: 10, marginLeft: 2 },
 });

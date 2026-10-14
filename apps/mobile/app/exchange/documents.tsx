@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { API_URL, getAuthHeader } from '@/lib/api';
 import { ContractState, DOCUMENTS, DriverProfile, documentPath, exchangeApi, вКавычках, ответ } from '@/lib/exchange';
-import { BRAND } from '@/lib/theme';
+import { BRAND, FONT } from '@/lib/theme';
 import { Badge, Button, Card, Empty } from '@/components/kit';
 import { ContractText, OpenContractPdf } from '@/components/ParkContract';
 
@@ -132,7 +132,7 @@ export default function MyDocuments() {
                             <Card style={{ gap: 6 }}>
                                 <View style={styles.signed}>
                                     <Ionicons name="checkmark-circle" size={20} color={colors.pos} />
-                                    <Text style={{ color: colors.text, fontWeight: '700', flex: 1 }}>
+                                    <Text style={{ color: colors.text, fontFamily: FONT.bold, flex: 1 }}>
                                         {contract?.signed ? `№ ${contract.signed.number} · ` : ''}подписан {new Date(me.contractSignedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                     </Text>
                                 </View>
@@ -195,14 +195,14 @@ function Viewer({ doc, title, onClose }: { doc: Doc | null; title: string; onClo
 }
 
 const styles = StyleSheet.create({
-    lead: { fontSize: 15.5, fontWeight: '800', marginBottom: 4 },
+    lead: { fontSize: 15.5, fontFamily: FONT.bold, marginBottom: 4 },
     note: { fontSize: 14, lineHeight: 20 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
     thumb: { width: 56, height: 56, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     thumbImage: { width: 56, height: 56 },
-    docTitle: { fontSize: 14.5, fontWeight: '700' },
+    docTitle: { fontSize: 14.5, fontFamily: FONT.bold },
     docSub: { fontSize: 12.5, marginTop: 2 },
-    section: { fontSize: 11.5, fontWeight: '700', letterSpacing: 1.2, marginTop: 14, marginBottom: 10 },
+    section: { fontSize: 11.5, fontFamily: FONT.bold, letterSpacing: 1.2, marginTop: 14, marginBottom: 10 },
     signed: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     footnote: { fontSize: 12.5, lineHeight: 18, marginTop: 16, textAlign: 'center', paddingHorizontal: 8 },
     viewer: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
@@ -211,5 +211,5 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
     close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)' },
-    viewerTitle: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 16, fontWeight: '600' },
+    viewerTitle: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 16, fontFamily: FONT.semibold },
 });

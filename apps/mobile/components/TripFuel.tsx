@@ -7,6 +7,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { TripFuel as Fuel, exchangeApi, деньги, ответ } from '@/lib/exchange';
 import { Badge, Button, Section } from '@/components/kit';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
+import { FONT } from '@/lib/theme';
 
 const STATUS: Record<Fuel['receipts']['items'][number]['status'], { label: string; tone: 'orange' | 'green' | 'red' }> = {
     PENDING: { label: 'На проверке', tone: 'orange' },
@@ -119,7 +120,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
                         <View key={r.id} style={[styles.receipt, { borderTopColor: colors.border2 }]}>
                             <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
                             <View style={{ flex: 1 }}>
-                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14.5 }}>{деньги(r.amount)}</Text>
+                                <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 14.5 }}>{деньги(r.amount)}</Text>
                                 <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{date(r.createdAt)}</Text>
                                 {r.status === 'REJECTED' && !!r.rejectReason && (
                                     <Text style={{ color: colors.danger, fontSize: 12.5, marginTop: 2 }}>{r.rejectReason}</Text>
@@ -153,7 +154,7 @@ function Line({ label, value, strong }: { label: string; value: string; strong?:
     return (
         <View style={styles.line}>
             <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{label}</Text>
-            <Text style={{ color: colors.text, fontSize: strong ? 16 : 14.5, fontWeight: strong ? '800' : '700' }}>{value}</Text>
+            <Text style={{ color: colors.text, fontSize: strong ? 16 : 14.5, fontFamily: FONT.bold, fontVariant: ['tabular-nums'] }}>{value}</Text>
         </View>
     );
 }
@@ -189,7 +190,7 @@ function AmountSheet({ visible, busy, onSubmit, onClose }: { visible: boolean; b
                     {!!error && <Text style={{ color: colors.danger, fontSize: 12.5, marginTop: 4 }}>{error}</Text>}
                     <Button title="Отправить чек" icon="paper-plane-outline" loading={busy} onPress={submit} style={{ marginTop: 14 }} />
                     <Pressable onPress={onClose} accessibilityRole="button" style={styles.cancel}>
-                        {busy ? <ActivityIndicator /> : <Text style={{ color: colors.textSecondary, fontSize: 16, fontWeight: '700' }}>Отмена</Text>}
+                        {busy ? <ActivityIndicator /> : <Text style={{ color: colors.textSecondary, fontSize: 16, fontFamily: FONT.bold }}>Отмена</Text>}
                     </Pressable>
                 </View>
             </KeyboardAvoidingView>
@@ -199,8 +200,8 @@ function AmountSheet({ visible, busy, onSubmit, onClose }: { visible: boolean; b
 
 const styles = StyleSheet.create({
     binBox: { borderRadius: 14, borderWidth: 1, padding: 12 },
-    binLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1 },
-    bin: { fontSize: 26, fontWeight: '800', letterSpacing: 1.5, marginTop: 2, fontVariant: ['tabular-nums'] },
+    binLabel: { fontSize: 11, fontFamily: FONT.bold, letterSpacing: 1.1 },
+    bin: { fontSize: 26, fontFamily: FONT.bold, letterSpacing: 1.5, marginTop: 2, fontVariant: ['tabular-nums'] },
     note: { fontSize: 12.5, lineHeight: 18, marginTop: 4 },
     actions: { gap: 8, marginTop: 10 },
     sums: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, gap: 6 },
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
     receipt: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1 },
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
     sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 16 },
-    sheetTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12 },
-    amount: { height: 56, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 24, fontWeight: '800' },
+    sheetTitle: { fontSize: 18, fontFamily: FONT.bold, marginBottom: 12 },
+    amount: { height: 56, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 24, fontFamily: FONT.bold },
     cancel: { height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
 });

@@ -3,7 +3,8 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, Tex
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { OfferInput, OwnOffer, деньги } from '@/lib/exchange';
-import { Button, Chip } from '@/components/kit';
+import { Button, Chip } from '@/components/kit';
+import { FONT } from '@/lib/theme';
 
 /** Дата YYYY-MM-DD через n дней от сегодня — по часам телефона. */
 function inDays(n: number): string {
@@ -106,7 +107,7 @@ export function OfferSheet({ visible, mine, busy, fuelEstimate, onSubmit, onClos
 
                     <Button title="Отправить отклик" icon="paper-plane-outline" loading={busy} onPress={submit} style={{ marginTop: 16 }} />
                     <Pressable onPress={onClose} accessibilityRole="button" style={styles.cancel}>
-                        <Text style={{ color: colors.textSecondary, fontSize: 16, fontWeight: '700' }}>Отмена</Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 16, fontFamily: FONT.bold }}>Отмена</Text>
                     </Pressable>
                 </View>
             </KeyboardAvoidingView>
@@ -118,9 +119,9 @@ const styles = StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
     sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 8 },
     grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: 14 },
-    title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3, marginBottom: 12 },
-    label: { fontSize: 12.5, fontWeight: '600', marginBottom: 6 },
-    price: { height: 56, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 24, fontWeight: '800' },
+    title: { fontSize: 18, fontFamily: FONT.bold, letterSpacing: -0.3, marginBottom: 12 },
+    label: { fontSize: 12.5, fontFamily: FONT.semibold, marginBottom: 6 },
+    price: { height: 56, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 24, fontFamily: FONT.bold },
     chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     comment: { minHeight: 64, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, textAlignVertical: 'top' },
     cancel: { height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
