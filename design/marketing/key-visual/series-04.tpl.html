@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>LogiCore — документы</title>
+<style>
+/*FONTS*/
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#070708}
+body{font-family:Inter,system-ui,sans-serif;color:#0b0d12;-webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01"}
+.ic{display:block;flex:none}
+.num{font-variant-numeric:tabular-nums}
+.scene{position:relative;width:1080px;height:1920px;overflow:hidden;background:
+  radial-gradient(760px 620px at 62% 58%, rgba(255,255,255,.075), transparent 64%),
+  radial-gradient(900px 500px at 20% 0%, rgba(255,255,255,.05), transparent 60%),
+  radial-gradient(1000px 700px at 50% 112%, rgba(255,255,255,.06), transparent 60%),#070708}
+.grid{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1px, transparent 1.2px);background-size:28px 28px;
+  -webkit-mask-image:radial-gradient(900px 1000px at 55% 60%, #000 25%, transparent 75%)}
+.grain{position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;z-index:9;pointer-events:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+.brand{position:absolute;left:72px;top:80px;z-index:6;font:700 30px/1 Unbounded;color:#fff;letter-spacing:-.02em}
+.brand span{color:rgba(255,255,255,.42)}
+.idx{position:absolute;right:72px;top:90px;z-index:6;font:500 13px/1 Inter;color:rgba(255,255,255,.42);letter-spacing:.14em;text-transform:uppercase}
+.copy{position:absolute;left:72px;right:72px;top:180px;z-index:6;color:#fff}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;height:36px;padding:0 16px 0 8px;border-radius:999px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);font:500 14px/1 Inter;color:rgba(255,255,255,.82)}
+.eyebrow b{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:#fff;color:#0b0d12;font:600 12px/1 Inter}
+h1{margin-top:34px;font:700 100px/1.0 Unbounded;letter-spacing:-.04em;color:#fff}
+h1 .acc{background:linear-gradient(180deg,#fff 0%,#c9cbd0 55%,#7d828c 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{margin-top:30px;max-width:900px;font:400 25px/1.45 Inter;color:rgba(255,255,255,.62);letter-spacing:-.005em}
+.lead strong{display:block;margin-top:6px;color:#fff;font-weight:500}
+.stats{position:absolute;left:72px;right:72px;bottom:118px;z-index:6;display:grid;grid-template-columns:repeat(3,1fr);
+  border-top:1px solid rgba(255,255,255,.14);padding-top:30px;color:#fff}
+.stat{padding-right:24px;margin-right:24px;border-right:1px solid rgba(255,255,255,.10)}
+.stat:last-child{border:0;margin:0;padding:0}
+.stat .v{font:700 46px/1 Unbounded;letter-spacing:-.03em}
+.stat .v small{font-size:22px;color:rgba(255,255,255,.55);margin-left:6px;letter-spacing:0}
+.stat .l{margin-top:12px;font:400 15px/1.35 Inter;color:rgba(255,255,255,.5)}
+.feat{position:absolute;left:72px;right:72px;bottom:58px;z-index:6;display:flex;justify-content:space-between;align-items:center;font:500 13.5px/1 Inter;color:rgba(255,255,255,.34)}
+.feat i{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.25)}
+.feat .on{color:#fff}
+.bgmap{position:absolute;z-index:1}
+
+.fl{position:absolute;z-index:3}
+.glass{background:rgba(18,19,22,.74);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);
+  border-radius:24px;color:#fff;box-shadow:0 40px 90px -10px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.08)}
+.wcard{background:#fff;border-radius:22px;box-shadow:0 0 0 1px rgba(11,13,18,.06),0 40px 90px -16px rgba(0,0,0,.7),0 12px 30px rgba(0,0,0,.25)}
+.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px 0 7px;border:1px solid #e7e8ec;border-radius:999px;font-size:12.5px;color:#3c414b;white-space:nowrap;background:#fff}
+.pill .ic{color:#8a909b}
+.pill.ok .ic{color:#16a34a}
+.pill.wait .ic{color:#ea8a0c}
+.toast{display:flex;gap:12px;align-items:center;padding:14px 16px}
+.toast .ico{width:42px;height:42px;border-radius:13px;background:#0b0d12;color:#fff;display:grid;place-items:center;flex:none}
+.toast .t{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+.toast .s{font-size:12.5px;color:#5f6672;margin-top:3px}
+.toast .tm{margin-left:auto;align-self:flex-start;font-size:11.5px;color:#a2a7b0;white-space:nowrap}
+.glass.toast .ico{background:#fff;color:#0b0d12}
+.glass.toast .s{color:rgba(255,255,255,.55)}
+.glass.toast .tm{color:rgba(255,255,255,.4)}
+
+/* телефон */
+.phone{width:330px;height:690px;border-radius:54px;background:#0b0d12;padding:10px;
+  box-shadow:0 0 0 1.5px #2a2d35,0 0 0 4px #0b0d12,0 70px 120px -20px rgba(0,0,0,.9),0 30px 60px rgba(0,0,0,.45)}
+.scr{position:relative;width:100%;height:100%;border-radius:45px;overflow:hidden;background:#fff;color:#0b0d12;padding:48px 14px 0}
+.notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:96px;height:28px;border-radius:20px;background:#0b0d12;z-index:2}
+.sbar{position:absolute;top:16px;left:28px;right:26px;display:flex;font:600 13px Inter;z-index:2}
+.sbar .r{margin-left:auto}
+.nav{position:absolute;left:18px;right:18px;bottom:16px;height:60px;border-radius:999px;background:#0b0d12;display:flex;align-items:center;justify-content:space-around;padding:0 8px}
+.nav span{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:rgba(255,255,255,.55)}
+.nav span.on{background:#fff;color:#0b0d12}
+.ph-h{display:flex;align-items:center;gap:10px;padding:2px 4px 12px}
+.ph-h .t{font:700 22px/1.1 Inter;letter-spacing:-.025em}
+.ph-h .s{font-size:11.5px;color:#8a909b;margin-top:3px}
+.ph-h .rb{margin-left:auto;width:36px;height:36px;border-radius:50%;background:#f2f3f5;display:grid;place-items:center;color:#3c414b}
+
+
+.doc{width:520px;height:720px;background:#fff;border-radius:10px;box-shadow:0 0 0 1px rgba(11,13,18,.06),0 50px 100px -20px rgba(0,0,0,.8),0 16px 40px rgba(0,0,0,.35)}
+.doc-in{position:relative;padding:40px 38px;height:100%}
+.dh{border-bottom:2px solid #0b0d12;padding-bottom:16px}
+.dt{font:800 17px/1.25 Inter;letter-spacing:-.01em;text-transform:uppercase}
+.dn{font-size:13px;color:#5f6672;margin-top:6px}
+.pt{display:grid;grid-template-columns:100px 1fr;font-size:12px;margin-top:14px;gap:10px}
+.pt span{color:#8a909b}
+.pt b{font-weight:500}
+table{width:100%;border-collapse:collapse;margin-top:22px;font-size:12px}
+th{text-align:left;font-weight:600;color:#5f6672;padding:8px 6px;border-bottom:1px solid #e7e8ec;background:#f7f8f9}
+td{padding:10px 6px;border-bottom:1px solid #f0f1f3}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+.tot{display:flex;justify-content:flex-end;gap:24px;margin-top:14px;font-size:14px}
+.tot b{font-weight:700}
+.sg{position:absolute;left:38px;right:38px;bottom:52px;display:grid;grid-template-columns:1fr 1fr;gap:30px;font-size:11.5px;color:#8a909b}
+.sg i{display:block;border-bottom:1px solid #c3c6cc;margin-top:28px}
+.stamp{position:absolute;left:90px;bottom:28px;transform:rotate(-14deg);opacity:.9}
+.d1{left:60px;top:740px;transform:rotate(-9deg)}
+.d2{left:150px;top:712px;transform:rotate(-3deg)}
+.d3{left:250px;top:700px;transform:rotate(3deg)}
+.phone.p4{position:absolute;left:690px;top:900px;transform:rotate(6deg);z-index:4}
+.cam{position:absolute;inset:0;background:radial-gradient(400px 400px at 50% 40%,#3a3c41,#151619)}
+.cam .ttn{position:absolute;left:44px;top:150px;width:222px;height:300px;background:#f4f4f2;border-radius:4px;transform:rotate(-4deg);box-shadow:0 20px 40px rgba(0,0,0,.5);padding:18px 16px}
+.cam .ttn b{display:block;font:800 11px Inter;letter-spacing:.02em}
+.cam .ttn i{display:block;height:5px;border-radius:3px;background:#d4d5d8;margin-top:9px}
+.cam .ttn i.s{width:60%}
+.cam .ttn i.m{width:80%}
+.cam .fr{position:absolute;left:32px;right:32px;top:130px;height:340px}
+.cam .fr span{position:absolute;width:34px;height:34px;border:3px solid #fff}
+.cam .fr .a{left:0;top:0;border-right:0;border-bottom:0;border-radius:12px 0 0 0}
+.cam .fr .b{right:0;top:0;border-left:0;border-bottom:0;border-radius:0 12px 0 0}
+.cam .fr .c{left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 12px}
+.cam .fr .d{right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 12px 0}
+.cam .hint{position:absolute;top:66px;left:0;right:0;text-align:center;color:#fff;font:600 15px Inter}
+.cam .hint div{font:400 12px Inter;color:rgba(255,255,255,.6);margin-top:4px}
+.cam .ok{position:absolute;left:50%;transform:translateX(-50%);top:488px;height:30px;display:flex;align-items:center;gap:6px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:600;white-space:nowrap}
+.cam .shut{position:absolute;left:50%;bottom:40px;transform:translateX(-50%);width:74px;height:74px;border-radius:50%;border:4px solid #fff;display:grid;place-items:center}
+.cam .shut i{width:58px;height:58px;border-radius:50%;background:#fff}
+.cam .x{position:absolute;left:30px;bottom:60px;color:#fff;font-size:14px}
+.cam .g{position:absolute;right:28px;bottom:56px;width:40px;height:40px;border-radius:10px;background:#d4d5d8;border:2px solid #fff}
+.inbox{left:40px;top:1400px;width:500px;transform:rotate(-2deg);z-index:5}
+.inbox .bt{display:flex;gap:6px;margin-top:10px}
+.inbox .bt span{height:30px;display:inline-flex;align-items:center;padding:0 12px;border-radius:9px;font-size:12.5px;font-weight:600;border:1px solid #e7e8ec}
+.inbox .bt span.p{background:#0b0d12;color:#fff;border-color:#0b0d12}
+.inbox{align-items:flex-start}
+.pdf{left:500px;top:1560px;width:370px;transform:rotate(2deg);z-index:5}
+</style></head>
+<body><div class="scene">
+<div class="grid"></div>
+
+<div class="brand">Logi<span>Core</span></div>
+<div class="idx">(04 — Документы)</div>
+<div class="copy">
+  <div class="eyebrow"><b>LogiCore</b>Документооборот</div>
+  <h1>Документы<br><span class="acc">пишутся сами</span></h1>
+  <p class="lead">Счета, акты, доверенности и договоры-заявки собираются из заявки —&nbsp;с&nbsp;реквизитами и&nbsp;печатью. <strong>Водитель снимает накладную прямо в рейсе.</strong></p>
+</div>
+
+<div class="fl doc d1"><div class="doc-in"><div class="dh"><div class="dt">Доверенность</div><div class="dn">№ 0412 от 14.10.2026</div></div><div class="pt"><span>Исполнитель</span><b>ТОО «Евразия Карго», БИН 190440012345</b></div><div class="pt"><span>Заказчик</span><b>ТОО «КазТрансЛогистик», БИН 180340098765</b></div><table><tr><th>№</th><th>Наименование</th><th class="n">Сумма, ₸</th></tr><tr><td>1</td><td>Получение груза: металлопрокат, 18 т</td><td class="n">—</td></tr><tr><td>2</td><td>Водитель: Кенжебаев Ерлан</td><td class="n">—</td></tr></table><div class="tot"><span>Итого</span><b>— ₸</b></div><div class="sg"><div><span>Исполнитель</span><i></i></div><div><span>Заказчик</span><i></i></div></div></div></div>
+<div class="fl doc d2"><div class="doc-in"><div class="dh"><div class="dt">Счёт на оплату</div><div class="dn">№ 1187 от 14.10.2026</div></div><div class="pt"><span>Исполнитель</span><b>ТОО «Евразия Карго», БИН 190440012345</b></div><div class="pt"><span>Заказчик</span><b>ТОО «КазТрансЛогистик», БИН 180340098765</b></div><table><tr><th>№</th><th>Наименование</th><th class="n">Сумма, ₸</th></tr><tr><td>1</td><td>Перевозка Алматы → Астана, ЗК-2607</td><td class="n">620 000</td></tr><tr><td>2</td><td>Перевозка Шымкент → Алматы, ЗК-2610</td><td class="n">540 000</td></tr><tr><td>3</td><td>Перевозка Астана → Караганда, ЗК-2611</td><td class="n">160 000</td></tr></table><div class="tot"><span>Итого</span><b>1 320 000 ₸</b></div><div class="sg"><div><span>Исполнитель</span><i></i></div><div><span>Заказчик</span><i></i></div></div></div></div>
+<div class="fl doc d3"><div class="doc-in"><div class="dh"><div class="dt">Акт выполненных работ (оказанных услуг)</div><div class="dn">№ 2601 от 14.10.2026</div></div><div class="pt"><span>Исполнитель</span><b>ТОО «Евразия Карго», БИН 190440012345</b></div><div class="pt"><span>Заказчик</span><b>ТОО «КазТрансЛогистик», БИН 180340098765</b></div><table><tr><th>№</th><th>Наименование</th><th class="n">Сумма, ₸</th></tr><tr><td>1</td><td>Перевозка груза Алматы → Астана, заявка ЗК-2601</td><td class="n">620 000</td></tr><tr><td>2</td><td>Тент 20 т, гос. номер 123 ABC 02</td><td class="n"></td></tr></table><div class="tot"><span>Итого</span><b>620 000 ₸</b></div><div class="sg"><div><span>Исполнитель</span><i></i></div><div><span>Заказчик</span><i></i></div></div><div class="stamp"><svg width="112" height="112" viewBox="0 0 112 112"><circle cx="56" cy="56" r="52" fill="none" stroke="#8a909b" stroke-width="2"/><circle cx="56" cy="56" r="38" fill="none" stroke="#8a909b" stroke-width="1.2"/><path id="sc" d="M56 56 m-45 0 a45 45 0 1 1 90 0 a45 45 0 1 1 -90 0" fill="none"/><text font-family="Inter" font-size="9.5" font-weight="600" fill="#8a909b" letter-spacing="2.2"><textPath href="#sc">ТОО «ЕВРАЗИЯ КАРГО» · АЛМАТЫ · БИН 190440012345 ·</textPath></text><text x="56" y="53" text-anchor="middle" font-family="Unbounded" font-size="11" font-weight="700" fill="#8a909b">ЕВРАЗИЯ</text><text x="56" y="67" text-anchor="middle" font-family="Unbounded" font-size="11" font-weight="700" fill="#8a909b">КАРГО</text></svg></div></div></div>
+<div class="phone p4"><div class="scr" style="padding:0">
+  <div class="cam">
+    <div class="hint">Фото документа<div>ТТН, накладная, акт · ЗК-2607</div></div>
+    <div class="ttn"><b>ТОВАРНО-ТРАНСПОРТНАЯ НАКЛАДНАЯ</b><i></i><i class="m"></i><i class="s"></i><i></i><i class="m"></i><i></i><i class="s"></i><i class="m"></i><i></i><i class="s"></i><i></i><i class="m"></i></div>
+    <div class="fr"><span class="a"></span><span class="b"></span><span class="c"></span><span class="d"></span></div>
+    <div class="ok">{{i:check:14:2.4}} Документ в кадре · чётко</div>
+    <span class="x">Отмена</span><div class="shut"><i></i></div><span class="g"></span>
+  </div>
+  <div class="notch"></div><div class="sbar" style="color:#fff"><span>9:41</span><span class="r">●●● ▮</span></div>
+</div></div>
+<div class="fl wcard toast inbox"><span class="ico">{{i:inbox:19}}</span><div><div class="t">Входящий счёт от перевозчика</div><div class="s">ИП Сериков А. · за ЗК-2607 · <b style="color:#0b0d12">470 000 ₸</b></div>
+  <div class="bt"><span class="p">Принять</span><span>Отклонить</span></div></div><span class="tm">5 мин</span></div>
+<div class="fl glass toast pdf"><span class="ico">{{i:file-check-2:19}}</span><div><div class="t">Акт № 2601 · PDF</div><div class="s">с печатью компании · готов к отправке</div></div></div>
+
+<div class="stats"><div class="stat"><div class="v">4<small>вида</small></div><div class="l">счёт, акт, доверенность,<br>договор-заявка</div></div><div class="stat"><div class="v">PDF</div><div class="l">с печатью компании<br>в один клик</div></div><div class="stat"><div class="v">1<small>фото</small></div><div class="l">накладной из рейса —<br>сразу у диспетчера</div></div></div>
+<div class="feat"><span>Заявки</span><i></i><span>Биржа грузов</span><i></i><span>GPS-мониторинг</span><i></i><span>Финансы</span><i></i><span class="on">Документы</span><i></i><span>Приложение водителя</span></div>
+<div class="grain"></div>
+</div></body></html>

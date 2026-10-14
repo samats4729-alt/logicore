@@ -25,3 +25,15 @@
     python3 build.py kv-vertical.tpl.html kv-vertical.html
     node shot.mjs "$PWD/kv-vertical.html" "$PWD/LogiCore_key_visual_9x16.png" 1080 1920 2
 
+
+## Серия 9:16 (02–05)
+
+Продолжение вертикальной (она — 01): `LogiCore_9x16_02_monitoring.png`,
+`_03_finance.png`, `_04_documents.png`, `_05_exchange.png`. Тот же
+чёрно-белый стиль, синего нет (скрипт проверяет). Всё собирает
+`series.py` — общее оформление, карта Казахстана точками и четыре
+страницы; дальше так же:
+
+    python3 series.py
+    python3 build.py series-02.tpl.html series-02.html
+    node shot.mjs "$PWD/series-02.html" "$PWD/LogiCore_9x16_02_monitoring.png" 1080 1920 2
