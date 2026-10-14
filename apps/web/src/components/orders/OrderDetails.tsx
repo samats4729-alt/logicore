@@ -514,6 +514,14 @@ export function OrderSideCards({
                             </Row>
                         )}
 
+                        {/* Водитель другой компании (парка с биржи, ИП-субподрядчика) — она
+                            перевозчик по документам, а не экспедитор заявки (15.10.2026). */}
+                        {!order.subForwarder && order.partner && order.partnerId !== order.forwarderId && (
+                            <Row label="Перевозчик">
+                                <b>{resolveCompanyName(order.partnerId, partners, order.partner.name)}</b>
+                            </Row>
+                        )}
+
                         {order.responsibleManager && (
                             <Row label="Менеджер">
                                 {order.responsibleManager.firstName} {order.responsibleManager.lastName}

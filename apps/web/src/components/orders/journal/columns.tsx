@@ -36,6 +36,19 @@ const Dash = () => <span className="text-muted-foreground">—</span>;
  * показывал перевозчиком свою компанию (владелец, 15.10.2026) — а должен
  * прочерк, пока исполнителя не выбрали.
  */
+/**
+ * Кто везёт. Рейс передан другой компании целиком — она. Водитель от
+ * другой компании (субподрядчик: водитель парка с биржи, водитель ИП) — эта
+ * компания: она перевозчик по документам (владелец, 15.10.2026: «почему
+ * перевозчик я, если парк должен выступать перевозчиком»). Иначе — экспедитор
+ * заявки, то есть своими силами.
+ */
+const carrierName = (r: Order, userCompanyId: string | null | undefined) => {
+    if (r.forwarderId === userCompanyId && r.subForwarder) return r.subForwarder.name;
+    if (r.partner && r.partnerId !== r.forwarderId && !r.subForwarder) return r.partner.name;
+    return r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—';
+};
+
 const searchingOnExchange = (r: Order) =>
     !!r.exchangePublishedAt && !r.exchangeClosedAt
     && !r.subForwarderId && !r.partnerId && !r.driverId && !r.assignedDriverName;
@@ -175,9 +188,9 @@ export function buildColumns(ctx: ColumnContext): { active: JournalColumn<Order>
             <span className="text-muted-foreground" title="Исполнителя ищут на бирже">— · на бирже</span>
         ) : (
             <Party
-                name={(r.forwarderId === userCompanyId && r.subForwarder) ? r.subForwarder.name : (r.forwarder?.name || r.subForwarder?.name || r.partner?.name || '—')}
+                name={carrierName(r, userCompanyId)}
                 debt={!isExecutorSettled(r)}
-                ours={r.forwarderId === userCompanyId}
+                ours={(r.partnerId && !r.subForwarder ? r.partnerId : r.forwarderId) === userCompanyId}
                 debtText="не оплачено"
             />
         ),
