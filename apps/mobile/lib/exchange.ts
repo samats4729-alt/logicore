@@ -407,6 +407,20 @@ export function телефонКрасиво(phone: string | null | undefined): 
 }
 
 /** «Сегодня», «Завтра», «12 окт» — водителю важнее «когда ехать», чем число. */
+/**
+ * Способ загрузки словами. В заявке он хранится служебным именем (SIDE, REAR…)
+ * — те же названия, что в мастере заявки на сайте (apps/web/src/lib/cargo.ts).
+ */
+const LOADING_LABELS: Record<string, string> = {
+    REAR: 'Задняя',
+    SIDE: 'Боковая',
+    TOP: 'Верхняя',
+    FULL: 'Полная растентовка',
+    RAMP: 'С аппарелями',
+    TAIL_LIFT: 'Гидроборт',
+};
+export const загрузкаСловами = (keys: string[]) => keys.map((k) => LOADING_LABELS[k] ?? k).join(', ');
+
 export function когдаПросто(date: string | null | undefined): string {
     if (!date) return 'Дата не указана';
     const d = new Date(date);

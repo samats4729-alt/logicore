@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 're
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { DriverProfile, ExchangeOrder, OfferInput, exchangeApi, груз, деньги, когда, ответ } from '@/lib/exchange';
+import { DriverProfile, ExchangeOrder, OfferInput, exchangeApi, груз, деньги, загрузкаСловами, когда, ответ } from '@/lib/exchange';
 import { BRAND, FONT } from '@/lib/theme';
 import { Button, Card, Empty, Row } from '@/components/kit';
 import { OfferSheet } from '@/components/OfferSheet';
@@ -143,7 +143,7 @@ export default function OrderScreen() {
                     <Row icon="cube-outline" label="Что везём" value={order.cargoDescription || '—'} />
                     <Row icon="bus-outline" label="Кузов и вес" value={груз(order) || '—'} />
                     {order.palletCount != null && <Row icon="grid-outline" label="Паллет" value={String(order.palletCount)} />}
-                    {order.loadingTypes.length > 0 && <Row icon="swap-vertical-outline" label="Загрузка" value={order.loadingTypes.join(', ')} />}
+                    {order.loadingTypes.length > 0 && <Row icon="swap-vertical-outline" label="Загрузка" value={загрузкаСловами(order.loadingTypes)} />}
                     {temp && <Row icon="thermometer-outline" label="Температура" value={temp} />}
                     {order.adr && <Row icon="warning-outline" label="Опасный груз" value={order.adrClass ? `ДОПОГ, класс ${order.adrClass}` : 'ДОПОГ'} />}
                     {!!order.requirements && <Row icon="alert-circle-outline" label="Требования" value={order.requirements} />}
