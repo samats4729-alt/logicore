@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ExchangeDriverDocumentKind, ExchangeDriverStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { assertAllowedUpload } from '../documents/allowed-files';
@@ -161,6 +162,45 @@ export class ExchangeDriversService {
             });
         }
         return user;
+    }
+
+    /**
+     * Регистрация водителя биржи по номеру телефона и паролю (задача владельца
+     * от 14.10.2026).
+     *
+     * Пока БЕЗ подтверждения по СМС — сервис рассылки ещё не выбран. Значит
+     * номер ничем не доказан: его проверяет парк, когда звонит водителю перед
+     * допуском, а водитель с ИП — тот, кто примет его отклик. Когда появится
+     * СМС, проверка кода встаёт первой строкой здесь, до любых записей.
+     *
+     * Номер, который уже есть в системе, второй раз не регистрируется: вход по
+     * телефону ищет человека по номеру, и двух хозяев у номера быть не должно.
+     */
+    async registerByPhone(data: { phone: string; password: string; kind?: 'PARK' | 'IP' }) {
+        const phone = normalizePhone(data.phone);
+        if (!phone) throw new BadRequestException('Телефон — казахстанский мобильный, например +7 701 123 45 67');
+
+        const taken = await this.prisma.user.findFirst({
+            where: { phone: { in: [phone, `8${phone.slice(2)}`] } },
+            select: { role: true, companyId: true },
+        });
+        if (taken) {
+            throw new BadRequestException(taken.role === 'DRIVER' && taken.companyId
+                ? 'Этот номер уже есть у водителя компании. Войдите по номеру и паролю — пароль выдаёт диспетчер.'
+                : 'Этот номер уже зарегистрирован. Войдите по номеру и паролю.');
+        }
+
+        return this.prisma.user.create({
+            data: {
+                role: 'DRIVER',
+                phone,
+                passwordHash: await bcrypt.hash(data.password, 12),
+                // Имя водитель впишет в анкете «О себе» — второй раз не спрашиваем.
+                firstName: 'Водитель',
+                lastName: '',
+                exchangeDriver: { create: { phone, kind: data.kind ?? null } },
+            },
+        });
     }
 
     // ==================== водитель (приложение) ====================

@@ -1,8 +1,38 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ExchangeDriverDocumentKind, ExchangeDriverKind, ExchangeDriverStatus } from '@prisma/client';
 import {
-    IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min,
+    IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength,
 } from 'class-validator';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../../auth/password-policy';
+
+/**
+ * Регистрация водителя биржи по номеру и паролю. Пока без СМС — см.
+ * `ExchangeDriversService.registerByPhone`.
+ */
+export class DriverPhoneRegisterDto {
+    @ApiProperty({ example: '+77011234567' })
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(30)
+    phone: string;
+
+    @ApiProperty()
+    @IsString()
+    @MinLength(MIN_PASSWORD_LENGTH, { message: PASSWORD_TOO_SHORT })
+    @MaxLength(100)
+    password: string;
+
+    @ApiProperty({ required: false, enum: ['PARK', 'IP'] })
+    @IsOptional()
+    @IsIn(['PARK', 'IP'])
+    kind?: 'PARK' | 'IP';
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(200)
+    deviceId: string;
+}
 
 /** Вход водителя через Google: токен от Google и устройство (одна сессия на человека). */
 export class DriverGoogleAuthDto {

@@ -30,6 +30,7 @@ const PUBLIC_ROUTES: Record<string, string> = {
     'ExchangePublicController.invite': 'чьё приглашение парка — отдаёт только название парка по коду',
     'ExchangePublicController.contractPdf': 'договор водителя в PDF для браузера телефона — замок: ссылка подписана секретом сервера и живёт десять минут',
     'ExchangeDriverAuthController.google': 'вход водителя биржи через Google — замок: проверка токена у Google',
+    'ExchangeDriverAuthController.registerByPhone': 'регистрация водителя биржи по номеру — пока без СМС; номер проверяет парк звонком перед допуском',
     'PublicAccountingController.getClientPortal': 'счета заказчику по постоянной ссылке — он не заводит логин',
     'PublicAccountingDocumentController.createFromSharedReport': 'счёт из присланной сверки',
     'PublicAccountingDocumentController.getByToken': 'счёт по ссылке',

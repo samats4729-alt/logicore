@@ -92,6 +92,6 @@ describe('Вход водителя по телефону', () => {
         const { service } = await makeService([{ id: 'в-1', updatedAt: new Date('2026-09-01'), passwordHash: null }]);
 
         await expect(service.loginDriver('+77001112233', ПАРОЛЬ, 'телефон'))
-            .rejects.toThrow('Пароль выдаёт ваша компания');
+            .rejects.toThrow('пароль выдаёт диспетчер');
     });
 });
