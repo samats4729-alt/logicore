@@ -38,6 +38,8 @@ function offerView(o: OfferRow) {
         readyDate: o.readyDate,
         comment: o.comment,
         createdAt: o.createdAt,
+        /** Последнее изменение — водитель или перевозчик поменял цену, подачу, комментарий. */
+        updatedAt: o.updatedAt,
         decidedAt: o.decidedAt,
         /** Кто откликнулся: водитель (с ИП или через парк) или компания-перевозчик. */
         kind: d ? (d.kind === 'IP' ? 'DRIVER_IP' : 'DRIVER_PARK') : 'COMPANY',
@@ -325,7 +327,8 @@ export class ExchangeOffersService {
         const rows = await this.prisma.exchangeOffer.findMany({
             where: { orderId: { in: [...byId.keys()] }, status: 'ACTIVE' },
             select: OFFER_SELECT,
-            orderBy: { createdAt: 'desc' },
+            // Свежие сверху — и новые, и с изменённой ценой.
+            orderBy: { updatedAt: 'desc' },
             take: 100,
         });
         return rows.map((o) => {

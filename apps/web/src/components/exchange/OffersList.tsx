@@ -6,7 +6,7 @@ import { Check, Loader2, Phone, Search, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
-import { ExchangeOffer, вКавычках, день, телефонКрасиво, тонн, ответСервера } from '@/lib/exchange';
+import { ExchangeOffer, вКавычках, день, откликИзменён, телефонКрасиво, тонн, ответСервера, ценаИзменена } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,7 @@ const KIND_FILTERS: { key: KindKey; label: string }[] = [
 /** Порядок: обычно решает цена, но иногда важнее подача или опыт. */
 const SORTS = {
     price: { label: 'Сначала дешевле', compare: (a: ExchangeOffer, b: ExchangeOffer) => a.price - b.price || a.createdAt.localeCompare(b.createdAt) },
-    fresh: { label: 'Сначала новые', compare: (a: ExchangeOffer, b: ExchangeOffer) => b.createdAt.localeCompare(a.createdAt) },
+    fresh: { label: 'Сначала новые', compare: (a: ExchangeOffer, b: ExchangeOffer) => откликИзменён(b).localeCompare(откликИзменён(a)) },
     trips: { label: 'Больше рейсов', compare: (a: ExchangeOffer, b: ExchangeOffer) => (b.driver?.tripsCompleted ?? 0) - (a.driver?.tripsCompleted ?? 0) || a.price - b.price },
     ready: { label: 'Раньше подача', compare: (a: ExchangeOffer, b: ExchangeOffer) => (a.readyDate ?? '9999').localeCompare(b.readyDate ?? '9999') || a.price - b.price },
 };
@@ -180,13 +180,15 @@ export default function OffersList({ orderId, onAccepted, newSince = null }: {
                             {page.map((o) => (
                                 <TableRow
                                     key={o.id}
-                                    className={`border-0 border-b border-solid border-border align-top last:border-b-0 ${newSince !== null && (newSince === '' || o.createdAt > newSince) ? 'bg-[var(--nova-accent-soft,#eef4ff)]' : ''}`}
+                                    className={`border-0 border-b border-solid border-border align-top last:border-b-0 ${newSince !== null && (newSince === '' || откликИзменён(o) > newSince) ? 'bg-[var(--nova-accent-soft,#eef4ff)]' : ''}`}
                                 >
                                     <TableCell className="max-w-[360px] py-2.5">
                                         <div className="flex items-center gap-2 font-semibold">
                                             {o.name}
-                                            {newSince !== null && (newSince === '' || o.createdAt > newSince) && (
-                                                <span className="rounded-full bg-foreground px-1.5 py-px text-[10.5px] font-semibold text-background">новый</span>
+                                            {newSince !== null && (newSince === '' || откликИзменён(o) > newSince) && (
+                                                <span className="rounded-full bg-foreground px-1.5 py-px text-[10.5px] font-semibold text-background">
+                                                    {ценаИзменена(o) ? 'изменил цену' : 'новый'}
+                                                </span>
                                             )}
                                         </div>
                                         <div className="text-[12px] text-muted-foreground">{whoIs(o)}</div>
@@ -202,7 +204,10 @@ export default function OffersList({ orderId, onAccepted, newSince = null }: {
                                     </TableCell>
                                     <TableCell className="py-2.5 text-right tabular-nums">{o.driver ? o.driver.tripsCompleted : '—'}</TableCell>
                                     <TableCell className="whitespace-nowrap py-2.5 text-[12.5px]">{o.readyDate ? день(o.readyDate) : <span className="text-muted-foreground">не указана</span>}</TableCell>
-                                    <TableCell className="whitespace-nowrap py-2.5 text-[12.5px] text-muted-foreground">{dayjs(o.createdAt).format('DD.MM HH:mm')}</TableCell>
+                                    <TableCell className="whitespace-nowrap py-2.5 text-[12.5px] text-muted-foreground">
+                                        {dayjs(o.createdAt).format('DD.MM HH:mm')}
+                                        {ценаИзменена(o) && <div className="text-[11.5px] text-foreground">цену изменил {dayjs(o.updatedAt).format('DD.MM HH:mm')}</div>}
+                                    </TableCell>
                                     <TableCell className="whitespace-nowrap py-2.5 text-right">
                                         <div className="text-[14px] font-bold tabular-nums">{moneyShort(o.price)}</div>
                                         <div className="text-[11px] text-muted-foreground">

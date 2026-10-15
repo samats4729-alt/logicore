@@ -5,7 +5,7 @@ import Link from 'next/link';
 import dayjs from 'dayjs';
 import { ArrowRight, Search } from 'lucide-react';
 import { moneyShort } from '@/lib/money-format';
-import type { IncomingOffer } from '@/lib/exchange';
+import { откликИзменён, type IncomingOffer } from '@/lib/exchange';
 import { Input } from '@/components/ui/input';
 import OffersList from './OffersList';
 import styles from '@/components/nova/nova.module.css';
@@ -44,12 +44,12 @@ export default function IncomingOffers({ offers, newSince = null, onChanged }: {
             if (!g) {
                 map.set(o.orderId, {
                     orderId: o.orderId, orderNumber: o.orderNumber, from: o.from, to: o.to, orderPrice: o.orderPrice,
-                    count: 1, best: o.price, latest: o.createdAt,
+                    count: 1, best: o.price, latest: откликИзменён(o),
                 });
             } else {
                 g.count += 1;
                 g.best = Math.min(g.best, o.price);
-                if (o.createdAt > g.latest) g.latest = o.createdAt;
+                if (откликИзменён(o) > g.latest) g.latest = откликИзменён(o);
             }
         }
         return Array.from(map.values()).sort((a, b) => b.latest.localeCompare(a.latest));
@@ -90,7 +90,7 @@ export default function IncomingOffers({ offers, newSince = null, onChanged }: {
                 <ul className="m-0 max-h-[calc(100vh-300px)] list-none divide-y divide-border overflow-y-auto p-0">
                     {shown.map((g) => {
                         const on = g.orderId === current.orderId;
-                        const fresh = offers.filter((x) => x.orderId === g.orderId && isNew(x.createdAt)).length;
+                        const fresh = offers.filter((x) => x.orderId === g.orderId && isNew(откликИзменён(x))).length;
                         return (
                             <li key={g.orderId}>
                                 <button

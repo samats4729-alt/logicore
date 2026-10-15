@@ -70,6 +70,8 @@ export interface ExchangeOffer {
     readyDate: string | null;
     comment: string | null;
     createdAt: string;
+    /** Последнее изменение отклика (цена, подача). Старый сервер не присылает. */
+    updatedAt?: string;
     kind: 'DRIVER_IP' | 'DRIVER_PARK' | 'COMPANY';
     name: string;
     phone: string | null;
@@ -86,6 +88,13 @@ export interface ExchangeOffer {
 }
 
 /** Биржа в карточке заявки: на бирже ли и можно ли выставить. */
+/** Когда отклик в последний раз появился или изменился — по этому времени он «новый». */
+export const откликИзменён = (o: Pick<ExchangeOffer, 'createdAt' | 'updatedAt'>) => o.updatedAt ?? o.createdAt;
+
+/** Цену (или подачу) поменяли после отклика — больше минуты спустя. */
+export const ценаИзменена = (o: Pick<ExchangeOffer, 'createdAt' | 'updatedAt'>) =>
+    !!o.updatedAt && new Date(o.updatedAt).getTime() - new Date(o.createdAt).getTime() > 60_000;
+
 /** Отклик на свою заявку — в «Предложениях» биржи и в колокольчике: с заявкой, к которой он относится. */
 export type IncomingOffer = ExchangeOffer & {
     orderId: string;

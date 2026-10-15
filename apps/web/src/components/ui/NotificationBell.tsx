@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { BellOutlined, NotificationOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useOffersFeed } from '@/lib/offers-feed';
+import { откликИзменён, ценаИзменена } from '@/lib/exchange';
 import { moneyShort } from '@/lib/money-format';
 import { STATUS_LABELS, STATUS_PILL } from '@/components/ui/StatusPill';
 import dayjs from 'dayjs';
@@ -92,7 +93,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
     const newEventCount = lastSeen ? events.filter(e => e.changedAt > lastSeen).length : events.length;
     const hasPending = pending.length > 0;
     // Новые отклики — пришедшие после последнего открытия колокольчика.
-    const newOffers = lastSeen ? offers.filter((o) => o.createdAt > lastSeen) : offers;
+    const newOffers = lastSeen ? offers.filter((o) => откликИзменён(o) > lastSeen) : offers;
     const showDot = hasNewUpdates || hasPending || newEventCount > 0 || freshAnswers.length > 0 || newOffers.length > 0;
 
     // При открытии — отметить прочитанным
@@ -211,7 +212,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                                         <b style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{moneyShort(o.price)}</b> · {o.from} → {o.to} · {o.name}
                                     </span>
                                     <span style={{ fontSize: 11, color: 'var(--nova-fg-3)', whiteSpace: 'nowrap' }}>
-                                        {dayjs(o.createdAt).format('DD.MM HH:mm')}
+                                        {ценаИзменена(o) ? 'цена изменена ' : ''}{dayjs(откликИзменён(o)).format('DD.MM HH:mm')}
                                     </span>
                                 </div>
                             ))}

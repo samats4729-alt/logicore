@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import { api } from '@/lib/api';
-import { exchangeStatus, type IncomingOffer } from '@/lib/exchange';
+import { exchangeStatus, откликИзменён, type IncomingOffer } from '@/lib/exchange';
 import { useAuthStore } from '@/store/auth';
 
 /**
@@ -64,9 +64,12 @@ export const useOffersFeed = create<FeedState>((set, get) => ({
     },
 }));
 
-/** Сколько новых откликов. До первого просмотра новыми считаются все ждущие решения. */
+/**
+ * Сколько новых откликов. Новый — пришёл или изменился (водитель поменял цену)
+ * после последнего просмотра. До первого просмотра новыми считаются все ждущие решения.
+ */
 export function useNewOffersCount(): number {
-    return useOffersFeed((s) => s.offers.filter((o) => !s.seenAt || o.createdAt > s.seenAt).length);
+    return useOffersFeed((s) => s.offers.filter((o) => !s.seenAt || откликИзменён(o) > s.seenAt).length);
 }
 
 /** Запустить опрос — один раз, в оболочке кабинета. */
