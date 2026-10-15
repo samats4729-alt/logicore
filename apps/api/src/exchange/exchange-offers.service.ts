@@ -132,14 +132,15 @@ export class ExchangeOffersService {
 
     /**
      * Водитель парка откликается суммой на руки (вместе с топливом) или
-     * соглашается на цену компании — тогда сумму на руки считаем от неё.
-     * В отклик пишем цену для компании и весь расчёт на этот момент.
+     * соглашается на цену компании — она и есть сумма на руки: налоги,
+     * комиссии и НДС идут сверху (владелец, 15.10.2026). В отклик пишем цену
+     * для компании и весь расчёт на этот момент.
      */
     private async driverCalc(driver: { id: string; parkCompanyId: string }, order: { id: string; exchangePrice: Prisma.Decimal | null }, dto: MakeOfferDto): Promise<SettlementCalc> {
         const ctx = await this.settlement.context(driver, order.id);
         if (dto.agree) {
             if (order.exchangePrice == null) throw new BadRequestException('У заявки цена договорная — предложите свою');
-            const calc = this.settlement.byCustomerPrice(ctx, Number(order.exchangePrice));
+            const calc = this.settlement.tryDriverTotal(ctx, Number(order.exchangePrice));
             if (!calc) throw new BadRequestException('Цена компании не покрывает топливо по расчёту — предложите свою сумму');
             return calc;
         }
@@ -375,9 +376,11 @@ export class ExchangeOffersService {
                 : `С биржи выбран водитель ${view.name} (свой ИП) за ${price.toLocaleString('ru-RU')} ₸`;
             if (d.kind === 'PARK' && d.parkCompanyId) {
                 const driver = { id: d.id, parkCompanyId: d.parkCompanyId };
-                // Отклик до нового расчёта — считаем от цены, которую видит компания.
-                const calc = (offer.calc as unknown as SettlementCalc | null)
-                    ?? this.settlement.byCustomerPrice(await this.settlement.context(driver, order.id), price);
+                // Вычет — по остатку на сейчас: пока отклик ждал, у водителя мог
+                // пройти другой рейс месяца. Отклик до нового расчёта (без calc) —
+                // рейс без расчёта «на руки», как раньше.
+                const offered = offer.calc as unknown as SettlementCalc | null;
+                const calc = offered ? this.settlement.atAccept(offered, await this.settlement.context(driver, order.id)) : null;
                 if (calc) {
                     settlementData = this.settlement.fixData(order.id, driver, calc);
                     comment += ` — водителю на руки ${Math.round(calc.driverTotal).toLocaleString('ru-RU')} ₸ с топливом`;

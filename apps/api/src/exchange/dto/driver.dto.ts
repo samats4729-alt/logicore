@@ -169,6 +169,24 @@ export class PayoutRatesDto {
 
     @ApiProperty({ required: false, description: 'МРП, ₸' })
     @IsOptional() @IsInt({ message: 'МРП — целым числом тенге' }) @Min(1) @Max(1000000) mrp?: number;
+
+    // НДС (15.10.2026): прибавляется к цене для компании, только у плательщиков НДС.
+    @ApiProperty({ required: false, description: 'Парк — плательщик НДС' })
+    @IsOptional() @IsBoolean() vatPayer?: boolean;
+
+    @ApiProperty({ required: false, description: 'Ставка НДС, %' })
+    @IsOptional() @IsNumber({}, { message: 'НДС — числом' }) @Min(0) @Max(100) vatPct?: number;
+}
+
+export class ConfirmRatesDto {
+    @ApiProperty({ description: 'true — бухгалтер подтвердил расчёт; false — снять подтверждение' })
+    @IsBoolean() confirmed: boolean;
+}
+
+/** Согласие продолжить по предварительному расчёту (ставки не подтверждены бухгалтером). */
+export class PreliminaryAckDto {
+    @ApiProperty({ required: false })
+    @IsOptional() @IsBoolean() preliminaryAck?: boolean;
 }
 
 export class ExportPayoutsDto {
@@ -176,6 +194,9 @@ export class ExportPayoutsDto {
     @IsArray()
     @IsString({ each: true })
     ids: string[];
+
+    @ApiProperty({ required: false, description: 'Согласие выгрузить по предварительному расчёту' })
+    @IsOptional() @IsBoolean() preliminaryAck?: boolean;
 }
 
 export const PAYOUT_FILTERS = ['REQUESTED', 'EXPORTED', 'PAID', 'REJECTED', 'all'] as const;

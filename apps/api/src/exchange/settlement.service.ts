@@ -1,18 +1,23 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { kzCurrentMonth } from '../common/utils/business-date';
 import { LngLat, estimateRoadKm, pointOf, roadDistanceKm } from './route-distance';
-import { Settlement, SettlementRates, fromCustomerPrice, fromDriverTotal, fuelEstimate } from './settlement-calc';
+import { Settlement, SettlementRates, fromDriverTotal, fuelEstimate, money, monthlyDeduction, withDeductionLeft } from './settlement-calc';
 
 /** Комиссия LogiCore по умолчанию, % — меняется в админке (ключ платформы). */
 export const PLATFORM_FEE_KEY = 'exchange_platform_fee_pct';
 const PLATFORM_FEE_DEFAULT = 5;
 
-/** Настройки парка по умолчанию — как в калькуляции шефа (2026). */
+/**
+ * Настройки парка по умолчанию — ставки 2026 года; комиссия парка 10 % и НДС
+ * 16 % — из задачи о расчёте водителя без ИП (15.10.2026). НДС только у
+ * плательщиков НДС — по умолчанию выключен.
+ */
 export const PARK_DEFAULTS = {
-    commissionPct: 5, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5,
+    commissionPct: 10, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5,
     fuelPerKm: 100, applyDeduction: true, deductionMrp: 30, mrp: 4325,
+    vatPayer: false, vatPct: 16,
 };
 
 /** Что нужно, чтобы посчитать рейс конкретному водителю: ставки, топливо, вычет. */
@@ -22,11 +27,14 @@ export interface SettlementContext {
     distanceKm: number | null;
     fuel: number;
     taxMonth: string;
-    deductionApplied: boolean;
+    /** Сколько месячного вычета у водителя ещё не ушло на другие рейсы этого месяца, ₸. */
+    deductionLeft: number;
+    /** Бухгалтер парка ещё не подтвердил расчёт — суммы предварительные. */
+    preliminary: boolean;
 }
 
 /** Расчёт и то, из чего он получился, — замораживается в отклике и в рейсе. */
-export type SettlementCalc = Settlement & Omit<SettlementContext, 'deductionApplied'>;
+export type SettlementCalc = Settlement & Omit<SettlementContext, 'deductionLeft'>;
 
 export const ROUTE_SELECT = {
     id: true,
@@ -76,37 +84,60 @@ export class ExchangeSettlementService {
             commissionPct: num(row.commissionPct), opvPct: num(row.opvPct), vosmsPct: num(row.vosmsPct),
             ipnPct: num(row.ipnPct), soPct: num(row.soPct), fuelPerKm: num(row.fuelPerKm),
             applyDeduction: row.applyDeduction, deductionMrp: row.deductionMrp, mrp: row.mrp,
+            vatPayer: row.vatPayer, vatPct: num(row.vatPct),
         } : PARK_DEFAULTS;
         const rates: SettlementRates = {
             opvPct: p.opvPct, vosmsPct: p.vosmsPct, ipnPct: p.ipnPct, soPct: p.soPct,
             platformPct: await this.platformPct(), parkPct: p.commissionPct,
             deductionMrp: p.deductionMrp, mrp: p.mrp,
+            vatPct: p.vatPayer ? p.vatPct : 0,
         };
-        return { rates, fuelPerKm: p.fuelPerKm, applyDeduction: p.applyDeduction };
+        return { rates, fuelPerKm: p.fuelPerKm, applyDeduction: p.applyDeduction, preliminary: !row?.ratesConfirmedAt };
     }
 
-    /** Ставки парка водителя и месяцы, в которых вычет уже был, — один раз на ленту. */
+    /**
+     * Ставки парка водителя и сколько вычета ушло на его рейсы по месяцам —
+     * один раз на ленту. Учёт по водителю в этом парке; в счёт идут только
+     * рейсы, которые он и везёт: отменённые и переданные другому — нет.
+     */
     async driverBase(driver: { id: string; parkCompanyId: string }) {
         const settings = await this.parkSettings(driver.parkCompanyId);
-        const used = await this.prisma.exchangeTripSettlement.findMany({
-            where: { driverId: driver.id, deductionApplied: true },
-            select: { taxMonth: true, orderId: true },
+        const rows = await this.prisma.exchangeTripSettlement.findMany({
+            where: {
+                driverId: driver.id, parkCompanyId: driver.parkCompanyId, deductionApplied: true,
+                order: { status: { not: OrderStatus.CANCELLED } },
+            },
+            select: { taxMonth: true, orderId: true, deductionAmount: true, order: { select: { driverId: true } }, driver: { select: { userId: true } } },
         });
+        const used = rows
+            .filter((r) => !r.order.driverId || r.order.driverId === r.driver.userId)
+            .map((r) => ({ taxMonth: r.taxMonth, orderId: r.orderId, amount: num(r.deductionAmount) }));
         return { ...settings, usedMonths: used };
+    }
+
+    /** Остаток месячного вычета водителя — без рейса orderId (его расчёт и пересчитываем). */
+    deductionLeft(base: Awaited<ReturnType<ExchangeSettlementService['driverBase']>>, taxMonth: string, orderId: string): number {
+        if (!base.applyDeduction) return 0;
+        const spent = base.usedMonths
+            .filter((u) => u.taxMonth === taxMonth && u.orderId !== orderId)
+            .reduce((sum, u) => money(sum + u.amount), 0);
+        return Math.max(0, money(monthlyDeduction(base.rates) - spent));
     }
 
     /**
      * Контекст расчёта по строке заявки: расстояние (посчитано при выставлении,
      * иначе — оценка по прямой), месяц дохода (месяц первой погрузки, без даты —
-     * текущий) и положен ли вычет (в этом месяце его у водителя ещё не было).
+     * текущий) и сколько вычета у водителя в этом месяце ещё осталось.
      */
     contextFromRow(base: Awaited<ReturnType<ExchangeSettlementService['driverBase']>>, row: RouteRow): SettlementContext {
         const points = row.routePoints.map((p) => pointOf(p.location)).filter((p): p is LngLat => !!p);
         const distanceKm = row.exchangeDistanceKm ?? estimateRoadKm(points);
         const pickup = row.routePoints.find((p) => p.pointType !== 'DELIVERY' && p.expectedDate);
         const taxMonth = kzCurrentMonth(pickup?.expectedDate ?? new Date());
-        const deductionApplied = base.applyDeduction && !base.usedMonths.some((u) => u.taxMonth === taxMonth && u.orderId !== row.id);
-        return { rates: base.rates, fuelPerKm: base.fuelPerKm, distanceKm, fuel: fuelEstimate(distanceKm, base.fuelPerKm), taxMonth, deductionApplied };
+        return {
+            rates: base.rates, fuelPerKm: base.fuelPerKm, distanceKm, fuel: fuelEstimate(distanceKm, base.fuelPerKm),
+            taxMonth, deductionLeft: this.deductionLeft(base, taxMonth, row.id), preliminary: base.preliminary,
+        };
     }
 
     /** Контекст для одной заявки — отклик и выбор исполнителя. */
@@ -125,24 +156,40 @@ export class ExchangeSettlementService {
         return km;
     }
 
-    /** Водитель назвал сумму на руки → полный расчёт. Ошибку суммы — словами. */
+    /**
+     * Сумма на руки вместе с топливом → полный расчёт. Её называет водитель в
+     * отклике — или компания базой на бирже: налоги, комиссии и НДС идут
+     * сверху (владелец, 15.10.2026). Ошибку суммы — словами.
+     */
     byDriverTotal(ctx: SettlementContext, driverTotal: number): SettlementCalc {
         try {
-            const s = fromDriverTotal(driverTotal, ctx.fuel, ctx.rates, ctx.deductionApplied);
-            return { ...s, rates: ctx.rates, fuelPerKm: ctx.fuelPerKm, distanceKm: ctx.distanceKm, taxMonth: ctx.taxMonth };
+            return this.withContext(fromDriverTotal(driverTotal, ctx.fuel, ctx.rates, ctx.deductionLeft), ctx);
         } catch (e) {
             throw new BadRequestException((e as Error).message);
         }
     }
 
-    /** Цена компании → полный расчёт; цена меньше топлива — водителю показать нечего. */
-    byCustomerPrice(ctx: SettlementContext, customerPrice: number): SettlementCalc | null {
+    /** То же для ленты: база не больше топлива — водителю показать нечего. */
+    tryDriverTotal(ctx: SettlementContext, driverTotal: number): SettlementCalc | null {
         try {
-            const s = fromCustomerPrice(customerPrice, ctx.fuel, ctx.rates, ctx.deductionApplied);
-            return { ...s, rates: ctx.rates, fuelPerKm: ctx.fuelPerKm, distanceKm: ctx.distanceKm, taxMonth: ctx.taxMonth };
+            return this.byDriverTotal(ctx, driverTotal);
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Расчёт отклика на момент выбора исполнителя: вычет — сколько его у
+     * водителя осталось сейчас (пока отклик ждал, мог пройти другой рейс
+     * месяца); цена компании и сумма водителю — как в отклике.
+     */
+    atAccept(offered: SettlementCalc, ctx: SettlementContext): SettlementCalc {
+        const s = withDeductionLeft({ ...offered, vat: offered.vat ?? 0 }, offered.rates, ctx.deductionLeft);
+        return { ...offered, ...s, preliminary: ctx.preliminary };
+    }
+
+    private withContext(s: Settlement, ctx: SettlementContext): SettlementCalc {
+        return { ...s, rates: ctx.rates, fuelPerKm: ctx.fuelPerKm, distanceKm: ctx.distanceKm, taxMonth: ctx.taxMonth, preliminary: ctx.preliminary };
     }
 
     /** Зафиксировать расчёт рейса — когда компания выбрала водителя. */
@@ -153,6 +200,7 @@ export class ExchangeSettlementService {
             driverTotal: c.driverTotal, workNet: c.workNet, gross: c.gross, opv: c.opv, vosms: c.vosms, ipn: c.ipn,
             so: c.so, parkCost: c.parkCost, platformFee: c.platformFee, parkFee: c.parkFee, customerPrice: c.customerPrice,
             deductionApplied: c.deductionApplied, deductionAmount: c.deductionAmount,
+            vat: c.vat ?? 0, preliminary: c.preliminary ?? true,
             rates: c.rates as unknown as Prisma.InputJsonValue,
         };
     }

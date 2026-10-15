@@ -8,7 +8,7 @@ function boardRow(overrides: Record<string, any> = {}) {
         id: 'order-1', orderNumber: '7A-0042',
         cargoDescription: 'Напитки', cargoWeight: 20000, cargoVolume: null, cargoType: 'Тент', natureOfCargo: null,
         palletCount: null, loadingTypes: [], packagingTypes: [], tempMin: null, tempMax: null, adr: null, adrClass: null,
-        requirements: null, exchangePrice: 508437.93, exchangeNote: null, exchangePublishedAt: new Date(), exchangeDistanceKm: 1200,
+        requirements: null, exchangePrice: 400000, exchangeNote: null, exchangePublishedAt: new Date(), exchangeDistanceKm: 1200,
         forwarder: { name: 'ТОО Экспедитор' }, customerCompany: null, subForwarder: null, subForwarderId: null, forwarderId: 'fwd',
         routePoints: [
             { pointType: 'PICKUP', sequence: 1, expectedDate: new Date('2099-01-10T03:00:00Z'), location: { city: 'Шымкент', region: null, cityRecord: null } },
@@ -31,8 +31,11 @@ function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', trip
         exchangeDriverDocument: { deleteMany: jest.fn() },
         session: { deleteMany: jest.fn() },
         user: { update: jest.fn() },
-        // Ставки парка по умолчанию (как в калькуляции шефа), вычет в месяце ещё не брали.
-        parkPayoutRates: { findUnique: jest.fn().mockResolvedValue(null) },
+        // Ставки парка как в калькуляции шефа (5 % парка), вычет в месяце ещё не брали.
+        parkPayoutRates: { findUnique: jest.fn().mockResolvedValue({
+            commissionPct: 5, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
+            applyDeduction: true, deductionMrp: 30, mrp: 4325, vatPayer: false, vatPct: 16, ratesConfirmedAt: null,
+        }) },
         platformSetting: { findUnique: jest.fn().mockResolvedValue(null) },
         exchangeTripSettlement: { findMany: jest.fn().mockResolvedValue([]) },
         $transaction: jest.fn(async (ops: any[]) => ops),
@@ -74,8 +77,21 @@ describe('Биржа · водитель: лента', () => {
         const { service, prisma } = build();
         const feed = await service.feed('u-1');
         expect(prisma.order.findMany.mock.calls[0][0].where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
-        // Компания выставила 508 437,93; 1 200 км × 100 ₸ = 120 000 топлива → на руки 400 000.
+        // Компания выставила 400 000 — это и есть на руки (с топливом 1 200 км × 100 ₸);
+        // налоги и комиссии сверху — компании 508 437,93 (владелец, 15.10.2026).
         expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 400000, fuelEstimate: 120000, orderNumber: '7A-0042' });
+        expect(feed[0].breakdown).toMatchObject({ customerPrice: 508437.93, driverTotal: 400000, vat: 0, preliminary: true });
+    });
+
+    it('парк плательщик НДС — НДС сверху виден водителю в разборе', async () => {
+        const { service, prisma } = build();
+        prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...{
+            commissionPct: 5, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
+            applyDeduction: true, deductionMrp: 30, mrp: 4325, vatPayer: false, vatPct: 16, ratesConfirmedAt: null,
+        }, vatPayer: true });
+        const [load] = await service.feed('u-1');
+        expect(load.price).toBe(400000);
+        expect(load.breakdown).toMatchObject({ vatPct: 16, vat: 81350.07 });
     });
 
     it('договорная цена — суммы на руки нет', async () => {

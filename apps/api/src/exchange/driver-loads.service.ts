@@ -50,14 +50,14 @@ export class ExchangeDriverLoadsService {
     }
 
     /**
-     * Заявка глазами водителя парка: вместо цены компании — сколько он получит
-     * на руки вместе с топливом (налоги и комиссии парк досчитывает сверху,
-     * решение владельца 12.10.2026). Цену компании водитель не видит.
+     * Заявка глазами водителя парка. Цена компании на бирже — база: столько
+     * водитель получит на руки вместе с топливом, а налоги, комиссии и НДС
+     * парк прибавляет сверху (владелец, 15.10.2026: «сверху прибавляется»).
      */
     private forDriver(base: Awaited<ReturnType<ExchangeSettlementService['driverBase']>>, row: ExchangeOrderRow) {
         const view = exchangeView(row);
         const ctx = this.settlement.contextFromRow(base, row);
-        const calc = view.price != null ? this.settlement.byCustomerPrice(ctx, view.price) : null;
+        const calc = view.price != null ? this.settlement.tryDriverTotal(ctx, view.price) : null;
         return {
             ...view,
             price: calc ? calc.driverTotal : null,
@@ -77,9 +77,18 @@ export class ExchangeDriverLoadsService {
                 parkPct: calc.rates.parkPct,
                 parkFee: calc.parkFee,
                 /** Налоги и взносы за водителя: ОПВ, ВОСМС, ИПН и социальные отчисления — платит парк. */
-                taxes: calc.opv + calc.vosms + calc.ipn + calc.so,
+                taxes: (Math.round(calc.opv * 100) + Math.round(calc.vosms * 100) + Math.round(calc.ipn * 100) + Math.round(calc.so * 100)) / 100,
+                opv: calc.opv,
+                vosms: calc.vosms,
+                ipn: calc.ipn,
+                so: calc.so,
+                /** НДС сверху — только если парк плательщик НДС; иначе 0. */
+                vat: calc.vat,
+                vatPct: calc.rates.vatPct ?? 0,
                 driverTotal: calc.driverTotal,
                 fuel: calc.fuel,
+                /** Бухгалтер парка ещё не подтвердил расчёт — суммы предварительные. */
+                preliminary: calc.preliminary,
             } : null,
         };
     }

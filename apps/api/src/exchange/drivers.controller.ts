@@ -27,6 +27,7 @@ import { sendExchangeFile } from './exchange-files';
 import { ParkContractService } from './park-contract.service';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService } from './settlement.service';
+import { ExchangeParkRegistryService } from './park-registry.service';
 import { PlatformFeeDto } from './dto/fuel.dto';
 import { FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
 
@@ -47,7 +48,7 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
 }
 import {
     AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
-    ExportPayoutsDto, ParkCodeDto, ParkPayoutsQueryDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
+    ConfirmRatesDto, ExportPayoutsDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -360,6 +361,7 @@ export class ExchangeParkController {
         private readonly audit: AuditService,
         private readonly contracts: ParkContractService,
         private readonly fuel: ExchangeFuelService,
+        private readonly registry: ExchangeParkRegistryService,
     ) {}
 
     @Get('overview')
@@ -411,6 +413,27 @@ export class ExchangeParkController {
         return sendExchangeFile(this.s3, res, await this.fuel.parkReceiptFile(req.user.companyId, id));
     }
 
+    // ==================== реестр бухгалтера ====================
+
+    @Get('registry')
+    @ApiOperation({ summary: 'Реестр бухгалтера за месяц: рейсы, начислено, удержано, в бюджет, выплачено' })
+    registryMonth(@Request() req: any, @Query('month') month?: string) {
+        return this.registry.month(req.user.companyId, month);
+    }
+
+    @Get('registry/export')
+    @ApiOperation({ summary: 'Реестр бухгалтера за месяц — Excel' })
+    async registryExport(@Request() req: any, @Res() res: Response, @Query('month') month?: string) {
+        const { buffer, month: m } = await this.registry.export(req.user.companyId, month);
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': `attachment; filename="registry_${m}.xlsx"`,
+            'Content-Length': String(buffer.length),
+            'Cache-Control': 'private, no-store',
+        });
+        res.end(buffer);
+    }
+
     @Get('payouts')
     @ApiOperation({ summary: 'Выплаты водителям парка' })
     payoutsList(@Request() req: any, @Query() query: ParkPayoutsQueryDto) {
@@ -427,7 +450,7 @@ export class ExchangeParkController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Реестр выплат для 1С (Excel); выгруженные — «в 1С»' })
     async exportPayouts(@Request() req: any, @Body() dto: ExportPayoutsDto, @Res() res: Response) {
-        const { buffer, count } = await this.payouts.exportFor1C(req.user.companyId, dto.ids);
+        const { buffer, count } = await this.payouts.exportFor1C(req.user.companyId, dto.ids, !!dto.preliminaryAck);
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'STATUS', entity: 'driver_payout',
             entityLabel: `Реестр выплат водителям для 1С: ${count}`,
@@ -444,8 +467,8 @@ export class ExchangeParkController {
     @Post('payouts/:id/paid')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Отметить выплату проведённой' })
-    async markPaid(@Request() req: any, @Param('id') id: string) {
-        const result = await this.payouts.markPaid(req.user.companyId, id, req.user.sub);
+    async markPaid(@Request() req: any, @Param('id') id: string, @Body() dto: PreliminaryAckDto) {
+        const result = await this.payouts.markPaid(req.user.companyId, id, req.user.sub, !!dto?.preliminaryAck);
         await this.audit.log({ companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'driver_payout', entityId: id, entityLabel: 'Выплата водителю отмечена выплаченной' });
         return result;
     }
@@ -471,7 +494,18 @@ export class ExchangeParkController {
         const result = await this.payouts.setRates(req.user.companyId, req.user.sub, dto);
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
-            entityLabel: `Ставки выплат: комиссия ${dto.commissionPct}%, ОПВ ${dto.opvPct}%, ВОСМС ${dto.vosmsPct}%, ИПН ${dto.ipnPct}%, СО ${dto.soPct}%`,
+            entityLabel: `Ставки выплат: комиссия ${dto.commissionPct}%, ОПВ ${dto.opvPct}%, ВОСМС ${dto.vosmsPct}%, ИПН ${dto.ipnPct}%, СО ${dto.soPct}%${dto.vatPayer ? `, НДС ${dto.vatPct ?? 16}%` : ''}`,
+        });
+        return result;
+    }
+
+    @Put('rates/confirm')
+    @ApiOperation({ summary: 'Бухгалтер парка подтверждает ставки и порядок расчёта (или снимает подтверждение)' })
+    async confirmRates(@Request() req: any, @Body() dto: ConfirmRatesDto) {
+        const result = await this.payouts.confirmRates(req.user.companyId, req.user.sub, dto.confirmed);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
+            entityLabel: dto.confirmed ? 'Бухгалтер подтвердил расчёт выплат водителям' : 'Подтверждение расчёта выплат снято',
         });
         return result;
     }

@@ -32,6 +32,7 @@ function build(driver: any = { id: 'd-1', userId: 'u-1', kind: 'PARK', parkCompa
     const prisma: any = {
         exchangeDriver: { findUnique: jest.fn().mockResolvedValue(driver), update: jest.fn() },
         parkPayoutRates: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
+        driverPayoutItem: { count: jest.fn().mockResolvedValue(0) },
         order: {
             findMany: jest.fn().mockResolvedValue([
                 { id: 'o-1', orderNumber: '7A-1', driverCost: 100000, completedAt: new Date(), routePoints: [] },
@@ -62,7 +63,8 @@ describe('Выплата водителю парка: запрос', () => {
         });
         const data = prisma.driverPayout.create.mock.calls[0][0].data;
         expect(data.items.create).toHaveLength(2);
-        expect(data.items.create[0]).toMatchObject({ orderId: 'o-1', net: 75240, commissionPct: 5, ipnPct: 10 });
+        // Парк без своих настроек — комиссия по умолчанию 10 % (задача 15.10.2026).
+        expect(data.items.create[0]).toMatchObject({ orderId: 'o-1', net: 71280, commissionPct: 10, ipnPct: 10 });
         expect(data).toMatchObject({ gross: 300000, iban: 'KZ123456789012345678' });
         expect(result.trips).toBe(2);
     });
@@ -105,12 +107,12 @@ describe('Выплата водителю парка: парк', () => {
             driver: { lastName: 'Сериков', firstName: 'Серик', middleName: null, iin: '900101300123' },
             items: [{ gross: 100000, commission: 5000, opv: 9500, vosms: 1900, ipn: 8360, net: 75240, order: { orderNumber: '7A-1', completedAt: new Date(), routePoints: [] } }],
         }]);
-        const { buffer, count } = await service.exportFor1C('park-1', ['p-1']);
+        const { buffer, count } = await service.exportFor1C('park-1', ['p-1'], true);
         expect(count).toBe(1);
         const book = XLSX.read(buffer, { type: 'buffer' });
         expect(book.SheetNames).toEqual(['Реестр выплат', 'По рейсам']);
         const row = XLSX.utils.sheet_to_json<any>(book.Sheets['Реестр выплат'])[0];
-        expect(row).toMatchObject({ 'ФИО': 'Сериков Серик', 'ИИН': '900101300123', 'К перечислению': 75240 });
+        expect(row).toMatchObject({ 'ФИО': 'Сериков Серик', 'ИИН': '900101300123', 'К перечислению': 75240, 'В бюджет (ОПВ+ВОСМС+ИПН+СО)': 24035, 'Расчёт': 'предварительный' });
         expect(prisma.driverPayout.updateMany.mock.calls[0][0]).toMatchObject({ where: { status: 'REQUESTED' }, data: { status: 'EXPORTED' } });
     });
 
@@ -124,7 +126,51 @@ describe('Выплата водителю парка: парк', () => {
     it('выплаченную второй раз не провести', async () => {
         const { service, prisma } = build();
         prisma.driverPayout.updateMany.mockResolvedValue({ count: 0 });
-        await expect(service.markPaid('park-1', 'p-1', 'user-1')).rejects.toThrow(/уже проведена/);
+        await expect(service.markPaid('park-1', 'p-1', 'user-1', true)).rejects.toThrow(/уже проведена/);
+    });
+
+    describe('расчёт предварительный, пока бухгалтер парка не подтвердил (15.10.2026)', () => {
+        it('без согласия — ни выгрузки в 1С, ни «выплачено»', async () => {
+            const { service, prisma } = build();
+            await expect(service.exportFor1C('park-1', ['p-1'])).rejects.toThrow(/предварительный/);
+            await expect(service.markPaid('park-1', 'p-1', 'user-1')).rejects.toThrow(/предварительный/);
+            expect(prisma.driverPayout.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('бухгалтер подтвердил, рейсы посчитаны после — согласие не нужно', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ratesConfirmedAt: new Date() });
+            await service.markPaid('park-1', 'p-1', 'user-1');
+            expect(prisma.driverPayout.updateMany.mock.calls[0][0].data).toMatchObject({ status: 'PAID' });
+        });
+
+        it('подтвердил, но в выплате рейс, посчитанный до подтверждения, — снова нужно согласие', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ratesConfirmedAt: new Date() });
+            prisma.driverPayoutItem.count.mockResolvedValue(1);
+            await expect(service.markPaid('park-1', 'p-1', 'user-1')).rejects.toThrow(/предварительный/);
+        });
+
+        it('бухгалтер поменял ставку — подтверждение снимается', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...RATES, ratesConfirmedAt: new Date() });
+            await service.setRates('park-1', 'user-1', { ...RATES, commissionPct: 10 });
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update).toMatchObject({ ratesConfirmedAt: null });
+        });
+
+        it('сохранил те же ставки — подтверждение остаётся', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...RATES, ratesConfirmedAt: new Date() });
+            await service.setRates('park-1', 'user-1', { ...RATES });
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update).not.toHaveProperty('ratesConfirmedAt');
+        });
+
+        it('подтвердить — отметка с датой и кто', async () => {
+            const { service, prisma } = build();
+            await service.confirmRates('park-1', 'user-1', true);
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update).toMatchObject({ ratesConfirmedById: 'user-1' });
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update.ratesConfirmedAt).toBeInstanceOf(Date);
+        });
     });
 
     it('ставки — от 0 до 100 %', async () => {
@@ -135,7 +181,7 @@ describe('Выплата водителю парка: парк', () => {
 
 describe('Выплата водителю парка: рейс по расчёту «на руки» (12.10.2026)', () => {
     const SETTLEMENT = {
-        driverTotal: 400000, deductionApplied: true,
+        driverTotal: 400000, deductionApplied: true, deductionAmount: 129750,
         rates: { opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, platformPct: 5, parkPct: 5, deductionMrp: 30, mrp: 4325 },
     };
 

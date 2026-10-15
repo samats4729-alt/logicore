@@ -3220,7 +3220,12 @@ model ExchangeTripSettlement {
   parkFee       Decimal @db.Decimal(18, 2)
   customerPrice Decimal @db.Decimal(18, 2)
   deductionApplied Boolean
+  /// Сколько месячного вычета ушло на этот рейс (с 15.10.2026 — не больше остатка за месяц).
   deductionAmount  Decimal @db.Decimal(18, 2)
+  /// НДС сверху, если парк плательщик НДС; входит в customerPrice.
+  vat           Decimal @default(0) @db.Decimal(18, 2)
+  /// Посчитано до того, как бухгалтер парка подтвердил расчёт.
+  preliminary   Boolean @default(true)
   /// Ставки на момент расчёта.
   rates         Json
 
@@ -3368,8 +3373,8 @@ model ParkPayoutRates {
   parkCompanyId String  @unique
   park          Company @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
 
-  /// Комиссия парка, % от суммы за рейс.
-  commissionPct Decimal @default(5) @db.Decimal(5, 2)
+  /// Комиссия парка, %. По умолчанию 10 % (задача о расчёте без ИП, 15.10.2026).
+  commissionPct Decimal @default(10) @db.Decimal(5, 2)
   /// Пенсионные взносы водителя (ОПВ), % — удерживаются.
   opvPct        Decimal @default(10) @db.Decimal(5, 2)
   /// Взносы водителя на медстрахование (ВОСМС), % — удерживаются.
@@ -3385,6 +3390,15 @@ model ParkPayoutRates {
   /// Вычет в МРП и сам МРП, ₸ (2026: 30 × 4 325).
   deductionMrp   Int     @default(30)
   mrp            Int     @default(4325)
+  /// Парк — плательщик НДС: НДС прибавляется к цене для компании (15.10.2026).
+  vatPayer       Boolean @default(false)
+  /// Ставка НДС, % (2026: 16).
+  vatPct         Decimal @default(16) @db.Decimal(5, 2)
+  /// Бухгалтер парка подтвердил ставки и порядок расчёта. Пока пусто — расчёт
+  /// «предварительный»: выгрузка в 1С и «выплачено» — только с явным согласием.
+  /// Любая правка ставок снимает подтверждение.
+  ratesConfirmedAt   DateTime?
+  ratesConfirmedById String?
 
   updatedById String?
   updatedAt   DateTime @updatedAt
