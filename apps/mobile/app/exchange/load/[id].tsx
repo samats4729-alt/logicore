@@ -211,8 +211,9 @@ function Breakdown({ b }: { b: NonNullable<ExchangeOrder['breakdown']> }) {
     const total = Math.round(b.customerPrice);
     const platform = Math.round(b.platformFee);
     const park = Math.round(b.parkFee);
+    const vat = Math.round(b.vat ?? 0);
     const onHand = Math.round(b.driverTotal);
-    const taxes = total - platform - park - onHand;
+    const taxes = total - platform - park - vat - onHand;
     // Без процентов в подписях: комиссии считаются от стоимости работы без
     // топлива, а не от всей цены рейса, — «5 % от 508 000» не сошлось бы.
     const line = (label: string, value: string, strong = false) => (
@@ -227,12 +228,14 @@ function Breakdown({ b }: { b: NonNullable<ExchangeOrder['breakdown']> }) {
             {line('Компания платит за рейс', деньги(total))}
             {line('Комиссия LogiCore', `− ${деньги(platform)}`)}
             {line('Комиссия парка', `− ${деньги(park)}`)}
+            {vat > 0 && line(`НДС${b.vatPct ? ` ${b.vatPct} %` : ''} — парк платит в бюджет`, `− ${деньги(vat)}`)}
             {line('Налоги и взносы за вас', `− ${деньги(taxes)}`)}
             <View style={[styles.bRule, { backgroundColor: colors.border2 }]} />
             {line('Вам на руки', деньги(onHand), true)}
             <Text style={[styles.bNote, { color: colors.textTertiary }]}>
                 {b.fuel > 0 ? `В том числе топливо — около ${деньги(Math.round(b.fuel))}. ` : ''}
                 Налоги и взносы — пенсионные (ОПВ), медстраховка (ВОСМС), подоходный налог (ИПН) и социальные отчисления. Их платит парк в бюджет, на ваш пенсионный счёт и медстраховку.
+                {b.preliminary ? ' Расчёт налогов предварительный: бухгалтер парка его ещё не подтвердил. Ваша сумма на руки от этого не меняется.' : ''}
             </Text>
         </View>
     );
