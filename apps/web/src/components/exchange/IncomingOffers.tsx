@@ -30,7 +30,13 @@ type OrderGroup = {
  * заявки с фильтром, порядком и поиском (`OffersList`). Выше — та заявка,
  * где отклик пришёл последним.
  */
-export default function IncomingOffers({ offers, onChanged }: { offers: IncomingOffer[]; onChanged: () => void }) {
+export default function IncomingOffers({ offers, newSince = null, onChanged }: {
+    offers: IncomingOffer[];
+    /** Отклики новее этой отметки — новые (подсвечиваем); '' — смотрят впервые, null — не подсвечивать. */
+    newSince?: string | null;
+    onChanged: () => void;
+}) {
+    const isNew = (createdAt: string) => newSince !== null && (newSince === '' || createdAt > newSince);
     const groups = useMemo<OrderGroup[]>(() => {
         const map = new Map<string, OrderGroup>();
         for (const o of offers) {
@@ -84,6 +90,7 @@ export default function IncomingOffers({ offers, onChanged }: { offers: Incoming
                 <ul className="m-0 max-h-[calc(100vh-300px)] list-none divide-y divide-border overflow-y-auto p-0">
                     {shown.map((g) => {
                         const on = g.orderId === current.orderId;
+                        const fresh = offers.filter((x) => x.orderId === g.orderId && isNew(x.createdAt)).length;
                         return (
                             <li key={g.orderId}>
                                 <button
@@ -103,6 +110,9 @@ export default function IncomingOffers({ offers, onChanged }: { offers: Incoming
                                     <span className="shrink-0 text-right">
                                         <span className="block text-[13px] font-bold tabular-nums text-foreground">от {moneyShort(g.best)}</span>
                                         <span className="block text-[11.5px] text-muted-foreground">откликов: {g.count}</span>
+                                        {fresh > 0 && (
+                                            <span className="mt-1 inline-flex rounded-full bg-destructive px-1.5 py-px text-[10.5px] font-semibold text-white">новых {fresh}</span>
+                                        )}
                                     </span>
                                 </button>
                             </li>
@@ -128,7 +138,7 @@ export default function IncomingOffers({ offers, onChanged }: { offers: Incoming
                 </div>
                 <div className="p-3">
                     {/* key — чтобы фильтры и порядок не переезжали на другую заявку. */}
-                    <OffersList key={current.orderId} orderId={current.orderId} onAccepted={onChanged} />
+                    <OffersList key={current.orderId} orderId={current.orderId} newSince={newSince} onAccepted={onChanged} />
                 </div>
             </section>
         </div>

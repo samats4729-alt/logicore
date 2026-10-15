@@ -54,7 +54,12 @@ function afterChoice(o: ExchangeOffer): string {
  * едет, сколько рейсов довёз и когда подаст машину. Выбор — с вопросом:
  * он необратим, остальным откликнувшимся уйдёт «выбрали другого».
  */
-export default function OffersList({ orderId, onAccepted }: { orderId: string; onAccepted: () => void }) {
+export default function OffersList({ orderId, onAccepted, newSince = null }: {
+    orderId: string;
+    onAccepted: () => void;
+    /** Отклики новее этой отметки подсвечены как новые; '' — все, null — никакие. */
+    newSince?: string | null;
+}) {
     const [offers, setOffers] = useState<ExchangeOffer[] | null>(null);
     const [failed, setFailed] = useState(false);
     const [chosen, setChosen] = useState<ExchangeOffer | null>(null);
@@ -173,9 +178,17 @@ export default function OffersList({ orderId, onAccepted }: { orderId: string; o
                         </TableHeader>
                         <TableBody>
                             {page.map((o) => (
-                                <TableRow key={o.id} className="border-0 border-b border-solid border-border align-top last:border-b-0">
+                                <TableRow
+                                    key={o.id}
+                                    className={`border-0 border-b border-solid border-border align-top last:border-b-0 ${newSince !== null && (newSince === '' || o.createdAt > newSince) ? 'bg-[var(--nova-accent-soft,#eef4ff)]' : ''}`}
+                                >
                                     <TableCell className="max-w-[360px] py-2.5">
-                                        <div className="font-semibold">{o.name}</div>
+                                        <div className="flex items-center gap-2 font-semibold">
+                                            {o.name}
+                                            {newSince !== null && (newSince === '' || o.createdAt > newSince) && (
+                                                <span className="rounded-full bg-destructive px-1.5 py-px text-[10.5px] font-semibold text-white">новый</span>
+                                            )}
+                                        </div>
                                         <div className="text-[12px] text-muted-foreground">{whoIs(o)}</div>
                                         {o.comment && <div className="mt-0.5 truncate text-[12px]" title={o.comment}>«{o.comment}»</div>}
                                     </TableCell>

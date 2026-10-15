@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { BellOutlined, NotificationOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
-import { exchangeStatus, type IncomingOffer } from '@/lib/exchange';
+import { useOffersFeed } from '@/lib/offers-feed';
 import { moneyShort } from '@/lib/money-format';
 import { STATUS_LABELS, STATUS_PILL } from '@/components/ui/StatusPill';
 import dayjs from 'dayjs';
@@ -28,30 +28,22 @@ function usePolledData() {
     const [events, setEvents] = useState<OrderEvent[]>([]);
     const [pending, setPending] = useState<PendingItem[]>([]);
     const [answers, setAnswers] = useState<SupportAnswer[]>([]);
-    const [offers, setOffers] = useState<IncomingOffer[]>([]);
     const [loading, setLoading] = useState(true);
     const mountedRef = useRef(true);
 
     const fetchAll = useCallback(async () => {
         try {
-            const [evRes, pendRes, ansRes, offRes] = await Promise.all([
+            const [evRes, pendRes, ansRes] = await Promise.all([
                 api.get('/company/orders/events', { params: { limit: 15 } }),
                 api.get('/company/orders/pending-confirmations'),
                 // Ответ поддержки — событие того же рода: человек ждал и
                 // должен узнать сразу, а не открывать раздел наугад.
                 api.get('/assistant/support/my/answers').catch(() => ({ data: [] })),
-                // Отклики на свои заявки на бирже (владелец, 15.10.2026: «если
-                // новые предложения поступают — уведомления»). Без биржи и у
-                // парка — не спрашиваем вовсе.
-                exchangeStatus()
-                    .then(async (s): Promise<IncomingOffer[]> => (s.enabled && !s.isPark ? (await api.get('/exchange/incoming-offers')).data : []))
-                    .catch((): IncomingOffer[] => []),
             ]);
             if (mountedRef.current) {
                 setEvents(evRes.data);
                 setPending(pendRes.data);
                 setAnswers(ansRes.data || []);
-                setOffers(offRes);
                 setLoading(false);
             }
         } catch {
@@ -66,14 +58,17 @@ function usePolledData() {
         return () => { mountedRef.current = false; clearInterval(timer); };
     }, [fetchAll]);
 
-    return { events, pending, answers, offers, loading };
+    return { events, pending, answers, loading };
 }
 
 export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boolean }) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const { events, pending, answers, offers, loading } = usePolledData();
+    const { events, pending, answers, loading } = usePolledData();
+    // Отклики на свои заявки на бирже — из общего счётчика кабинета (lib/offers-feed):
+    // тот же список, что у значков в меню, без второго опроса сервера.
+    const offers = useOffersFeed((s) => s.offers);
 
     /* Новые ответы поддержки — те, что появились после последнего открытия
        колокольчика. Метка местная: сервер про «прочитано» ничего не знает,

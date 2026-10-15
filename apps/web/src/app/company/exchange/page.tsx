@@ -8,6 +8,7 @@ import { moneyShort } from '@/lib/money-format';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { ExchangeOrder, IncomingOffer, грузКратко, день, черезТочки } from '@/lib/exchange';
 import IncomingOffers from '@/components/exchange/IncomingOffers';
+import { useNewOffersCount, useOffersFeed } from '@/lib/offers-feed';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -29,7 +30,13 @@ export default function ExchangePage() {
     const [tab, setTab] = useState<Tab>('board');
     const [board, setBoard] = useState<ExchangeOrder[] | null>(null);
     const [mine, setMine] = useState<ExchangeOrder[] | null>(null);
-    const [offers, setOffers] = useState<IncomingOffer[] | null>(null);
+    // Отклики — из общего счётчика кабинета: тот же список, что у значков в меню.
+    const feedOffers = useOffersFeed((s) => s.offers);
+    const [feedReady, setFeedReady] = useState(false);
+    const offers: IncomingOffer[] | null = feedReady ? feedOffers : null;
+    const newCount = useNewOffersCount();
+    /** С какого момента отклики считаются новыми на этом показе — их подсвечиваем. */
+    const [newSince, setNewSince] = useState<string | null>(null);
     const [reload, setReload] = useState(0);
     const [failed, setFailed] = useState(false);
     const [from, setFrom] = useState('');
@@ -39,11 +46,18 @@ export default function ExchangePage() {
     useEffect(() => {
         let alive = true;
         setFailed(false);
-        Promise.all([api.get('/exchange/board'), api.get('/exchange/mine'), api.get('/exchange/incoming-offers')])
-            .then(([b, m, o]) => { if (alive) { setBoard(b.data); setMine(m.data); setOffers(o.data); } })
+        Promise.all([api.get('/exchange/board'), api.get('/exchange/mine'), useOffersFeed.getState().load()])
+            .then(([b, m]) => { if (alive) { setBoard(b.data); setMine(m.data); setFeedReady(true); } })
             .catch(() => { if (alive) setFailed(true); });
         return () => { alive = false; };
     }, [reload]);
+    // Открыли «Предложения» — запоминаем, что было новым (подсветка), и гасим
+    // значки в меню и на вкладке: человек их увидел.
+    useEffect(() => {
+        if (tab !== 'offers' || !feedReady) return;
+        setNewSince(useOffersFeed.getState().seenAt);
+        useOffersFeed.getState().markSeen();
+    }, [tab, feedReady]);
     // Из колокольчика ведут прямо на отклики: /company/exchange?tab=offers.
     useEffect(() => {
         if (new URLSearchParams(window.location.search).get('tab') === 'offers') setTab('offers');
@@ -89,6 +103,14 @@ export default function ExchangePage() {
                         onClick={() => setTab(key)}
                     >
                         {label}{list ? ` · ${list.length}` : ''}
+                        {key === 'offers' && newCount > 0 && (
+                            <span
+                                className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold leading-none text-white"
+                                aria-label={`новых ${newCount}`}
+                            >
+                                {newCount}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -111,7 +133,7 @@ export default function ExchangePage() {
                         {[0, 1].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted/60" />)}
                     </div>
                 ) : (
-                    <IncomingOffers offers={offers} onChanged={() => setReload((n) => n + 1)} />
+                    <IncomingOffers offers={offers} newSince={newSince} onChanged={() => setReload((n) => n + 1)} />
                 )
             ) : (
             <section className={styles.card}>
