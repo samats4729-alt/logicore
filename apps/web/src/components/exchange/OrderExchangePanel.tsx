@@ -167,6 +167,10 @@ function PublishDialog({ state, open, onOpenChange, onDone }: {
                             className="h-10 text-[15px] font-semibold tabular-nums placeholder:font-normal"
                         />
                         {priceError && <span role="alert" className="text-[12px] text-destructive">{priceError}</span>}
+                        <span className="text-[12px] text-muted-foreground">
+                            Перевозчику и водителю с ИП — эта сумма. Водитель без ИП, через парк, получит её на руки вместе с топливом,
+                            а налоги, комиссии и НДС парка прибавятся сверху: полную цену увидите в его отклике до выбора.
+                        </span>
                     </label>
                     {state.from && state.to && (
                         <RoutePricesPanel origin={state.from} destination={state.to} onUse={(p) => setPrice(String(p))} />

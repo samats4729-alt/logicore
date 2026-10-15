@@ -410,6 +410,8 @@ export interface ParkPayout {
     paidAt: string | null;
     rejectReason: string | null;
     driver: { id: string; name: string; iin: string | null; phone: string | null };
+    /** Расчёт предварительный: бухгалтер парка не подтвердил ставки или рейс посчитан до подтверждения. */
+    preliminary?: boolean;
 }
 
 /** Ставки удержаний парка, %. */
@@ -425,6 +427,61 @@ export interface PayoutRates {
     deductionMrp?: number;
     mrp?: number;
     platformPct?: number;
+    /** НДС (15.10.2026): прибавляется к цене для компании, только у плательщиков НДС. */
+    vatPayer?: boolean;
+    vatPct?: number;
+    /** Бухгалтер парка подтвердил ставки и порядок расчёта; пока нет — расчёт «предварительный». */
+    confirmedAt?: string | null;
+    preliminary?: boolean;
     updatedAt?: string | null;
     isDefault?: boolean;
+}
+
+/** Что с деньгами рейса водителя парка: от «рейс идёт» до «выплачено». */
+export type RegistryPayStatus = 'IN_TRIP' | 'TO_REQUEST' | PayoutStatus;
+
+/** Рейс в реестре бухгалтера парка за месяц (15.10.2026). */
+export interface ParkRegistryLine {
+    orderId: string;
+    orderNumber: string;
+    route: string;
+    loadingDate: string | null;
+    completedAt: string | null;
+    driver: { id: string; name: string; iin: string | null };
+    driverTotal: number;
+    fuelEstimate: number;
+    fuelIssued: number;
+    fuelReceipts: number;
+    gross: number;
+    opv: number;
+    vosms: number;
+    ipn: number;
+    withheld: number;
+    so: number;
+    toBudget: number;
+    deductionAmount: number;
+    toPay: number;
+    paid: number;
+    payStatus: RegistryPayStatus;
+    payStatusText: string;
+    /** Суммы из запрошенной выплаты; false — оценка по текущим чекам. */
+    fixed: boolean;
+    preliminary: boolean;
+    fuelReceiptsPending: number;
+    customerPrice: number;
+    vat: number;
+    parkFee: number;
+    platformFee: number;
+}
+
+type RegistryTotals = Pick<ParkRegistryLine,
+    'driverTotal' | 'fuelIssued' | 'fuelReceipts' | 'gross' | 'opv' | 'vosms' | 'ipn' | 'withheld' | 'so' | 'toBudget'
+    | 'deductionAmount' | 'toPay' | 'paid' | 'customerPrice' | 'vat' | 'parkFee' | 'platformFee'>;
+
+export interface ParkRegistry {
+    month: string;
+    preliminary: boolean;
+    lines: ParkRegistryLine[];
+    drivers: (RegistryTotals & { driver: ParkRegistryLine['driver']; trips: number })[];
+    totals: RegistryTotals & { trips: number };
 }

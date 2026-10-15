@@ -80,11 +80,22 @@ export default function ParkPayoutsPage() {
         return next;
     });
 
-    const exportFile = async () => {
+    /** Среди отмеченных есть посчитанные предварительно — сначала явное согласие. */
+    const [ackExport, setAckExport] = useState(false);
+    const pickedPreliminary = (rows ?? []).some((r) => picked.has(r.id) && r.preliminary);
+
+    const startExport = () => {
         if (!picked.size) { toast.error('Отметьте выплаты для выгрузки'); return; }
+        if (pickedPreliminary) { setAckExport(true); return; }
+        exportFile(false);
+    };
+
+    const exportFile = async (preliminaryAck: boolean) => {
+        if (!picked.size) { toast.error('Отметьте выплаты для выгрузки'); return; }
+        setAckExport(false);
         setExporting(true);
         try {
-            const res = await api.post('/exchange/park/payouts/export', { ids: Array.from(picked) }, { responseType: 'blob' });
+            const res = await api.post('/exchange/park/payouts/export', { ids: Array.from(picked), preliminaryAck }, { responseType: 'blob' });
             const url = URL.createObjectURL(res.data as Blob);
             const a = document.createElement('a');
             a.href = url;
@@ -94,7 +105,7 @@ export default function ParkPayoutsPage() {
             toast.success('Реестр скачан — переведите деньги по нему и отметьте «Выплачено»');
             load();
         } catch (e) {
-            toast.error(ответСервера(e, 'Не удалось выгрузить реестр'));
+            toast.error(await ответИзФайла(e, 'Не удалось выгрузить реестр'));
         } finally {
             setExporting(false);
         }
@@ -140,7 +151,7 @@ export default function ParkPayoutsPage() {
                 </div>
                 {exportable.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 border-0 border-b border-solid border-border px-4 py-2.5">
-                        <Button size="sm" onClick={exportFile} disabled={exporting || !picked.size}>
+                        <Button size="sm" onClick={startExport} disabled={exporting || !picked.size}>
                             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                             Выгрузить реестр{picked.size ? ` · ${picked.size}` : ''}
                         </Button>
@@ -214,6 +225,7 @@ export default function ParkPayoutsPage() {
                                             <TableCell>
                                                 <StatusPill status={PILL[r.status]} label={PAYOUT_STATUS_TEXT[r.status]} />
                                                 {r.paidAt && <div className="mt-1 text-[11px] text-muted-foreground">{dayjs(r.paidAt).format('DD.MM.YYYY')}</div>}
+                                                {r.preliminary && open && <div className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">расчёт предварительный</div>}
                                             </TableCell>
                                             <TableCell className="whitespace-nowrap text-right">
                                                 {open && (
@@ -232,22 +244,59 @@ export default function ParkPayoutsPage() {
                 )}
             </section>
 
-            <RatesCard />
+            <RatesCard onChanged={load} />
 
             <PaidDialog payout={paying} onClose={() => setPaying(null)} onDone={load} />
             <RejectDialog payout={rejecting} onClose={() => setRejecting(null)} onDone={load} />
+            <Dialog open={ackExport} onOpenChange={(o) => { if (!o) setAckExport(false); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader><DialogTitle className="text-[15px]">Выгрузить реестр по предварительному расчёту?</DialogTitle></DialogHeader>
+                    <PreliminaryNote />
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setAckExport(false)}>Отмена</Button>
+                        <Button onClick={() => exportFile(true)}>Выгрузить как предварительный</Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
+}
+
+/** Почему «предварительный» и что делать — одним текстом для всех окон. */
+function PreliminaryNote() {
+    return (
+        <p className="m-0 rounded-lg bg-amber-50 p-3 text-[12.5px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            Бухгалтер парка ещё не подтвердил ставки и порядок расчёта (или рейс посчитан до подтверждения). Налоги и взносы
+            в этой выплате — оценка: сверьте их с бухгалтером до уплаты. Подтвердить расчёт — внизу страницы, в «Ставках».
+        </p>
+    );
+}
+
+/** Текст ошибки сервера, когда ответ ждали файлом: он приходит тоже файлом. */
+async function ответИзФайла(e: unknown, fallback: string): Promise<string> {
+    const data = (e as { response?: { data?: unknown } })?.response?.data;
+    if (data instanceof Blob) {
+        try {
+            const parsed = JSON.parse(await data.text()) as { message?: string | string[] };
+            const m = Array.isArray(parsed.message) ? parsed.message[0] : parsed.message;
+            if (m) return m;
+        } catch { /* не JSON — общий текст */ }
+    }
+    return ответСервера(e, fallback);
 }
 
 /** «Выплачено» — после перевода денег. */
 function PaidDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; onClose: () => void; onDone: () => void }) {
     const [saving, setSaving] = useState(false);
+    // Предварительный расчёт — «выплачено» только с явным согласием (задача 15.10.2026).
+    const [ack, setAck] = useState(false);
+    useEffect(() => { if (payout) setAck(false); }, [payout]);
     const submit = async () => {
         if (!payout) return;
+        if (payout.preliminary && !ack) { toast.error('Отметьте, что знаете: расчёт предварительный'); return; }
         setSaving(true);
         try {
-            await api.post(`/exchange/park/payouts/${payout.id}/paid`);
+            await api.post(`/exchange/park/payouts/${payout.id}/paid`, { preliminaryAck: !!payout.preliminary && ack });
             toast.success(`Выплата ${payout.driver.name} отмечена — водитель увидит «Выплачено»`);
             onClose();
             onDone();
@@ -264,9 +313,18 @@ function PaidDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; on
                 <p className="m-0 text-[13px] text-muted-foreground">
                     Отмечайте, когда деньги уже отправлены на счёт {payout?.iban ?? ''}. Водитель увидит в приложении «Выплачено».
                 </p>
+                {payout?.preliminary && (
+                    <>
+                        <PreliminaryNote />
+                        <label className="flex cursor-pointer items-start gap-2 text-[12.5px]">
+                            <input type="checkbox" className="mt-0.5" checked={ack} onChange={(e) => setAck(e.target.checked)} />
+                            Знаю, что расчёт предварительный, — налоги сверю с бухгалтером
+                        </label>
+                    </>
+                )}
                 <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={onClose}>Отмена</Button>
-                    <Button onClick={submit} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Выплачено</Button>
+                    <Button onClick={submit} disabled={saving || (!!payout?.preliminary && !ack)}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Выплачено</Button>
                 </div>
             </DialogContent>
         </Dialog>
@@ -336,13 +394,14 @@ const RATE_FIELDS: { key: 'commissionPct' | 'opvPct' | 'vosmsPct' | 'ipnPct' | '
 ];
 
 /** Ставки удержаний — парк задаёт со своим бухгалтером. */
-function RatesCard() {
+function RatesCard({ onChanged }: { onChanged: () => void }) {
     const [rates, setRates] = useState<PayoutRates | null>(null);
     const [draft, setDraft] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
+    const [confirming, setConfirming] = useState(false);
 
-    // Расчёт «на руки» (12.10.2026): топливо на км и вычет по ИПН.
-    const [extra, setExtra] = useState({ fuelPerKm: '', applyDeduction: true, deductionMrp: '', mrp: '' });
+    // Расчёт «на руки» (12.10.2026): топливо на км и вычет по ИПН; НДС (15.10.2026).
+    const [extra, setExtra] = useState({ fuelPerKm: '', applyDeduction: true, deductionMrp: '', mrp: '', vatPayer: false, vatPct: '' });
 
     useEffect(() => {
         api.get('/exchange/park/rates').then((r) => {
@@ -353,9 +412,26 @@ function RatesCard() {
                 applyDeduction: r.data.applyDeduction ?? true,
                 deductionMrp: String(r.data.deductionMrp ?? 30),
                 mrp: String(r.data.mrp ?? 4325),
+                vatPayer: r.data.vatPayer ?? false,
+                vatPct: String(r.data.vatPct ?? 16),
             });
         }).catch(() => setRates(null));
     }, []);
+
+    /** Бухгалтер подтвердил ставки и порядок расчёта — или снимает подтверждение. */
+    const confirm = async (confirmed: boolean) => {
+        setConfirming(true);
+        try {
+            const { data } = await api.put('/exchange/park/rates/confirm', { confirmed });
+            setRates(data);
+            toast.success(confirmed ? 'Расчёт подтверждён — новые рейсы считаются без пометки «предварительный»' : 'Подтверждение снято — расчёт снова предварительный');
+            onChanged();
+        } catch (e) {
+            toast.error(ответСервера(e, 'Не удалось сохранить'));
+        } finally {
+            setConfirming(false);
+        }
+    };
 
     const save = async () => {
         const body = Object.fromEntries(RATE_FIELDS.map((f) => [f.key, Number(String(draft[f.key]).replace(',', '.'))]));
@@ -371,11 +447,19 @@ function RatesCard() {
             toast.error('Вычет и МРП — целые числа');
             return;
         }
+        const vatPct = Number(extra.vatPct.replace(',', '.'));
+        if (!Number.isFinite(vatPct) || vatPct < 0 || vatPct > 100) { toast.error('НДС — число от 0 до 100'); return; }
         setSaving(true);
         try {
-            const { data } = await api.put('/exchange/park/rates', { ...body, fuelPerKm, applyDeduction: extra.applyDeduction, deductionMrp, mrp });
+            const { data } = await api.put('/exchange/park/rates', {
+                ...body, fuelPerKm, applyDeduction: extra.applyDeduction, deductionMrp, mrp, vatPayer: extra.vatPayer, vatPct,
+            });
+            const wasConfirmed = !!rates?.confirmedAt;
             setRates(data);
-            toast.success('Ставки сохранены — новые выплаты посчитаются по ним, прошлые останутся как были');
+            toast.success(wasConfirmed && data.preliminary
+                ? 'Ставки сохранены. Они изменились — подтверждение бухгалтера снято, расчёт снова предварительный'
+                : 'Ставки сохранены — новые выплаты посчитаются по ним, прошлые останутся как были');
+            onChanged();
         } catch (e) {
             toast.error(ответСервера(e, 'Не удалось сохранить ставки'));
         } finally {
@@ -391,6 +475,25 @@ function RatesCard() {
                 <h2 className={styles.cardTitle}>Ставки и расчёт рейса</h2>
             </div>
             <div className={`${styles.cardBody} space-y-3`}>
+                {rates.preliminary ? (
+                    <div className="flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-[12.5px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                        <span className="min-w-[280px] flex-1">
+                            <b>Расчёт предварительный.</b> Пока бухгалтер парка не проверил ставки и порядок расчёта, суммы налогов у
+                            водителей помечены «предварительный», а выгрузка в 1С и «Выплачено» — только с вашим согласием.
+                        </span>
+                        <Button size="sm" onClick={() => confirm(true)} disabled={confirming}>
+                            {confirming && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Бухгалтер проверил — подтверждаю
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="flex flex-wrap items-center gap-3 rounded-lg bg-muted/40 p-3 text-[12.5px]">
+                        <span className="flex-1">
+                            <Check className="mr-1 inline h-3.5 w-3.5" />
+                            Расчёт подтверждён бухгалтером{rates.confirmedAt ? ` ${dayjs(rates.confirmedAt).format('DD.MM.YYYY')}` : ''}. Изменение ставок снимет подтверждение.
+                        </span>
+                        <Button size="sm" variant="ghost" onClick={() => confirm(false)} disabled={confirming}>Снять подтверждение</Button>
+                    </div>
+                )}
                 <p className="m-0 text-[12px] text-muted-foreground">
                     Согласуйте со своим бухгалтером: закон меняется, и система ставок не придумывает.
                     {rates.isDefault ? ' Сейчас стоят ставки по умолчанию.' : rates.updatedAt ? ` Изменены ${dayjs(rates.updatedAt).format('DD.MM.YYYY')}.` : ''}
@@ -413,9 +516,9 @@ function RatesCard() {
                 <div className="space-y-2 rounded-lg bg-muted/40 p-3">
                     <div className="text-[12.5px] font-semibold">Расчёт «на руки»</div>
                     <p className="m-0 text-[12px] text-muted-foreground">
-                        Водитель называет сумму на руки вместе с топливом. Программа оценивает топливо по расстоянию и досчитывает сверху
-                        налоги, комиссию LogiCore{rates.platformPct != null ? ` (${rates.platformPct}%)` : ''} и вашу — так получается цена для компании.
-                        Водителю за топливо платите по чекам на БИН парка.
+                        Цена компании на бирже и отклик водителя — сумма на руки вместе с топливом. Программа оценивает топливо по расстоянию
+                        и досчитывает сверху налоги, комиссию LogiCore{rates.platformPct != null ? ` (${rates.platformPct}%)` : ''}, вашу
+                        и НДС, если вы его плательщик, — так получается цена для компании. Водителю за топливо платите по чекам на БИН парка.
                     </p>
                     <div className="grid gap-3 sm:grid-cols-3">
                         <label className="flex flex-col gap-1">
@@ -426,7 +529,7 @@ function RatesCard() {
                         <label className="flex flex-col gap-1">
                             <span className="text-[12px] font-medium text-muted-foreground">Вычет по ИПН, МРП</span>
                             <Input value={extra.deductionMrp} onChange={(e) => setExtra((x) => ({ ...x, deductionMrp: e.target.value }))} inputMode="numeric" className="h-9 text-[13px] tabular-nums" />
-                            <span className="text-[11px] text-muted-foreground">раз в месяц, на первый рейс водителя</span>
+                            <span className="text-[11px] text-muted-foreground">в месяц на водителя; что не ушло на первый рейс — переходит на следующие</span>
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-[12px] font-medium text-muted-foreground">МРП, ₸</span>
@@ -438,6 +541,18 @@ function RatesCard() {
                         <input type="checkbox" checked={extra.applyDeduction} onChange={(e) => setExtra((x) => ({ ...x, applyDeduction: e.target.checked }))} />
                         Учитывать вычет по ИПН в цене — выключите, если водители получают его по основному месту работы
                     </label>
+                    <div className="flex flex-wrap items-end gap-3 border-0 border-t border-solid border-border pt-2">
+                        <label className="flex cursor-pointer items-center gap-2 pb-2 text-[12.5px]">
+                            <input type="checkbox" checked={extra.vatPayer} onChange={(e) => setExtra((x) => ({ ...x, vatPayer: e.target.checked }))} />
+                            Парк — плательщик НДС: прибавлять НДС к цене для компании
+                        </label>
+                        {extra.vatPayer && (
+                            <label className="flex w-32 flex-col gap-1">
+                                <span className="text-[12px] font-medium text-muted-foreground">НДС, %</span>
+                                <Input value={extra.vatPct} onChange={(e) => setExtra((x) => ({ ...x, vatPct: e.target.value }))} inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
+                            </label>
+                        )}
+                    </div>
                 </div>
                 <Button onClick={save} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Сохранить ставки</Button>
             </div>

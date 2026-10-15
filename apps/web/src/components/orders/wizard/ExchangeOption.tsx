@@ -64,10 +64,17 @@ export function ExchangeOnBoardNote({ orderId, price }: { orderId: string; price
 /** Галочка под полем «Перевозчик». */
 export function ExchangeCarrierCheckbox({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
     return (
-        <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-            <Checkbox checked={checked} onCheckedChange={(v) => onChange(v === true)} aria-label="Найти перевозчика на бирже" />
-            Найти перевозчика на бирже
-        </label>
+        <div className="flex flex-col gap-1">
+            <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                <Checkbox checked={checked} onCheckedChange={(v) => onChange(v === true)} aria-label="Найти перевозчика на бирже" />
+                Найти перевозчика на бирже
+            </label>
+            {checked && (
+                <span className="text-[12px] text-muted-foreground">
+                    Водитель без ИП, через парк, получит «цену для исполнителя» на руки; налоги, комиссии и НДС парка — сверху, полная цена будет в его отклике.
+                </span>
+            )}
+        </div>
     );
 }
 
