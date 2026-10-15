@@ -186,7 +186,7 @@ export default function OffersList({ orderId, onAccepted, newSince = null }: {
                                         <div className="flex items-center gap-2 font-semibold">
                                             {o.name}
                                             {newSince !== null && (newSince === '' || o.createdAt > newSince) && (
-                                                <span className="rounded-full bg-destructive px-1.5 py-px text-[10.5px] font-semibold text-white">новый</span>
+                                                <span className="rounded-full bg-foreground px-1.5 py-px text-[10.5px] font-semibold text-background">новый</span>
                                             )}
                                         </div>
                                         <div className="text-[12px] text-muted-foreground">{whoIs(o)}</div>

@@ -63,12 +63,12 @@ function CountBadge({ count, label }: { count?: number; label: string }) {
     return (
         <>
             <span
-                className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold leading-none text-white tabular-nums group-data-[collapsible=icon]:hidden"
+                className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold leading-none text-background tabular-nums group-data-[collapsible=icon]:hidden"
                 aria-label={`${label}: новых ${count}`}
             >
                 {count > 99 ? '99+' : count}
             </span>
-            <span className="absolute right-1 top-1 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block" aria-hidden />
+            <span className="absolute right-1 top-1 hidden size-2 rounded-full bg-foreground group-data-[collapsible=icon]:block" aria-hidden />
         </>
     );
 }

@@ -105,7 +105,7 @@ export default function ExchangePage() {
                         {label}{list ? ` · ${list.length}` : ''}
                         {key === 'offers' && newCount > 0 && (
                             <span
-                                className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold leading-none text-white"
+                                className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold leading-none text-background"
                                 aria-label={`новых ${newCount}`}
                             >
                                 {newCount}

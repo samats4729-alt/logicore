@@ -111,7 +111,7 @@ export default function IncomingOffers({ offers, newSince = null, onChanged }: {
                                         <span className="block text-[13px] font-bold tabular-nums text-foreground">от {moneyShort(g.best)}</span>
                                         <span className="block text-[11.5px] text-muted-foreground">откликов: {g.count}</span>
                                         {fresh > 0 && (
-                                            <span className="mt-1 inline-flex rounded-full bg-destructive px-1.5 py-px text-[10.5px] font-semibold text-white">новых {fresh}</span>
+                                            <span className="mt-1 inline-flex rounded-full bg-foreground px-1.5 py-px text-[10.5px] font-semibold text-background">новых {fresh}</span>
                                         )}
                                     </span>
                                 </button>
