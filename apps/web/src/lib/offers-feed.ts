@@ -15,7 +15,7 @@ import { useAuthStore } from '@/store/auth';
  * «Новые» — пришедшие после того, как человек последний раз открыл
  * «Предложения» или колокольчик. Отметка живёт в браузере: сервер о
  * «прочитано» не знает, да ему и незачем. Опрос — раз в минуту и сразу при
- * возвращении в окно. Без биржи и у парка не спрашиваем вовсе.
+ * возвращении в окно. Без биржи не спрашиваем вовсе.
  */
 
 const POLL_MS = 60_000;
@@ -49,7 +49,7 @@ export const useOffersFeed = create<FeedState>((set, get) => ({
     load: async () => {
         try {
             const s = await exchangeStatus();
-            if (!s.enabled || s.isPark) { set({ offers: [] }); return; }
+            if (!s.enabled) { set({ offers: [] }); return; }
             const { data } = await api.get<IncomingOffer[]>('/exchange/incoming-offers');
             set({ offers: data || [], seenAt: readSeen() });
         } catch {

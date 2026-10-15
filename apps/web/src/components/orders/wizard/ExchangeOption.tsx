@@ -19,12 +19,12 @@ import { Checkbox } from '@/components/ui/checkbox';
  * партнёром по рейсу.
  */
 
-/** Показывать ли галочку: биржа открыта этой компании, и компания — не парк. */
+/** Показывать ли галочку: биржа открыта этой компании. Парк тоже выставляет — он сам возит (15.10.2026). */
 export function useExchangeForNewOrder(): boolean {
     const [available, setAvailable] = useState(false);
     useEffect(() => {
         let alive = true;
-        exchangeStatus().then((s) => { if (alive) setAvailable(s.enabled && !s.isPark); });
+        exchangeStatus().then((s) => { if (alive) setAvailable(s.enabled); });
         return () => { alive = false; };
     }, []);
     return available;

@@ -96,11 +96,11 @@ describe('Биржа: отклик', () => {
         await expect(service.offerAsCompany(CARRIER, 'user-c', 'order-1', { agree: true })).rejects.toThrow(/снята с биржи/);
     });
 
-    it('компания не откликается на свою заявку; парк сам не откликается', async () => {
+    it('компания не откликается на свою заявку; парк откликается, как любой перевозчик (15.10.2026)', async () => {
         const { service, prisma } = build();
         await expect(service.offerAsCompany(OUR, 'user-1', 'order-1', { agree: true })).rejects.toThrow(/ваша заявка/);
         prisma.company.findUnique.mockResolvedValue({ isPark: true });
-        await expect(service.offerAsCompany(CARRIER, 'user-c', 'order-1', { agree: true })).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(service.offerAsCompany(CARRIER, 'user-c', 'order-1', { agree: true })).resolves.toBeDefined();
     });
 });
 

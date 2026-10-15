@@ -234,8 +234,7 @@ export class ExchangeOffersService {
     // ==================== компания-перевозчик ====================
 
     async offerAsCompany(companyId: string, userId: string, orderId: string, dto: MakeOfferDto) {
-        const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { isPark: true } });
-        if (company?.isPark) throw new ForbiddenException('Парк сам не возит — откликаются его водители через приложение');
+        // Парк откликается, как любой перевозчик: он и сам возит (владелец, 15.10.2026).
         const order = await this.openOrder(orderId);
         if ([order.customerCompanyId, order.forwarderId, order.subForwarderId].includes(companyId)) {
             throw new BadRequestException('Это ваша заявка — откликаться на неё не нужно');
