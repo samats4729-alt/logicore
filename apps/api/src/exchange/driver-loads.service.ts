@@ -64,6 +64,23 @@ export class ExchangeDriverLoadsService {
             /** Топливо по оценке — входит в сумму на руки; заправка через парк, чеки на БИН парка. */
             fuelEstimate: ctx.fuel || null,
             distanceKm: ctx.distanceKm,
+            /**
+             * Из чего сложилась сумма на руки (владелец, 15.10.2026: «комиссия и
+             * общая сумма — чтобы было понятно, за что высчитывают»). Это
+             * меняет решение от 12.10, когда цену компании водителю не
+             * показывали: теперь он видит её и всё, что из неё уходит.
+             */
+            breakdown: calc ? {
+                customerPrice: calc.customerPrice,
+                platformPct: calc.rates.platformPct,
+                platformFee: calc.platformFee,
+                parkPct: calc.rates.parkPct,
+                parkFee: calc.parkFee,
+                /** Налоги и взносы за водителя: ОПВ, ВОСМС, ИПН и социальные отчисления — платит парк. */
+                taxes: calc.opv + calc.vosms + calc.ipn + calc.so,
+                driverTotal: calc.driverTotal,
+                fuel: calc.fuel,
+            } : null,
         };
     }
 

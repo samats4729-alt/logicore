@@ -111,13 +111,29 @@ export interface ExchangeOrder {
     /**
      * Сколько водитель парка получит на руки вместе с топливом (налоги и
      * комиссии парк досчитывает сверху — решение владельца 12.10.2026);
-     * нет — договорная. Цену компании водитель не видит.
+     * нет — договорная. Цену компании и что из неё уходит — в breakdown
+     * (с 15.10.2026 водитель её видит).
      */
     price: number | null;
     /** Топливо по оценке, ₸ — входит в сумму на руки; заправка через парк, чек на БИН парка. */
     fuelEstimate?: number | null;
     /** Расстояние маршрута, км — оценка. */
     distanceKm?: number | null;
+    /**
+     * Из чего сложилась сумма на руки: цена рейса у компании, комиссии
+     * LogiCore и парка, налоги и взносы за водителя (их платит парк).
+     * Старый сервер не присылает — тогда расшифровки нет.
+     */
+    breakdown?: {
+        customerPrice: number;
+        platformPct: number;
+        platformFee: number;
+        parkPct: number;
+        parkFee: number;
+        taxes: number;
+        driverTotal: number;
+        fuel: number;
+    } | null;
     note: string | null;
     publishedAt: string | null;
     /** Свой отклик: в ленте — только статус, в карточке — целиком. */
@@ -391,6 +407,20 @@ export function телефонКрасиво(phone: string | null | undefined): 
 }
 
 /** «Сегодня», «Завтра», «12 окт» — водителю важнее «когда ехать», чем число. */
+/**
+ * Способ загрузки словами. В заявке он хранится служебным именем (SIDE, REAR…)
+ * — те же названия, что в мастере заявки на сайте (apps/web/src/lib/cargo.ts).
+ */
+const LOADING_LABELS: Record<string, string> = {
+    REAR: 'Задняя',
+    SIDE: 'Боковая',
+    TOP: 'Верхняя',
+    FULL: 'Полная растентовка',
+    RAMP: 'С аппарелями',
+    TAIL_LIFT: 'Гидроборт',
+};
+export const загрузкаСловами = (keys: string[]) => keys.map((k) => LOADING_LABELS[k] ?? k).join(', ');
+
 export function когдаПросто(date: string | null | undefined): string {
     if (!date) return 'Дата не указана';
     const d = new Date(date);
