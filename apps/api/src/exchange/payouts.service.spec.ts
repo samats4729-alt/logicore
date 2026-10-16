@@ -32,6 +32,7 @@ function build(driver: any = { id: 'd-1', userId: 'u-1', kind: 'PARK', parkCompa
     const prisma: any = {
         exchangeDriver: { findUnique: jest.fn().mockResolvedValue(driver), update: jest.fn() },
         parkPayoutRates: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
+        driverPayoutItem: { count: jest.fn().mockResolvedValue(0) },
         order: {
             findMany: jest.fn().mockResolvedValue([
                 { id: 'o-1', orderNumber: '7A-1', driverCost: 100000, completedAt: new Date(), routePoints: [] },
@@ -49,7 +50,7 @@ function build(driver: any = { id: 'd-1', userId: 'u-1', kind: 'PARK', parkCompa
     const drivers: any = { assertPark: jest.fn() };
     // Топливо по рейсам: по умолчанию ничего не выдавали и чеков нет.
     const fuel: any = { totals: jest.fn(async (ids: string[]) => new Map(ids.map((id) => [id, { issued: 0, receipts: 0 }]))) };
-    const settlement: any = { platformPct: jest.fn().mockResolvedValue(5) };
+    const settlement: any = { platformPct: jest.fn().mockResolvedValue(5), parkSettings: jest.fn().mockResolvedValue({ fuelPerKm: 105 }) };
     return { service: new ExchangePayoutsService(prisma, drivers, fuel, settlement), prisma, tx, fuel };
 }
 
@@ -62,7 +63,8 @@ describe('Выплата водителю парка: запрос', () => {
         });
         const data = prisma.driverPayout.create.mock.calls[0][0].data;
         expect(data.items.create).toHaveLength(2);
-        expect(data.items.create[0]).toMatchObject({ orderId: 'o-1', net: 75240, commissionPct: 5, ipnPct: 10 });
+        // Парк без своих настроек — комиссия по умолчанию 10 % (задача 15.10.2026).
+        expect(data.items.create[0]).toMatchObject({ orderId: 'o-1', net: 71280, commissionPct: 10, ipnPct: 10 });
         expect(data).toMatchObject({ gross: 300000, iban: 'KZ123456789012345678' });
         expect(result.trips).toBe(2);
     });
@@ -105,12 +107,12 @@ describe('Выплата водителю парка: парк', () => {
             driver: { lastName: 'Сериков', firstName: 'Серик', middleName: null, iin: '900101300123' },
             items: [{ gross: 100000, commission: 5000, opv: 9500, vosms: 1900, ipn: 8360, net: 75240, order: { orderNumber: '7A-1', completedAt: new Date(), routePoints: [] } }],
         }]);
-        const { buffer, count } = await service.exportFor1C('park-1', ['p-1']);
+        const { buffer, count } = await service.exportFor1C('park-1', ['p-1'], true);
         expect(count).toBe(1);
         const book = XLSX.read(buffer, { type: 'buffer' });
         expect(book.SheetNames).toEqual(['Реестр выплат', 'По рейсам']);
         const row = XLSX.utils.sheet_to_json<any>(book.Sheets['Реестр выплат'])[0];
-        expect(row).toMatchObject({ 'ФИО': 'Сериков Серик', 'ИИН': '900101300123', 'К перечислению': 75240 });
+        expect(row).toMatchObject({ 'ФИО': 'Сериков Серик', 'ИИН': '900101300123', 'К перечислению': 75240, 'В бюджет (ОПВ+ВОСМС+ИПН+СО)': 24035, 'Расчёт': 'предварительный' });
         expect(prisma.driverPayout.updateMany.mock.calls[0][0]).toMatchObject({ where: { status: 'REQUESTED' }, data: { status: 'EXPORTED' } });
     });
 
@@ -124,7 +126,58 @@ describe('Выплата водителю парка: парк', () => {
     it('выплаченную второй раз не провести', async () => {
         const { service, prisma } = build();
         prisma.driverPayout.updateMany.mockResolvedValue({ count: 0 });
-        await expect(service.markPaid('park-1', 'p-1', 'user-1')).rejects.toThrow(/уже проведена/);
+        await expect(service.markPaid('park-1', 'p-1', 'user-1', true)).rejects.toThrow(/уже проведена/);
+    });
+
+    describe('расчёт предварительный, пока бухгалтер парка не подтвердил (15.10.2026)', () => {
+        it('без согласия — ни выгрузки в 1С, ни «выплачено»', async () => {
+            const { service, prisma } = build();
+            await expect(service.exportFor1C('park-1', ['p-1'])).rejects.toThrow(/предварительный/);
+            await expect(service.markPaid('park-1', 'p-1', 'user-1')).rejects.toThrow(/предварительный/);
+            expect(prisma.driverPayout.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('бухгалтер подтвердил, рейсы посчитаны после — согласие не нужно', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ratesConfirmedAt: new Date() });
+            await service.markPaid('park-1', 'p-1', 'user-1');
+            expect(prisma.driverPayout.updateMany.mock.calls[0][0].data).toMatchObject({ status: 'PAID' });
+        });
+
+        it('подтвердил, но в выплате рейс, посчитанный до подтверждения, — снова нужно согласие', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ratesConfirmedAt: new Date() });
+            prisma.driverPayoutItem.count.mockResolvedValue(1);
+            await expect(service.markPaid('park-1', 'p-1', 'user-1')).rejects.toThrow(/предварительный/);
+        });
+
+        it('бухгалтер поменял ставку — подтверждение снимается', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...RATES, ratesConfirmedAt: new Date() });
+            await service.setRates('park-1', 'user-1', { ...RATES, commissionPct: 10 });
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update).toMatchObject({ ratesConfirmedAt: null });
+        });
+
+        it('поменял топливо или сезон — подтверждение остаётся: это не налоги', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...RATES, fuelConsumption: 30, fuelSeason: 'SUMMER', ratesConfirmedAt: new Date() });
+            await service.setRates('park-1', 'user-1', { ...RATES, fuelConsumption: 32, fuelSeason: 'WINTER', fuelPriceWinter: 400 });
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update).not.toHaveProperty('ratesConfirmedAt');
+        });
+
+        it('сохранил те же ставки — подтверждение остаётся', async () => {
+            const { service, prisma } = build();
+            prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...RATES, ratesConfirmedAt: new Date() });
+            await service.setRates('park-1', 'user-1', { ...RATES });
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update).not.toHaveProperty('ratesConfirmedAt');
+        });
+
+        it('подтвердить — отметка с датой и кто', async () => {
+            const { service, prisma } = build();
+            await service.confirmRates('park-1', 'user-1', true);
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update).toMatchObject({ ratesConfirmedById: 'user-1' });
+            expect(prisma.parkPayoutRates.upsert.mock.calls[0][0].update.ratesConfirmedAt).toBeInstanceOf(Date);
+        });
     });
 
     it('ставки — от 0 до 100 %', async () => {
@@ -135,7 +188,7 @@ describe('Выплата водителю парка: парк', () => {
 
 describe('Выплата водителю парка: рейс по расчёту «на руки» (12.10.2026)', () => {
     const SETTLEMENT = {
-        driverTotal: 400000, deductionApplied: true,
+        driverTotal: 400000, deductionApplied: true, deductionAmount: 129750,
         rates: { opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, platformPct: 5, parkPct: 5, deductionMrp: 30, mrp: 4325 },
     };
 
@@ -152,6 +205,24 @@ describe('Выплата водителю парка: рейс по расчёт
         expect(data).toMatchObject({ toPay: 280000, fuelIssued: 120000, commission: 0, net: 300000 });
         expect(data.items.create[0]).toMatchObject({
             orderId: 'o-1', driverTotal: 400000, fuelIssued: 120000, fuelReceipts: 100000, toPay: 280000, net: 300000, commissionPct: 5,
+        });
+    });
+
+    it('схема шефа: на руки как договорились, налоги из расчёта рейса; дали на топливо без чека — вычитается', async () => {
+        const { service, prisma, fuel } = build();
+        prisma.order.findMany.mockResolvedValue([{
+            id: 'o-2', orderNumber: '000000030', driverCost: 115219.5, completedAt: new Date(), routePoints: [],
+            exchangeSettlement: {
+                scheme: 2, driverTotal: 65700, workNet: 65700, gross: 73000, opv: 7300, vosms: 1460, ipn: 0, so: 3285,
+                deductionAmount: 65700, preliminary: true,
+                rates: { opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, platformPct: 5, parkPct: 10, deductionMrp: 30, mrp: 4325 },
+            },
+        }]);
+        fuel.totals.mockResolvedValue(new Map([['o-2', { issued: 27000, receipts: 25000 }]]));
+        prisma.driverPayout.create.mockImplementation(async (args: any) => ({ id: 'p-2', net: args.data.net, toPay: args.data.toPay }));
+        await service.request('u-1');
+        expect(prisma.driverPayout.create.mock.calls[0][0].data.items.create[0]).toMatchObject({
+            orderId: 'o-2', gross: 73000, opv: 7300, vosms: 1460, ipn: 0, so: 3285, net: 65700, toPay: 63700, fuelIssued: 27000, fuelReceipts: 25000,
         });
     });
 

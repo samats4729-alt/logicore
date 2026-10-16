@@ -5,7 +5,7 @@ import { Check, Loader2, Send, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { formatMoneyInput, moneyShort, parseMoneyInput } from '@/lib/money-format';
-import { ExchangeOrder, OwnOffer, exchangeStatus, день, ответСервера } from '@/lib/exchange';
+import { ExchangeOrder, OwnOffer, день, ответСервера } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateStringField } from '@/components/ui/DateField';
@@ -26,28 +26,18 @@ const STATUS_TEXT: Record<OwnOffer['status'], string> = {
  * обязывает, пока вас не выбрали, и его можно отозвать.
  */
 export default function OfferForm({ order, onChanged }: { order: ExchangeOrder; onChanged: (offer: OwnOffer | null) => void }) {
-    const [isPark, setIsPark] = useState(false);
     const [editing, setEditing] = useState(!order.myOffer || order.myOffer.status === 'WITHDRAWN');
     const [price, setPrice] = useState('');
     const [readyDate, setReadyDate] = useState('');
     const [comment, setComment] = useState('');
     const [saving, setSaving] = useState<'agree' | 'own' | 'withdraw' | null>(null);
 
-    useEffect(() => { exchangeStatus().then((s) => setIsPark(s.isPark)); }, []);
     useEffect(() => {
         const mine = order.myOffer;
         setPrice(mine && !mine.agreed ? String(mine.price) : '');
         setReadyDate(mine?.readyDate?.slice(0, 10) ?? '');
         setComment(mine?.comment ?? '');
     }, [order.myOffer]);
-
-    if (isPark) {
-        return (
-            <p className="m-0 text-[12px] text-muted-foreground">
-                Парк сам не возит — на заявки откликаются его водители через приложение.
-            </p>
-        );
-    }
 
     const send = async (agree: boolean) => {
         const own = Number(parseMoneyInput(price));

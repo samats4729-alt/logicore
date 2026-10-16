@@ -4,19 +4,38 @@ import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExchangeDriversService } from './drivers.service';
 import { PayoutAmounts, PayoutRates, calcPayout, normalizeIban, sumPayouts } from './payout-calc';
-import { SettlementRates, actualPayout, money } from './settlement-calc';
+import { SettlementRates, actualPayout, money, payoutOf } from './settlement-calc';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService, PARK_DEFAULTS } from './settlement.service';
 
-/** Настройки парка: ставки и расчёт «на руки» (топливо на км, вычет). */
-type ParkRatesInput = PayoutRates & { fuelPerKm?: number; applyDeduction?: boolean; deductionMrp?: number; mrp?: number };
+/** Настройки парка: ставки и расчёт «на руки» (топливо на км, вычет, НДС). */
+type ParkRatesInput = PayoutRates & {
+    fuelPerKm?: number; applyDeduction?: boolean; deductionMrp?: number; mrp?: number;
+    vatPayer?: boolean; vatPct?: number;
+    fuelConsumption?: number; fuelPriceSummer?: number; fuelPriceWinter?: number | null; fuelSeason?: string;
+    ipnHighPct?: number; ipnThresholdMrp?: number;
+};
 
-const DEFAULT_RATES: PayoutRates = { commissionPct: 5, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5 };
+/** Поля налоговой схемы: их правка снимает подтверждение бухгалтера. Топливо — нет. */
+const TAX_FIELDS = ['commissionPct', 'opvPct', 'vosmsPct', 'ipnPct', 'soPct', 'applyDeduction', 'deductionMrp', 'mrp', 'vatPayer', 'vatPct', 'ipnHighPct', 'ipnThresholdMrp'];
+
+const DEFAULT_RATES: PayoutRates = {
+    commissionPct: PARK_DEFAULTS.commissionPct, opvPct: PARK_DEFAULTS.opvPct, vosmsPct: PARK_DEFAULTS.vosmsPct,
+    ipnPct: PARK_DEFAULTS.ipnPct, soPct: PARK_DEFAULTS.soPct,
+};
+
+/** Отказ без согласия на предварительный расчёт — кабинет по нему показывает предупреждение. */
+const PRELIMINARY_MESSAGE = 'Расчёт предварительный: бухгалтер парка ещё не подтвердил ставки и порядок расчёта. Продолжить можно только с явным согласием.';
 
 const TRIP_SELECT = {
     id: true, orderNumber: true, driverCost: true, completedAt: true,
     /** Рейс по расчёту «на руки» (12.10.2026) — выплата считается от него, а не от цены. */
-    exchangeSettlement: { select: { driverTotal: true, deductionApplied: true, rates: true } },
+    exchangeSettlement: {
+        select: {
+            scheme: true, driverTotal: true, deductionAmount: true, preliminary: true, rates: true,
+            workNet: true, gross: true, opv: true, vosms: true, ipn: true, so: true,
+        },
+    },
     routePoints: {
         select: { pointType: true, location: { select: { city: true, cityRecord: { select: { name: true } } } } },
         orderBy: { sequence: 'asc' as const },
@@ -115,12 +134,23 @@ export class ExchangePayoutsService {
             if (!s) return { orderId: t.id, ...calcPayout(num(t.driverCost), rates), driverTotal: null, fuelIssued: null, fuelReceipts: null, toPay: 0, itemRates: rates };
             const r = s.rates as unknown as SettlementRates;
             const f = fuel.get(t.id) ?? { issued: 0, receipts: 0 };
-            const a = actualPayout(num(s.driverTotal), f.issued, f.receipts, r, s.deductionApplied);
+            const itemRates = { commissionPct: r.parkPct, opvPct: r.opvPct, vosmsPct: r.vosmsPct, ipnPct: r.ipnPct, soPct: r.soPct };
+            if (s.scheme === 2) {
+                // Схема шефа: налоги посчитаны при выборе исполнителя и не меняются;
+                // на руки как договорились, топливо сводится чеками.
+                const p = payoutOf(num(s.workNet), f.issued, f.receipts);
+                return {
+                    orderId: t.id,
+                    gross: num(s.gross), commission: 0, opv: num(s.opv), vosms: num(s.vosms), ipn: num(s.ipn), net: num(s.workNet), so: num(s.so),
+                    driverTotal: num(s.workNet), fuelIssued: p.fuelIssued, fuelReceipts: p.fuelReceipts, toPay: p.toPay, itemRates,
+                };
+            }
+            // Прежняя схема: вычет — сколько его закреплено за рейсом при выборе.
+            const a = actualPayout(num(s.driverTotal), f.issued, f.receipts, r, num(s.deductionAmount));
             return {
                 orderId: t.id,
                 gross: a.gross, commission: 0, opv: a.opv, vosms: a.vosms, ipn: a.ipn, net: a.workNet, so: a.so,
-                driverTotal: a.driverTotal, fuelIssued: a.fuelIssued, fuelReceipts: a.fuelReceipts, toPay: a.toPay,
-                itemRates: { commissionPct: r.parkPct, opvPct: r.opvPct, vosmsPct: r.vosmsPct, ipnPct: r.ipnPct, soPct: r.soPct },
+                driverTotal: a.driverTotal, fuelIssued: a.fuelIssued, fuelReceipts: a.fuelReceipts, toPay: a.toPay, itemRates,
             };
         }).map((l) => (l.driverTotal == null ? { ...l, toPay: l.net } : l));
     }
@@ -138,35 +168,109 @@ export class ExchangePayoutsService {
         const row = await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId } });
         return {
             ...(await this.rates(parkId)),
-            // Расчёт «на руки»: топливо на км, вычет по ИПН; комиссия LogiCore — для сведения.
-            fuelPerKm: row ? num(row.fuelPerKm) : PARK_DEFAULTS.fuelPerKm,
+            // Топливо (16.10.2026): расход на 100 км, цена литра лето/зима, сезон; на км — для сведения.
+            fuelConsumption: row ? num(row.fuelConsumption) : PARK_DEFAULTS.fuelConsumption,
+            fuelPriceSummer: row ? num(row.fuelPriceSummer) : PARK_DEFAULTS.fuelPriceSummer,
+            fuelPriceWinter: row ? (row.fuelPriceWinter != null ? num(row.fuelPriceWinter) : null) : PARK_DEFAULTS.fuelPriceWinter,
+            fuelSeason: row ? row.fuelSeason : PARK_DEFAULTS.fuelSeason,
+            fuelPerKm: (await this.settlement.parkSettings(parkId)).fuelPerKm,
+            ipnHighPct: row ? num(row.ipnHighPct) : PARK_DEFAULTS.ipnHighPct,
+            ipnThresholdMrp: row ? row.ipnThresholdMrp : PARK_DEFAULTS.ipnThresholdMrp,
             applyDeduction: row ? row.applyDeduction : PARK_DEFAULTS.applyDeduction,
             deductionMrp: row ? row.deductionMrp : PARK_DEFAULTS.deductionMrp,
             mrp: row ? row.mrp : PARK_DEFAULTS.mrp,
+            vatPayer: row ? row.vatPayer : PARK_DEFAULTS.vatPayer,
+            vatPct: row ? num(row.vatPct) : PARK_DEFAULTS.vatPct,
             platformPct: await this.settlement.platformPct(),
+            /** Бухгалтер парка подтвердил ставки и порядок расчёта; пока нет — расчёт «предварительный». */
+            confirmedAt: row?.ratesConfirmedAt ?? null,
+            preliminary: !row?.ratesConfirmedAt,
             updatedAt: row?.updatedAt ?? null,
             isDefault: !row,
         };
     }
 
+    /**
+     * Сохранить ставки. Если что-то поменялось — подтверждение бухгалтера
+     * снимается: подтверждали другие цифры.
+     */
     async setRates(parkId: string, userId: string, dto: ParkRatesInput) {
         await this.drivers.assertPark(parkId);
-        const { fuelPerKm, applyDeduction, deductionMrp, mrp, ...percents } = dto;
-        for (const [k, v] of Object.entries(percents)) {
+        const {
+            fuelPerKm, applyDeduction, deductionMrp, mrp, vatPayer, vatPct,
+            fuelConsumption, fuelPriceSummer, fuelPriceWinter, fuelSeason, ipnHighPct, ipnThresholdMrp, ...percents
+        } = dto;
+        for (const [k, v] of Object.entries({ ...percents, ...(vatPct != null ? { vatPct } : {}), ...(ipnHighPct != null ? { ipnHighPct } : {}) })) {
             if (typeof v !== 'number' || v < 0 || v > 100) throw new BadRequestException(`Ставка ${k} — от 0 до 100 %`);
         }
-        const extra = {
+        if (fuelSeason != null && fuelSeason !== 'SUMMER' && fuelSeason !== 'WINTER') throw new BadRequestException('Сезон — лето или зима');
+        const extra: Record<string, number | boolean | string | null> = {
             ...(fuelPerKm != null ? { fuelPerKm } : {}),
             ...(applyDeduction != null ? { applyDeduction } : {}),
             ...(deductionMrp != null ? { deductionMrp } : {}),
             ...(mrp != null ? { mrp } : {}),
+            ...(vatPayer != null ? { vatPayer } : {}),
+            ...(vatPct != null ? { vatPct } : {}),
+            ...(fuelConsumption != null ? { fuelConsumption } : {}),
+            ...(fuelPriceSummer != null ? { fuelPriceSummer } : {}),
+            ...(fuelPriceWinter !== undefined ? { fuelPriceWinter } : {}),
+            ...(fuelSeason != null ? { fuelSeason } : {}),
+            ...(ipnHighPct != null ? { ipnHighPct } : {}),
+            ...(ipnThresholdMrp != null ? { ipnThresholdMrp } : {}),
         };
+        const before = await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId } });
+        const next: Record<string, number | boolean | string | null> = { ...percents, ...extra };
+        // Подтверждение бухгалтера снимает только правка налоговой схемы; топливо и сезон — нет.
+        const changed = !before || Object.entries(next).some(([k, v]) => {
+            if (!TAX_FIELDS.includes(k)) return false;
+            const was = (before as unknown as Record<string, unknown>)[k];
+            return typeof v === 'boolean' ? was !== v : num(was as Prisma.Decimal | number | null) !== v;
+        });
+        const unconfirm = changed ? { ratesConfirmedAt: null, ratesConfirmedById: null } : {};
         await this.prisma.parkPayoutRates.upsert({
             where: { parkCompanyId: parkId },
             create: { parkCompanyId: parkId, ...percents, ...extra, updatedById: userId },
-            update: { ...percents, ...extra, updatedById: userId },
+            update: { ...percents, ...extra, ...unconfirm, updatedById: userId },
         });
         return this.parkRates(parkId);
+    }
+
+    /** Лето или зима: цена литра для расчёта топлива — переключает парк одной кнопкой. */
+    async setFuelSeason(parkId: string, userId: string, season: string) {
+        await this.drivers.assertPark(parkId);
+        if (season !== 'SUMMER' && season !== 'WINTER') throw new BadRequestException('Сезон — лето или зима');
+        await this.prisma.parkPayoutRates.upsert({
+            where: { parkCompanyId: parkId },
+            create: { parkCompanyId: parkId, fuelSeason: season, updatedById: userId },
+            update: { fuelSeason: season, updatedById: userId },
+        });
+        return this.parkRates(parkId);
+    }
+
+    /**
+     * Бухгалтер парка подтверждает ставки и порядок расчёта (или снимает
+     * подтверждение). До этого расчёт водителей «предварительный»: выгрузка в
+     * 1С и «выплачено» — только с явным согласием (задача 15.10.2026).
+     */
+    async confirmRates(parkId: string, userId: string, confirmed: boolean) {
+        await this.drivers.assertPark(parkId);
+        const data = confirmed ? { ratesConfirmedAt: new Date(), ratesConfirmedById: userId } : { ratesConfirmedAt: null, ratesConfirmedById: null };
+        await this.prisma.parkPayoutRates.upsert({
+            where: { parkCompanyId: parkId },
+            create: { parkCompanyId: parkId, ...data, updatedById: userId },
+            update: data,
+        });
+        return this.parkRates(parkId);
+    }
+
+    /** Выплаты по предварительному расчёту: парк не подтвердил ставки или рейс посчитан до подтверждения. */
+    private async isPreliminary(parkId: string, payoutIds: string[]): Promise<boolean> {
+        const row = await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId }, select: { ratesConfirmedAt: true } });
+        if (!row?.ratesConfirmedAt) return true;
+        const early = await this.prisma.driverPayoutItem.count({
+            where: { payoutId: { in: payoutIds }, order: { exchangeSettlement: { preliminary: true } } },
+        });
+        return early > 0;
     }
 
     // ==================== водитель ====================
@@ -292,10 +396,14 @@ export class ExchangePayoutsService {
                 iban: true, bank: true, requestedAt: true, exportedAt: true, paidAt: true, rejectReason: true,
                 driver: { select: { id: true, lastName: true, firstName: true, middleName: true, iin: true, phone: true } },
                 _count: { select: { items: true } },
+                items: { select: { order: { select: { exchangeSettlement: { select: { preliminary: true } } } } } },
             },
         });
+        const confirmed = !!(await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId }, select: { ratesConfirmedAt: true } }))?.ratesConfirmedAt;
         return rows.map((p) => ({
             id: p.id, status: p.status, ...amountsOf(p), trips: p._count.items,
+            /** По предварительному расчёту — выгрузка и «выплачено» только с явным согласием. */
+            preliminary: !confirmed || p.items.some((i) => i.order.exchangeSettlement?.preliminary),
             iban: p.iban, bank: p.bank, requestedAt: p.requestedAt, exportedAt: p.exportedAt, paidAt: p.paidAt, rejectReason: p.rejectReason,
             driver: {
                 id: p.driver.id,
@@ -331,9 +439,13 @@ export class ExchangePayoutsService {
      * к выплате; второй лист — по рейсам. Выгруженные — «в 1С»: бухгалтер
      * платит из 1С. Повторная выгрузка тех же выплат разрешена.
      */
-    async exportFor1C(parkId: string, ids: string[]) {
+    async exportFor1C(parkId: string, ids: string[], preliminaryAck = false) {
         await this.drivers.assertPark(parkId);
         if (!ids.length) throw new BadRequestException('Отметьте выплаты для выгрузки');
+        const preliminary = await this.isPreliminary(parkId, ids);
+        if (preliminary && !preliminaryAck) throw new BadRequestException(PRELIMINARY_MESSAGE);
+        const parkConfirmed = !!(await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId }, select: { ratesConfirmedAt: true } }))?.ratesConfirmedAt;
+        const calcText = (s: { preliminary: boolean } | null | undefined) => (!parkConfirmed || s?.preliminary !== false ? 'предварительный' : 'подтверждён');
         const payouts = await this.prisma.driverPayout.findMany({
             where: { id: { in: ids }, parkCompanyId: parkId, status: { in: ['REQUESTED', 'EXPORTED'] } },
             include: {
@@ -365,6 +477,8 @@ export class ExchangePayoutsService {
             'Выдано на топливо': num(p.fuelIssued),
             'К перечислению': amountsOf(p).toPay,
             'СО (за счёт парка)': num(p.so),
+            'В бюджет (ОПВ+ВОСМС+ИПН+СО)': money(num(p.opv) + num(p.vosms) + num(p.ipn) + num(p.so)),
+            'Расчёт': p.items.some((it) => calcText(it.order.exchangeSettlement) === 'предварительный') ? 'предварительный' : 'подтверждён',
             'Дата запроса': date(p.requestedAt),
             'Код выплаты': p.id,
         }));
@@ -384,6 +498,8 @@ export class ExchangePayoutsService {
             'На руки за работу': num(it.net),
             'Выдано на топливо': num(it.fuelIssued),
             'К перечислению': amountsOf(it).toPay,
+            'СО (за счёт парка)': num(it.so),
+            'Расчёт': calcText(it.order.exchangeSettlement),
             'Код выплаты': p.id,
         })));
 
@@ -399,8 +515,9 @@ export class ExchangePayoutsService {
         return { buffer, count: payouts.length };
     }
 
-    async markPaid(parkId: string, id: string, userId: string) {
+    async markPaid(parkId: string, id: string, userId: string, preliminaryAck = false) {
         await this.drivers.assertPark(parkId);
+        if (!preliminaryAck && await this.isPreliminary(parkId, [id])) throw new BadRequestException(PRELIMINARY_MESSAGE);
         const { count } = await this.prisma.driverPayout.updateMany({
             where: { id, parkCompanyId: parkId, status: { in: ['REQUESTED', 'EXPORTED'] } },
             data: { status: 'PAID', paidAt: new Date(), decidedById: userId },

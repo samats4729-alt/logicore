@@ -35,6 +35,10 @@ export interface DriverProfile {
     rejectReason: string | null;
     blockedReason: string | null;
     tripsCompleted: number;
+    /** Заявление на базовый вычет по ИПН — «у другого работодателя не получаю» (16.10.2026). */
+    deductionRequested?: boolean;
+    /** Попросил удалить аккаунт — ждёт администратора. */
+    deletionRequestedAt?: string | null;
     documents: { id: string; kind: DocumentKind; fileName: string; mimeType: string; createdAt: string }[];
     /** Чего не хватает, чтобы отправить анкету — словами. */
     missing: string[];
@@ -109,15 +113,41 @@ export interface ExchangeOrder {
     adrClass: string | null;
     requirements: string | null;
     /**
-     * Сколько водитель парка получит на руки вместе с топливом (налоги и
-     * комиссии парк досчитывает сверху — решение владельца 12.10.2026);
-     * нет — договорная. Цену компании водитель не видит.
+     * Сколько водитель парка получит на руки — без топлива (его оплачивает
+     * парк): сумма компании минус топливо минус ОПВ (схема шефа, 16.10.2026);
+     * нет — договорная. Сколько заплатит компания и что уходит — в breakdown.
      */
     price: number | null;
     /** Топливо по оценке, ₸ — входит в сумму на руки; заправка через парк, чек на БИН парка. */
     fuelEstimate?: number | null;
     /** Расстояние маршрута, км — оценка. */
     distanceKm?: number | null;
+    /**
+     * Из чего сложилась сумма на руки: цена рейса у компании, комиссии
+     * LogiCore и парка, налоги и взносы за водителя (их платит парк).
+     * Старый сервер не присылает — тогда расшифровки нет.
+     */
+    breakdown?: {
+        customerPrice: number;
+        platformPct: number;
+        platformFee: number;
+        parkPct: number;
+        parkFee: number;
+        taxes: number;
+        /** Схема шефа: сумма компании, оплата за работу, ОПВ, комиссия 10 % (с 16.10.2026). */
+        base?: number;
+        gross?: number;
+        opv?: number;
+        commission?: number;
+        deductionApplied?: boolean;
+        /** НДС сверху — если парк плательщик НДС (с 15.10.2026; старый сервер не присылает). */
+        vat?: number;
+        vatPct?: number;
+        driverTotal: number;
+        fuel: number;
+        /** Бухгалтер парка ещё не подтвердил расчёт — суммы налогов предварительные. */
+        preliminary?: boolean;
+    } | null;
     note: string | null;
     publishedAt: string | null;
     /** Свой отклик: в ленте — только статус, в карточке — целиком. */
@@ -182,6 +212,10 @@ export interface TripFuel {
     };
     toPay: number | null;
     withoutReceipt: number;
+    /** 2 — схема шефа (16.10.2026): деньги на топливо без чека вычитаются из выплаты; 1 — облагаются. */
+    scheme?: number | null;
+    /** Заправлялся за свои (чеков больше, чем дали) — парк вернёт. */
+    ownMoney?: number;
     locked: boolean;
 }
 
@@ -349,7 +383,11 @@ export const exchangeApi = {
     reopen: () => api.post<DriverProfile>('/exchange/driver/me/reopen').then((r) => r.data),
     /** Вступить в парк по коду из приглашения. */
     joinPark: (code: string) => api.post<DriverProfile>('/exchange/driver/me/park-code', { code }).then((r) => r.data),
-    deleteAccount: () => api.post('/exchange/driver/me/delete'),
+    /** Попросить удалить аккаунт — удаляет администратор (16.10.2026). */
+    deleteAccount: (reason?: string) => api.post('/exchange/driver/me/delete', reason ? { reason } : {}),
+    cancelDeletion: () => api.post('/exchange/driver/me/delete/cancel'),
+    /** Заявление на базовый вычет по ИПН. */
+    setDeduction: (requested: boolean) => api.put<DriverProfile>('/exchange/driver/me/deduction', { requested }).then((r) => r.data),
 
     feed: (bodyType?: string) =>
         api.get<ExchangeOrder[]>('/exchange/driver/loads', { params: bodyType ? { bodyType } : {} }).then((r) => r.data),
@@ -391,6 +429,20 @@ export function телефонКрасиво(phone: string | null | undefined): 
 }
 
 /** «Сегодня», «Завтра», «12 окт» — водителю важнее «когда ехать», чем число. */
+/**
+ * Способ загрузки словами. В заявке он хранится служебным именем (SIDE, REAR…)
+ * — те же названия, что в мастере заявки на сайте (apps/web/src/lib/cargo.ts).
+ */
+const LOADING_LABELS: Record<string, string> = {
+    REAR: 'Задняя',
+    SIDE: 'Боковая',
+    TOP: 'Верхняя',
+    FULL: 'Полная растентовка',
+    RAMP: 'С аппарелями',
+    TAIL_LIFT: 'Гидроборт',
+};
+export const загрузкаСловами = (keys: string[]) => keys.map((k) => LOADING_LABELS[k] ?? k).join(', ');
+
 export function когдаПросто(date: string | null | undefined): string {
     if (!date) return 'Дата не указана';
     const d = new Date(date);

@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 're
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { DriverProfile, ExchangeOrder, OfferInput, exchangeApi, груз, деньги, когда, ответ } from '@/lib/exchange';
+import { DriverProfile, ExchangeOrder, OfferInput, exchangeApi, груз, деньги, загрузкаСловами, когда, ответ } from '@/lib/exchange';
 import { BRAND, FONT } from '@/lib/theme';
 import { Button, Card, Empty, Row } from '@/components/kit';
 import { OfferSheet } from '@/components/OfferSheet';
@@ -131,18 +131,19 @@ export default function OrderScreen() {
                     {me.kind === 'PARK' && (
                         <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
                             {order.fuelEstimate
-                                ? `Вместе с топливом: по расчёту около ${деньги(order.fuelEstimate)}${order.distanceKm ? ` на ${Math.round(order.distanceKm).toLocaleString('ru-RU')} км` : ''}. Заправка через парк, чек — на БИН парка. `
-                                : 'Вместе с топливом: заправка через парк, чек — на БИН парка. '}
-                            Налоги за вас платит парк — из этой суммы они не вычитаются.
+                                ? `Топливо оплачивает парк: по расчёту около ${деньги(order.fuelEstimate)}${order.distanceKm ? ` на ${Math.round(order.distanceKm).toLocaleString('ru-RU')} км` : ''}. Заправка через парк, чек — на БИН парка. `
+                                : 'Топливо оплачивает парк: заправка через парк, чек — на БИН парка. '}
+                            Пенсионные уже удержаны, остальные налоги платит парк — эта сумма ваша.
                         </Text>
                     )}
+                    {me.kind === 'PARK' && order.breakdown && <Breakdown b={order.breakdown} />}
                 </Card>
 
                 <Card>
                     <Row icon="cube-outline" label="Что везём" value={order.cargoDescription || '—'} />
                     <Row icon="bus-outline" label="Кузов и вес" value={груз(order) || '—'} />
                     {order.palletCount != null && <Row icon="grid-outline" label="Паллет" value={String(order.palletCount)} />}
-                    {order.loadingTypes.length > 0 && <Row icon="swap-vertical-outline" label="Загрузка" value={order.loadingTypes.join(', ')} />}
+                    {order.loadingTypes.length > 0 && <Row icon="swap-vertical-outline" label="Загрузка" value={загрузкаСловами(order.loadingTypes)} />}
                     {temp && <Row icon="thermometer-outline" label="Температура" value={temp} />}
                     {order.adr && <Row icon="warning-outline" label="Опасный груз" value={order.adrClass ? `ДОПОГ, класс ${order.adrClass}` : 'ДОПОГ'} />}
                     {!!order.requirements && <Row icon="alert-circle-outline" label="Требования" value={order.requirements} />}
@@ -199,7 +200,66 @@ export default function OrderScreen() {
     );
 }
 
+/**
+ * Из чего сложилась сумма на руки (владелец, 15.10.2026: «комиссия и общая
+ * сумма — чтобы было понятно, за что высчитывают»). Суммы — до тенге, и
+ * сходятся до тенге: налоги считаются остатком от округлённых строк, иначе
+ * при сложении «на глаз» вылезал бы лишний тенге.
+ */
+function Breakdown({ b }: { b: NonNullable<ExchangeOrder['breakdown']> }) {
+    const { colors } = useAppTheme();
+    const total = Math.round(b.customerPrice);
+    const platform = Math.round(b.platformFee);
+    const park = Math.round(b.parkFee);
+    const vat = Math.round(b.vat ?? 0);
+    const onHand = Math.round(b.driverTotal);
+    // Схема шефа (16.10.2026): комиссия одной строкой, топливо и ОПВ — отдельно.
+    const boss = b.opv != null && b.commission != null;
+    const commission = Math.round(b.commission ?? 0);
+    const fuel = Math.round(b.fuel);
+    const opv = Math.round(b.opv ?? 0);
+    const taxes = boss ? total - vat - commission - fuel - opv - onHand : total - platform - park - vat - onHand;
+    // Без процентов в подписях: комиссии считаются от стоимости работы без
+    // топлива, а не от всей цены рейса, — «5 % от 508 000» не сошлось бы.
+    const line = (label: string, value: string, strong = false) => (
+        <View style={styles.bLine}>
+            <Text style={[styles.bLabel, { color: strong ? colors.text : colors.textSecondary }, strong && { fontFamily: FONT.semibold }]}>{label}</Text>
+            <Text style={[styles.bValue, { color: colors.text }, strong && { fontFamily: FONT.bold }]}>{value}</Text>
+        </View>
+    );
+    return (
+        <View style={[styles.breakdown, { borderTopColor: colors.border2 }]}>
+            <Text style={[styles.priceLabel, { color: colors.textTertiary, marginBottom: 6 }]}>ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА</Text>
+            {line('Компания платит за рейс', деньги(total))}
+            {vat > 0 && line(`НДС${b.vatPct ? ` ${b.vatPct} %` : ''} — парк платит в бюджет`, `− ${деньги(vat)}`)}
+            {boss ? line('Комиссия парка и LogiCore', `− ${деньги(commission)}`) : (
+                <>
+                    {line('Комиссия LogiCore', `− ${деньги(platform)}`)}
+                    {line('Комиссия парка', `− ${деньги(park)}`)}
+                </>
+            )}
+            {line(boss ? 'Налоги за вас платит парк' : 'Налоги и взносы за вас', `− ${деньги(taxes)}`)}
+            {boss && line('Топливо — оплачивает парк', `− ${деньги(fuel)}`)}
+            {boss && line('Пенсионные (ОПВ) — на ваш счёт', `− ${деньги(opv)}`)}
+            <View style={[styles.bRule, { backgroundColor: colors.border2 }]} />
+            {line('Вам на руки', деньги(onHand), true)}
+            <Text style={[styles.bNote, { color: colors.textTertiary }]}>
+                {boss
+                    ? `Парк платит за вас медстраховку (ОСМС), социальные отчисления и подоходный налог (ИПН)${b.deductionApplied ? ' — с учётом базового вычета по вашему заявлению' : ''}. Пенсионные удерживаются из вашей оплаты и идут на ваш пенсионный счёт.`
+                    : `${b.fuel > 0 ? `В том числе топливо — около ${деньги(Math.round(b.fuel))}. ` : ''}Налоги и взносы — пенсионные (ОПВ), медстраховка (ВОСМС), подоходный налог (ИПН) и социальные отчисления. Их платит парк в бюджет, на ваш пенсионный счёт и медстраховку.`}
+                {b.preliminary ? ' Расчёт налогов предварительный: бухгалтер парка его ещё не подтвердил. Ваша сумма на руки от этого не меняется.' : ''}
+            </Text>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
+    breakdown: { marginTop: 14, paddingTop: 12, borderTopWidth: 1 },
+    bLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingVertical: 4 },
+    bLabel: { flex: 1, fontFamily: FONT.regular, fontSize: 14 },
+    bValue: { fontFamily: FONT.semibold, fontSize: 14.5, fontVariant: ['tabular-nums'] },
+    bRule: { height: 1, marginVertical: 6 },
+    bNote: { fontFamily: FONT.regular, fontSize: 12, lineHeight: 17, marginTop: 8 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     head: { fontFamily: FONT.bold, marginBottom: 10 },
     point: { flexDirection: 'row', gap: 12 },

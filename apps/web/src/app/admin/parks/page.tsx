@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Loader2, Percent, Search } from 'lucide-react';
+import dayjs from 'dayjs';
+import { Building2, Loader2, Percent, Search, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ответСервера } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import styles from '@/components/nova/nova.module.css';
 
@@ -96,12 +98,13 @@ export default function AdminParksPage() {
                     </p>
                     <p className={styles.subtitle}>
                         Парки — компании-посредники: через них работают водители без ИП. Парк регистрируется на платформе как организация, а здесь вы
-                        подтверждаете его как парк — биржа при этом открывается сама: без неё парк не работает. После этого у него свой кабинет — водители, их рейсы и приглашение; заявок, биржи и денег
-                        перевозчика у парка нет: он сам не возит.
+                        подтверждаете его как парк — биржа при этом открывается сама: без неё парк не работает. Кабинет у парка обычный, как у
+                        любой транспортной компании, а внизу меню — «Управление парком»: водители, их рейсы, выплаты и реестр бухгалтера.
                     </p>
                 </div>
             </div>
 
+            <DeletionRequestsCard />
             <PlatformFeeCard />
 
             <section className={styles.card}>
@@ -177,10 +180,101 @@ export default function AdminParksPage() {
     );
 }
 
+interface DeletionRequest {
+    id: string;
+    name: string;
+    phone: string | null;
+    iin: string | null;
+    kind: 'PARK' | 'IP' | null;
+    park: string | null;
+    requestedAt: string;
+    reason: string | null;
+}
+
 /**
- * Комиссия LogiCore с рейса водителя парка (решение владельца 12.10.2026):
- * досчитывается сверху к цене для компании вместе с налогами и долей парка.
- * Меняется здесь; действует на новые отклики — прошлые рейсы посчитаны.
+ * Водители просят удалить аккаунт (шеф, 16.10.2026): сами в приложении они
+ * больше не удаляют — только просят, а удаляют здесь. Держать заявку долго
+ * нельзя: Google Play требует удалять по просьбе.
+ */
+function DeletionRequestsCard() {
+    const [rows, setRows] = useState<DeletionRequest[] | null>(null);
+    const [busy, setBusy] = useState<string | null>(null);
+    const [confirming, setConfirming] = useState<DeletionRequest | null>(null);
+
+    const load = () => api.get('/exchange/admin/deletion-requests').then((r) => setRows(r.data)).catch(() => setRows([]));
+    useEffect(() => { load(); }, []);
+
+    const act = async (row: DeletionRequest, action: 'delete' | 'decline') => {
+        setBusy(`${row.id}:${action}`);
+        try {
+            await api.post(`/exchange/admin/drivers/${row.id}/delete${action === 'decline' ? '/decline' : ''}`);
+            toast.success(action === 'delete' ? `Аккаунт ${row.name} удалён` : `Заявка ${row.name} снята — аккаунт остаётся`);
+            setConfirming(null);
+            load();
+        } catch (e) {
+            toast.error(ответСервера(e, 'Не удалось'));
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    if (!rows || rows.length === 0) return null;
+    return (
+        <section className={styles.card}>
+            <div className={styles.cardHead}>
+                <UserX size={14} />
+                <h2 className={styles.cardTitle}>Просят удалить аккаунт</h2>
+                <span className={styles.cardCount}>{rows.length}</span>
+            </div>
+            <Table className="border-collapse text-[13px]">
+                <TableBody>
+                    {rows.map((r) => (
+                        <TableRow key={r.id} className="border-0 border-b border-solid border-border">
+                            <TableCell className="py-2.5">
+                                <div className="font-medium">{r.name}</div>
+                                <div className="text-[12px] text-muted-foreground">
+                                    {[r.phone, r.iin ? `ИИН ${r.iin}` : null, r.kind === 'IP' ? 'свой ИП' : r.park ? `парк ${r.park}` : null].filter(Boolean).join(' · ')}
+                                </div>
+                                {r.reason && <div className="text-[12px]">«{r.reason}»</div>}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-[12px] text-muted-foreground">
+                                просит с {dayjs(r.requestedAt).format('DD.MM.YYYY')}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-right">
+                                <div className="flex justify-end gap-1.5">
+                                    <Button size="sm" variant="ghost" onClick={() => act(r, 'decline')} disabled={!!busy}>
+                                        {busy === `${r.id}:decline` && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Передумал — оставить
+                                    </Button>
+                                    <Button size="sm" variant="destructive" onClick={() => setConfirming(r)} disabled={!!busy}>Удалить аккаунт</Button>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+            <Dialog open={!!confirming} onOpenChange={(o) => { if (!o) setConfirming(null); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader><DialogTitle className="text-[15px]">Удалить аккаунт {confirming?.name}?</DialogTitle></DialogHeader>
+                    <p className="m-0 text-[13px] text-muted-foreground">
+                        Сотрутся ФИО, ИИН, телефон и фото документов, вход закроется. Рейсы останутся у заказчиков — без имени водителя.
+                        Отменить нельзя. Если водитель сейчас везёт груз, удалить не получится — сначала рейс должен закончиться.
+                    </p>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setConfirming(null)}>Отмена</Button>
+                        <Button variant="destructive" onClick={() => confirming && act(confirming, 'delete')} disabled={!!busy}>
+                            {busy?.endsWith(':delete') && <Loader2 className="h-4 w-4 animate-spin" />} Удалить навсегда
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </section>
+    );
+}
+
+/**
+ * Доля LogiCore в комиссии с рейса водителя парка. Схема шефа (16.10.2026):
+ * парк берёт 10 % со всей суммы с налогами, и в них — доля LogiCore (5 %,
+ * половина). Меняется здесь; действует на новые отклики — прошлые рейсы посчитаны.
  */
 function PlatformFeeCard() {
     const [value, setValue] = useState<string | null>(null);
@@ -210,16 +304,16 @@ function PlatformFeeCard() {
         <section className={styles.card}>
             <div className={styles.cardHead}>
                 <Percent size={14} />
-                <h2 className={styles.cardTitle}>Комиссия LogiCore</h2>
+                <h2 className={styles.cardTitle}>Доля LogiCore в комиссии</h2>
             </div>
             <div className={`${styles.cardBody} flex flex-wrap items-end gap-3`}>
                 <label className="flex flex-col gap-1">
-                    <span className="text-[12px] font-medium text-muted-foreground">С рейса водителя парка, %</span>
+                    <span className="text-[12px] font-medium text-muted-foreground">От суммы с налогами, %</span>
                     <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" aria-label="Комиссия LogiCore, %" className="h-9 w-28 text-[13px] tabular-nums" />
                 </label>
                 <Button onClick={save} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Сохранить</Button>
                 <p className="m-0 basis-full text-[12px] text-muted-foreground">
-                    Досчитывается сверху к цене для компании вместе с налогами водителя и долей парка. Действует на новые отклики.
+                    Парк берёт комиссию со всей суммы с налогами (по умолчанию 10 %), и в ней — эта доля LogiCore; остальное — парку. Действует на новые отклики.
                 </p>
             </div>
         </section>

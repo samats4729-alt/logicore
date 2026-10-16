@@ -16,6 +16,8 @@ export interface ExchangeOrder {
     orderNumber: string;
     /** Компания, которая ищет исполнителя. */
     companyName: string | null;
+    /** Заказчик — только в своих заявках («Мои»); в общей ленте чужого клиента не показывают. */
+    customerName?: string | null;
     from: string;
     to: string;
     loadingDate: string | null;
@@ -68,6 +70,8 @@ export interface ExchangeOffer {
     readyDate: string | null;
     comment: string | null;
     createdAt: string;
+    /** Последнее изменение отклика (цена, подача). Старый сервер не присылает. */
+    updatedAt?: string;
     kind: 'DRIVER_IP' | 'DRIVER_PARK' | 'COMPANY';
     name: string;
     phone: string | null;
@@ -84,6 +88,22 @@ export interface ExchangeOffer {
 }
 
 /** Биржа в карточке заявки: на бирже ли и можно ли выставить. */
+/** Когда отклик в последний раз появился или изменился — по этому времени он «новый». */
+export const откликИзменён = (o: Pick<ExchangeOffer, 'createdAt' | 'updatedAt'>) => o.updatedAt ?? o.createdAt;
+
+/** Цену (или подачу) поменяли после отклика — больше минуты спустя. */
+export const ценаИзменена = (o: Pick<ExchangeOffer, 'createdAt' | 'updatedAt'>) =>
+    !!o.updatedAt && new Date(o.updatedAt).getTime() - new Date(o.createdAt).getTime() > 60_000;
+
+/** Отклик на свою заявку — в «Предложениях» биржи и в колокольчике: с заявкой, к которой он относится. */
+export type IncomingOffer = ExchangeOffer & {
+    orderId: string;
+    orderNumber: string;
+    from: string;
+    to: string;
+    orderPrice: number | null;
+};
+
 export interface ExchangeOrderState {
     orderId: string;
     orderNumber: string;
@@ -327,7 +347,11 @@ export interface ParkTrip {
     loadingDate: string | null;
     customerName: string | null;
     /** Расчёт «на руки» (рейсы с 12.10.2026): итог водителю, топливо, доли парка и LogiCore. */
-    settlement?: { driverTotal: number; fuelEstimate: number; parkFee: number; platformFee: number } | null;
+    settlement?: {
+        driverTotal: number; fuelEstimate: number; parkFee: number; platformFee: number;
+        /** 2 — схема шефа (16.10.2026), 1 — прежняя. Разбивка налогов по рейсу. */
+        scheme?: number; gross?: number; opv?: number; vosms?: number; so?: number; ipn?: number; preliminary?: boolean;
+    } | null;
     /** Чеков на топливо ждут решения парка. */
     fuelReceiptsPending?: number;
     createdAt: string;
@@ -350,6 +374,10 @@ export interface ParkTripFuel {
     };
     toPay: number | null;
     withoutReceipt: number;
+    /** 2 — схема шефа: на руки без топлива, топливо сводится чеками; 1 — прежняя. */
+    scheme?: number | null;
+    /** Чеков больше, чем дали: водитель заправлялся за свои — парк возвращает. */
+    ownMoney?: number;
     locked: boolean;
 }
 
@@ -390,6 +418,8 @@ export interface ParkPayout {
     paidAt: string | null;
     rejectReason: string | null;
     driver: { id: string; name: string; iin: string | null; phone: string | null };
+    /** Расчёт предварительный: бухгалтер парка не подтвердил ставки или рейс посчитан до подтверждения. */
+    preliminary?: boolean;
 }
 
 /** Ставки удержаний парка, %. */
@@ -405,6 +435,69 @@ export interface PayoutRates {
     deductionMrp?: number;
     mrp?: number;
     platformPct?: number;
+    /** НДС (15.10.2026): прибавляется к цене для компании, только у плательщиков НДС. */
+    vatPayer?: boolean;
+    vatPct?: number;
+    /** Топливо (16.10.2026): расход на 100 км, цена литра лето/зима, сезон. */
+    fuelConsumption?: number;
+    fuelPriceSummer?: number;
+    fuelPriceWinter?: number | null;
+    fuelSeason?: 'SUMMER' | 'WINTER';
+    /** Прогрессивный ИПН: повышенная ставка выше порога годового дохода, МРП. */
+    ipnHighPct?: number;
+    ipnThresholdMrp?: number;
+    /** Бухгалтер парка подтвердил ставки и порядок расчёта; пока нет — расчёт «предварительный». */
+    confirmedAt?: string | null;
+    preliminary?: boolean;
     updatedAt?: string | null;
     isDefault?: boolean;
+}
+
+/** Что с деньгами рейса водителя парка: от «рейс идёт» до «выплачено». */
+export type RegistryPayStatus = 'IN_TRIP' | 'TO_REQUEST' | PayoutStatus;
+
+/** Рейс в реестре бухгалтера парка за месяц (15.10.2026). */
+export interface ParkRegistryLine {
+    orderId: string;
+    orderNumber: string;
+    route: string;
+    loadingDate: string | null;
+    completedAt: string | null;
+    driver: { id: string; name: string; iin: string | null };
+    driverTotal: number;
+    fuelEstimate: number;
+    fuelIssued: number;
+    fuelReceipts: number;
+    gross: number;
+    opv: number;
+    vosms: number;
+    ipn: number;
+    withheld: number;
+    so: number;
+    toBudget: number;
+    deductionAmount: number;
+    toPay: number;
+    paid: number;
+    payStatus: RegistryPayStatus;
+    payStatusText: string;
+    /** Суммы из запрошенной выплаты; false — оценка по текущим чекам. */
+    fixed: boolean;
+    preliminary: boolean;
+    fuelReceiptsPending: number;
+    customerPrice: number;
+    vat: number;
+    parkFee: number;
+    platformFee: number;
+}
+
+type RegistryTotals = Pick<ParkRegistryLine,
+    'driverTotal' | 'fuelIssued' | 'fuelReceipts' | 'gross' | 'opv' | 'vosms' | 'ipn' | 'withheld' | 'so' | 'toBudget'
+    | 'deductionAmount' | 'toPay' | 'paid' | 'customerPrice' | 'vat' | 'parkFee' | 'platformFee'>;
+
+export interface ParkRegistry {
+    month: string;
+    preliminary: boolean;
+    lines: ParkRegistryLine[];
+    drivers: (RegistryTotals & { driver: ParkRegistryLine['driver']; trips: number })[];
+    totals: RegistryTotals & { trips: number };
 }

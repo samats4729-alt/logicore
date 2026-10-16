@@ -30,11 +30,15 @@ test.describe('Биржа · заявки', () => {
         let target: { id: string; orderNumber: string } | null = null;
         for (const o of orders) {
             const state = await page.request.get(`${API}/exchange/orders/${o.id}`);
-            if (state.ok() && (await state.json()).canPublish) { target = o; break; }
+            if (!state.ok()) continue;
+            // Уже выставленная заявка тоже «можно выставить» — но кнопки там нет, есть «Снять».
+            const st = await state.json();
+            if (st.canPublish && !st.onExchange) { target = o; break; }
         }
         test.skip(!target, 'На стенде нет заявки без исполнителя');
 
-        await page.goto(`/company/orders/${target!.id}`);
+        // Биржа заявки — во вкладке «Предложения» (15.10.2026).
+        await page.goto(`/company/orders/${target!.id}?tab=offers`);
         await page.getByRole('button', { name: 'Выставить на биржу' }).click();
         const publish = page.getByRole('dialog');
         await publish.getByLabel('Цена для исполнителя').fill('450000');
@@ -51,7 +55,8 @@ test.describe('Биржа · заявки', () => {
         await expect(page.getByText(target!.orderNumber).first()).toBeVisible();
 
         // Снять: вопрос, причина, и можно выставить снова.
-        await page.goto(`/company/orders/${target!.id}`);
+        // Биржа заявки — во вкладке «Предложения» (15.10.2026).
+        await page.goto(`/company/orders/${target!.id}?tab=offers`);
         await page.getByRole('button', { name: 'Снять с биржи' }).click();
         const close = page.getByRole('dialog');
         await close.getByRole('button', { name: 'Нашли исполнителя сами' }).click();

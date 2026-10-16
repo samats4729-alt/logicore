@@ -3,7 +3,7 @@ import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { kzToday } from '../common/utils/business-date';
 import { MakeOfferDto } from './dto/exchange-order.dto';
-import { ON_EXCHANGE, managerOf } from './exchange-orders';
+import { EXCHANGE_ORDER_SELECT, ON_EXCHANGE, exchangeView, managerOf } from './exchange-orders';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeSettlementService, SettlementCalc } from './settlement.service';
@@ -38,6 +38,8 @@ function offerView(o: OfferRow) {
         readyDate: o.readyDate,
         comment: o.comment,
         createdAt: o.createdAt,
+        /** Последнее изменение — водитель или перевозчик поменял цену, подачу, комментарий. */
+        updatedAt: o.updatedAt,
         decidedAt: o.decidedAt,
         /** Кто откликнулся: водитель (с ИП или через парк) или компания-перевозчик. */
         kind: d ? (d.kind === 'IP' ? 'DRIVER_IP' : 'DRIVER_PARK') : 'COMPANY',
@@ -129,20 +131,21 @@ export class ExchangeOffersService {
     // ==================== водитель ====================
 
     /**
-     * Водитель парка откликается суммой на руки (вместе с топливом) или
-     * соглашается на цену компании — тогда сумму на руки считаем от неё.
-     * В отклик пишем цену для компании и весь расчёт на этот момент.
+     * Водитель парка откликается суммой на руки (без топлива — его оплачивает
+     * парк) или соглашается на цену компании — тогда на руки = её сумма минус
+     * топливо и ОПВ (схема шефа, 16.10.2026). В отклик пишем цену для компании
+     * — с налогами парка, 10 % комиссии и НДС — и весь расчёт на этот момент.
      */
     private async driverCalc(driver: { id: string; parkCompanyId: string }, order: { id: string; exchangePrice: Prisma.Decimal | null }, dto: MakeOfferDto): Promise<SettlementCalc> {
         const ctx = await this.settlement.context(driver, order.id);
         if (dto.agree) {
             if (order.exchangePrice == null) throw new BadRequestException('У заявки цена договорная — предложите свою');
-            const calc = this.settlement.byCustomerPrice(ctx, Number(order.exchangePrice));
+            const calc = this.settlement.tryBase(ctx, Number(order.exchangePrice));
             if (!calc) throw new BadRequestException('Цена компании не покрывает топливо по расчёту — предложите свою сумму');
             return calc;
         }
         if (!dto.price || dto.price <= 0) throw new BadRequestException('Укажите, сколько хотите получить на руки');
-        return this.settlement.byDriverTotal(ctx, dto.price);
+        return this.settlement.byOnHand(ctx, dto.price);
     }
 
     async offerAsDriver(userId: string, orderId: string, dto: MakeOfferDto) {
@@ -232,8 +235,7 @@ export class ExchangeOffersService {
     // ==================== компания-перевозчик ====================
 
     async offerAsCompany(companyId: string, userId: string, orderId: string, dto: MakeOfferDto) {
-        const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { isPark: true } });
-        if (company?.isPark) throw new ForbiddenException('Парк сам не возит — откликаются его водители через приложение');
+        // Парк откликается, как любой перевозчик: он и сам возит (владелец, 15.10.2026).
         const order = await this.openOrder(orderId);
         if ([order.customerCompanyId, order.forwarderId, order.subForwarderId].includes(companyId)) {
             throw new BadRequestException('Это ваша заявка — откликаться на неё не нужно');
@@ -302,6 +304,39 @@ export class ExchangeOffersService {
         return rows.map(offerView);
     }
 
+    /**
+     * Отклики на все свои заявки на бирже — новые сверху (владелец, 15.10.2026:
+     * вкладка «Предложения» на бирже и уведомления о новых откликах). Только
+     * ждущие решения: выбранные и отклонённые уже не предложение.
+     */
+    async incomingOffers(companyId: string) {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                ...ON_EXCHANGE,
+                OR: [
+                    { subForwarderId: companyId },
+                    { subForwarderId: null, forwarderId: companyId },
+                    { subForwarderId: null, forwarderId: null, customerCompanyId: companyId },
+                ],
+            },
+            select: EXCHANGE_ORDER_SELECT,
+            take: 300,
+        });
+        if (!orders.length) return [];
+        const byId = new Map(orders.map((o) => [o.id, exchangeView(o)]));
+        const rows = await this.prisma.exchangeOffer.findMany({
+            where: { orderId: { in: [...byId.keys()] }, status: 'ACTIVE' },
+            select: OFFER_SELECT,
+            // Свежие сверху — и новые, и с изменённой ценой.
+            orderBy: { updatedAt: 'desc' },
+            take: 100,
+        });
+        return rows.map((o) => {
+            const order = byId.get(o.orderId)!;
+            return { ...offerView(o), orderId: o.orderId, orderNumber: order.orderNumber, from: order.from, to: order.to, orderPrice: order.price };
+        });
+    }
+
     async accept(companyId: string, userId: string, orderId: string, offerId: string) {
         const order = await this.managedOrder(companyId, orderId);
         const offer = await this.prisma.exchangeOffer.findFirst({ where: { id: offerId, orderId }, select: OFFER_SELECT });
@@ -341,9 +376,11 @@ export class ExchangeOffersService {
                 : `С биржи выбран водитель ${view.name} (свой ИП) за ${price.toLocaleString('ru-RU')} ₸`;
             if (d.kind === 'PARK' && d.parkCompanyId) {
                 const driver = { id: d.id, parkCompanyId: d.parkCompanyId };
-                // Отклик до нового расчёта — считаем от цены, которую видит компания.
-                const calc = (offer.calc as unknown as SettlementCalc | null)
-                    ?? this.settlement.byCustomerPrice(await this.settlement.context(driver, order.id), price);
+                // Вычет — по остатку на сейчас: пока отклик ждал, у водителя мог
+                // пройти другой рейс месяца. Отклик до нового расчёта (без calc) —
+                // рейс без расчёта «на руки», как раньше.
+                const offered = offer.calc as unknown as SettlementCalc | null;
+                const calc = offered ? this.settlement.atAccept(offered, await this.settlement.context(driver, order.id)) : null;
                 if (calc) {
                     settlementData = this.settlement.fixData(order.id, driver, calc);
                     comment += ` — водителю на руки ${Math.round(calc.driverTotal).toLocaleString('ru-RU')} ₸ с топливом`;

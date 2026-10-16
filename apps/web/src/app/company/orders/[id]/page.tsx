@@ -45,7 +45,7 @@ import OrderOperationModals from '@/components/orders/OrderOperationModals';
 import OrderEditForm from '@/components/orders/OrderEditForm';
 import OrderDocumentChain from '@/components/orders/OrderDocumentChain';
 import OrderHistory from '@/components/orders/OrderHistory';
-import OrderExchangePanel from '@/components/exchange/OrderExchangePanel';
+import OrderExchangePanel, { useOrderExchange } from '@/components/exchange/OrderExchangePanel';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import {
     EMPTY_CARGO, totalPallets,
@@ -1146,6 +1146,10 @@ export default function OrderDetailPage() {
     // Вкладка управляется состоянием: из блока водителя ведёт кнопка
     // «Документы рейса», а несвязанные вкладки переключать нечем.
     const [activeTab, setActiveTab] = useState('details');
+    // Из колокольчика и с биржи ведут прямо на отклики: ?tab=offers.
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get('tab') === 'offers') setActiveTab('offers');
+    }, []);
     const [contracts, setContracts] = useState<any[]>([]);
     const [poaDocuments, setPoaDocuments] = useState<any[]>([]);
     const [docBusy, setDocBusy] = useState<OrderDocKind | null>(null);
@@ -1333,6 +1337,9 @@ export default function OrderDetailPage() {
             toast.error(error.response?.data?.message || 'Ошибка');
         } finally { setQuickPartnerLoading(false); }
     };
+
+    // Биржа заявки — для вкладки «Предложения» (перечитывается, когда заявка изменилась).
+    const exchangeState = useOrderExchange(orderId, data?.order?.updatedAt);
 
     // =================== RENDER ===================
 
@@ -1800,13 +1807,18 @@ export default function OrderDetailPage() {
                                     setCargo={setCargoState}
                                 />
                             ) : (
-                                <>
-                                {/* Биржа: найти исполнителя, пока его нет. */}
-                                <OrderExchangePanel orderId={orderId} reloadKey={order.updatedAt} onChanged={fetchData} />
                                 <OrderDetails order={order} fmt={fmt} palletLines={palletLines} />
-                                </>
                             )
                         )
+                    },
+                    // «Предложения» — биржа заявки: выставить, отклики, выбор
+                    // исполнителя (владелец, 15.10.2026: отдельной вкладкой,
+                    // а не блоком над маршрутом). Только пока бирже есть что
+                    // показать: заявку можно выставить, она на бирже или откликались.
+                    exchangeState && (exchangeState.onExchange || exchangeState.canPublish || exchangeState.offersCount > 0) && {
+                        key: 'offers',
+                        label: exchangeState.offersCount > 0 ? `Предложения · ${exchangeState.offersCount}` : 'Предложения',
+                        children: <OrderExchangePanel orderId={orderId} reloadKey={order.updatedAt} onChanged={fetchData} />,
                     },
                     // Вкладка «Финансы» — работа бухгалтера: НДС, сроки
                     // оплаты, счёт и акт. Менеджеру её не показываем вовсе:

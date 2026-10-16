@@ -437,3 +437,36 @@ describe('Биржа: договор с парком', () => {
         expect(card.contract).toEqual({ number: 'ПА-261009-D1', signedAt: new Date('2026-10-09T10:00:00Z') });
     });
 });
+
+describe('Биржа: удаление аккаунта — заявкой, удаляет администратор (16.10.2026)', () => {
+    it('водитель просит — ставится отметка с причиной, сам аккаунт не трогаем', async () => {
+        const { service, prisma } = build();
+        expect(await service.requestDeletion('u-1', ' ушёл с работы ')).toEqual({ requested: true });
+        const data = prisma.exchangeDriver.update.mock.calls[0][0].data;
+        expect(data.deletionReason).toBe('ушёл с работы');
+        expect(data.deletionRequestedAt).toBeInstanceOf(Date);
+    });
+
+    it('передумал — заявка снимается', async () => {
+        const { service, prisma } = build();
+        await service.cancelDeletion('u-1');
+        expect(prisma.exchangeDriver.update.mock.calls[0][0].data).toEqual({ deletionRequestedAt: null, deletionReason: null });
+    });
+
+    it('админке — старые заявки сверху', async () => {
+        const { service, prisma } = build();
+        await service.deletionRequests();
+        expect(prisma.exchangeDriver.findMany.mock.calls[0][0]).toMatchObject({ where: { deletionRequestedAt: { not: null } }, orderBy: { deletionRequestedAt: 'asc' } });
+    });
+});
+
+describe('Биржа: заявление водителя на базовый вычет (16.10.2026)', () => {
+    it('подал — отметка и дата; отозвал — снимается', async () => {
+        const { service, prisma } = build();
+        await service.setDeduction('u-1', true);
+        expect(prisma.exchangeDriver.update.mock.calls[0][0].data.deductionRequested).toBe(true);
+        expect(prisma.exchangeDriver.update.mock.calls[0][0].data.deductionRequestedAt).toBeInstanceOf(Date);
+        await service.setDeduction('u-1', false);
+        expect(prisma.exchangeDriver.update.mock.calls[1][0].data).toEqual({ deductionRequested: false, deductionRequestedAt: null });
+    });
+});

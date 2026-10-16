@@ -3148,6 +3148,15 @@ model ExchangeDriver {
   payoutIban String?
   payoutBank String?
 
+  /// Заявление водителя на базовый вычет по ИПН (30 МРП): «у другого работодателя
+  /// не получаю». Без заявления вычета нет — так сказали налоговики (16.10.2026).
+  deductionRequested   Boolean   @default(false)
+  deductionRequestedAt DateTime?
+
+  /// Водитель попросил удалить аккаунт — удаляет администратор (шеф, 16.10.2026).
+  deletionRequestedAt DateTime?
+  deletionReason      String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3220,7 +3229,20 @@ model ExchangeTripSettlement {
   parkFee       Decimal @db.Decimal(18, 2)
   customerPrice Decimal @db.Decimal(18, 2)
   deductionApplied Boolean
+  /// Сколько месячного вычета ушло на этот рейс (с 15.10.2026 — не больше остатка за месяц).
   deductionAmount  Decimal @db.Decimal(18, 2)
+  /// НДС сверху, если парк плательщик НДС; входит в customerPrice.
+  vat           Decimal @default(0) @db.Decimal(18, 2)
+  /// Посчитано до того, как бухгалтер парка подтвердил расчёт.
+  preliminary   Boolean @default(true)
+  /// Схема расчёта: 1 — «на руки с топливом, налоги сверху» (12.10.2026);
+  /// 2 — схема шефа (16.10.2026): на руки = оплата за работу минус ОПВ,
+  /// ОСМС, СО и ИПН платит парк, 10 % комиссии и НДС сверху, топливо — на парке.
+  scheme        Int     @default(1)
+  /// Схема 2: сумма заказчика до налогов и комиссии (топливо + оплата за работу).
+  base          Decimal? @db.Decimal(18, 2)
+  /// Облагаемый ИПН доход рейса — копится за год для прогрессивной шкалы.
+  ipnBase       Decimal @default(0) @db.Decimal(18, 2)
   /// Ставки на момент расчёта.
   rates         Json
 
@@ -3368,8 +3390,8 @@ model ParkPayoutRates {
   parkCompanyId String  @unique
   park          Company @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
 
-  /// Комиссия парка, % от суммы за рейс.
-  commissionPct Decimal @default(5) @db.Decimal(5, 2)
+  /// Комиссия парка, %. По умолчанию 10 % (задача о расчёте без ИП, 15.10.2026).
+  commissionPct Decimal @default(10) @db.Decimal(5, 2)
   /// Пенсионные взносы водителя (ОПВ), % — удерживаются.
   opvPct        Decimal @default(10) @db.Decimal(5, 2)
   /// Взносы водителя на медстрахование (ВОСМС), % — удерживаются.
@@ -3385,6 +3407,26 @@ model ParkPayoutRates {
   /// Вычет в МРП и сам МРП, ₸ (2026: 30 × 4 325).
   deductionMrp   Int     @default(30)
   mrp            Int     @default(4325)
+  /// Топливо по схеме шефа (16.10.2026): расход на 100 км и цена литра летом и
+  /// зимой; сезон парк переключает сам. Перерасход и экономия — на парке.
+  fuelConsumption Decimal @default(30) @db.Decimal(6, 2)
+  fuelPriceSummer Decimal @default(350) @db.Decimal(10, 2)
+  /// Зимний дизель — цену парк ставит сам; пусто — считается по летней.
+  fuelPriceWinter Decimal? @db.Decimal(10, 2)
+  /// SUMMER или WINTER.
+  fuelSeason      String  @default("SUMMER")
+  /// Прогрессивный ИПН: выше порога годового дохода водителя — повышенная ставка.
+  ipnHighPct      Decimal @default(15) @db.Decimal(5, 2)
+  ipnThresholdMrp Int     @default(8500)
+  /// Парк — плательщик НДС: НДС прибавляется к цене для компании (15.10.2026).
+  vatPayer       Boolean @default(false)
+  /// Ставка НДС, % (2026: 16).
+  vatPct         Decimal @default(16) @db.Decimal(5, 2)
+  /// Бухгалтер парка подтвердил ставки и порядок расчёта. Пока пусто — расчёт
+  /// «предварительный»: выгрузка в 1С и «выплачено» — только с явным согласием.
+  /// Любая правка ставок снимает подтверждение.
+  ratesConfirmedAt   DateTime?
+  ratesConfirmedById String?
 
   updatedById String?
   updatedAt   DateTime @updatedAt

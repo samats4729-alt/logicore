@@ -9,6 +9,7 @@ import { moneyShort } from '@/lib/money-format';
 import { ExchangeOrder, день, тонн } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import OfferForm from '@/components/exchange/OfferForm';
+import { loadingLabel, packagingLabel } from '@/lib/cargo';
 import styles from '@/components/nova/nova.module.css';
 
 const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
@@ -127,8 +128,8 @@ export default function ExchangeOrderPage() {
                             <Row label="Вес и объём" value={[тонн(order.weightKg), order.volumeM3 ? `${order.volumeM3} м³` : null].filter(Boolean).join(' · ')} />
                             {order.palletCount != null && <Row label="Паллет" value={String(order.palletCount)} />}
                             {order.natureOfCargo && <Row label="Характер груза" value={order.natureOfCargo} />}
-                            {order.loadingTypes.length > 0 && <Row label="Загрузка" value={order.loadingTypes.join(', ')} />}
-                            {order.packagingTypes.length > 0 && <Row label="Упаковка" value={order.packagingTypes.join(', ')} />}
+                            {order.loadingTypes.length > 0 && <Row label="Загрузка" value={order.loadingTypes.map(loadingLabel).join(', ')} />}
+                            {order.packagingTypes.length > 0 && <Row label="Упаковка" value={order.packagingTypes.map(packagingLabel).join(', ')} />}
                             {temp && <Row label="Температура" value={temp} />}
                             {order.adr && <Row label="Опасный груз" value={order.adrClass ? `ДОПОГ, класс ${order.adrClass}` : 'ДОПОГ'} />}
                             {order.requirements && <Row label="Требования" value={order.requirements} />}
