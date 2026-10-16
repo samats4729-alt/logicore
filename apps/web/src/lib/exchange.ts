@@ -347,7 +347,11 @@ export interface ParkTrip {
     loadingDate: string | null;
     customerName: string | null;
     /** Расчёт «на руки» (рейсы с 12.10.2026): итог водителю, топливо, доли парка и LogiCore. */
-    settlement?: { driverTotal: number; fuelEstimate: number; parkFee: number; platformFee: number } | null;
+    settlement?: {
+        driverTotal: number; fuelEstimate: number; parkFee: number; platformFee: number;
+        /** 2 — схема шефа (16.10.2026), 1 — прежняя. Разбивка налогов по рейсу. */
+        scheme?: number; gross?: number; opv?: number; vosms?: number; so?: number; ipn?: number; preliminary?: boolean;
+    } | null;
     /** Чеков на топливо ждут решения парка. */
     fuelReceiptsPending?: number;
     createdAt: string;
@@ -370,6 +374,10 @@ export interface ParkTripFuel {
     };
     toPay: number | null;
     withoutReceipt: number;
+    /** 2 — схема шефа: на руки без топлива, топливо сводится чеками; 1 — прежняя. */
+    scheme?: number | null;
+    /** Чеков больше, чем дали: водитель заправлялся за свои — парк возвращает. */
+    ownMoney?: number;
     locked: boolean;
 }
 
@@ -430,6 +438,14 @@ export interface PayoutRates {
     /** НДС (15.10.2026): прибавляется к цене для компании, только у плательщиков НДС. */
     vatPayer?: boolean;
     vatPct?: number;
+    /** Топливо (16.10.2026): расход на 100 км, цена литра лето/зима, сезон. */
+    fuelConsumption?: number;
+    fuelPriceSummer?: number;
+    fuelPriceWinter?: number | null;
+    fuelSeason?: 'SUMMER' | 'WINTER';
+    /** Прогрессивный ИПН: повышенная ставка выше порога годового дохода, МРП. */
+    ipnHighPct?: number;
+    ipnThresholdMrp?: number;
     /** Бухгалтер парка подтвердил ставки и порядок расчёта; пока нет — расчёт «предварительный». */
     confirmedAt?: string | null;
     preliminary?: boolean;

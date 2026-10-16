@@ -386,11 +386,11 @@ function RejectDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; 
 }
 
 const RATE_FIELDS: { key: 'commissionPct' | 'opvPct' | 'vosmsPct' | 'ipnPct' | 'soPct'; label: string; hint: string }[] = [
-    { key: 'commissionPct', label: 'Комиссия парка', hint: 'сверху к цене компании (рейсы «на руки»)' },
-    { key: 'opvPct', label: 'ОПВ', hint: 'удерживается с дохода' },
-    { key: 'vosmsPct', label: 'ВОСМС', hint: 'удерживается с дохода' },
-    { key: 'ipnPct', label: 'ИПН', hint: 'с дохода за вычетом ОПВ и ВОСМС' },
-    { key: 'soPct', label: 'СО', hint: 'платит парк сверху, не удерживается' },
+    { key: 'commissionPct', label: 'Комиссия', hint: 'сверху со всей суммы с налогами; в ней доля LogiCore' },
+    { key: 'opvPct', label: 'ОПВ', hint: 'удерживается из денег водителя' },
+    { key: 'vosmsPct', label: 'ОСМС', hint: 'платит парк, от оплаты за работу' },
+    { key: 'ipnPct', label: 'ИПН', hint: 'платит парк: с оплаты за работу минус ОПВ и вычет' },
+    { key: 'soPct', label: 'СО', hint: 'платит парк: от оплаты за работу минус ОПВ' },
 ];
 
 /** Ставки удержаний — парк задаёт со своим бухгалтером. */
@@ -400,23 +400,46 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
     const [saving, setSaving] = useState(false);
     const [confirming, setConfirming] = useState(false);
 
-    // Расчёт «на руки» (12.10.2026): топливо на км и вычет по ИПН; НДС (15.10.2026).
-    const [extra, setExtra] = useState({ fuelPerKm: '', applyDeduction: true, deductionMrp: '', mrp: '', vatPayer: false, vatPct: '' });
+    // Вычет, НДС (15.10.2026); топливо по литрам и прогрессивный ИПН (схема шефа, 16.10.2026).
+    const [extra, setExtra] = useState({
+        applyDeduction: true, deductionMrp: '', mrp: '', vatPayer: false, vatPct: '',
+        fuelConsumption: '', fuelPriceSummer: '', fuelPriceWinter: '', ipnHighPct: '', ipnThresholdMrp: '',
+    });
+    const [seasonSaving, setSeasonSaving] = useState(false);
 
     useEffect(() => {
         api.get('/exchange/park/rates').then((r) => {
             setRates(r.data);
             setDraft(Object.fromEntries(RATE_FIELDS.map((f) => [f.key, String(r.data[f.key])])));
             setExtra({
-                fuelPerKm: String(r.data.fuelPerKm ?? 100),
                 applyDeduction: r.data.applyDeduction ?? true,
                 deductionMrp: String(r.data.deductionMrp ?? 30),
                 mrp: String(r.data.mrp ?? 4325),
                 vatPayer: r.data.vatPayer ?? false,
                 vatPct: String(r.data.vatPct ?? 16),
+                fuelConsumption: String(r.data.fuelConsumption ?? 30),
+                fuelPriceSummer: String(r.data.fuelPriceSummer ?? 350),
+                fuelPriceWinter: r.data.fuelPriceWinter != null ? String(r.data.fuelPriceWinter) : '',
+                ipnHighPct: String(r.data.ipnHighPct ?? 15),
+                ipnThresholdMrp: String(r.data.ipnThresholdMrp ?? 8500),
             });
         }).catch(() => setRates(null));
     }, []);
+
+    /** Лето/зима — сразу, без «Сохранить»: это переключатель, а не ставка. */
+    const setSeason = async (season: 'SUMMER' | 'WINTER') => {
+        if (rates?.fuelSeason === season) return;
+        setSeasonSaving(true);
+        try {
+            const { data } = await api.put('/exchange/park/rates/season', { season });
+            setRates(data);
+            toast.success(season === 'WINTER' ? 'Топливо считается по зимней цене — для новых заявок и откликов' : 'Топливо считается по летней цене — для новых заявок и откликов');
+        } catch (e) {
+            toast.error(ответСервера(e, 'Не удалось переключить'));
+        } finally {
+            setSeasonSaving(false);
+        }
+    };
 
     /** Бухгалтер подтвердил ставки и порядок расчёта — или снимает подтверждение. */
     const confirm = async (confirmed: boolean) => {
@@ -439,20 +462,30 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
             toast.error('Ставка — число от 0 до 100');
             return;
         }
-        const fuelPerKm = Number(extra.fuelPerKm.replace(',', '.'));
+        const n = (v: string) => Number(v.replace(/\s/g, '').replace(',', '.'));
         const deductionMrp = Number(extra.deductionMrp);
         const mrp = Number(extra.mrp);
-        if (!Number.isFinite(fuelPerKm) || fuelPerKm < 0) { toast.error('Топливо на км — число, ₸'); return; }
         if (!Number.isInteger(deductionMrp) || deductionMrp < 0 || !Number.isInteger(mrp) || mrp < 1) {
             toast.error('Вычет и МРП — целые числа');
             return;
         }
-        const vatPct = Number(extra.vatPct.replace(',', '.'));
+        const vatPct = n(extra.vatPct);
         if (!Number.isFinite(vatPct) || vatPct < 0 || vatPct > 100) { toast.error('НДС — число от 0 до 100'); return; }
+        const fuelConsumption = n(extra.fuelConsumption);
+        const fuelPriceSummer = n(extra.fuelPriceSummer);
+        const fuelPriceWinter = extra.fuelPriceWinter.trim() ? n(extra.fuelPriceWinter) : null;
+        if (!Number.isFinite(fuelConsumption) || fuelConsumption <= 0) { toast.error('Расход — литров на 100 км, числом'); return; }
+        if (!Number.isFinite(fuelPriceSummer) || fuelPriceSummer <= 0) { toast.error('Цена литра летом — числом, ₸'); return; }
+        if (fuelPriceWinter != null && (!Number.isFinite(fuelPriceWinter) || fuelPriceWinter <= 0)) { toast.error('Цена литра зимой — числом, ₸, или пусто'); return; }
+        const ipnHighPct = n(extra.ipnHighPct);
+        const ipnThresholdMrp = Number(extra.ipnThresholdMrp);
+        if (!Number.isFinite(ipnHighPct) || ipnHighPct < 0 || ipnHighPct > 100) { toast.error('Повышенный ИПН — число от 0 до 100'); return; }
+        if (!Number.isInteger(ipnThresholdMrp) || ipnThresholdMrp < 0) { toast.error('Порог — целым числом МРП'); return; }
         setSaving(true);
         try {
             const { data } = await api.put('/exchange/park/rates', {
-                ...body, fuelPerKm, applyDeduction: extra.applyDeduction, deductionMrp, mrp, vatPayer: extra.vatPayer, vatPct,
+                ...body, applyDeduction: extra.applyDeduction, deductionMrp, mrp, vatPayer: extra.vatPayer, vatPct,
+                fuelConsumption, fuelPriceSummer, fuelPriceWinter, ipnHighPct, ipnThresholdMrp,
             });
             const wasConfirmed = !!rates?.confirmedAt;
             setRates(data);
@@ -514,32 +547,74 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                     ))}
                 </div>
                 <div className="space-y-2 rounded-lg bg-muted/40 p-3">
-                    <div className="text-[12.5px] font-semibold">Расчёт «на руки»</div>
+                    <div className="text-[12.5px] font-semibold">Как считается рейс водителя без ИП</div>
                     <p className="m-0 text-[12px] text-muted-foreground">
-                        Цена компании на бирже и отклик водителя — сумма на руки вместе с топливом. Программа оценивает топливо по расстоянию
-                        и досчитывает сверху налоги, комиссию LogiCore{rates.platformPct != null ? ` (${rates.platformPct}%)` : ''}, вашу
-                        и НДС, если вы его плательщик, — так получается цена для компании. Водителю за топливо платите по чекам на БИН парка.
+                        Сумма заказчика на бирже минус топливо — оплата водителю за работу. Из неё удерживается ОПВ, остальное водитель
+                        получает на руки. ОСМС, СО и ИПН платит парк — они прибавляются к сумме, сверху — комиссия со всей суммы
+                        (в ней доля LogiCore{rates.platformPct != null ? ` ${rates.platformPct}%` : ''}) и НДС, если вы его плательщик.
+                        Топливо оплачивает парк: перерасход и экономия — ваши, сумму водителю они не меняют.
                     </p>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                        <label className="flex flex-col gap-1">
-                            <span className="text-[12px] font-medium text-muted-foreground">Топливо на 1 км, ₸</span>
-                            <Input value={extra.fuelPerKm} onChange={(e) => setExtra((x) => ({ ...x, fuelPerKm: e.target.value }))} inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
-                            <span className="text-[11px] text-muted-foreground">оценка для цены заранее</span>
+                    <div className="flex flex-wrap items-end gap-3 border-0 border-b border-solid border-border pb-3">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">Сезон топлива</span>
+                            <div className={styles.pills} role="tablist" aria-label="Сезон топлива">
+                                {([['SUMMER', 'Лето'], ['WINTER', 'Зима']] as const).map(([key, label]) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={rates.fuelSeason === key}
+                                        disabled={seasonSaving}
+                                        className={`${styles.pill} ${rates.fuelSeason === key ? styles.pillActive : ''}`}
+                                        onClick={() => setSeason(key)}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <label className="flex w-40 flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">Расход, л на 100 км</span>
+                            <Input value={extra.fuelConsumption} onChange={(e) => setExtra((x) => ({ ...x, fuelConsumption: e.target.value }))} inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
                         </label>
+                        <label className="flex w-40 flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">Литр летом, ₸</span>
+                            <Input value={extra.fuelPriceSummer} onChange={(e) => setExtra((x) => ({ ...x, fuelPriceSummer: e.target.value }))} inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
+                        </label>
+                        <label className="flex w-40 flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">Литр зимой, ₸</span>
+                            <Input value={extra.fuelPriceWinter} onChange={(e) => setExtra((x) => ({ ...x, fuelPriceWinter: e.target.value }))} inputMode="decimal" placeholder="как летом" className="h-9 text-[13px] tabular-nums" />
+                        </label>
+                        <span className="pb-2 text-[12px] text-muted-foreground">
+                            Сейчас: {rates.fuelPerKm != null ? `${rates.fuelPerKm.toLocaleString('ru-RU')} ₸ за км` : '—'}
+                            {rates.fuelSeason === 'WINTER' && rates.fuelPriceWinter == null ? ' — зимняя цена не задана, считается по летней' : ''}
+                        </span>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-4">
                         <label className="flex flex-col gap-1">
                             <span className="text-[12px] font-medium text-muted-foreground">Вычет по ИПН, МРП</span>
                             <Input value={extra.deductionMrp} onChange={(e) => setExtra((x) => ({ ...x, deductionMrp: e.target.value }))} inputMode="numeric" className="h-9 text-[13px] tabular-nums" />
-                            <span className="text-[11px] text-muted-foreground">в месяц на водителя; что не ушло на первый рейс — переходит на следующие</span>
+                            <span className="text-[11px] text-muted-foreground">в месяц, только водителям с заявлением в приложении; остаток переходит на следующие рейсы</span>
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-[12px] font-medium text-muted-foreground">МРП, ₸</span>
                             <Input value={extra.mrp} onChange={(e) => setExtra((x) => ({ ...x, mrp: e.target.value }))} inputMode="numeric" className="h-9 text-[13px] tabular-nums" />
                             <span className="text-[11px] text-muted-foreground">2026 год — 4 325</span>
                         </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">ИПН выше порога, %</span>
+                            <Input value={extra.ipnHighPct} onChange={(e) => setExtra((x) => ({ ...x, ipnHighPct: e.target.value }))} inputMode="decimal" className="h-9 text-[13px] tabular-nums" />
+                            <span className="text-[11px] text-muted-foreground">прогрессивная шкала; равна обычной — шкалы нет</span>
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[12px] font-medium text-muted-foreground">Порог дохода за год, МРП</span>
+                            <Input value={extra.ipnThresholdMrp} onChange={(e) => setExtra((x) => ({ ...x, ipnThresholdMrp: e.target.value }))} inputMode="numeric" className="h-9 text-[13px] tabular-nums" />
+                            <span className="text-[11px] text-muted-foreground">облагаемый доход водителя в вашем парке с начала года</span>
+                        </label>
                     </div>
                     <label className="flex cursor-pointer items-center gap-2 text-[12.5px]">
                         <input type="checkbox" checked={extra.applyDeduction} onChange={(e) => setExtra((x) => ({ ...x, applyDeduction: e.target.checked }))} />
-                        Учитывать вычет по ИПН в цене — выключите, если водители получают его по основному месту работы
+                        Применять базовый вычет водителям, которые написали заявление в приложении («у другого работодателя не получаю»)
                     </label>
                     <div className="flex flex-wrap items-end gap-3 border-0 border-t border-solid border-border pt-2">
                         <label className="flex cursor-pointer items-center gap-2 pb-2 text-[12.5px]">
