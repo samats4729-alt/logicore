@@ -80,7 +80,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 <Text style={[styles.binLabel, { color: colors.textTertiary }]}>ЧЕК — НА БИН ПАРКА</Text>
                 <Text selectable style={[styles.bin, { color: colors.text }]}>{bin || 'БИН не указан'}</Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                    {fuel.park?.name ? `${fuel.park.name}. ` : ''}Покажите кассиру — он пробьёт чек на парк. Без этого с денег на топливо будет налог.
+                    {fuel.park?.name ? `${fuel.park.name}. ` : ''}Покажите кассиру — он пробьёт чек на парк. {fuel.scheme === 2 ? 'Без чека деньги на топливо вычтут из вашей выплаты.' : 'Без этого с денег на топливо будет налог.'}
                 </Text>
             </View>
 
@@ -106,7 +106,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 {/* Тревожно — только то, на что чека нет вовсе: ждущие проверки — не в счёт. */}
                 {noReceipt > 0 && (
                     <Text style={[styles.warn, { color: colors.danger }]}>
-                        Нет чека на {деньги(noReceipt)} — с этой суммы будет налог. Отправьте чек.
+                        Нет чека на {деньги(noReceipt)} — {fuel.scheme === 2 ? 'эту сумму вычтут из выплаты' : 'с этой суммы будет налог'}. Отправьте чек.
                     </Text>
                 )}
                 {fuel.locked && (

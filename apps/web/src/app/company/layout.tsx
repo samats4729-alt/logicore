@@ -13,7 +13,6 @@ import {
     Hourglass,
     LayoutDashboard,
     Settings,
-    Truck,
     User as UserIcon,
     Users,
     Wallet,
@@ -41,6 +40,7 @@ import Loader from '@/components/ui/Loader';
 import { isNavItemActive } from '@/lib/cabinet-nav';
 import { ROLE_LABELS } from '@/lib/vocabulary';
 import { exchangeStatus } from '@/lib/exchange';
+import { useNewOffersCount, useOffersFeedPolling } from '@/lib/offers-feed';
 
 /**
  * Название пункта меню с подписью «бета-тестирование».
@@ -130,6 +130,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
        биржи и денег перевозчика. Парк подтверждает владелец платформы. */
     const [isPark, setIsPark] = useState(false);
     const { theme, setTheme } = useTheme();
+    // Новые отклики на свои заявки на бирже — значок у «Заявок» и «Биржи» с
+    // любой страницы кабинета (владелец, 15.10.2026).
+    useOffersFeedPolling();
+    const newOffers = useNewOffersCount();
 
     useEffect(() => {
         if (!user?.companyId) return;
@@ -220,10 +224,6 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         });
     }, [hydrated, checkAuth, router, logout, pathname]);
 
-    useEffect(() => {
-        if (isPark && pathname === '/company') router.replace('/company/park');
-    }, [isPark, pathname, router]);
-
     if (!hydrated || isLoading || !user) {
         return (
             <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -250,17 +250,6 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     const getMenuItems = (): NavItem[] => {
         const acc = hasPerm('accounting');
 
-        // У парка своё меню: он сам не возит, заявки и деньги перевозчика ему не нужны.
-        if (isPark) {
-            return [
-                { key: '/company/park', icon: ic(LayoutDashboard), label: 'Парк' },
-                { key: '/company/park/drivers', icon: ic(Users), label: 'Водители' },
-                { key: '/company/park/trips', icon: ic(Truck), label: 'Рейсы' },
-                { key: '/company/park/payouts', icon: ic(Wallet), label: 'Выплаты' },
-                { key: '/company/cabinet', icon: ic(Building2), label: 'Кабинет' },
-            ];
-        }
-
         const items: NavItem[] = [
             { key: '/company', icon: ic(LayoutDashboard), label: 'Дашборд' },
         ];
@@ -271,11 +260,12 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 key: '/company/orders',
                 icon: ic(FileText),
                 label: 'Заявки',
+                badge: exchangeOn ? newOffers : 0,
                 children: [
                     { key: '/company/orders', label: 'Все заявки' },
                     { key: '/company/orders/create', label: 'Новая заявка' },
                     // Биржа — только если открыта на сервере и этой компании.
-                    ...(exchangeOn ? [{ key: '/company/exchange', label: 'Биржа' }] : []),
+                    ...(exchangeOn ? [{ key: '/company/exchange', label: 'Биржа', badge: newOffers }] : []),
                 ],
             });
         }
@@ -364,6 +354,26 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 ...(isAdmin && auditEnabled ? [{ key: '/company/audit', label: 'Журнал действий' }] : []),
             ],
         });
+
+        // --- УПРАВЛЕНИЕ ПАРКОМ ---
+        // Парк — обычная транспортная компания: сам возит, ищет и выставляет
+        // грузы, поэтому кабинет у него полный. А водители без ИП, которые
+        // работают через него, — отдельным разделом внизу. Видят его только
+        // парки (владелец, 15.10.2026).
+        if (isPark) {
+            items.push({
+                key: '/company/park',
+                icon: ic(Users),
+                label: 'Управление парком',
+                children: [
+                    { key: '/company/park', label: 'Обзор' },
+                    { key: '/company/park/drivers', label: 'Водители парка' },
+                    { key: '/company/park/trips', label: 'Рейсы водителей' },
+                    { key: '/company/park/payouts', label: 'Выплаты водителям' },
+                    { key: '/company/park/registry', label: 'Реестр бухгалтера' },
+                ],
+            });
+        }
 
         return items;
     };

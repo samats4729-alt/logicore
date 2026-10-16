@@ -24,6 +24,7 @@ import { ProblemSheet } from '@/components/ProblemSheet';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
 import { useTabBarSpace } from '@/components/TabBar';
 import { TripFuel } from '@/components/TripFuel';
+import { appendPhoto } from '@/lib/upload';
 
 /** Высота ползунка «смахните вправо» (кружок 54 + поля). */
 const SWIPE_HEIGHT = 64;
@@ -144,11 +145,7 @@ export default function CurrentTrip({
         try {
             setUploading(true);
             const formData = new FormData();
-            formData.append('file', {
-                uri: photo.uri,
-                name: `doc_${Date.now()}.jpg`,
-                type: 'image/jpeg',
-            } as any);
+            await appendPhoto(formData, photo.uri, `doc_${Date.now()}.jpg`);
             formData.append('type', 'TTN');
 
             await api.post(`/documents/upload/${currentOrder.id}`, formData, {

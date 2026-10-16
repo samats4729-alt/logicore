@@ -116,6 +116,7 @@ export default function ParkTripsPage() {
                                     <TableHead className="h-9 text-[12.5px]">Для компании</TableHead>
                                     <TableHead className="h-9 text-[12.5px]">Статус</TableHead>
                                     <TableHead className="h-9 text-right text-[12.5px]">За рейс</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">Налоги по рейсу</TableHead>
                                     <TableHead className="h-9 text-right text-[12.5px]">Топливо</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -137,10 +138,11 @@ export default function ParkTripsPage() {
                                             <div className="font-semibold">{t.price != null ? moneyShort(t.price) : '—'}</div>
                                             {t.settlement && (
                                                 <div className="text-[11.5px] text-muted-foreground">
-                                                    водителю {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}
+                                                    водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}
                                                 </div>
                                             )}
                                         </TableCell>
+                                        <TableCell className="text-[12px]"><TaxBreakdown s={t.settlement} /></TableCell>
                                         <TableCell className="text-right">
                                             {t.settlement ? <FuelButton trip={t} onOpen={setFuelTrip} /> : <span className="text-muted-foreground">—</span>}
                                         </TableCell>
@@ -157,8 +159,9 @@ export default function ParkTripsPage() {
                                     </div>
                                     <div className="text-[12px] text-muted-foreground">{t.driverName ?? '—'}{t.vehiclePlate ? ` · ${t.vehiclePlate}` : ''} · {день(t.loadingDate)}</div>
                                     {t.settlement && (
-                                        <div className="text-[12px] text-muted-foreground">водителю {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}</div>
+                                        <div className="text-[12px] text-muted-foreground">водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}</div>
                                     )}
+                                    {t.settlement && <div className="text-[12px]"><TaxBreakdown s={t.settlement} /></div>}
                                     <div className="flex items-center justify-between gap-2">
                                         <StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} />
                                         {t.settlement && <FuelButton trip={t} onOpen={setFuelTrip} />}
@@ -177,6 +180,24 @@ export default function ParkTripsPage() {
                 onOpenChange={(o) => { if (!o) setFuelTrip(null); }}
                 onChanged={() => setReload((n) => n + 1)}
             />
+        </div>
+    );
+}
+
+/**
+ * Налоги рейса (шеф, 16.10.2026: «сколько ИПН, ОПВ, ОСМС, соцотчисления»):
+ * ОПВ удержано у водителя, остальное платит парк.
+ */
+function TaxBreakdown({ s }: { s: ParkTrip['settlement'] }) {
+    if (!s || s.gross == null) return <span className="text-muted-foreground">—</span>;
+    const parkPays = (s.vosms ?? 0) + (s.so ?? 0) + (s.ipn ?? 0);
+    return (
+        <div className="space-y-0.5 tabular-nums">
+            <div>ОПВ {moneyShort(s.opv)} · ОСМС {moneyShort(s.vosms)} · СО {moneyShort(s.so)} · ИПН {moneyShort(s.ipn)}</div>
+            <div className="text-[11.5px] text-muted-foreground">
+                {s.scheme === 2 ? `ОПВ — из денег водителя; ОСМС, СО, ИПН — за счёт парка (${moneyShort(parkPays)})` : 'по прежнему расчёту'}
+                {s.preliminary ? ' · предварительный' : ''}
+            </div>
         </div>
     );
 }

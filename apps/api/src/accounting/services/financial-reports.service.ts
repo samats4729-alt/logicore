@@ -27,6 +27,7 @@ import { documentsOfOwnOrders, managerOrdersFilter } from '../../common/manager-
 import type { JournalViewer } from '../../common/journal-company';
 import { periodStart, periodEnd, calendarDay } from '../../common/utils/period';
 import { exchangeOutcome, paymentInBase } from './exchange-difference';
+import { isCustomerOnly } from '../../orders/order-visibility';
 
 /** Учётная валюта: в ней ведутся все итоги отчётов. */
 const BASE_CURRENCY = 'KZT';
@@ -153,7 +154,11 @@ export class FinancialReportsService {
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
 
-        const isCustomer = order.customerCompanyId === companyId;
+        // «Только заказчик» — не исполнитель этой же заявки. Компания бывает по рейсу и
+        // заказчиком, и экспедитором (своя перевозка, своя заявка на бирже): прятать от
+        // неё перевозчика и его ставку значило прятать рейс от того, кто его ведёт
+        // (владелец, 15.10.2026: «почему перевозчик я, если парк…» — парка не было видно).
+        const isCustomer = isCustomerOnly(order, companyId);
 
         // Платежи всего заказа нужны калькулятору (оплата заказчика/суб-экспедитора
         // определяется по платежам экспедитора); на экран отдаём только свои.
@@ -475,7 +480,7 @@ export class FinancialReportsService {
         });
 
         const rows = orders.map(order => {
-            const isCustomer = order.customerCompanyId === companyId;
+            const isCustomer = isCustomerOnly(order, companyId);
             const fin = this.calculator.computeOrderFinance({
                 order,
                 payments: orderFinancePayments(order),

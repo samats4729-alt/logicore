@@ -6,13 +6,15 @@ import { AlertTriangle, ArrowRight, FileText, Search, Store, X } from 'lucide-re
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
 import { VEHICLE_TYPES } from '@/lib/constants';
-import { ExchangeOrder, грузКратко, день, черезТочки } from '@/lib/exchange';
+import { ExchangeOrder, IncomingOffer, грузКратко, день, черезТочки } from '@/lib/exchange';
+import IncomingOffers from '@/components/exchange/IncomingOffers';
+import { useNewOffersCount, useOffersFeed } from '@/lib/offers-feed';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import styles from '@/components/nova/nova.module.css';
 
-type Tab = 'board' | 'mine';
+type Tab = 'board' | 'mine' | 'offers';
 
 /**
  * Биржа.
@@ -21,12 +23,21 @@ type Tab = 'board' | 'mine';
  * перевозчик смотрит, откуда и куда, когда, что за груз и за сколько.
  * Вторая — свои заявки, выставленные на биржу. Выставляют из карточки
  * заявки: биржа — это обычная заявка, у которой пока нет исполнителя.
+ * Третья — «Предложения»: отклики на все свои заявки разом (15.10.2026).
  */
 export default function ExchangePage() {
     const router = useRouter();
     const [tab, setTab] = useState<Tab>('board');
     const [board, setBoard] = useState<ExchangeOrder[] | null>(null);
     const [mine, setMine] = useState<ExchangeOrder[] | null>(null);
+    // Отклики — из общего счётчика кабинета: тот же список, что у значков в меню.
+    const feedOffers = useOffersFeed((s) => s.offers);
+    const [feedReady, setFeedReady] = useState(false);
+    const offers: IncomingOffer[] | null = feedReady ? feedOffers : null;
+    const newCount = useNewOffersCount();
+    /** С какого момента отклики считаются новыми на этом показе — их подсвечиваем. */
+    const [newSince, setNewSince] = useState<string | null>(null);
+    const [reload, setReload] = useState(0);
     const [failed, setFailed] = useState(false);
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
@@ -35,16 +46,27 @@ export default function ExchangePage() {
     useEffect(() => {
         let alive = true;
         setFailed(false);
-        Promise.all([api.get('/exchange/board'), api.get('/exchange/mine')])
-            .then(([b, m]) => { if (alive) { setBoard(b.data); setMine(m.data); } })
+        Promise.all([api.get('/exchange/board'), api.get('/exchange/mine'), useOffersFeed.getState().load()])
+            .then(([b, m]) => { if (alive) { setBoard(b.data); setMine(m.data); setFeedReady(true); } })
             .catch(() => { if (alive) setFailed(true); });
         return () => { alive = false; };
+    }, [reload]);
+    // Открыли «Предложения» — запоминаем, что было новым (подсветка), и гасим
+    // значки в меню и на вкладке: человек их увидел.
+    useEffect(() => {
+        if (tab !== 'offers' || !feedReady) return;
+        setNewSince(useOffersFeed.getState().seenAt);
+        useOffersFeed.getState().markSeen();
+    }, [tab, feedReady]);
+    // Из колокольчика ведут прямо на отклики: /company/exchange?tab=offers.
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get('tab') === 'offers') setTab('offers');
     }, []);
 
     /** Фильтр прямо в браузере: заявок на бирже сотни, не тысячи. */
     const shown = useMemo(() => {
         const has = (v: string | null, needle: string) => !needle.trim() || (v ?? '').toLowerCase().includes(needle.trim().toLowerCase());
-        const list = tab === 'board' ? board : mine;
+        const list = tab === 'board' ? board : tab === 'mine' ? mine : [];
         return (list ?? []).filter((o) => has(o.from, from) && has(o.to, to) && has(o.bodyType, bodyType));
     }, [tab, board, mine, from, to, bodyType]);
     const filtered = !!(from.trim() || to.trim() || bodyType);
@@ -60,7 +82,7 @@ export default function ExchangePage() {
                     <h1 className={styles.title}>Биржа заявок</h1>
                     <p className={styles.subtitle}>
                         Заявки других компаний, которым нужен исполнитель. Свою заявку выставляют на биржу из её карточки —
-                        кнопкой «Выставить на биржу», пока исполнителя нет.
+                        во вкладке «Предложения», кнопкой «Выставить на биржу», пока исполнителя нет.
                     </p>
                 </div>
                 <div className={styles.heroActions}>
@@ -71,7 +93,7 @@ export default function ExchangePage() {
             </div>
 
             <div className={styles.pills} role="tablist" style={{ marginBottom: 12 }}>
-                {([['board', 'Заявки на бирже', board], ['mine', 'Мои на бирже', mine]] as const).map(([key, label, list]) => (
+                {([['board', 'Заявки на бирже', board], ['mine', 'Мои на бирже', mine], ['offers', 'Предложения', offers]] as const).map(([key, label, list]) => (
                     <button
                         key={key}
                         type="button"
@@ -81,6 +103,14 @@ export default function ExchangePage() {
                         onClick={() => setTab(key)}
                     >
                         {label}{list ? ` · ${list.length}` : ''}
+                        {key === 'offers' && newCount > 0 && (
+                            <span
+                                className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold leading-none text-background"
+                                aria-label={`новых ${newCount}`}
+                            >
+                                {newCount}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -95,6 +125,17 @@ export default function ExchangePage() {
                 </div>
             )}
 
+            {tab === 'offers' ? (
+                failed ? (
+                    <section className={styles.card}><div className={styles.empty}>Не удалось загрузить биржу — проверьте интернет и обновите страницу.</div></section>
+                ) : !offers ? (
+                    <div className="space-y-2" aria-label="Загрузка">
+                        {[0, 1].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted/60" />)}
+                    </div>
+                ) : (
+                    <IncomingOffers offers={offers} newSince={newSince} onChanged={() => setReload((n) => n + 1)} />
+                )
+            ) : (
             <section className={styles.card}>
                 <div className={styles.cardHead}>
                     <Store size={14} />
@@ -139,7 +180,7 @@ export default function ExchangePage() {
                             ? 'По этому фильтру заявок нет. Попробуйте другой город или сбросьте фильтр.'
                             : tab === 'board'
                                 ? 'Сейчас на бирже нет заявок других компаний. Загляните позже.'
-                                : 'Ваших заявок на бирже нет. Откройте заявку без исполнителя и нажмите «Выставить на биржу».'}
+                                : 'Ваших заявок на бирже нет. Откройте заявку без исполнителя и во вкладке «Предложения» нажмите «Выставить на биржу».'}
                     </div>
                 ) : (
                     <>
@@ -149,7 +190,7 @@ export default function ExchangePage() {
                                     <TableHead className="h-9 text-[12.5px]">Маршрут</TableHead>
                                     <TableHead className="h-9 text-[12.5px]">Погрузка</TableHead>
                                     <TableHead className="h-9 text-[12.5px]">Груз</TableHead>
-                                    <TableHead className="h-9 text-[12.5px]">{tab === 'board' ? 'Компания' : 'Заявка'}</TableHead>
+                                    <TableHead className="h-9 text-[12.5px]">{tab === 'board' ? 'Компания' : 'Заказчик'}</TableHead>
                                     <TableHead className="h-9 text-right text-[12.5px]">Цена</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -174,7 +215,12 @@ export default function ExchangePage() {
                                         </TableCell>
                                         <TableCell className="max-w-[280px] truncate text-muted-foreground">{грузКратко(o)}</TableCell>
                                         <TableCell className="whitespace-nowrap">
-                                            {tab === 'board' ? (o.companyName ?? '—') : o.orderNumber}
+                                            {tab === 'board' ? (o.companyName ?? '—') : (
+                                                <>
+                                                    {o.customerName ?? '—'}
+                                                    <div className="text-[11px] text-muted-foreground">заявка {o.orderNumber}</div>
+                                                </>
+                                            )}
                                             {o.myOfferStatus === 'ACTIVE' && <div className="text-[11px] font-medium text-[var(--nova-accent)]">вы откликнулись</div>}
                                             {o.myOfferStatus === 'ACCEPTED' && <div className="text-[11px] font-medium text-emerald-600">вас выбрали</div>}
                                         </TableCell>
@@ -202,7 +248,7 @@ export default function ExchangePage() {
                                         <div className="text-[12px] text-muted-foreground">
                                             {день(o.loadingDate)}{черезТочки(o) ? ` · ${черезТочки(o)}` : ''} · {грузКратко(o)}
                                         </div>
-                                        <div className="text-[12px] text-muted-foreground">{tab === 'board' ? o.companyName : `Заявка ${o.orderNumber}`}</div>
+                                        <div className="text-[12px] text-muted-foreground">{tab === 'board' ? o.companyName : `${o.customerName ?? 'Заказчик не указан'} · заявка ${o.orderNumber}`}</div>
                                     </button>
                                 </li>
                             ))}
@@ -210,6 +256,7 @@ export default function ExchangePage() {
                     </>
                 )}
             </section>
+            )}
         </div>
     );
 }

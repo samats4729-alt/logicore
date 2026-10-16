@@ -48,11 +48,17 @@ function build() {
                 routePoints: [{ pointType: 'PICKUP', expectedDate: new Date('2026-10-20T03:00:00Z'), location: { latitude: null, longitude: null, cityRecord: null } }],
             }),
         },
-        parkPayoutRates: { findUnique: jest.fn().mockResolvedValue(null) },
+        // Ставки как в калькуляции шефа (5 % парка).
+        parkPayoutRates: { findUnique: jest.fn().mockResolvedValue({
+            commissionPct: 10, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
+            applyDeduction: true, deductionMrp: 30, mrp: 4325, vatPayer: false, vatPct: 16, ratesConfirmedAt: null,
+            fuelConsumption: 30, fuelPriceSummer: 350, fuelPriceWinter: null, fuelSeason: 'SUMMER', ipnHighPct: 15, ipnThresholdMrp: 8500,
+        }) },
         platformSetting: { findUnique: jest.fn().mockResolvedValue(null) },
         exchangeTripSettlement: { findMany: jest.fn().mockResolvedValue([]) },
         company: { findUnique: jest.fn().mockResolvedValue({ isPark: false }) },
-        exchangeDriver: { findUnique: jest.fn().mockResolvedValue({ id: 'd-1' }) },
+        // Водитель написал заявление на базовый вычет.
+        exchangeDriver: { findUnique: jest.fn().mockResolvedValue({ id: 'd-1', deductionRequested: true }) },
         exchangeOffer: {
             upsert: jest.fn(async (args: any) => ({ id: 'offer-1', updatedAt: new Date(), ...args.create })),
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -96,11 +102,11 @@ describe('Биржа: отклик', () => {
         await expect(service.offerAsCompany(CARRIER, 'user-c', 'order-1', { agree: true })).rejects.toThrow(/снята с биржи/);
     });
 
-    it('компания не откликается на свою заявку; парк сам не откликается', async () => {
+    it('компания не откликается на свою заявку; парк откликается, как любой перевозчик (15.10.2026)', async () => {
         const { service, prisma } = build();
         await expect(service.offerAsCompany(OUR, 'user-1', 'order-1', { agree: true })).rejects.toThrow(/ваша заявка/);
         prisma.company.findUnique.mockResolvedValue({ isPark: true });
-        await expect(service.offerAsCompany(CARRIER, 'user-c', 'order-1', { agree: true })).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(service.offerAsCompany(CARRIER, 'user-c', 'order-1', { agree: true })).resolves.toBeDefined();
     });
 });
 
@@ -161,50 +167,76 @@ describe('Биржа: выбор исполнителя', () => {
     });
 });
 
-describe('Биржа: отклик водителя парка — сумма на руки (12.10.2026)', () => {
+describe('Биржа: отклик водителя парка — схема шефа (16.10.2026)', () => {
     const PARK_DRIVER = { id: 'd-1', status: 'APPROVED', kind: 'PARK', parkCompanyId: 'park-1' };
+    const PARK_OFFER = (saved: any) => offerRow({
+        price: saved.price, driverTotal: saved.driverTotal, calc: saved.calc,
+        driver: driverRow({ kind: 'PARK', parkCompanyId: 'park-1', park: { id: 'park-1', name: 'Парк А' } }),
+    });
 
-    it('своя сумма на руки — компании уходит полная цена с налогами, топливом и комиссиями', async () => {
+    it('своя сумма на руки (без топлива) — компании уходит цена с топливом, налогами парка и 10 %', async () => {
         const { service, prisma, drivers } = build();
         drivers.approvedDriver.mockResolvedValue(PARK_DRIVER);
         const own = await service.offerAsDriver('u-driver', 'order-1', { price: 400000 });
-        // Водитель видит свою сумму…
         expect(own.price).toBe(400000);
-        // …а в отклике для компании — 508 437,93 и весь расчёт.
         const saved = prisma.exchangeOffer.upsert.mock.calls[0][0].create;
-        expect(saved.price).toBe(508437.93);
+        // 400 000 на руки → за работу 444 444,44 (ОПВ 44 444,44); топливо 126 000; ИПН с вычетом.
+        expect(saved.price).toBe(688994.16);
         expect(saved.driverTotal).toBe(400000);
-        expect(saved.calc).toMatchObject({ fuel: 120000, workNet: 280000, deductionApplied: true, taxMonth: '2026-10' });
+        expect(saved.calc).toMatchObject({ scheme: 2, fuel: 126000, gross: 444444.44, opv: 44444.44, ipn: 27025, deductionApplied: true, taxMonth: '2026-10' });
     });
 
-    it('«согласен» на цену компании — на руки считается от неё', async () => {
+    it('«согласен» на цену компании — на руки = её сумма минус топливо и ОПВ', async () => {
         const { service, prisma, drivers } = build();
         drivers.approvedDriver.mockResolvedValue(PARK_DRIVER);
-        prisma.order.findFirst.mockResolvedValue(openOrder({ exchangePrice: 508437.93 }));
+        prisma.order.findFirst.mockResolvedValue(openOrder({ exchangePrice: 400000 }));
         const agreed = await service.offerAsDriver('u-driver', 'order-1', { agree: true });
-        expect(agreed.price).toBe(400000);
-        expect(prisma.exchangeOffer.upsert.mock.calls[0][0].create.price).toBe(508437.93);
+        expect(agreed.price).toBe(246600);
+        expect(prisma.exchangeOffer.upsert.mock.calls[0][0].create.price).toBe(472444.5);
     });
 
-    it('сумма меньше топлива по расчёту — понятный отказ', async () => {
-        const { service, drivers } = build();
+    it('цена компании не покрывает топливо — согласиться нельзя, понятный отказ', async () => {
+        const { service, prisma, drivers } = build();
         drivers.approvedDriver.mockResolvedValue(PARK_DRIVER);
-        await expect(service.offerAsDriver('u-driver', 'order-1', { price: 90000 })).rejects.toThrow(/больше топлива/);
+        prisma.order.findFirst.mockResolvedValue(openOrder({ exchangePrice: 100000 }));
+        await expect(service.offerAsDriver('u-driver', 'order-1', { agree: true })).rejects.toThrow(/не покрывает топливо/);
     });
 
-    it('компания выбрала водителя парка — расчёт рейса фиксируется, компании — её цена', async () => {
+    it('без заявления на вычет — ИПН со всего', async () => {
+        const { service, prisma, drivers } = build();
+        drivers.approvedDriver.mockResolvedValue(PARK_DRIVER);
+        prisma.exchangeDriver.findUnique.mockResolvedValue({ id: 'd-1', deductionRequested: false });
+        await service.offerAsDriver('u-driver', 'order-1', { price: 400000 });
+        expect(prisma.exchangeOffer.upsert.mock.calls[0][0].create.calc).toMatchObject({ ipn: 40000, deductionApplied: false });
+    });
+
+    it('компания выбрала водителя парка — расчёт рейса фиксируется по схеме шефа, компании — её цена', async () => {
+        const { service, prisma, tx, drivers } = build();
+        drivers.approvedDriver.mockResolvedValue(PARK_DRIVER);
+        await service.offerAsDriver('u-driver', 'order-1', { price: 400000 });
+        prisma.exchangeOffer.findFirst.mockResolvedValue(PARK_OFFER(prisma.exchangeOffer.upsert.mock.calls[0][0].create));
+        await service.accept(OUR, 'u-manager', 'order-1', 'offer-1');
+        expect(tx.order.updateMany.mock.calls[0][0].data).toMatchObject({ driverCost: 688994.16, partnerId: 'park-1' });
+        expect(tx.exchangeTripSettlement.upsert.mock.calls[0][0].create).toMatchObject({
+            orderId: 'order-1', driverId: 'd-1', parkCompanyId: 'park-1', scheme: 2, base: 570444.44,
+            driverTotal: 400000, workNet: 400000, customerPrice: 688994.16, taxMonth: '2026-10',
+            deductionAmount: 129750, ipnBase: 270250, vat: 0, preliminary: true,
+        });
+    });
+
+    it('пока отклик ждал, другой рейс месяца забрал вычет — цена компании и сумма водителю те же, разница — у парка', async () => {
         const { service, prisma, tx, drivers } = build();
         drivers.approvedDriver.mockResolvedValue(PARK_DRIVER);
         await service.offerAsDriver('u-driver', 'order-1', { price: 400000 });
         const saved = prisma.exchangeOffer.upsert.mock.calls[0][0].create;
-        prisma.exchangeOffer.findFirst.mockResolvedValue(offerRow({
-            price: saved.price, driverTotal: saved.driverTotal, calc: saved.calc,
-            driver: driverRow({ kind: 'PARK', parkCompanyId: 'park-1', park: { id: 'park-1', name: 'Парк А' } }),
-        }));
+        prisma.exchangeOffer.findFirst.mockResolvedValue(PARK_OFFER(saved));
+        prisma.exchangeTripSettlement.findMany.mockResolvedValue([{
+            taxMonth: '2026-10', orderId: 'order-other', deductionAmount: 129750, deductionApplied: true, ipnBase: 0,
+            order: { driverId: 'u-1' }, driver: { userId: 'u-1' },
+        }]);
         await service.accept(OUR, 'u-manager', 'order-1', 'offer-1');
-        expect(tx.order.updateMany.mock.calls[0][0].data).toMatchObject({ driverCost: 508437.93, partnerId: 'park-1' });
-        expect(tx.exchangeTripSettlement.upsert.mock.calls[0][0].create).toMatchObject({
-            orderId: 'order-1', driverId: 'd-1', parkCompanyId: 'park-1', driverTotal: 400000, customerPrice: 508437.93, taxMonth: '2026-10',
-        });
+        const fixed = tx.exchangeTripSettlement.upsert.mock.calls[0][0].create;
+        expect(fixed).toMatchObject({ customerPrice: 688994.16, driverTotal: 400000, deductionApplied: false, deductionAmount: 0, ipn: 40000 });
+        expect(fixed.parkFee).toBe(18342.91);
     });
 });

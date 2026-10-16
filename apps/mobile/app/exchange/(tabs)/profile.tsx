@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
@@ -48,28 +48,79 @@ export default function ExchangeProfile() {
         ],
     );
 
-    /** Требование Google Play: аккаунт удаляется из самого приложения. */
-    const remove = () => Alert.alert(
-        'Удалить аккаунт?',
-        'Анкета и фото документов будут стёрты, войти этим аккаунтом больше не получится. История рейсов останется у заказчиков без вашего имени.',
-        [
-            { text: 'Отмена', style: 'cancel' },
-            {
-                text: 'Удалить',
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await exchangeApi.deleteAccount();
-                        await logout();
-                        router.replace('/login');
-                        Alert.alert('Аккаунт удалён');
-                    } catch (e) {
-                        Alert.alert('Не удалось удалить', ответ(e, 'Попробуйте ещё раз'));
-                    }
+    /**
+     * Удаление аккаунта — заявкой (шеф, 16.10.2026: «чтобы не смогли просто так
+     * удалить»): водитель просит, удаляет администратор. Пока не удалили —
+     * заявку можно отозвать.
+     */
+    const remove = () => {
+        if (me?.deletionRequestedAt) {
+            Alert.alert(
+                'Заявка на удаление отправлена',
+                'Администратор удалит аккаунт в ближайшее время. Передумали — отзовите заявку.',
+                [
+                    { text: 'Оставить заявку', style: 'cancel' },
+                    {
+                        text: 'Отозвать',
+                        onPress: async () => {
+                            try {
+                                await exchangeApi.cancelDeletion();
+                                setMe(await exchangeApi.me());
+                            } catch (e) {
+                                Alert.alert('Не удалось', ответ(e, 'Попробуйте ещё раз'));
+                            }
+                        },
+                    },
+                ],
+            );
+            return;
+        }
+        Alert.alert(
+            'Попросить удалить аккаунт?',
+            'Заявка уйдёт администратору. После удаления анкета и фото документов будут стёрты, войти этим аккаунтом больше не получится. История рейсов останется у заказчиков без вашего имени.',
+            [
+                { text: 'Отмена', style: 'cancel' },
+                {
+                    text: 'Отправить заявку',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await exchangeApi.deleteAccount();
+                            setMe(await exchangeApi.me());
+                            Alert.alert('Заявка отправлена', 'Администратор удалит аккаунт в ближайшее время.');
+                        } catch (e) {
+                            Alert.alert('Не удалось отправить', ответ(e, 'Попробуйте ещё раз'));
+                        }
+                    },
                 },
-            },
-        ],
-    );
+            ],
+        );
+    };
+
+    /**
+     * Заявление на базовый вычет по ИПН (налоговики, 16.10.2026): вычет даётся
+     * только у одного работодателя и только по заявлению. Налог за водителя
+     * платит парк — с вычетом цена для компании ниже.
+     */
+    const [deductionSaving, setDeductionSaving] = useState(false);
+    const toggleDeduction = (requested: boolean) => {
+        const save = async () => {
+            setDeductionSaving(true);
+            try {
+                setMe(await exchangeApi.setDeduction(requested));
+            } catch (e) {
+                Alert.alert('Не удалось сохранить', ответ(e, 'Попробуйте ещё раз'));
+            } finally {
+                setDeductionSaving(false);
+            }
+        };
+        if (!requested) { save(); return; }
+        Alert.alert(
+            'Заявление на вычет',
+            'Подтверждаете, что базовый вычет по ИПН (30 МРП в месяц) не получаете у другого работодателя? Вычет можно получать только в одном месте.',
+            [{ text: 'Отмена', style: 'cancel' }, { text: 'Подтверждаю', onPress: save }],
+        );
+    };
 
     if (!me) return <ActivityIndicator style={{ marginTop: 40 }} size="large" color={BRAND.primary} />;
 
@@ -107,6 +158,26 @@ export default function ExchangeProfile() {
                 <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
             </Card>
 
+            {me.kind === 'PARK' && (
+                <Card style={styles.menuItem}>
+                    <Ionicons name="receipt-outline" size={20} color={colors.text} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>Базовый вычет по ИПН</Text>
+                        <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2, lineHeight: 17 }}>
+                            {me.deductionRequested
+                                ? 'Заявление подано: парк учитывает вычет — налог за вас меньше, цена для компании ниже.'
+                                : 'Включите, если не получаете вычет у другого работодателя: налог за вас меньше, цена для компании ниже.'}
+                        </Text>
+                    </View>
+                    <Switch
+                        value={!!me.deductionRequested}
+                        disabled={deductionSaving}
+                        onValueChange={toggleDeduction}
+                        accessibilityLabel="Заявление на базовый вычет"
+                    />
+                </Card>
+            )}
+
             <Card onPress={edit} style={styles.menuItem}>
                 <Ionicons name="create-outline" size={20} color={colors.text} />
                 <View style={{ flex: 1 }}>
@@ -127,7 +198,13 @@ export default function ExchangeProfile() {
             )}
 
             <Button title="Выйти" variant="secondary" icon="log-out-outline" onPress={exit} />
-            <Button title="Удалить аккаунт" variant="danger" icon="trash-outline" onPress={remove} style={{ marginTop: 10 }} />
+            <Button
+                title={me.deletionRequestedAt ? 'Заявка на удаление отправлена' : 'Попросить удалить аккаунт'}
+                variant="danger"
+                icon="trash-outline"
+                onPress={remove}
+                style={{ marginTop: 10 }}
+            />
 
             <Text style={[styles.version, { color: colors.textTertiary }]}>
                 LogiCore Водитель · версия {Constants.expoConfig?.version ?? ''}

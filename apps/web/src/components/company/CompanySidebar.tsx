@@ -44,11 +44,33 @@ export interface NavItem {
     label: React.ReactNode;
     icon?: React.ReactNode;
     children?: NavSubItem[];
+    /** Сколько нового ждёт в разделе — красный значок с числом (новые отклики на бирже). */
+    badge?: number;
 }
 
 export interface NavSubItem {
     key: string;
     label: React.ReactNode;
+    badge?: number;
+}
+
+/**
+ * Красный значок с числом рядом с названием. В свёрнутом меню видна только
+ * иконка — тогда на ней красная точка, чтобы новое не терялось.
+ */
+function CountBadge({ count, label }: { count?: number; label: string }) {
+    if (!count) return null;
+    return (
+        <>
+            <span
+                className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold leading-none text-background tabular-nums group-data-[collapsible=icon]:hidden"
+                aria-label={`${label}: новых ${count}`}
+            >
+                {count > 99 ? '99+' : count}
+            </span>
+            <span className="absolute right-1 top-1 hidden size-2 rounded-full bg-foreground group-data-[collapsible=icon]:block" aria-hidden />
+        </>
+    );
 }
 
 export interface ProfileLink {
@@ -271,9 +293,10 @@ function NavEntry({ item, pathname, onNavigate }: { item: NavItem; pathname: str
             <SidebarMenuItem>
                 {hasPage ? (
                     <SidebarMenuButton asChild isActive={active} tooltip={label}>
-                        <Link href={item.key} data-menu-id={`lc2-${item.key}`} onClick={() => { setOpen(true); onNavigate(); }} className={LINK}>
+                        <Link href={item.key} data-menu-id={`lc2-${item.key}`} onClick={() => { setOpen(true); onNavigate(); }} className={`${LINK} relative pr-8`}>
                             {item.icon}
                             <span>{item.label}</span>
+                            <CountBadge count={item.badge} label={label ?? 'Раздел'} />
                         </Link>
                     </SidebarMenuButton>
                 ) : (
@@ -299,6 +322,7 @@ function NavEntry({ item, pathname, onNavigate }: { item: NavItem; pathname: str
                                 <SidebarMenuSubButton asChild isActive={subActive(sub.key, pathname)}>
                                     <Link href={sub.key} data-menu-id={`lc2-${sub.key}`} onClick={onNavigate} className={LINK}>
                                         <span>{sub.label}</span>
+                                        <CountBadge count={sub.badge} label={typeof sub.label === 'string' ? sub.label : 'Пункт'} />
                                     </Link>
                                 </SidebarMenuSubButton>
                             </SidebarMenuSubItem>

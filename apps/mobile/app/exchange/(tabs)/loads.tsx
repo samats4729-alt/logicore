@@ -117,7 +117,9 @@ export default function LoadsScreen() {
 function OffersStrip({ offers }: { offers: MyOffer[] }) {
     const { colors } = useAppTheme();
     const recent = (o: MyOffer) => Date.now() - new Date(o.updatedAt).getTime() < 3 * 86_400_000;
-    const accepted = offers.find((o) => o.status === 'ACCEPTED' && recent(o));
+    // Рейс уже довезён или отменён — звать в «Мой рейс» незачем (владелец, 15.10.2026).
+    const tripOpen = (o: MyOffer) => !o.orderStatus || !['COMPLETED', 'CANCELLED'].includes(o.orderStatus);
+    const accepted = offers.find((o) => o.status === 'ACCEPTED' && recent(o) && tripOpen(o));
     const waiting = offers.filter((o) => o.status === 'ACTIVE').length;
     const rejected = offers.filter((o) => o.status === 'REJECTED' && recent(o));
     if (!accepted && !waiting && !rejected.length) return null;

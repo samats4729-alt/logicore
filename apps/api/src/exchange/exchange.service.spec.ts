@@ -89,10 +89,11 @@ describe('Биржа: кто выставляет заявку', () => {
             .rejects.toThrow(/в работе или закрыта/);
     });
 
-    it('парк заявки не выставляет — он сам не возит', async () => {
+    it('парк выставляет заявку, как любая компания: он и сам возит (15.10.2026)', async () => {
         const { service, prisma } = build();
         prisma.company.findUnique.mockResolvedValue({ isPark: true });
-        await expect(service.publish(OUR, USER, 'order-1', { price: 1 })).rejects.toThrow(/Парк не выставляет/);
+        await service.publish(OUR, USER, 'order-1', { price: 1 });
+        expect(prisma.order.updateMany).toHaveBeenCalled();
     });
 
     it('без погрузки и выгрузки — не выставить', async () => {

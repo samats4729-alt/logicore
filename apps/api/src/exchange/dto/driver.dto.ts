@@ -169,6 +169,58 @@ export class PayoutRatesDto {
 
     @ApiProperty({ required: false, description: 'МРП, ₸' })
     @IsOptional() @IsInt({ message: 'МРП — целым числом тенге' }) @Min(1) @Max(1000000) mrp?: number;
+
+    // НДС (15.10.2026): прибавляется к цене для компании, только у плательщиков НДС.
+    @ApiProperty({ required: false, description: 'Парк — плательщик НДС' })
+    @IsOptional() @IsBoolean() vatPayer?: boolean;
+
+    @ApiProperty({ required: false, description: 'Ставка НДС, %' })
+    @IsOptional() @IsNumber({}, { message: 'НДС — числом' }) @Min(0) @Max(100) vatPct?: number;
+
+    // Топливо и прогрессивный ИПН — схема шефа (16.10.2026).
+    @ApiProperty({ required: false, description: 'Расход топлива, л на 100 км' })
+    @IsOptional() @IsNumber({}, { message: 'Расход — числом' }) @Min(0) @Max(200) fuelConsumption?: number;
+
+    @ApiProperty({ required: false, description: 'Цена литра летом, ₸' })
+    @IsOptional() @IsNumber({}, { message: 'Цена литра — числом' }) @Min(0) @Max(100000) fuelPriceSummer?: number;
+
+    @ApiProperty({ required: false, nullable: true, description: 'Цена литра зимой, ₸; пусто — как летом' })
+    @IsOptional() @IsNumber({}, { message: 'Цена литра — числом' }) @Min(0) @Max(100000) fuelPriceWinter?: number | null;
+
+    @ApiProperty({ required: false, enum: ['SUMMER', 'WINTER'] })
+    @IsOptional() @IsIn(['SUMMER', 'WINTER'], { message: 'Сезон — лето или зима' }) fuelSeason?: string;
+
+    @ApiProperty({ required: false, description: 'Повышенная ставка ИПН, %' })
+    @IsOptional() @IsNumber({}, { message: 'Ставка ИПН — числом' }) @Min(0) @Max(100) ipnHighPct?: number;
+
+    @ApiProperty({ required: false, description: 'Порог годового дохода для повышенной ставки, МРП' })
+    @IsOptional() @IsInt({ message: 'Порог — целым числом МРП' }) @Min(0) @Max(1000000) ipnThresholdMrp?: number;
+}
+
+export class FuelSeasonDto {
+    @ApiProperty({ enum: ['SUMMER', 'WINTER'] })
+    @IsIn(['SUMMER', 'WINTER'], { message: 'Сезон — лето или зима' }) season: string;
+}
+
+export class DeductionRequestDto {
+    @ApiProperty({ description: 'true — прошу применять базовый вычет; у другого работодателя не получаю' })
+    @IsBoolean() requested: boolean;
+}
+
+export class DeletionRequestDto {
+    @ApiProperty({ required: false })
+    @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
+export class ConfirmRatesDto {
+    @ApiProperty({ description: 'true — бухгалтер подтвердил расчёт; false — снять подтверждение' })
+    @IsBoolean() confirmed: boolean;
+}
+
+/** Согласие продолжить по предварительному расчёту (ставки не подтверждены бухгалтером). */
+export class PreliminaryAckDto {
+    @ApiProperty({ required: false })
+    @IsOptional() @IsBoolean() preliminaryAck?: boolean;
 }
 
 export class ExportPayoutsDto {
@@ -176,6 +228,9 @@ export class ExportPayoutsDto {
     @IsArray()
     @IsString({ each: true })
     ids: string[];
+
+    @ApiProperty({ required: false, description: 'Согласие выгрузить по предварительному расчёту' })
+    @IsOptional() @IsBoolean() preliminaryAck?: boolean;
 }
 
 export const PAYOUT_FILTERS = ['REQUESTED', 'EXPORTED', 'PAID', 'REJECTED', 'all'] as const;

@@ -96,6 +96,12 @@ export class ExchangeController {
         return this.service.mine(req.user.companyId);
     }
 
+    @Get('incoming-offers')
+    @ApiOperation({ summary: 'Отклики на все свои заявки на бирже — новые сверху' })
+    incomingOffers(@Request() req: any) {
+        return this.offers.incomingOffers(req.user.companyId);
+    }
+
     @Get('orders/:id')
     @ApiOperation({ summary: 'Биржа в карточке заявки: на бирже ли и можно ли выставить' })
     state(@Request() req: any, @Param('id') id: string) {

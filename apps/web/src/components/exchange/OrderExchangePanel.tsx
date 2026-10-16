@@ -14,6 +14,23 @@ import { RoutePricesPanel } from './RoutePricesPanel';
 import OffersList from './OffersList';
 import nova from '@/components/nova/nova.module.css';
 
+/**
+ * Состояние биржи у заявки — для вкладки «Предложения» в карточке: показывать
+ * ли её и сколько откликов ждут решения. Биржа выключена — null.
+ */
+export function useOrderExchange(orderId: string, reloadKey?: unknown): ExchangeOrderState | null {
+    const [state, setState] = useState<ExchangeOrderState | null>(null);
+    useEffect(() => {
+        let alive = true;
+        exchangeEnabled().then((on) => {
+            if (!on || !alive) return;
+            api.get(`/exchange/orders/${orderId}`).then((r) => { if (alive) setState(r.data); }).catch(() => { if (alive) setState(null); });
+        });
+        return () => { alive = false; };
+    }, [orderId, reloadKey]);
+    return state;
+}
+
 /** Частые причины снять — одним нажатием. Своя — словами в поле. */
 const CLOSE_REASONS = ['Нашли исполнителя сами', 'Клиент отменил перевозку', 'Перенесли на другой день'];
 
@@ -150,6 +167,10 @@ function PublishDialog({ state, open, onOpenChange, onDone }: {
                             className="h-10 text-[15px] font-semibold tabular-nums placeholder:font-normal"
                         />
                         {priceError && <span role="alert" className="text-[12px] text-destructive">{priceError}</span>}
+                        <span className="text-[12px] text-muted-foreground">
+                            Перевозчику и водителю с ИП — эта сумма. Водителю без ИП, через парк, из неё оплачивается топливо и работа,
+                            а налоги парка, 10 % комиссии и НДС прибавятся сверху: полную цену увидите в его отклике до выбора.
+                        </span>
                     </label>
                     {state.from && state.to && (
                         <RoutePricesPanel origin={state.from} destination={state.to} onUse={(p) => setPrice(String(p))} />

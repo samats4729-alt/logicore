@@ -103,6 +103,10 @@ export function exchangeView(row: ExchangeOrderRow) {
     }));
     const pickups = points.filter((p) => p.type !== 'DELIVERY');
     const deliveries = points.filter((p) => p.type === 'DELIVERY');
+    // Что везём: в мастере заявки часто заполняют только «Характер груза»,
+    // а «Описание» оставляют пустым — тогда на бирже стоял прочерк (владелец,
+    // 15.10.2026). Берём то, что есть, и не повторяем одно и то же дважды.
+    const what = row.cargoDescription?.trim() || row.natureOfCargo?.trim() || '';
     return {
         id: row.id,
         orderNumber: row.orderNumber,
@@ -111,11 +115,11 @@ export function exchangeView(row: ExchangeOrderRow) {
         to: deliveries[deliveries.length - 1]?.city ?? points[points.length - 1]?.city ?? '—',
         loadingDate: firstLoadingDate(row),
         points,
-        cargoDescription: row.cargoDescription,
+        cargoDescription: what,
         weightKg: row.cargoWeight != null ? Math.round(row.cargoWeight) : null,
         volumeM3: row.cargoVolume,
         bodyType: row.cargoType,
-        natureOfCargo: row.natureOfCargo,
+        natureOfCargo: row.natureOfCargo && row.natureOfCargo.trim() !== what ? row.natureOfCargo : null,
         palletCount: row.palletCount,
         loadingTypes: row.loadingTypes,
         packagingTypes: row.packagingTypes,
