@@ -201,7 +201,7 @@ export class ExchangeOffersService {
                 id: true, status: true, price: true, driverTotal: true, agreed: true, readyDate: true, comment: true, updatedAt: true,
                 order: {
                     select: {
-                        id: true, orderNumber: true,
+                        id: true, orderNumber: true, status: true,
                         routePoints: {
                             select: { pointType: true, location: { select: { city: true, cityRecord: { select: { name: true } } } } },
                             orderBy: { sequence: 'asc' },
@@ -216,6 +216,8 @@ export class ExchangeOffersService {
             ...driverOwnView(r),
             orderId: r.order.id,
             orderNumber: r.order.orderNumber,
+            /** Где рейс сейчас: «Вас выбрали» не висит над лентой, когда рейс уже довезён или отменён. */
+            orderStatus: r.order.status,
             from: city(r.order.routePoints.find((p) => p.pointType !== 'DELIVERY')),
             to: city([...r.order.routePoints].reverse().find((p) => p.pointType === 'DELIVERY')),
         }));

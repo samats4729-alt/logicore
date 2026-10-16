@@ -172,6 +172,8 @@ export interface OwnOffer {
 export interface MyOffer extends OwnOffer {
     orderId: string;
     orderNumber: string;
+    /** Статус рейса по заявке. Старый сервер не присылает. */
+    orderStatus?: string;
     from: string;
     to: string;
 }
