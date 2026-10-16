@@ -23,8 +23,8 @@ const READY = [
 /**
  * Своя сумма — панелью снизу: сколько хотите на руки, когда подадите машину,
  * комментарий. Цифры — крупно и числовой клавиатурой: водитель набирает одной
- * рукой. Сумма — вместе с топливом: топливо оплачивает парк по ходу рейса и
- * засчитывает в эту сумму; налоги парк платит сверху (12.10.2026).
+ * рукой. Сумма — без топлива: топливо оплачивает парк, перерасход — на нём;
+ * пенсионные удержаны, остальные налоги парк платит сверху (схема шефа, 16.10.2026).
  */
 export function OfferSheet({ visible, mine, busy, fuelEstimate, onSubmit, onClose }: {
     visible: boolean;
@@ -75,16 +75,14 @@ export function OfferSheet({ visible, mine, busy, fuelEstimate, onSubmit, onClos
                         value={pretty}
                         onChangeText={(v: string) => { setPrice(v.replace(/\D/g, '').slice(0, 10)); setError(null); }}
                         keyboardType="number-pad"
-                        placeholder="Например: 400 000"
+                        placeholder="Например: 250 000"
                         placeholderTextColor={colors.textTertiary}
                         style={[styles.price, { color: colors.text, borderColor: error ? colors.danger : colors.border, backgroundColor: colors.background }]}
                     />
                     {!!error && <Text style={{ color: colors.danger, fontSize: 12.5, marginTop: 4 }}>{error}</Text>}
                     <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
-                        {fuelEstimate
-                            ? `Вместе с топливом — по расчёту около ${деньги(fuelEstimate)}: парк оплатит его на заправке и засчитает в эту сумму. `
-                            : 'Вместе с топливом: парк оплатит его на заправке и засчитает в эту сумму. '}
-                        Налоги платит парк сверху.
+                        Сколько хотите получить сами — без топлива: {fuelEstimate ? `его (около ${деньги(fuelEstimate)}) ` : 'его '}
+                        оплачивает парк. С этой суммы пенсионные уже удержаны; остальные налоги парк платит сверху.
                     </Text>
 
                     <Text style={[styles.label, { color: colors.textSecondary, marginTop: 14 }]}>Когда подадите машину</Text>
