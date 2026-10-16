@@ -18,5 +18,9 @@ module.exports = ({ config }) => ({
         googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID || config.extra?.googleWebClientId || '',
         // Сайт платформы — для ссылки на политику конфиденциальности.
         siteUrl: process.env.SITE_URL || config.extra?.siteUrl || '',
+        // Проверка фото документов (резкость, свет, лист целиком). На тестовом
+        // стенде её выключают (PHOTO_CHECK=off), чтобы проходить анкету любыми
+        // картинками; в сборках для водителей переменной нет — проверка включена.
+        photoCheck: process.env.PHOTO_CHECK !== 'off',
     },
 });

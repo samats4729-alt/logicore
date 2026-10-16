@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { appendPhoto } from '@/lib/upload';
 
 /** Анкета водителя биржи — как её отдаёт сервер. */
 export interface DriverProfile {
@@ -365,10 +366,10 @@ export const exchangeApi = {
     me: () => api.get<DriverProfile>('/exchange/driver/me').then((r) => r.data),
     update: (data: Partial<Record<string, unknown>>) => api.put<DriverProfile>('/exchange/driver/me', data).then((r) => r.data),
     parks: () => api.get<Park[]>('/exchange/driver/parks').then((r) => r.data),
-    uploadDocument: (kind: DocumentKind, uri: string) => {
+    uploadDocument: async (kind: DocumentKind, uri: string) => {
         const form = new FormData();
         form.append('kind', kind);
-        form.append('file', { uri, name: `${kind.toLowerCase()}.jpg`, type: 'image/jpeg' } as any);
+        await appendPhoto(form, uri, `${kind.toLowerCase()}.jpg`);
         return api.post<DriverProfile>('/exchange/driver/me/documents', form, {
             headers: { 'Content-Type': 'multipart/form-data' },
             timeout: 60000,
@@ -400,10 +401,10 @@ export const exchangeApi = {
     earnings: () => api.get<Earnings>('/exchange/driver/earnings').then((r) => r.data),
     /** Топливо рейса через парк. Рейс по прежнему расчёту — сервер скажет, что топлива нет. */
     tripFuel: (orderId: string) => api.get<TripFuel>(`/exchange/driver/trips/${orderId}/fuel`).then((r) => r.data),
-    addFuelReceipt: (orderId: string, amount: number, uri: string) => {
+    addFuelReceipt: async (orderId: string, amount: number, uri: string) => {
         const form = new FormData();
         form.append('amount', String(amount));
-        form.append('file', { uri, name: 'fuel-check.jpg', type: 'image/jpeg' } as any);
+        await appendPhoto(form, uri, 'fuel-check.jpg');
         return api.post<TripFuel>(`/exchange/driver/trips/${orderId}/fuel/receipts`, form, {
             headers: { 'Content-Type': 'multipart/form-data' },
             timeout: 60000,
