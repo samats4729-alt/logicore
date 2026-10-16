@@ -43,6 +43,7 @@ const DRIVER_SELECT = {
     contractSignedAt: true,
     submittedAt: true, reviewedAt: true, rejectReason: true, blockedAt: true, blockedReason: true,
     tripsCompleted: true, createdAt: true,
+    deductionRequested: true, deductionRequestedAt: true, deletionRequestedAt: true,
     user: { select: { email: true } },
     documents: { select: { id: true, kind: true, fileName: true, mimeType: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
 } satisfies Prisma.ExchangeDriverSelect;
@@ -211,6 +212,69 @@ export class ExchangeDriversService {
         if (existing) return this.view(existing);
         const created = await this.prisma.exchangeDriver.create({ data: { userId }, select: DRIVER_SELECT });
         return this.view(created);
+    }
+
+    /**
+     * Заявление на базовый вычет по ИПН (30 МРП в месяц): водитель подтверждает,
+     * что у другого работодателя его не получает. Без заявления парк считает
+     * ИПН со всего дохода (налоговики, 16.10.2026). Действует на новые рейсы.
+     */
+    async setDeduction(userId: string, requested: boolean) {
+        const driver = await this.ownDriver(userId);
+        await this.prisma.exchangeDriver.update({
+            where: { id: driver.id },
+            data: { deductionRequested: requested, deductionRequestedAt: requested ? new Date() : null },
+        });
+        return this.me(userId);
+    }
+
+    /**
+     * Попросить удалить аккаунт (шеф, 16.10.2026: «чтобы не смогли просто так
+     * удалить — запрос в админку»). Удаляет администратор; пока не удалил —
+     * заявку можно отозвать.
+     */
+    async requestDeletion(userId: string, reason?: string) {
+        const driver = await this.ownDriver(userId);
+        await this.prisma.exchangeDriver.update({
+            where: { id: driver.id },
+            data: { deletionRequestedAt: new Date(), deletionReason: reason?.trim() || null },
+        });
+        return { requested: true };
+    }
+
+    async cancelDeletion(userId: string) {
+        const driver = await this.ownDriver(userId);
+        await this.prisma.exchangeDriver.update({ where: { id: driver.id }, data: { deletionRequestedAt: null, deletionReason: null } });
+        return { requested: false };
+    }
+
+    /** Заявки на удаление — для админки, старые сверху: их нельзя держать долго (требование Google Play). */
+    async deletionRequests() {
+        const rows = await this.prisma.exchangeDriver.findMany({
+            where: { deletionRequestedAt: { not: null } },
+            orderBy: { deletionRequestedAt: 'asc' },
+            select: {
+                id: true, userId: true, lastName: true, firstName: true, middleName: true, phone: true, iin: true, kind: true,
+                deletionRequestedAt: true, deletionReason: true, park: { select: { name: true } },
+            },
+        });
+        return rows.map((r) => ({
+            id: r.id, userId: r.userId, kind: r.kind, phone: r.phone, iin: r.iin, park: r.park?.name ?? null,
+            name: [r.lastName, r.firstName, r.middleName].filter(Boolean).join(' ') || 'Водитель без имени',
+            requestedAt: r.deletionRequestedAt, reason: r.deletionReason,
+        }));
+    }
+
+    /** Отказать в удалении (например, водитель передумал по телефону) — заявка снимается. */
+    async declineDeletion(driverId: string) {
+        await this.prisma.exchangeDriver.update({ where: { id: driverId }, data: { deletionRequestedAt: null, deletionReason: null } });
+        return { ok: true };
+    }
+
+    async driverUserId(driverId: string): Promise<string> {
+        const d = await this.prisma.exchangeDriver.findUnique({ where: { id: driverId }, select: { userId: true } });
+        if (!d) throw new NotFoundException('Водитель не найден');
+        return d.userId;
     }
 
     private async ownDriver(userId: string) {

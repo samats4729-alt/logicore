@@ -131,21 +131,21 @@ export class ExchangeOffersService {
     // ==================== водитель ====================
 
     /**
-     * Водитель парка откликается суммой на руки (вместе с топливом) или
-     * соглашается на цену компании — она и есть сумма на руки: налоги,
-     * комиссии и НДС идут сверху (владелец, 15.10.2026). В отклик пишем цену
-     * для компании и весь расчёт на этот момент.
+     * Водитель парка откликается суммой на руки (без топлива — его оплачивает
+     * парк) или соглашается на цену компании — тогда на руки = её сумма минус
+     * топливо и ОПВ (схема шефа, 16.10.2026). В отклик пишем цену для компании
+     * — с налогами парка, 10 % комиссии и НДС — и весь расчёт на этот момент.
      */
     private async driverCalc(driver: { id: string; parkCompanyId: string }, order: { id: string; exchangePrice: Prisma.Decimal | null }, dto: MakeOfferDto): Promise<SettlementCalc> {
         const ctx = await this.settlement.context(driver, order.id);
         if (dto.agree) {
             if (order.exchangePrice == null) throw new BadRequestException('У заявки цена договорная — предложите свою');
-            const calc = this.settlement.tryDriverTotal(ctx, Number(order.exchangePrice));
+            const calc = this.settlement.tryBase(ctx, Number(order.exchangePrice));
             if (!calc) throw new BadRequestException('Цена компании не покрывает топливо по расчёту — предложите свою сумму');
             return calc;
         }
         if (!dto.price || dto.price <= 0) throw new BadRequestException('Укажите, сколько хотите получить на руки');
-        return this.settlement.byDriverTotal(ctx, dto.price);
+        return this.settlement.byOnHand(ctx, dto.price);
     }
 
     async offerAsDriver(userId: string, orderId: string, dto: MakeOfferDto) {

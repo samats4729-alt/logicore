@@ -48,7 +48,7 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
 }
 import {
     AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
-    ConfirmRatesDto, ExportPayoutsDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
+    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -252,9 +252,22 @@ export class ExchangeDriverController {
 
     @Post('me/delete')
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Удалить свой аккаунт' })
-    deleteAccount(@Request() req: any) {
-        return this.loads.deleteAccount(req.user.sub);
+    @ApiOperation({ summary: 'Попросить удалить аккаунт — удаляет администратор' })
+    deleteAccount(@Request() req: any, @Body() dto: DeletionRequestDto) {
+        return this.drivers.requestDeletion(req.user.sub, dto?.reason);
+    }
+
+    @Post('me/delete/cancel')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Отозвать просьбу удалить аккаунт' })
+    cancelDeletion(@Request() req: any) {
+        return this.drivers.cancelDeletion(req.user.sub);
+    }
+
+    @Put('me/deduction')
+    @ApiOperation({ summary: 'Заявление на базовый вычет по ИПН — у другого работодателя не получаю' })
+    setDeduction(@Request() req: any, @Body() dto: DeductionRequestDto) {
+        return this.drivers.setDeduction(req.user.sub, dto.requested);
     }
 
     // ==================== биржа ====================
@@ -499,6 +512,17 @@ export class ExchangeParkController {
         return result;
     }
 
+    @Put('rates/season')
+    @ApiOperation({ summary: 'Лето или зима — цена литра для расчёта топлива' })
+    async setSeason(@Request() req: any, @Body() dto: FuelSeasonDto) {
+        const result = await this.payouts.setFuelSeason(req.user.companyId, req.user.sub, dto.season);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
+            entityLabel: `Топливо: ${dto.season === 'WINTER' ? 'зимняя' : 'летняя'} цена`,
+        });
+        return result;
+    }
+
     @Put('rates/confirm')
     @ApiOperation({ summary: 'Бухгалтер парка подтверждает ставки и порядок расчёта (или снимает подтверждение)' })
     async confirmRates(@Request() req: any, @Body() dto: ConfirmRatesDto) {
@@ -587,7 +611,28 @@ export class ExchangeAdminController {
     constructor(
         private readonly drivers: ExchangeDriversService,
         private readonly settlement: ExchangeSettlementService,
+        private readonly loads: ExchangeDriverLoadsService,
     ) {}
+
+    @Get('deletion-requests')
+    @ApiOperation({ summary: 'Водители, которые просят удалить аккаунт' })
+    deletionRequests() {
+        return this.drivers.deletionRequests();
+    }
+
+    @Post('drivers/:id/delete')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Удалить аккаунт водителя по его просьбе' })
+    async approveDeletion(@Param('id') id: string) {
+        return this.loads.deleteAccount(await this.drivers.driverUserId(id));
+    }
+
+    @Post('drivers/:id/delete/decline')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Снять просьбу об удалении (водитель передумал)' })
+    declineDeletion(@Param('id') id: string) {
+        return this.drivers.declineDeletion(id);
+    }
 
     @Get('platform-fee')
     @ApiOperation({ summary: 'Комиссия LogiCore с рейса водителя парка, %' })

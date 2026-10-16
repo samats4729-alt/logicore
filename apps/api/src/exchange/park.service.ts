@@ -22,7 +22,12 @@ const TRIP_SELECT = {
     id: true, orderNumber: true, status: true, driverCost: true, createdAt: true, completedAt: true,
     assignedDriverName: true, assignedDriverPlate: true,
     // Расчёт «на руки»: итог водителю, топливо по оценке, доля парка и LogiCore.
-    exchangeSettlement: { select: { driverTotal: true, fuelEstimate: true, parkFee: true, platformFee: true } },
+    exchangeSettlement: {
+        select: {
+            scheme: true, driverTotal: true, fuelEstimate: true, parkFee: true, platformFee: true,
+            gross: true, opv: true, vosms: true, so: true, ipn: true, preliminary: true,
+        },
+    },
     _count: { select: { exchangeFuelReceipts: { where: { status: 'PENDING' } } } },
     forwarder: { select: { name: true } },
     subForwarder: { select: { name: true } },
@@ -108,6 +113,14 @@ export class ExchangeParkService {
                     fuelEstimate: Number(r.exchangeSettlement.fuelEstimate),
                     parkFee: Number(r.exchangeSettlement.parkFee),
                     platformFee: Number(r.exchangeSettlement.platformFee),
+                    /** Разбивка по налогам (шеф, 16.10.2026: «сколько ИПН, ОПВ, ОСМС, соцотчисления»). */
+                    scheme: r.exchangeSettlement.scheme,
+                    gross: Number(r.exchangeSettlement.gross),
+                    opv: Number(r.exchangeSettlement.opv),
+                    vosms: Number(r.exchangeSettlement.vosms),
+                    so: Number(r.exchangeSettlement.so),
+                    ipn: Number(r.exchangeSettlement.ipn),
+                    preliminary: r.exchangeSettlement.preliminary,
                 } : null,
                 /** Чеков на топливо ждут решения парка. */
                 fuelReceiptsPending: r._count.exchangeFuelReceipts,

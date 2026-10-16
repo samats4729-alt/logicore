@@ -5,12 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { kzCurrentMonth } from '../common/utils/business-date';
 import { ExchangeDriversService } from './drivers.service';
 import { ExchangeFuelService } from './fuel.service';
-import { SettlementRates, actualPayout, money } from './settlement-calc';
+import { SettlementRates, actualPayout, money, payoutOf } from './settlement-calc';
 
 const num = (d: Prisma.Decimal | number | null | undefined) => (d == null ? 0 : Number(d));
 
 const ROW_SELECT = {
     orderId: true, taxMonth: true, driverTotal: true, fuelEstimate: true, deductionAmount: true, rates: true,
+    scheme: true, workNet: true, gross: true, opv: true, vosms: true, ipn: true, so: true,
     customerPrice: true, vat: true, parkFee: true, platformFee: true, preliminary: true, createdAt: true,
     driver: { select: { id: true, lastName: true, firstName: true, middleName: true, iin: true } },
     order: {
@@ -62,7 +63,7 @@ export interface RegistryLine {
     opv: number;
     vosms: number;
     ipn: number;
-    /** Удержано из дохода водителя: ОПВ + ВОСМС + ИПН. */
+    /** Удержано из дохода водителя: схема шефа — ОПВ; прежняя — ОПВ + ВОСМС + ИПН. */
     withheld: number;
     /** СО — платит парк от себя. */
     so: number;
@@ -145,13 +146,17 @@ export class ExchangeParkRegistryService {
     private line(r: Row, f: { issued: number; receipts: number }, confirmed: boolean): RegistryLine {
         const item = r.order.driverPayoutItem;
         // Выплата запрошена — суммы из неё (их и выгружали в 1С); нет — оценка по текущим чекам.
-        const live = item ? null : actualPayout(num(r.driverTotal), f.issued, f.receipts, r.rates as unknown as SettlementRates, num(r.deductionAmount));
+        // Схема шефа: налоги зафиксированы при выборе исполнителя, топливо сводится чеками.
+        const live = item ? null : r.scheme === 2
+            ? { gross: num(r.gross), opv: num(r.opv), vosms: num(r.vosms), ipn: num(r.ipn), so: num(r.so), ...payoutOf(num(r.workNet), f.issued, f.receipts) }
+            : actualPayout(num(r.driverTotal), f.issued, f.receipts, r.rates as unknown as SettlementRates, num(r.deductionAmount));
         const a = item ? {
             gross: num(item.gross), opv: num(item.opv), vosms: num(item.vosms), ipn: num(item.ipn), so: num(item.so),
             toPay: item.toPay != null ? num(item.toPay) : num(item.net),
             fuelIssued: num(item.fuelIssued), fuelReceipts: num(item.fuelReceipts),
         } : { gross: live!.gross, opv: live!.opv, vosms: live!.vosms, ipn: live!.ipn, so: live!.so, toPay: live!.toPay, fuelIssued: live!.fuelIssued, fuelReceipts: live!.fuelReceipts };
-        const withheld = money(a.opv + a.vosms + a.ipn);
+        // Удержано у водителя: по схеме шефа — только ОПВ (ОСМС и ИПН платит парк); по прежней — ОПВ, ВОСМС, ИПН.
+        const withheld = r.scheme === 2 ? a.opv : money(a.opv + a.vosms + a.ipn);
         const payStatus: PayStatus = item ? item.payout.status
             : r.order.status === OrderStatus.COMPLETED ? 'TO_REQUEST' : 'IN_TRIP';
         const pickup = r.order.routePoints.find((p) => p.pointType !== 'DELIVERY');

@@ -33,8 +33,9 @@ function build(driver: any = { id: 'd-1', status: 'APPROVED', kind: 'PARK', trip
         user: { update: jest.fn() },
         // Ставки парка как в калькуляции шефа (5 % парка), вычет в месяце ещё не брали.
         parkPayoutRates: { findUnique: jest.fn().mockResolvedValue({
-            commissionPct: 5, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
+            commissionPct: 10, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
             applyDeduction: true, deductionMrp: 30, mrp: 4325, vatPayer: false, vatPct: 16, ratesConfirmedAt: null,
+            fuelConsumption: 30, fuelPriceSummer: 350, fuelPriceWinter: null, fuelSeason: 'SUMMER', ipnHighPct: 15, ipnThresholdMrp: 8500,
         }) },
         platformSetting: { findUnique: jest.fn().mockResolvedValue(null) },
         exchangeTripSettlement: { findMany: jest.fn().mockResolvedValue([]) },
@@ -77,21 +78,27 @@ describe('Биржа · водитель: лента', () => {
         const { service, prisma } = build();
         const feed = await service.feed('u-1');
         expect(prisma.order.findMany.mock.calls[0][0].where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
-        // Компания выставила 400 000 — это и есть на руки (с топливом 1 200 км × 100 ₸);
-        // налоги и комиссии сверху — компании 508 437,93 (владелец, 15.10.2026).
-        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 400000, fuelEstimate: 120000, orderNumber: '7A-0042' });
-        expect(feed[0].breakdown).toMatchObject({ customerPrice: 508437.93, driverTotal: 400000, vat: 0, preliminary: true });
+        // Схема шефа: 400 000 − топливо 126 000 (1 200 км × 30 л × 350 ₸) = 274 000 за работу,
+        // минус ОПВ 27 400 — на руки 246 600. Без заявления на вычет ИПН со всего.
+        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 246600, fuelEstimate: 126000, orderNumber: '7A-0042' });
+        expect(feed[0].breakdown).toMatchObject({
+            base: 400000, gross: 274000, opv: 27400, vosms: 5480, so: 12330, ipn: 24660,
+            driverTotal: 246600, vat: 0, deductionApplied: false, preliminary: true,
+        });
+        // 400 000 + ОСМС + СО + ИПН = 442 470; +10 % = 486 717.
+        expect(feed[0].breakdown?.customerPrice).toBe(486717);
     });
 
     it('парк плательщик НДС — НДС сверху виден водителю в разборе', async () => {
         const { service, prisma } = build();
         prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...{
-            commissionPct: 5, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
+            commissionPct: 10, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
             applyDeduction: true, deductionMrp: 30, mrp: 4325, vatPayer: false, vatPct: 16, ratesConfirmedAt: null,
+            fuelConsumption: 30, fuelPriceSummer: 350, fuelPriceWinter: null, fuelSeason: 'SUMMER', ipnHighPct: 15, ipnThresholdMrp: 8500,
         }, vatPayer: true });
         const [load] = await service.feed('u-1');
-        expect(load.price).toBe(400000);
-        expect(load.breakdown).toMatchObject({ vatPct: 16, vat: 81350.07 });
+        expect(load.price).toBe(246600);
+        expect(load.breakdown).toMatchObject({ vatPct: 16, vat: 77874.72, customerPrice: 564591.72 });
     });
 
     it('договорная цена — суммы на руки нет', async () => {

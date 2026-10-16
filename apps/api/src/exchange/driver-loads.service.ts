@@ -50,18 +50,19 @@ export class ExchangeDriverLoadsService {
     }
 
     /**
-     * Заявка глазами водителя парка. Цена компании на бирже — база: столько
-     * водитель получит на руки вместе с топливом, а налоги, комиссии и НДС
-     * парк прибавляет сверху (владелец, 15.10.2026: «сверху прибавляется»).
+     * Заявка глазами водителя парка (схема шефа, 16.10.2026): сумма заказчика
+     * минус топливо — оплата за работу; из неё удерживается ОПВ, остальное —
+     * на руки. ОСМС, СО и ИПН платит парк; 10 % комиссии и НДС — сверху.
      */
     private forDriver(base: Awaited<ReturnType<ExchangeSettlementService['driverBase']>>, row: ExchangeOrderRow) {
         const view = exchangeView(row);
         const ctx = this.settlement.contextFromRow(base, row);
-        const calc = view.price != null ? this.settlement.tryDriverTotal(ctx, view.price) : null;
+        const calc = view.price != null ? this.settlement.tryBase(ctx, view.price) : null;
         return {
             ...view,
+            /** Водителю на руки — без топлива: топливо оплачивает парк. */
             price: calc ? calc.driverTotal : null,
-            /** Топливо по оценке — входит в сумму на руки; заправка через парк, чеки на БИН парка. */
+            /** Топливо по расчёту — оплачивает парк; чеки на БИН парка. */
             fuelEstimate: ctx.fuel || null,
             distanceKm: ctx.distanceKm,
             /**
@@ -71,17 +72,25 @@ export class ExchangeDriverLoadsService {
              * показывали: теперь он видит её и всё, что из неё уходит.
              */
             breakdown: calc ? {
+                /** Сумма заказчика на бирже (до налогов и комиссии). */
+                base: calc.base,
                 customerPrice: calc.customerPrice,
                 platformPct: calc.rates.platformPct,
                 platformFee: calc.platformFee,
                 parkPct: calc.rates.parkPct,
                 parkFee: calc.parkFee,
-                /** Налоги и взносы за водителя: ОПВ, ВОСМС, ИПН и социальные отчисления — платит парк. */
-                taxes: (Math.round(calc.opv * 100) + Math.round(calc.vosms * 100) + Math.round(calc.ipn * 100) + Math.round(calc.so * 100)) / 100,
+                /** Комиссия 10 % со всей суммы: доля парка и LogiCore. */
+                commission: calc.commission,
+                /** Оплата за работу (доход по договору) и ОПВ, удержанное из неё. */
+                gross: calc.gross,
                 opv: calc.opv,
+                /** За счёт парка: ОСМС, СО, ИПН. */
+                taxes: (Math.round(calc.vosms * 100) + Math.round(calc.so * 100) + Math.round(calc.ipn * 100)) / 100,
                 vosms: calc.vosms,
                 ipn: calc.ipn,
                 so: calc.so,
+                /** Применён ли базовый вычет (водитель написал заявление). */
+                deductionApplied: calc.deductionApplied,
                 /** НДС сверху — только если парк плательщик НДС; иначе 0. */
                 vat: calc.vat,
                 vatPct: calc.rates.vatPct ?? 0,
@@ -115,7 +124,9 @@ export class ExchangeDriverLoadsService {
     }
 
     /**
-     * Удалить аккаунт — требование Google Play: из самого приложения.
+     * Удалить аккаунт. С 16.10.2026 водитель только просит в приложении, а
+     * удаляет администратор (заявки — в админке); требование Google Play —
+     * удалить по просьбе — выполняется там.
      *
      * Стираем личное (ФИО, ИИН, телефон, фото документов), закрываем вход.
      * Рейсы остаются у заказчиков — без имени водителя. Пока рейс идёт,
@@ -138,6 +149,7 @@ export class ExchangeDriverLoadsService {
             await this.prisma.exchangeDriver.update({
                 where: { id: driver.id },
                 data: {
+                    deletionRequestedAt: null, deletionReason: null,
                     lastName: null, firstName: null, middleName: null, iin: null, phone: null,
                     ipName: null, ipIin: null, vehiclePlate: null, contractSignedDevice: null, contractSignedIp: null,
                 },

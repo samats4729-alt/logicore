@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { assertAllowedUpload } from '../documents/allowed-files';
 import { removeExchangeFile, safeExtension, storeExchangeFile } from './exchange-files';
-import { money } from './settlement-calc';
+import { money, payoutOf } from './settlement-calc';
 import { FuelDecisionDto, FuelIssueDto } from './dto/fuel.dto';
 
 const num = (v: Prisma.Decimal | number | null | undefined) => (v == null ? 0 : Number(v));
@@ -13,7 +13,7 @@ const num = (v: Prisma.Decimal | number | null | undefined) => (v == null ? 0 : 
 const ORDER_FUEL_SELECT = {
     id: true, orderNumber: true, driverId: true, partnerId: true, status: true,
     partner: { select: { name: true, bin: true, phone: true } },
-    exchangeSettlement: { select: { driverTotal: true, fuelEstimate: true, distanceKm: true, driverId: true } },
+    exchangeSettlement: { select: { scheme: true, driverTotal: true, workNet: true, fuelEstimate: true, distanceKm: true, driverId: true } },
     exchangeFuelIssues: { select: { id: true, amount: true, method: true, note: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
     exchangeFuelReceipts: {
         select: { id: true, amount: true, status: true, rejectReason: true, createdAt: true, decidedAt: true },
@@ -74,10 +74,18 @@ export class ExchangeFuelService {
                     id: r.id, amount: num(r.amount), status: r.status, rejectReason: r.rejectReason, createdAt: r.createdAt,
                 })),
             },
-            /** Перечислить водителю в конце: итог минус всё, что парк дал на топливо. */
-            toPay: driverTotal != null ? money(driverTotal - issued) : null,
-            /** Дали на топливо, а чека нет — эта часть облагается как оплата водителю. */
+            /**
+             * Схема расчёта: 2 — шефа (16.10.2026): на руки без топлива, топливо
+             * сводится чеками (дали без чека — вычитается, заправился за свои —
+             * возвращается); 1 — прежняя: итог с топливом минус выданное.
+             */
+            scheme: s?.scheme ?? null,
+            /** Перечислить водителю в конце. */
+            toPay: s == null ? null : s.scheme === 2 ? payoutOf(num(s.workNet), issued, accepted).toPay : money(num(s.driverTotal) - issued),
+            /** Дали на топливо, а чека нет: по схеме шефа — вычитается из выплаты, по прежней — облагается. */
             withoutReceipt: money(Math.max(0, issued - accepted)),
+            /** Чеков больше, чем дали: водитель заправлялся за свои — парк возвращает (схема шефа). */
+            ownMoney: s?.scheme === 2 ? money(Math.max(0, accepted - issued)) : 0,
             /** Выплату запросили — топливо по рейсу больше не меняется. */
             locked: !!row.driverPayoutItem,
         };
