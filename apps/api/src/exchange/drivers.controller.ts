@@ -28,6 +28,7 @@ import { ParkContractService } from './park-contract.service';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
+import { fuelChangeText, fuelView } from './fuel-history';
 import { PlatformFeeDto } from './dto/fuel.dto';
 import { FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
 
@@ -504,7 +505,17 @@ export class ExchangeParkController {
     @Put('rates')
     @ApiOperation({ summary: 'Изменить ставки удержаний' })
     async setRates(@Request() req: any, @Body() dto: PayoutRatesDto) {
+        const before = await this.payouts.parkRates(req.user.companyId);
         const result = await this.payouts.setRates(req.user.companyId, req.user.sub, dto);
+        // История цен на топливо (задачи шефа, Q15) — в журнале действий, отдельной записью.
+        const fuelChange = fuelChangeText(before, result);
+        if (fuelChange) {
+            await this.audit.log({
+                companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_fuel',
+                entityLabel: `Топливо: ${fuelChange}`,
+                details: { before: fuelView(before), after: fuelView(result) },
+            });
+        }
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
             entityLabel: `Ставки выплат: комиссия ${dto.commissionPct}%, ОПВ ${dto.opvPct}%, ВОСМС ${dto.vosmsPct}%, ИПН ${dto.ipnPct}%, СО ${dto.soPct}%${dto.vatPayer ? `, НДС ${dto.vatPct ?? 16}%` : ''}`,
@@ -517,10 +528,17 @@ export class ExchangeParkController {
     async setSeason(@Request() req: any, @Body() dto: FuelSeasonDto) {
         const result = await this.payouts.setFuelSeason(req.user.companyId, req.user.sub, dto.season);
         await this.audit.log({
-            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
-            entityLabel: `Топливо: ${dto.season === 'WINTER' ? 'зимняя' : 'летняя'} цена`,
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_fuel',
+            entityLabel: `Топливо: ${dto.season === 'WINTER' ? 'зимняя' : 'летняя'} цена — ${result.fuelPerKm.toLocaleString('ru-RU')} ₸ за км`,
+            details: { after: fuelView(result) },
         });
         return result;
+    }
+
+    @Get('rates/fuel-history')
+    @ApiOperation({ summary: 'История цен на топливо: кто, когда и что поменял' })
+    fuelHistory(@Request() req: any) {
+        return this.payouts.fuelHistory(req.user.companyId);
     }
 
     @Put('rates/confirm')

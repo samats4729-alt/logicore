@@ -235,6 +235,22 @@ export class ExchangePayoutsService {
         return this.parkRates(parkId);
     }
 
+    /**
+     * История цен на топливо (задачи шефа, Q15): записи журнала действий
+     * парка о топливе — свежие сверху. Отдельной таблицы не заводим: журнал
+     * и так пишет, кто и когда поменял.
+     */
+    async fuelHistory(parkId: string) {
+        await this.drivers.assertPark(parkId);
+        const rows = await this.prisma.auditLog.findMany({
+            where: { companyId: parkId, entity: 'park_fuel' },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+            select: { id: true, createdAt: true, userName: true, entityLabel: true },
+        });
+        return rows.map((r) => ({ id: r.id, at: r.createdAt, who: r.userName, text: (r.entityLabel ?? '').replace(/^Топливо: /, '') }));
+    }
+
     /** Лето или зима: цена литра для расчёта топлива — переключает парк одной кнопкой. */
     async setFuelSeason(parkId: string, userId: string, season: string) {
         await this.drivers.assertPark(parkId);

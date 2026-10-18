@@ -406,6 +406,14 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
         fuelConsumption: '', fuelPriceSummer: '', fuelPriceWinter: '', ipnHighPct: '', ipnThresholdMrp: '',
     });
     const [seasonSaving, setSeasonSaving] = useState(false);
+    /** История цен на топливо (задачи шефа, Q15): кто, когда и что поменял. */
+    const [fuelHistory, setFuelHistory] = useState<{ id: string; at: string; who: string | null; text: string }[]>([]);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    // После каждого сохранения (rates меняется) — свежая история.
+    useEffect(() => {
+        if (!rates) return;
+        api.get('/exchange/park/rates/fuel-history').then((r) => setFuelHistory(r.data)).catch(() => undefined);
+    }, [rates]);
 
     useEffect(() => {
         api.get('/exchange/park/rates').then((r) => {
@@ -590,6 +598,25 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                             {rates.fuelSeason === 'WINTER' && rates.fuelPriceWinter == null ? ' — зимняя цена не задана, считается по летней' : ''}
                         </span>
                     </div>
+                    {fuelHistory.length > 0 && (
+                        <div className="border-0 border-b border-solid border-border pb-3 text-[12px]">
+                            <div className="mb-1 font-medium text-muted-foreground">История цен на топливо</div>
+                            <ul className="m-0 list-none space-y-0.5 p-0">
+                                {(historyOpen ? fuelHistory : fuelHistory.slice(0, 3)).map((h) => (
+                                    <li key={h.id} className="flex flex-wrap gap-x-2">
+                                        <span className="tabular-nums text-muted-foreground">{dayjs(h.at).format('DD.MM.YYYY HH:mm')}</span>
+                                        <span>{h.text}</span>
+                                        {h.who && <span className="text-muted-foreground">· {h.who}</span>}
+                                    </li>
+                                ))}
+                            </ul>
+                            {fuelHistory.length > 3 && (
+                                <button type="button" className="mt-1 cursor-pointer border-0 bg-transparent p-0 text-[12px] text-primary [font-family:inherit]" onClick={() => setHistoryOpen((v) => !v)}>
+                                    {historyOpen ? 'Свернуть' : `Показать всю — ${fuelHistory.length}`}
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <div className="grid gap-3 sm:grid-cols-4">
                         <label className="flex flex-col gap-1">
                             <span className="text-[12px] font-medium text-muted-foreground">Вычет по ИПН, МРП</span>
