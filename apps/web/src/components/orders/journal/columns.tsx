@@ -1,7 +1,7 @@
 'use client';
 
 import dayjs from 'dayjs';
-import { ArrowRight, ChevronRight, CircleAlert, Eye, Pencil } from 'lucide-react';
+import { ArrowRight, ChevronRight, CircleAlert, Eye, FileCheck2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import StatusPill from '@/components/ui/StatusPill';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -67,6 +67,33 @@ function Hint({ text, children }: { text: string; children: React.ReactElement }
  * Номера, по которым заказчик находит рейс у себя: накладная и его
  * собственный номер. Пустых подписей нет — у обычного рейса прочерк.
  */
+/**
+ * ТТН: номер и есть ли файл (задачи шефа, C1). Файл загружен — значок;
+ * рейс завершён, а файла нет — «нет ТТН», чтобы хвост был виден в списке, а
+ * не только в карточке. Пока рейс идёт, пустота нормальна — ничего не пишем.
+ */
+function TtnCell({ order }: { order: Order }) {
+    const number = (order as any).ttnNumber?.trim() as string | undefined;
+    const files = order._count?.documents;
+    if (files == null) return <RefNumber value={number} />;
+    if (files > 0) {
+        return (
+            <span title={`ТТН загружена${files > 1 ? `: ${files} файла` : ''}${number ? ` · № ${number}` : ''}`} className="inline-flex items-center gap-1 text-[12px] tabular-nums text-muted-foreground">
+                <FileCheck2 className="size-3.5 shrink-0 text-foreground" aria-label="ТТН загружена" />
+                {number && <span className="truncate">{number}</span>}
+            </span>
+        );
+    }
+    if (order.status === 'COMPLETED') {
+        return (
+            <span title={number ? `№ ${number}, файла ТТН нет` : 'Файла ТТН нет'} className="whitespace-nowrap text-[11.5px] font-medium text-amber-700 dark:text-amber-400">
+                нет ТТН
+            </span>
+        );
+    }
+    return <RefNumber value={number} />;
+}
+
 function RefNumber({ value }: { value?: string | null }) {
     const text = value?.trim();
     if (!text) return <Dash />;
@@ -158,7 +185,7 @@ export function buildColumns(ctx: ColumnContext): { active: JournalColumn<Order>
         key: 'orderNumber', title: '№', width: 96, ellipsis: true,
         render: (r) => <span title={r.orderNumber} className="font-medium tabular-nums">{r.orderNumber}</span>,
     };
-    const ttn: JournalColumn<Order> = { key: 'ttnNumber', title: 'ТТН', width: 76, ellipsis: true, render: (r) => <RefNumber value={(r as any).ttnNumber} /> };
+    const ttn: JournalColumn<Order> = { key: 'ttnNumber', title: 'ТТН', width: 84, ellipsis: true, render: (r) => <TtnCell order={r} /> };
     const ref: JournalColumn<Order> = { key: 'customerRefNumber', title: customerRefTitle, width: 76, ellipsis: true, render: (r) => <RefNumber value={(r as any).customerRefNumber} /> };
     const created: JournalColumn<Order> = {
         key: 'date', title: 'Дата', width: 58,

@@ -5,6 +5,7 @@ import {
     AccountingDocumentDirection,
     AccountingDocumentStatus,
     AccountingDocumentType,
+    DocumentType,
     Prisma,
     UserRole,
 } from '@prisma/client';
@@ -691,6 +692,9 @@ export class CompanyService {
                 take,
                 include: {
                     routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                    // Загружена ли ТТН файлом — пометка в журнале (задачи шефа, C1):
+                    // по каким сделкам накладная есть, а по каким её ещё ждать.
+                    _count: { select: { documents: { where: { type: DocumentType.TTN } } } },
                     // Выставлен ли по рейсу счёт заказчику. Логист этого не
                     // видел: понять, что счёт забыли, можно было только сверяя
                     // список заявок с журналом счетов вручную.
