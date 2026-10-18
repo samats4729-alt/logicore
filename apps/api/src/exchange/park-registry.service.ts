@@ -84,9 +84,16 @@ export interface RegistryLine {
     vat: number;
     parkFee: number;
     platformFee: number;
+    /**
+     * Топливо против расчёта по довезённому рейсу (схема шефа: топливо — на
+     * парке): «+» — сэкономили, «−» — перерасход. Пока рейс идёт — 0.
+     */
+    fuelDiff: number;
+    /** Прибыль парка по рейсу: его комиссия плюс разница по топливу. */
+    parkProfit: number;
 }
 
-const TOTAL_KEYS = ['driverTotal', 'fuelIssued', 'fuelReceipts', 'gross', 'opv', 'vosms', 'ipn', 'withheld', 'so', 'toBudget', 'deductionAmount', 'toPay', 'paid', 'customerPrice', 'vat', 'parkFee', 'platformFee'] as const;
+const TOTAL_KEYS = ['driverTotal', 'fuelIssued', 'fuelReceipts', 'gross', 'opv', 'vosms', 'ipn', 'withheld', 'so', 'toBudget', 'deductionAmount', 'toPay', 'paid', 'customerPrice', 'vat', 'parkFee', 'platformFee', 'fuelDiff', 'parkProfit'] as const;
 type Totals = Record<typeof TOTAL_KEYS[number], number>;
 
 function sum(lines: RegistryLine[]): Totals {
@@ -160,6 +167,9 @@ export class ExchangeParkRegistryService {
         const payStatus: PayStatus = item ? item.payout.status
             : r.order.status === OrderStatus.COMPLETED ? 'TO_REQUEST' : 'IN_TRIP';
         const pickup = r.order.routePoints.find((p) => p.pointType !== 'DELIVERY');
+        // Топливо парк оплачивает по чекам; по довезённому рейсу видно, уложились ли в расчёт.
+        const done = r.order.status === OrderStatus.COMPLETED || !!item;
+        const fuelDiff = r.scheme === 2 && done ? money(num(r.fuelEstimate) - a.fuelReceipts) : 0;
         return {
             orderId: r.orderId,
             orderNumber: r.order.orderNumber,
@@ -185,6 +195,8 @@ export class ExchangeParkRegistryService {
             vat: num(r.vat),
             parkFee: num(r.parkFee),
             platformFee: num(r.platformFee),
+            fuelDiff,
+            parkProfit: money(num(r.parkFee) + fuelDiff),
         };
     }
 
@@ -241,6 +253,19 @@ export class ExchangeParkRegistryService {
         const book = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(trips), 'Рейсы');
         XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(drivers), 'По водителям');
+        // Итог месяца парка одной сводкой (задачи шефа, K8): оборот, налоги, прибыль.
+        const t = r.totals;
+        XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
+            ['Итог месяца', r.month],
+            ['Рейсов', t.trips],
+            ['Оборот по рейсам (что платят компании)', t.customerPrice],
+            ['НДС', t.vat],
+            ['Налоги и взносы в бюджет (ОПВ, ОСМС, ИПН, СО)', t.toBudget],
+            ['Комиссия парка по расчёту', t.parkFee],
+            ['Топливо: экономия (+) / перерасход (−)', t.fuelDiff],
+            ['Прибыль парка', t.parkProfit],
+            ['Доля LogiCore', t.platformFee],
+        ]), 'Итог месяца');
         if (r.preliminary) {
             XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
                 ['РАСЧЁТ ПРЕДВАРИТЕЛЬНЫЙ'],

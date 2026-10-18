@@ -488,11 +488,15 @@ export interface ParkRegistryLine {
     vat: number;
     parkFee: number;
     platformFee: number;
+    /** Топливо против расчёта по довезённому рейсу: «+» экономия, «−» перерасход (K8). */
+    fuelDiff?: number;
+    /** Прибыль парка по рейсу: комиссия плюс разница по топливу. */
+    parkProfit?: number;
 }
 
 type RegistryTotals = Pick<ParkRegistryLine,
     'driverTotal' | 'fuelIssued' | 'fuelReceipts' | 'gross' | 'opv' | 'vosms' | 'ipn' | 'withheld' | 'so' | 'toBudget'
-    | 'deductionAmount' | 'toPay' | 'paid' | 'customerPrice' | 'vat' | 'parkFee' | 'platformFee'>;
+    | 'deductionAmount' | 'toPay' | 'paid' | 'customerPrice' | 'vat' | 'parkFee' | 'platformFee' | 'fuelDiff' | 'parkProfit'>;
 
 export interface ParkRegistry {
     month: string;

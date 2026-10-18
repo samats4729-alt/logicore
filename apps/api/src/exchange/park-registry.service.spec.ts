@@ -62,6 +62,19 @@ describe('Реестр бухгалтера парка за месяц', () => {
         expect(t(r.totals.toBudget)).toBe(t(r.lines[0].toBudget) + t(r.lines[1].toBudget));
     });
 
+    it('итог месяца парка: прибыль = комиссия + экономия топлива по довезённым рейсам (схема шефа)', async () => {
+        const { service } = build([settlementRow({ scheme: 2, fuelEstimate: 125000, parkFee: 5237.25, workNet: 65700, gross: 73000, opv: 7300, vosms: 1460, ipn: 0, so: 3285 })]);
+        const r = await service.month('park-1', '2026-10');
+        // Расчёт 125 000, по чекам 120 000 — сэкономили 5 000.
+        expect(r.lines[0]).toMatchObject({ fuelDiff: 5000, parkProfit: 10237.25 });
+        expect(r.totals).toMatchObject({ fuelDiff: 5000, parkProfit: 10237.25 });
+    });
+
+    it('рейс ещё идёт — разницу по топливу не считаем', async () => {
+        const { service } = build([settlementRow({ scheme: 2, fuelEstimate: 125000, order: { ...settlementRow().order, status: 'IN_TRANSIT' } })]);
+        expect((await service.month('park-1', '2026-10')).lines[0].fuelDiff).toBe(0);
+    });
+
     it('месяц с ошибкой — понятный отказ', async () => {
         const { service } = build();
         await expect(service.month('park-1', '2026-13')).rejects.toThrow(/ГГГГ-ММ/);
@@ -71,7 +84,7 @@ describe('Реестр бухгалтера парка за месяц', () => {
         const { service } = build();
         const { buffer } = await service.export('park-1', '2026-10');
         const book = XLSX.read(buffer, { type: 'buffer' });
-        expect(book.SheetNames).toEqual(['Рейсы', 'По водителям', 'Внимание']);
+        expect(book.SheetNames).toEqual(['Рейсы', 'По водителям', 'Итог месяца', 'Внимание']);
         const row = XLSX.utils.sheet_to_json<any>(book.Sheets['Рейсы'])[0];
         expect(row).toMatchObject({ 'Заявка': '000000013', 'В бюджет всего': 72324.66, 'Расчёт': 'предварительный' });
     });
@@ -79,6 +92,6 @@ describe('Реестр бухгалтера парка за месяц', () => {
     it('бухгалтер подтвердил и рейсы посчитаны после — листа «Внимание» нет', async () => {
         const { service } = build([settlementRow({ preliminary: false })], true);
         const book = XLSX.read((await service.export('park-1', '2026-10')).buffer, { type: 'buffer' });
-        expect(book.SheetNames).toEqual(['Рейсы', 'По водителям']);
+        expect(book.SheetNames).toEqual(['Рейсы', 'По водителям', 'Итог месяца']);
     });
 });
