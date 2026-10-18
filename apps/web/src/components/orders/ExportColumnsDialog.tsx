@@ -22,7 +22,7 @@ const GROUPS: { title: string; columns: string[] }[] = [
     {
         title: 'Рейс',
         columns: [
-            '№ заявки', 'Номер ТТН', DEFAULT_REF_LABEL,
+            'Организация', '№ заявки', 'Номер ТТН', DEFAULT_REF_LABEL,
             'Статус', 'Груз', 'Вес, кг', 'Откуда', 'Куда',
         ],
     },

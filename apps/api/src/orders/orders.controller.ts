@@ -156,6 +156,7 @@ export class OrdersController {
             req.user.companyId,
             body?.orderIds ?? [],
             body?.columns,
+            req.user.sub,
         );
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

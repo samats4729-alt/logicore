@@ -35,6 +35,10 @@ export const CUSTOMER_REF_COLUMN = DEFAULT_CUSTOMER_REF_LABEL;
  * галочки: файл должен выглядеть одинаково от раза к разу.
  */
 export const EXPORT_COLUMNS = [
+    // Какая из своих организаций в сделке — у владельца их несколько
+    // (Альфа Бизнес Солюшнс, Нагима, Трек Транс), и выгрузку для заказчика
+    // делают по образцу, где организация — первая колонка (шеф, 19.10.2026).
+    'Организация',
     '№ заявки',
     // Номера, по которым заказчик находит этот рейс у себя. Стоят рядом с
     // нашим номером: бухгалтер сверяет свою выгрузку с его реестром, и
@@ -126,6 +130,7 @@ export class OrdersExportService {
         companyId: string,
         orderIds: string[],
         columns?: string[],
+        userId?: string,
     ): Promise<Buffer> {
         const ids = [...new Set(orderIds ?? [])].filter(Boolean);
         if (!ids.length) {
@@ -204,6 +209,23 @@ export class OrdersExportService {
             },
         });
 
+        // Свои организации человека — чтобы назвать, от какой из них сделка.
+        // Без пользователя (старые вызовы) — только активная.
+        const mine = new Set<string>([companyId]);
+        if (userId) {
+            const relations = await this.prisma.userCompanyRelation.findMany({ where: { userId }, select: { companyId: true } });
+            for (const r of relations) mine.add(r.companyId);
+        }
+        const ownOrganization = (order: (typeof orders)[number]) => {
+            const sides = [
+                { id: order.forwarderId, name: order.forwarder?.name },
+                { id: order.subForwarderId, name: order.subForwarder?.name },
+                { id: order.customerCompanyId, name: order.customerCompany?.name },
+            ];
+            // Сначала активная организация, потом любая другая своя.
+            return (sides.find((s) => s.id === companyId) ?? sides.find((s) => s.id && mine.has(s.id)))?.name || '';
+        };
+
         const rows = orders.map((order) => {
             // Кто в этом рейсе только заказчик — не увидит нашу сторону
             // сделки. Маска ставится до расчёта: калькулятор не должен
@@ -272,6 +294,7 @@ export class OrdersExportService {
                     && (document.companyId === companyId || document.counterpartyId === companyId));
 
             return {
+                'Организация': ownOrganization(order),
                 '№ заявки': order.orderNumber,
                 'Номер ТТН': order.ttnNumber || '',
                 [CUSTOMER_REF_COLUMN]: order.customerRefNumber || '',
