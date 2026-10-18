@@ -16,15 +16,27 @@ function core(name: string): string {
     return name.replace(/[«»"'„“]/g, ' ').trim().replace(LEGAL_FORMS, '').trim() || name.trim();
 }
 
-/** Оттенок из названия: одинаковое название — одинаковый цвет, соседние названия — далёкие оттенки. */
-export function partyHue(name: string): number {
+/** Число из названия: одинаковое название — одинаковое число. */
+function hashOf(name: string): number {
     let h = 2166136261;
     for (const ch of core(name).toLowerCase()) {
         h ^= ch.codePointAt(0) ?? 0;
         h = Math.imul(h, 16777619);
     }
-    // Золотой угол разводит оттенки по кругу ровнее, чем остаток от деления.
-    return Math.round(((h >>> 0) * 137.508) % 360);
+    return h >>> 0;
+}
+
+/**
+ * Цвет из названия: оттенок по кругу (золотой угол разводит соседние названия
+ * далеко) и одна из трёх яркостей — чтобы при 20–30 компаниях два близких
+ * оттенка всё же отличались светлотой.
+ */
+export function partyColor(name: string): string {
+    const h = hashOf(name);
+    const hue = Math.round((h * 137.508) % 360);
+    const light = [36, 45, 54][(h >>> 9) % 3];
+    const sat = [62, 52][(h >>> 13) % 2];
+    return `hsl(${hue} ${sat}% ${light}%)`;
 }
 
 export default function PartyMark({ name, size = 18 }: { name?: string | null; size?: number }) {
@@ -39,7 +51,7 @@ export default function PartyMark({ name, size = 18 }: { name?: string | null; s
                 width: size,
                 height: size,
                 fontSize: Math.round(size * 0.55),
-                background: label ? `hsl(${partyHue(label)} 58% 44%)` : 'var(--muted-foreground, #8c8c8c)',
+                background: label ? partyColor(label) : 'var(--muted-foreground, #8c8c8c)',
             }}
         >
             {letter}
