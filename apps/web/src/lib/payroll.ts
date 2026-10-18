@@ -93,6 +93,8 @@ export interface PendingTrip {
     percentValue: number;
     percentBase: string;
     amount: number;
+    /** Процент придёт после оплаты, а отсрочка у заказчика не задана (K3). Старый сервер не присылает. */
+    customerTermsMissing?: boolean;
 }
 
 /** Начисление с расшифровкой. */

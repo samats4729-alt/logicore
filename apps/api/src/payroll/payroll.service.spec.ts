@@ -521,6 +521,26 @@ describe('PayrollService.pendingPercent — проценты, которые е�
         expect(pending[0]).toMatchObject({ orderNumber: '001', reason: 'in_progress', amount: 25000 });
     });
 
+    it('процент придёт после оплаты, а отсрочка у рейса не задана — подсказка «укажите отсрочку» (K3)', async () => {
+        const service = build({ accrualStatus: 'CUSTOMER_PAID', percentBase: 'MARGIN', percentValue: 10 }, [
+            order({ id: 'o1', orderNumber: '001', status: 'COMPLETED', isCustomerPaid: false, customerPaymentDays: null }),
+            order({ id: 'o2', orderNumber: '002', status: 'COMPLETED', isCustomerPaid: false, customerPaymentDays: 15 }),
+        ]);
+
+        const pending = (await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)!;
+
+        expect(pending.find((p) => p.orderNumber === '001')?.customerTermsMissing).toBe(true);
+        expect(pending.find((p) => p.orderNumber === '002')?.customerTermsMissing).toBe(false);
+    });
+
+    it('процент после завершения рейса — отсрочка заказчика ему не нужна, подсказки нет', async () => {
+        const service = build({ accrualStatus: 'COMPLETED', percentBase: 'ORDER_AMOUNT', percentValue: 5 }, [
+            order({ id: 'o1', orderNumber: '001', status: 'IN_TRANSIT', customerPaymentDays: null }),
+        ]);
+
+        expect((await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)![0].customerTermsMissing).toBe(false);
+    });
+
     it('уже начисленный процент в ожидании не числится', async () => {
         const service = build({ accrualStatus: 'CUSTOMER_PAID' }, [
             order({ id: 'o1', orderNumber: '001', status: 'COMPLETED', isCustomerPaid: false }),

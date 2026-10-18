@@ -91,6 +91,11 @@ export default function EmployeeMonthDetails({ data, showTotal = true, who = 'em
                                     <div className="text-[12px] text-muted-foreground">
                                         {p.percentBase === 'ORDER_AMOUNT' ? 'сумма рейса' : 'маржа'} {сумма(p.baseAmount)} · {p.percentValue}% · {причинаОжидания(p.reason)}
                                     </div>
+                                    {p.customerTermsMissing && (
+                                        <div className="mt-0.5 text-[12px] font-medium text-amber-700 dark:text-amber-400">
+                                            Укажите отсрочку платежа у заказчика — без неё не посчитать, когда он заплатит и когда придёт бонус
+                                        </div>
+                                    )}
                                 </div>
                                 <span className="flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground" title="Оценка по сегодняшней цене — начислится после события">
                                     <Clock className="h-3.5 w-3.5" /> {тенге(p.amount)}

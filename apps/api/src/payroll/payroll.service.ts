@@ -31,6 +31,12 @@ export interface PendingTrip {
     percentValue: number;
     percentBase: string;
     amount: number;
+    /**
+     * Процент придёт после оплаты заказчика, а отсрочка у рейса не задана:
+     * когда он заплатит — неизвестно, а значит, и когда придёт процент
+     * (задачи шефа, K3: «укажите отсрочку платежа для расчёта бонусов»).
+     */
+    customerTermsMissing: boolean;
 }
 
 /** Схема оплаты для экрана — числами, без служебных полей. */
@@ -519,6 +525,7 @@ export class PayrollService {
                 percentValue: D(scheme.percentValue).toNumber(),
                 percentBase: scheme.percentBase,
                 amount: amount.toNumber(),
+                customerTermsMissing: forPayment && order.customerPaymentDays == null,
             });
             result.set(userId, list);
         }
