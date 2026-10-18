@@ -210,17 +210,7 @@ export class DriverService {
         const uploaderId = order.driverId || order.responsibleManagerId || order.customerId;
         if (!uploaderId) throw new BadRequestException('Невозможно определить отправителя');
 
-        const ext = path.extname(file.originalname) || '.jpg';
-        const filename = `ttn_${order.id}_${Date.now()}${ext}`;
-        const relativePath = `uploads/documents/${filename}`;
-
-        if (this.s3.isS3Enabled()) {
-            await this.s3.uploadFile(relativePath, file.buffer, file.mimetype);
-        } else {
-            const uploadsDir = path.join(process.cwd(), 'uploads', 'documents');
-            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-            fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
-        }
+        const relativePath = await this.saveFile(`ttn_${order.id}`, file);
 
         const doc = await this.prisma.document.create({
             data: {
@@ -236,15 +226,63 @@ export class DriverService {
         return { ok: true, documentId: doc.id };
     }
 
-    async reportProblem(token: string, comment?: string) {
+    /** Файл с водительской страницы — в хранилище; путь для записи документа. */
+    private async saveFile(prefix: string, file: Express.Multer.File): Promise<string> {
+        const ext = path.extname(file.originalname) || '.jpg';
+        const filename = `${prefix}_${Date.now()}${ext}`;
+        const relativePath = `uploads/documents/${filename}`;
+        if (this.s3.isS3Enabled()) {
+            await this.s3.uploadFile(relativePath, file.buffer, file.mimetype);
+        } else {
+            const uploadsDir = path.join(process.cwd(), 'uploads', 'documents');
+            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+            fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
+        }
+        return relativePath;
+    }
+
+    /**
+     * «Проблема в пути»: поломка, закрытая дорога. С 19.10.2026 — с фото
+     * (задачи шефа, M2): снимок ложится в документы рейса, а запись — в
+     * историю рейса, чтобы менеджер видел, что случилось, а не только
+     * красный статус. Сам статус виден в колокольчике и в «Требуют внимания».
+     */
+    async reportProblem(token: string, comment?: string, file?: Express.Multer.File) {
         const order = await this.findByToken(token);
         if (order.status === OrderStatus.COMPLETED || order.status === OrderStatus.CANCELLED) {
             throw new BadRequestException('Заявка уже закрыта');
         }
+        if (file) assertAllowedUpload(file);
+        const text = comment?.trim().slice(0, 1000) || '';
+        const uploaderId = order.driverId || order.responsibleManagerId || order.customerId;
+        let photo = false;
+        if (file && uploaderId) {
+            const relativePath = await this.saveFile(`problem_${order.id}`, file);
+            await this.prisma.document.create({
+                data: {
+                    type: DocumentType.OTHER,
+                    fileName: `Проблема в пути${path.extname(file.originalname) || '.jpg'}`,
+                    fileUrl: relativePath,
+                    fileSize: file.size,
+                    mimeType: file.mimetype,
+                    orderId: order.id,
+                    uploadedById: uploaderId,
+                },
+            });
+            photo = true;
+        }
         await this.prisma.order.update({ where: { id: order.id }, data: { status: OrderStatus.PROBLEM } });
+        await this.prisma.orderStatusHistory.create({
+            data: {
+                orderId: order.id,
+                status: OrderStatus.PROBLEM,
+                comment: `Водитель: проблема в пути${text ? ` — ${text}` : ''}${photo ? ' (фото — во вкладке «Документы»)' : ''}`,
+                changedById: order.driverId ?? null,
+            },
+        });
         if (order.driverId) {
             await this.prisma.orderChangeLog.create({
-                data: { orderId: order.id, userId: order.driverId, action: 'driver_problem', details: `Водитель сообщил о проблеме${comment ? `: ${comment}` : ''}` },
+                data: { orderId: order.id, userId: order.driverId, action: 'driver_problem', details: `Водитель сообщил о проблеме${text ? `: ${text}` : ''}${photo ? ' (с фото)' : ''}` },
             });
         }
         return this.getByToken(token);
