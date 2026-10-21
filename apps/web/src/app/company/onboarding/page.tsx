@@ -49,7 +49,22 @@ interface VerificationState {
     canSubmit: boolean;
     missingDocuments: string[];
     documents: { id: string; type: string; fileName: string }[];
+    /** Какие документы нужны: у ИП свой пакет (P8). Старый сервер не присылает. */
+    requiredDocuments?: string[];
+    soleTrader?: boolean;
 }
+
+/** Для ИП — те же два документа, но так, как они у ИП называются (P8). */
+const SOLE_TRADER_TITLES: Record<string, { title: string; hint: string }> = {
+    COMPANY_REGISTRATION: {
+        title: 'Талон (уведомление) о регистрации ИП',
+        hint: 'С eGov или из налоговой: ФИО, ИИН, дата регистрации ИП',
+    },
+    DIRECTOR_ID: {
+        title: 'Удостоверение личности ИП',
+        hint: 'Скан или фото — сверяется с талоном',
+    },
+};
 
 /**
  * Онбординг после регистрации: создать организацию и провести её через
@@ -146,7 +161,7 @@ export default function CompanyOnboardingPage() {
                 style={{ marginBottom: 20 }}
                 items={[
                     { title: 'Организация', description: 'Название, БИН, вид деятельности' },
-                    { title: 'Документы', description: 'Справка, приказ, удостоверение' },
+                    { title: 'Документы', description: verification?.soleTrader ? 'Талон ИП, удостоверение' : 'Справка, приказ, удостоверение' },
                     { title: 'Подтверждена', description: 'Проверяем за рабочий день', icon: <CheckCircleOutlined /> },
                 ]}
             />
@@ -213,7 +228,7 @@ export default function CompanyOnboardingPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <div>
                             <div style={{ fontWeight: 600, fontSize: 15 }}>{company.name}</div>
-                            <div style={{ fontSize: 12, color: token.colorTextSecondary }}>БИН {company.bin}</div>
+                            <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{verification?.soleTrader ? 'ИИН' : 'БИН'} {company.bin}</div>
                         </div>
                         <span className={`${nova.chip}${status === 'REJECTED' ? ` ${nova.chipNeg}` : status === 'PENDING' ? ` ${nova.chipWarn}` : ''}`}>
                             {STATUS_VIEW[status]?.label}
@@ -260,7 +275,10 @@ export default function CompanyOnboardingPage() {
                     )}
 
                     <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                        {REQUIRED_DOCUMENTS.map((document) => {
+                        {REQUIRED_DOCUMENTS
+                            .filter((d) => !verification?.requiredDocuments || verification.requiredDocuments.includes(d.type))
+                            .map((d) => (verification?.soleTrader ? { ...d, ...SOLE_TRADER_TITLES[d.type] } : d))
+                            .map((document) => {
                             const attached = verification?.documents.find((d) => d.type === document.type);
                             return (
                                 <div
@@ -328,7 +346,9 @@ export default function CompanyOnboardingPage() {
                             </Button>
                             {!verification?.canSubmit && status !== 'PENDING' && (
                                 <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 8, textAlign: 'center' }}>
-                                    Приложите все три документа, чтобы отправить заявку
+                                    {verification?.soleTrader
+                                        ? 'Приложите оба документа, чтобы отправить заявку'
+                                        : 'Приложите все три документа, чтобы отправить заявку'}
                                 </div>
                             )}
                         </>
