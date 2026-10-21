@@ -9,6 +9,7 @@ import { birthDateFromIin, digitsOnly, isValidIin, normalizeIdNumber, normalizeP
 import { removeExchangeFile, safeExtension, storeExchangeFile } from './exchange-files';
 import { PARK_FILTER_STATUSES, ParkDriverFilter, UpdateDriverProfileDto } from './dto/driver.dto';
 import { ParkContractService } from './park-contract.service';
+import { tempPassword } from '../auth/temp-password';
 
 /** Подписи документов — ими же сервер говорит, чего не хватает. */
 export const DOCUMENT_TITLES: Record<ExchangeDriverDocumentKind, string> = {
@@ -202,6 +203,57 @@ export class ExchangeDriversService {
                 exchangeDriver: { create: { phone, kind: data.kind ?? null } },
             },
         });
+    }
+
+    /**
+     * Парк сам заводит водителя (задачи шефа, Q3/R1).
+     *
+     * Водитель позвонил или пришёл — диспетчер вносит его имя и номер, а
+     * система придумывает пароль. Пароль показывается один раз: его диктуют
+     * водителю, и он входит в приложение по номеру и паролю. Остальное — ИИН,
+     * удостоверение, машину, договор — водитель заполняет в анкете, как при
+     * обычной регистрации, и анкета приходит парку на проверку.
+     *
+     * Номер, который уже есть в системе, второй раз не заводится — так же,
+     * как при регистрации из приложения. Номер из чёрного списка биржи —
+     * тоже: проверку анкеты он всё равно не прошёл бы.
+     */
+    async addByPark(parkId: string, data: { phone: string; lastName: string; firstName: string; middleName?: string }) {
+        const phone = normalizePhone(data.phone);
+        if (!phone) throw new BadRequestException('Телефон — казахстанский мобильный, например +7 701 123 45 67');
+        const lastName = data.lastName.trim();
+        const firstName = data.firstName.trim();
+        if (!lastName || !firstName) throw new BadRequestException('Укажите фамилию и имя водителя');
+
+        const taken = await this.prisma.user.findFirst({
+            where: { phone: { in: [phone, `8${phone.slice(2)}`] } },
+            select: { id: true },
+        });
+        if (taken) {
+            throw new BadRequestException(
+                'Этот номер уже есть в системе. Если водитель зарегистрирован сам, дайте ему код приглашения парка.',
+            );
+        }
+        const blocked = await this.blockedBy({ iin: null, phone, vehiclePlate: null });
+        if (blocked) throw new ForbiddenException(`Этот номер в чёрном списке биржи${blocked.reason ? `: ${blocked.reason}` : ''}`);
+
+        const password = tempPassword();
+        const middleName = data.middleName?.trim() || null;
+        const user = await this.prisma.user.create({
+            data: {
+                role: 'DRIVER',
+                phone,
+                passwordHash: await bcrypt.hash(password, 12),
+                firstName,
+                lastName,
+                middleName,
+                exchangeDriver: {
+                    create: { phone, kind: 'PARK', parkCompanyId: parkId, lastName, firstName, middleName },
+                },
+            },
+            select: { exchangeDriver: { select: { id: true } } },
+        });
+        return { id: user.exchangeDriver!.id, lastName, firstName, phone, password };
     }
 
     // ==================== водитель (приложение) ====================
@@ -589,7 +641,7 @@ export class ExchangeDriversService {
         });
         const grouped = await this.prisma.exchangeDriver.groupBy({
             by: ['status'],
-            where: { parkCompanyId: companyId, status: { not: 'DRAFT' } },
+            where: { parkCompanyId: companyId },
             _count: { _all: true },
         });
         const count = (s: ExchangeDriverStatus[] | undefined) =>
@@ -601,7 +653,8 @@ export class ExchangeDriversService {
                 approved: count(['APPROVED']),
                 rejected: count(['REJECTED']),
                 blocked: count(['BLOCKED']),
-                all: count(undefined),
+                all: count(PARK_FILTER_STATUSES.all),
+                draft: count(['DRAFT']),
             },
         };
     }

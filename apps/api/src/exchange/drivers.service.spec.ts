@@ -470,3 +470,37 @@ describe('Биржа: заявление водителя на базовый в
         expect(prisma.exchangeDriver.update.mock.calls[1][0].data).toEqual({ deductionRequested: false, deductionRequestedAt: null });
     });
 });
+
+describe('Парк сам добавляет водителя (Q3/R1)', () => {
+    const dto = { phone: '8 701 555 44 33', lastName: ' Сериков ', firstName: 'Ерлан' };
+
+    it('водитель парка с паролем из цифр; пароль отдаётся один раз и в базе не лежит открыто', async () => {
+        const { service, prisma } = build();
+        prisma.user.findFirst.mockResolvedValue(null);
+        prisma.user.create.mockResolvedValue({ exchangeDriver: { id: 'x-1' } });
+
+        const added = await service.addByPark('park-1', dto);
+
+        expect(added).toMatchObject({ id: 'x-1', lastName: 'Сериков', firstName: 'Ерлан', phone: '+77015554433' });
+        expect(added.password).toMatch(/^\d{8}$/);
+        const data = prisma.user.create.mock.calls[0][0].data;
+        expect(data).toMatchObject({ role: 'DRIVER', phone: '+77015554433', lastName: 'Сериков', firstName: 'Ерлан' });
+        expect(data.passwordHash).not.toContain(added.password);
+        expect(data.exchangeDriver.create).toMatchObject({ kind: 'PARK', parkCompanyId: 'park-1', phone: '+77015554433' });
+    });
+
+    it('номер уже в системе — второй раз не заводится', async () => {
+        const { service, prisma } = build();
+        prisma.user.findFirst.mockResolvedValue({ id: 'u-1' });
+        await expect(service.addByPark('park-1', dto)).rejects.toThrow(/уже есть/);
+        expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('номер из чёрного списка биржи — нельзя', async () => {
+        const { service, prisma } = build();
+        prisma.user.findFirst.mockResolvedValue(null);
+        prisma.exchangeBlocklist.findFirst.mockResolvedValue({ reason: 'обман с топливом' });
+        await expect(service.addByPark('park-1', dto)).rejects.toThrow(/чёрном списке/);
+        expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+});

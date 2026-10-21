@@ -292,7 +292,7 @@ export interface ExchangeDriver {
     missing: string[];
 }
 
-export type ParkDriverFilter = 'pending' | 'approved' | 'rejected' | 'blocked' | 'all';
+export type ParkDriverFilter = 'pending' | 'approved' | 'rejected' | 'blocked' | 'all' | 'draft';
 
 export interface ParkDriverList {
     drivers: ExchangeDriver[];

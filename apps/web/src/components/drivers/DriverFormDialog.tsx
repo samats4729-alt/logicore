@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { alreadyExistsMessage, driverKindLabel, type PoolDriver } from '@/lib/driver-pool';
+import { tempPassword } from '@/lib/temp-password';
 
 /**
  * Водитель: добавить в список или поправить.
@@ -95,6 +96,8 @@ export default function DriverFormDialog({
     const [errors, setErrors] = useState<Partial<Record<keyof Values, string>>>({});
     const [saving, setSaving] = useState(false);
     const [confirmRemove, setConfirmRemove] = useState(false);
+    /** Придуманный пароль показываем открыто — его надо продиктовать водителю. */
+    const [showPassword, setShowPassword] = useState(false);
 
     const editing = !!driver;
 
@@ -105,6 +108,7 @@ export default function DriverFormDialog({
         setCarrierId('');
         setErrors({});
         setConfirmRemove(false);
+        setShowPassword(false);
         if (!driver) {
             // Перевозчики — только для нештатного, и только чтобы отметить,
             // от кого он: на рейс его всё равно можно поставить за любого.
@@ -354,10 +358,20 @@ export default function DriverFormDialog({
                         <Section title="Приложение водителя">
                             <Field
                                 label={editing ? 'Новый пароль' : 'Пароль'}
-                                hint={editing ? 'оставьте пустым, чтобы не менять' : 'необязательно — можно выдать позже'}
+                                hint={showPassword
+                                    ? 'запишите или продиктуйте водителю — после сохранения пароль не показывается'
+                                    : editing ? 'оставьте пустым, чтобы не менять' : 'необязательно — можно выдать позже'}
                             >
-                                <Input value={values.password} onChange={(e) => set('password', e.target.value)}
-                                    type="password" autoComplete="new-password" className="h-9 text-[13px]" />
+                                <div className="flex gap-2">
+                                    <Input value={values.password} onChange={(e) => set('password', e.target.value)}
+                                        type={showPassword ? 'text' : 'password'} autoComplete="new-password"
+                                        className="h-9 text-[13px] tabular-nums" />
+                                    {/* Пароль придумывает система (R1): диспетчеру не нужно сочинять его самому. */}
+                                    <Button type="button" variant="outline" size="sm" className="h-9 shrink-0"
+                                        onClick={() => { set('password', tempPassword()); setShowPassword(true); }}>
+                                        Придумать
+                                    </Button>
+                                </div>
                             </Field>
                         </Section>
                     )}

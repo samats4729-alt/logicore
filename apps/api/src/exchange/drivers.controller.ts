@@ -48,7 +48,7 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
     res.send(file.pdf);
 }
 import {
-    AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
+    AddParkDriverDto, AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
     ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
@@ -563,6 +563,22 @@ export class ExchangeParkController {
     @ApiOperation({ summary: 'Водители парка' })
     list(@Request() req: any, @Query() query: ParkDriversQueryDto) {
         return this.drivers.parkDrivers(req.user.companyId, query.status);
+    }
+
+    @Post('drivers')
+    @ApiOperation({ summary: 'Добавить водителя самому: имя и номер, пароль придумает система' })
+    async add(@Request() req: any, @Body() dto: AddParkDriverDto) {
+        const added = await this.drivers.addByPark(req.user.companyId, dto);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'exchange_driver',
+            entityId: added.id,
+            // Пароля в журнале нет: его видит только тот, кто добавил, и один раз.
+            entityLabel: `${added.lastName} ${added.firstName}: добавлен парком, ${added.phone}`,
+        });
+        return added;
     }
 
     @Get('drivers/:id')

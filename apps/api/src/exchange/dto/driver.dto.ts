@@ -5,6 +5,33 @@ import {
 } from 'class-validator';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../../auth/password-policy';
 
+/** Парк сам заводит водителя: имя и номер, пароль придумает система (Q3/R1). */
+export class AddParkDriverDto {
+    @ApiProperty({ example: '+77011234567' })
+    @IsString()
+    @IsNotEmpty({ message: 'Укажите телефон водителя' })
+    @MaxLength(30)
+    phone: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty({ message: 'Укажите фамилию' })
+    @MaxLength(100)
+    lastName: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty({ message: 'Укажите имя' })
+    @MaxLength(100)
+    firstName: string;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsString()
+    @MaxLength(100)
+    middleName?: string;
+}
+
 /**
  * Регистрация водителя биржи по номеру и паролю. Пока без СМС — см.
  * `ExchangeDriversService.registerByPhone`.
@@ -251,7 +278,8 @@ export class ParkTripsQueryDto {
     status?: typeof PARK_TRIP_FILTERS[number];
 }
 
-export const PARK_DRIVER_FILTERS = ['pending', 'approved', 'rejected', 'blocked', 'all'] as const;
+/** `draft` — анкета ещё не отправлена: водитель вошёл по коду или его добавил сам парк (Q3). */
+export const PARK_DRIVER_FILTERS = ['pending', 'approved', 'rejected', 'blocked', 'all', 'draft'] as const;
 export type ParkDriverFilter = typeof PARK_DRIVER_FILTERS[number];
 
 export class ParkDriversQueryDto {
@@ -287,4 +315,5 @@ export const PARK_FILTER_STATUSES: Record<ParkDriverFilter, ExchangeDriverStatus
     rejected: ['REJECTED'],
     blocked: ['BLOCKED'],
     all: ['PENDING', 'APPROVED', 'REJECTED', 'BLOCKED'],
+    draft: ['DRAFT'],
 };
