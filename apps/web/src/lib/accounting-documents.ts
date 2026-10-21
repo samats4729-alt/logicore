@@ -22,6 +22,8 @@ export interface AccountingDocumentParty {
     id: string;
     name: string | null;
     bin: string | null;
+    /** Почта из карточки — в карточке документа, в журнале её нет. */
+    email?: string | null;
 }
 
 export interface AccountingDocumentRoutePoint {
@@ -672,6 +674,18 @@ export async function fetchOpenOrdersForPayment(params: {
     direction: 'IN' | 'OUT';
 }): Promise<OpenOrderForPayment[]> {
     const res = await api.get('/accounting/payments/open-orders', { params });
+    return res.data;
+}
+
+/**
+ * Сообщить контрагенту, что счёт оплачен (задачи шефа, H7/O3): письмом, а
+ * если он работает на платформе — ещё и в его кабинете.
+ */
+export async function notifyInvoicePaid(
+    id: string,
+    email?: string,
+): Promise<{ sentTo: string | null; platform: boolean }> {
+    const res = await api.post(`/accounting-documents/${id}/notify-paid`, email ? { email } : {});
     return res.data;
 }
 

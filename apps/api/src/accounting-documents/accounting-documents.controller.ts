@@ -321,6 +321,53 @@ export class AccountingDocumentsController {
         return { ok: true, sentTo: address };
     }
 
+    /**
+     * Сообщить контрагенту, что счёт оплачен (задачи шефа, H7/O3).
+     *
+     * Письмо — на почту из карточки или на ту, что вписали. Если контрагент
+     * сам работает на платформе, весть попадает ещё и в его колокольчик:
+     * для этого запись в журнале помнит, кому она адресована.
+     */
+    @Post(':id/notify-paid')
+    @Roles(...CHANGE_ROLES)
+    @ApiOperation({ summary: 'Сообщить контрагенту, что счёт оплачен' })
+    async notifyPaid(
+        @Request() req: any,
+        @Param('id') id: string,
+        @Body() body: { email?: string },
+    ) {
+        const info = await this.documents.paidNoticeInfo(req.user.companyId, id);
+        const address = (body?.email || info.counterpartyEmail || '').trim();
+        if (address && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+            throw new BadRequestException(`«${address}» не похоже на адрес почты`);
+        }
+        if (!address && !info.platformCompanyId) {
+            throw new BadRequestException(
+                `У «${info.counterpartyName || 'контрагента'}» не указана почта, и на платформе его нет. `
+                + 'Впишите адрес — сообщение уйдёт письмом.',
+            );
+        }
+
+        if (address) await this.email.sendInvoicePaidEmail(address, info);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE',
+            entity: 'invoice_paid_notice', entityId: id,
+            entityLabel: `Контрагенту сообщено об оплате счёта ${info.number}${address ? `: ${address}` : ''}`,
+            details: {
+                number: info.number,
+                incoming: info.incoming,
+                senderName: info.senderName,
+                recipientName: info.counterpartyName,
+                recipientCompanyId: info.platformCompanyId,
+                email: address || null,
+                paid: info.paid,
+                total: info.total,
+                currency: info.currency,
+            },
+        });
+        return { sentTo: address || null, platform: Boolean(info.platformCompanyId) };
+    }
+
     @Post(':id/receipt')
     @Roles(...CHANGE_ROLES)
     @ApiOperation({

@@ -1081,3 +1081,43 @@ describe('срок оплаты из карточки контрагента (H2
         expect(result.dependsOn).toContain('отсрочка');
     });
 });
+
+describe('сообщение «счёт оплачен» (H7/O3)', () => {
+    const paidDoc = (extra: Record<string, unknown> = {}) => ({
+        id: 'doc-1', number: 'ВХ-7', externalNumber: '123', type: AccountingDocumentType.PAYMENT_INVOICE,
+        direction: AccountingDocumentDirection.INCOMING, status: AccountingDocumentStatus.POSTED,
+        documentDate: new Date('2026-10-20'), externalDate: new Date('2026-10-18'), currency: 'KZT',
+        total: new Prisma.Decimal(500000), amountPaid: new Prisma.Decimal(500000), balanceDue: new Prisma.Decimal(0),
+        counterparty: { name: 'ТОО Перевозчик', email: 'buh@carrier.kz', bin: '111111111111' },
+        company: { name: 'Наша компания' },
+        ...extra,
+    });
+
+    it('входящий счёт: номер и дата — перевозчика, видно, что он есть на платформе', async () => {
+        const { service, prisma } = makeService();
+        prisma.accountingDocument.findFirst.mockResolvedValue(paidDoc());
+        prisma.company.findFirst = jest.fn().mockResolvedValue({ id: 'carrier-tenant', name: 'ТОО Перевозчик', bin: '111111111111' });
+
+        const info = await service.paidNoticeInfo(COMPANY, 'doc-1');
+
+        expect(info).toMatchObject({
+            incoming: true, number: '123', paid: 500000, balance: 0,
+            counterpartyEmail: 'buh@carrier.kz', platformCompanyId: 'carrier-tenant',
+        });
+        expect(new Date(info.documentDate as Date).toISOString().slice(0, 10)).toBe('2026-10-18');
+    });
+
+    it('по счёту ещё нет денег — сообщать не о чем', async () => {
+        const { service, prisma } = makeService();
+        prisma.accountingDocument.findFirst.mockResolvedValue(paidDoc({ amountPaid: new Prisma.Decimal(0) }));
+
+        await expect(service.paidNoticeInfo(COMPANY, 'doc-1')).rejects.toThrow('нет оплаты');
+    });
+
+    it('черновик — рано', async () => {
+        const { service, prisma } = makeService();
+        prisma.accountingDocument.findFirst.mockResolvedValue(paidDoc({ status: AccountingDocumentStatus.DRAFT }));
+
+        await expect(service.paidNoticeInfo(COMPANY, 'doc-1')).rejects.toThrow('не проведён');
+    });
+});
