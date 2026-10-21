@@ -215,6 +215,7 @@ export default function PayTermsForm({ employees, onSaved, onCancel }: {
                             <SelectContent>
                                 <SelectItem value="COMPLETED">когда рейс завершён</SelectItem>
                                 <SelectItem value="CUSTOMER_PAID">когда заказчик оплатил</SelectItem>
+                                <SelectItem value="CUSTOMER_PAID_ON_TIME">когда заказчик оплатил в срок</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
