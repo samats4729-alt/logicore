@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { BillingModule } from '../billing/billing.module';
 import { OrdersService } from './orders.service';
 import { OrdersExportService } from './orders-export.service';
+import { OrderDeleteService } from './order-delete.service';
 import { OrdersController } from './orders.controller';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
@@ -24,6 +25,7 @@ import { CurrencyModule } from '../currency/currency.module';
     providers: [
         OrdersService,
         OrdersExportService,
+        OrderDeleteService,
         PowerOfAttorneyService,
         OrderContractService,
         OrderDocumentsService,

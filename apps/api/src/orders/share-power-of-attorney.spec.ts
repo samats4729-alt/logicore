@@ -46,6 +46,7 @@ describe('рассылка доверенности по почте', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
         );
 
         return { controller, poaService, emailService };

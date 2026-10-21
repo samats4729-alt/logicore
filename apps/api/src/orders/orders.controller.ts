@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Controller, Delete, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { OrdersExportService } from './orders-export.service';
+import { OrderDeleteService } from './order-delete.service';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
 import { OrderDocumentsService } from './order-documents.service';
@@ -37,6 +38,7 @@ export class OrdersController {
         private billingService: BillingService,
         private ordersExport: OrdersExportService,
         private auditService: AuditService,
+        private orderDelete: OrderDeleteService,
     ) { }
 
     @Post()
@@ -587,6 +589,30 @@ export class OrdersController {
             companyId: req.user.companyId,
         });
         return this.auditService.getOrderHistory(id);
+    }
+
+    @Get(':id/delete-check')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Можно ли удалить заявку — и что мешает' })
+    async deleteCheck(@Param('id') id: string) {
+        const why = await this.orderDelete.blockers(id);
+        return { canDelete: why.length === 0, blockers: why };
+    }
+
+    @Delete(':id')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Удалить заявку без платежей и учётных документов' })
+    async deleteOrder(@Param('id') id: string, @Request() req: any) {
+        const result = await this.orderDelete.delete(id, req.user.companyId, req.user.role);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'DELETE',
+            entity: 'order',
+            entityId: id,
+            entityLabel: `Заявка №${result.orderNumber} удалена`,
+        });
+        return result;
     }
 
     @Put(':id')

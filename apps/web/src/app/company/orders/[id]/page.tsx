@@ -35,6 +35,7 @@ import OrderDocuments from '@/components/orders/OrderDocuments';
 import PillTabs from '@/components/ui/PillTabs';
 import OrderDetails, { OrderSideCards } from '@/components/orders/OrderDetails';
 import { OrderStageBar } from '@/components/orders/OrderStageBar';
+import DeleteOrderDialog from '@/components/orders/DeleteOrderDialog';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
@@ -135,6 +136,8 @@ export default function OrderDetailPage() {
     const [actLoading, setActLoading] = useState(false);
     /** «Отменить заявку?» — отмена из меню «Действия» переспрашивает, как и раньше. */
     const [cancelAsk, setCancelAsk] = useState(false);
+    /** «Удалить заявку» (A12) — окно само скажет, если удалить нельзя. */
+    const [deleteAsk, setDeleteAsk] = useState(false);
     const [invoiceLoading, setInvoiceLoading] = useState(false);
     /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
     const [documentChainKey, setDocumentChainKey] = useState(0);
@@ -1643,6 +1646,14 @@ export default function OrderDetailPage() {
                                         </DropdownMenuItem>
                                     </>
                                 )}
+                                {['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN'].includes(user?.role || '') && (
+                                    <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onSelect={() => setDeleteAsk(true)}
+                                    >
+                                        <Trash2 className="h-4 w-4" /> Удалить заявку
+                                    </DropdownMenuItem>
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                         {canChangeStatus && (
@@ -1661,6 +1672,8 @@ export default function OrderDetailPage() {
 
             {/* Где рейс сейчас — полосой этапов, как в макете. */}
             <OrderStageBar status={order.status} />
+
+            <DeleteOrderDialog orderId={orderId} orderNumber={order.orderNumber} open={deleteAsk} onOpenChange={setDeleteAsk} />
 
             <Dialog open={cancelAsk} onOpenChange={setCancelAsk}>
                 <DialogContent className="max-w-sm">
