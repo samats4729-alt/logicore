@@ -3,11 +3,16 @@ import { IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Ma
 
 /** Выставить заявку на биржу: цена для исполнителя и что ещё ему важно. */
 export class PublishOrderDto {
-    @ApiProperty({ description: 'Цена, которую компания предлагает исполнителю, ₸' })
+    /**
+     * Пусто — «без цены» (задачи шефа, P4): исполнители предложат свою, а
+     * на бирже заявка видна как «договорная».
+     */
+    @ApiProperty({ required: false, nullable: true, description: 'Цена, которую компания предлагает исполнителю, ₸; пусто — без цены' })
+    @IsOptional()
     @IsNumber({}, { message: 'Укажите цену для исполнителя' })
     @Min(1, { message: 'Укажите цену для исполнителя' })
     @Max(1_000_000_000, { message: 'Цена слишком большая — проверьте число' })
-    price: number;
+    price?: number | null;
 
     @ApiProperty({ required: false, description: 'Что ещё важно исполнителю — видно всем на бирже' })
     @IsString()

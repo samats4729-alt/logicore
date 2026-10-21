@@ -144,7 +144,9 @@ export class ExchangeController {
             action: 'UPDATE',
             entity: 'order',
             entityId: id,
-            entityLabel: `Заявка ${state.orderNumber} выставлена на биржу за ${dto.price.toLocaleString('ru-RU')} ₸`,
+            entityLabel: dto.price
+                ? `Заявка ${state.orderNumber} выставлена на биржу за ${dto.price.toLocaleString('ru-RU')} ₸`
+                : `Заявка ${state.orderNumber} выставлена на биржу без цены — исполнители предложат свою`,
         });
         return state;
     }

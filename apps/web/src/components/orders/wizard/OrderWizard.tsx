@@ -409,6 +409,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     const exchangeAvailable = exchangeEnabled && selectedMyCompanyId === user?.companyId
         && (!editIdProp || (!!editExchange && !editExchange.onExchange && editExchange.canPublish));
     const exchangeChecked = Form.useWatch('onExchange', { form, preserve: true }) === true;
+    /** «Без цены» на бирже (задачи шефа, P4): исполнители предложат свою. */
+    const [exchangeNoPrice, setExchangeNoPrice] = useState(false);
     /** Выставить на биржу при сохранении: в заявке перевозчиком записана наша компания, водителя нет. */
     const exchangeActive = exchangeAvailable && exchangeChecked && isMeCarrier;
     /**
@@ -959,6 +961,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 return false;
             }
             if (exchangeActive) {
+                if (exchangeNoPrice) return true;
                 try {
                     await form.validateFields(['exchangePrice']);
                     return true;
@@ -1220,7 +1223,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 // форма — один состав заявки.
                 await api.put(`/orders/${editingId}`, orderData);
                 if (exchangeActive) {
-                    await publishNewOrder({ id: editingId, orderNumber: editingNumber }, Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`), 'сохранена');
+                    await publishNewOrder({ id: editingId, orderNumber: editingNumber }, exchangeNoPrice ? null : Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`), 'сохранена');
                 } else {
                     toast.success('Заявка сохранена');
                 }
@@ -1232,7 +1235,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 черновикЗакрыт.current = true;
                 if (черновикКлюч) clearDraft(черновикКлюч);
                 if (exchangeActive) {
-                    await publishNewOrder(created, Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`));
+                    await publishNewOrder(created, exchangeNoPrice ? null : Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`));
                 } else {
                     toast.success('Заявка создана!');
                 }
@@ -1414,17 +1417,27 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     {exchangeActive && (
                         <div className="min-w-[200px] flex-1">
                             {/* Та же цена, что спрашивает кнопка «Выставить на биржу» в карточке. */}
-                            <Form.Item
-                                name="exchangePrice"
-                                label="Цена для исполнителя на бирже"
-                                rules={[{
-                                    validator: (_, v) => (Number(v) > 0
-                                        ? Promise.resolve()
-                                        : Promise.reject(new Error('Укажите цену — исполнители согласятся на неё или предложат свою'))),
-                                }]}
-                            >
-                                <MoneyInput addonAfter="KZT" aria-label="Цена для исполнителя на бирже" />
-                            </Form.Item>
+                            {!exchangeNoPrice && (
+                                <Form.Item
+                                    name="exchangePrice"
+                                    label="Цена для исполнителя на бирже"
+                                    // Экспедитору две цены рядом путались (P4): говорим, чем они разные.
+                                    extra={showCustomerPriceField
+                                        ? 'Сколько получит исполнитель. «Ставка от заказчика» — сколько заказчик платит вам; на бирже её не видно.'
+                                        : undefined}
+                                    rules={[{
+                                        validator: (_, v) => (Number(v) > 0
+                                            ? Promise.resolve()
+                                            : Promise.reject(new Error('Укажите цену — исполнители согласятся на неё или предложат свою'))),
+                                    }]}
+                                >
+                                    <MoneyInput addonAfter="KZT" aria-label="Цена для исполнителя на бирже" />
+                                </Form.Item>
+                            )}
+                            <label className="-mt-2 mb-3 flex cursor-pointer items-center gap-2 text-[12.5px] text-muted-foreground">
+                                <Checkbox checked={exchangeNoPrice} onCheckedChange={(c) => setExchangeNoPrice(c === true)} />
+                                Без цены — пусть исполнители предложат свою
+                            </label>
                         </div>
                     )}
                     {showDriverCostField && (

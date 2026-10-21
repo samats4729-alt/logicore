@@ -140,7 +140,7 @@ export class ExchangeService {
             data: {
                 exchangePublishedAt: new Date(),
                 exchangePublishedById: userId,
-                exchangePrice: dto.price,
+                exchangePrice: dto.price ?? null,
                 exchangeNote: dto.note?.trim() || null,
                 exchangeClosedAt: null,
                 exchangeCloseReason: null,
