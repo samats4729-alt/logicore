@@ -13,6 +13,7 @@ import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
+import { maskForCustomer } from '../orders/order-visibility';
 import { managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
 import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
 import { MODULE_PERMISSIONS } from '../auth/module-permissions';
@@ -769,7 +770,11 @@ export class CompanyService {
         ]);
 
         return {
-            data,
+            // Кто какие деньги видит — то же правило, что в карточке рейса и
+            // в выгрузке. Журнал его не спрашивал: заказчик видел в своём
+            // списке, какому перевозчику и за сколько отдан его рейс, а
+            // перевозчик — цену заказчика.
+            data: data.map((order) => maskForCustomer(order as any, companyId)),
             total,
             page,
             limit,
