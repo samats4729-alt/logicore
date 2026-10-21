@@ -594,10 +594,15 @@ export class OrdersService {
                 throw new ForbiddenException('Этот рейс назначен не вам');
             }
 
+            // Перевозчик по документам (парк, `partnerId`) тоже свой: заявка
+            // была у него в журнале, а открыть её он не мог — «нет доступа»
+            // (задачи шефа, 16.10). Что ему видно из денег — решает
+            // maskForCustomer ниже.
             const isCompanyOrder = companyId && (
                 order.customerCompanyId === companyId ||
                 order.forwarderId === companyId ||
-                order.subForwarderId === companyId
+                order.subForwarderId === companyId ||
+                order.partnerId === companyId
             );
 
             if (!isOwner && !isDriver && !isManager && !isCompanyOrder) {

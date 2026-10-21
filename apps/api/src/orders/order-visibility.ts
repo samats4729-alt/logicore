@@ -57,6 +57,49 @@ export function isCustomerOnly(order: OrderSides, companyId?: string | null): bo
         && order.subForwarderId !== companyId;
 }
 
+/**
+ * Компания в этой заявке — только исполнитель: перевозчик (парк) или
+ * субподрядчик, но не экспедитор и не заказчик. Ей своя ставка, а сколько
+ * заказчик платит экспедитору — не её сведения (задачи шефа, P10: «парк не
+ * видит, сколько заказчик платит экспедитору»).
+ */
+export function isExecutorOnly(order: OrderSides, companyId?: string | null): boolean {
+    if (!companyId) return false;
+    return (order.partnerId === companyId || order.subForwarderId === companyId)
+        && order.forwarderId !== companyId
+        && order.customerCompanyId !== companyId;
+}
+
+/** Поля сделки экспедитора с заказчиком: цена, оплата, условия. */
+type CustomerSideFields = {
+    customerPrice?: unknown;
+    customerPriceBase?: unknown;
+    isCustomerPaid?: unknown;
+    customerPaidAt?: unknown;
+    customerPaymentDays?: unknown;
+    customerPaymentFrom?: unknown;
+    customerPaymentDate?: unknown;
+    customerPaymentCondition?: unknown;
+    hasVat?: unknown;
+    vatRate?: unknown;
+};
+
+/** Убрать из заявки сделку экспедитора с заказчиком — для исполнителя. */
+export function hideCustomerSide<T extends CustomerSideFields>(order: T): T {
+    const masked = order as any;
+    masked.customerPrice = null;
+    masked.customerPriceBase = null;
+    masked.isCustomerPaid = false;
+    masked.customerPaidAt = null;
+    masked.customerPaymentDays = null;
+    masked.customerPaymentFrom = null;
+    masked.customerPaymentDate = null;
+    masked.customerPaymentCondition = null;
+    masked.hasVat = null;
+    masked.vatRate = null;
+    return order;
+}
+
 /** Убрать из заявки себестоимость исполнителя — на месте, как отдаёт Prisma. */
 export function hideExecutorCost<T extends ExecutorCostFields>(order: T): T {
     const masked = order as any;
@@ -148,6 +191,7 @@ export function maskForCustomer<T extends ExecutorCostFields & OrderSides & Sett
     companyId?: string | null,
 ): T {
     if (isCustomerOnly(order, companyId)) hideExecutorCost(order);
+    if (isExecutorOnly(order, companyId)) hideCustomerSide(order as T & CustomerSideFields);
 
     // Налоговую часть скрываем у всех участников, кроме хозяина рейса, пока
     // её не проверил бухгалтер: до проверки там значения по умолчанию, а не
