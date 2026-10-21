@@ -392,6 +392,15 @@ export default function PartnerDetailPage() {
 
     const contractsContent = (
         <div>
+            {/* Договор прямо из карточки (задачи шефа, G4): вторая сторона уже выбрана. */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                <Button
+                    icon={<PlusOutlined />}
+                    onClick={() => router.push(`/company/contracts?create=1&partner=${partnerId}&role=${partner?.isCustomer ? 'FORWARDER' : 'CUSTOMER'}`)}
+                >
+                    Новый договор
+                </Button>
+            </div>
             <Table
                 columns={contractColumns}
                 dataSource={contracts}
