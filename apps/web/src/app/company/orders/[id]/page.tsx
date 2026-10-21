@@ -2152,6 +2152,10 @@ export default function OrderDetailPage() {
                                             </button>
                                         )}
                                     </div>
+                                    {/* Чем блоки отличаются (задачи шефа, A7): их принимали за дубль. */}
+                                    <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                        Деньги по банку и кассе: оплата от заказчика и оплата перевозчику. Только эти платежи закрывают долги и счета.
+                                    </p>
                                     <Table columns={paymentColumns} dataSource={payments} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет зарегистрированных платежей' }} scroll={{ x: true }} />
                                 </section>
 
@@ -2171,6 +2175,9 @@ export default function OrderDetailPage() {
                                                 </button>
                                             )}
                                         </div>
+                                        <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                            Прочие доходы рейса — возврат, компенсация. Прибавляются к марже, долг заказчика не закрывают: его оплату вносите в «Платежи».
+                                        </p>
                                         <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
                                     </section>
                                     <section className={nova.card} style={{ marginBottom: 0 }}>
@@ -2190,6 +2197,9 @@ export default function OrderDetailPage() {
                                                 </button>
                                             )}
                                         </div>
+                                        <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                            Затраты рейса кроме оплаты перевозчику — топливо, ремонт, штрафы. Уменьшают маржу; оплату перевозчику вносите в «Платежи».
+                                        </p>
                                         <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
                                     </section>
                                 </div>
