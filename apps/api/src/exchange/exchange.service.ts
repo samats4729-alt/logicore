@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PUBLISHER_HAS_ACCESS } from './exchange-access';
+import { PUBLISHER_HAS_ACCESS, soleTraderBlock } from './exchange-access';
 import { ExchangeSettlementService } from './settlement.service';
 import { cityKey } from '../cities/city-key';
 import { ExchangeBoardQueryDto, PublishOrderDto, RoutePricesQueryDto } from './dto/exchange-order.dto';
@@ -88,8 +88,11 @@ export class ExchangeService {
         return null;
     }
 
-    private stateView(order: StateRow, companyId: string) {
-        const blocker = this.blocker(order, companyId);
+    private stateView(order: StateRow, companyId: string, soleTrader: string | null = null) {
+        // ИП — последним: отметку «только через парк» показываем там, где
+        // без неё заявку можно было бы выставить, а не на каждом рейсе.
+        const own = this.blocker(order, companyId);
+        const blocker = own ?? soleTrader;
         const published = !!order.exchangePublishedAt && !order.exchangeClosedAt;
         return {
             orderId: order.id,
@@ -98,6 +101,8 @@ export class ExchangeService {
             onExchange: published && !blocker,
             canPublish: !blocker,
             reason: blocker,
+            /** Компания — ИП: на биржу только через парк (P7). Кабинет показывает причину. */
+            soleTrader: !own && !!soleTrader,
             publishedAt: order.exchangePublishedAt,
             price: order.exchangePrice != null ? Number(order.exchangePrice) : null,
             note: order.exchangeNote,
@@ -116,12 +121,16 @@ export class ExchangeService {
     /** Биржа в карточке заявки: на бирже ли она и можно ли выставить. */
     async state(companyId: string, orderId: string) {
         // Парк выставляет заявки, как любая компания: он и сам возит (владелец, 15.10.2026).
-        return this.stateView(await this.participantOrder(companyId, orderId), companyId);
+        const [order, soleTrader] = await Promise.all([
+            this.participantOrder(companyId, orderId),
+            soleTraderBlock(this.prisma, companyId),
+        ]);
+        return this.stateView(order, companyId, soleTrader);
     }
 
     async publish(companyId: string, userId: string, orderId: string, dto: PublishOrderDto) {
         const order = await this.participantOrder(companyId, orderId);
-        const blocker = this.blocker(order, companyId);
+        const blocker = this.blocker(order, companyId) ?? await soleTraderBlock(this.prisma, companyId);
         if (blocker) throw new BadRequestException(blocker);
 
         // Исполнителя могли назначить, пока открыта форма: обновляем, только

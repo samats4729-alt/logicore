@@ -57,6 +57,21 @@ export default function OrderExchangePanel({ orderId, reloadKey, onChanged }: { 
 
     useEffect(() => { load(); }, [load, reloadKey]);
 
+    // ИП выставлять не может (P7): говорим, как быть, вместо пустого места.
+    if (state?.soleTrader) {
+        return (
+            <section className={nova.card} aria-label="Биржа">
+                <div className={nova.cardHead}>
+                    <Store size={14} />
+                    <h3 className={nova.cardTitle}>Биржа</h3>
+                </div>
+                <div className={`${nova.cardBody} text-[13px] text-muted-foreground`}>
+                    Индивидуальный предприниматель выставляет заявки на биржу через парк или приложение водителя —
+                    напрямую от ИП нельзя.
+                </div>
+            </section>
+        );
+    }
     if (!state || (!state.onExchange && !state.canPublish)) return null;
 
     return (

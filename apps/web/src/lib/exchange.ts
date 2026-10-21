@@ -123,6 +123,8 @@ export interface ExchangeOrderState {
     offersCount: number;
     /** Подсказка: сколько в заявке заложено перевозчику. */
     suggestedPrice: number | null;
+    /** Компания — ИП: на биржу только через парк или приложение водителя (P7). */
+    soleTrader?: boolean;
 }
 
 /** Прошлая перевозка по направлению — биржа или свой рейс. */
@@ -195,6 +197,8 @@ export interface ExchangeStatus {
     enabled: boolean;
     /** Компания — парк: у неё есть раздел «Водители биржи». */
     isPark: boolean;
+    /** Компания — ИП: смотреть биржу можно, выставлять и откликаться — нет (P7). */
+    soleTrader?: boolean;
 }
 
 /**
@@ -215,7 +219,7 @@ export function exchangeStatus(): Promise<ExchangeStatus> {
     if (!statusRequest || statusFor !== who) {
         statusFor = who;
         statusRequest = api.get('/exchange/status')
-            .then((r) => ({ enabled: !!r.data?.enabled, isPark: !!r.data?.isPark }))
+            .then((r) => ({ enabled: !!r.data?.enabled, isPark: !!r.data?.isPark, soleTrader: !!r.data?.soleTrader }))
             .catch(() => {
                 statusRequest = null;
                 return { enabled: false, isPark: false };

@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { kzToday } from '../common/utils/business-date';
 import { MakeOfferDto } from './dto/exchange-order.dto';
 import { EXCHANGE_ORDER_SELECT, ON_EXCHANGE, exchangeView, managerOf } from './exchange-orders';
-import { PUBLISHER_HAS_ACCESS } from './exchange-access';
+import { PUBLISHER_HAS_ACCESS, soleTraderBlock } from './exchange-access';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeSettlementService, SettlementCalc } from './settlement.service';
 
@@ -237,6 +237,9 @@ export class ExchangeOffersService {
     // ==================== компания-перевозчик ====================
 
     async offerAsCompany(companyId: string, userId: string, orderId: string, dto: MakeOfferDto) {
+        // ИП в исполнении на бирже не участвует — только через парк или приложение (P7).
+        const soleTrader = await soleTraderBlock(this.prisma, companyId);
+        if (soleTrader) throw new ForbiddenException(soleTrader);
         // Парк откликается, как любой перевозчик: он и сам возит (владелец, 15.10.2026).
         const order = await this.openOrder(orderId);
         if ([order.customerCompanyId, order.forwarderId, order.subForwarderId].includes(companyId)) {

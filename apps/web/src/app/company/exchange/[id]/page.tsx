@@ -6,7 +6,7 @@ import dayjs from 'dayjs';
 import { ArrowLeft, ArrowRight, Building2, MapPin, MessageSquareText, Package } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
-import { ExchangeOrder, день, тонн } from '@/lib/exchange';
+import { ExchangeOrder, exchangeStatus, день, тонн } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import OfferForm from '@/components/exchange/OfferForm';
 import { loadingLabel, packagingLabel } from '@/lib/cargo';
@@ -30,6 +30,9 @@ export default function ExchangeOrderPage() {
     const router = useRouter();
     const [order, setOrder] = useState<ExchangeOrder | null>(null);
     const [failed, setFailed] = useState<string | null>(null);
+    /** Компания — ИП: откликаться напрямую нельзя (P7). */
+    const [soleTrader, setSoleTrader] = useState(false);
+    useEffect(() => { exchangeStatus().then((s) => setSoleTrader(!!s.soleTrader)); }, []);
 
     useEffect(() => {
         api.get(`/exchange/board/${id}`)
@@ -148,7 +151,13 @@ export default function ExchangeOrderPage() {
                             <div className="text-[26px] font-bold leading-tight tabular-nums">
                                 {order.price != null ? moneyShort(order.price) : 'договорная'}
                             </div>
-                            {!order.own && (
+                            {!order.own && soleTrader && (
+                                <div className="mt-4 text-[13px] text-muted-foreground">
+                                    Индивидуальный предприниматель откликается на биржу через парк или приложение
+                                    водителя — напрямую от ИП нельзя.
+                                </div>
+                            )}
+                            {!order.own && !soleTrader && (
                                 <div className="mt-4">
                                     <OfferForm order={order} onChanged={(myOffer) => setOrder({ ...order, myOffer })} />
                                 </div>
