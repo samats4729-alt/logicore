@@ -366,7 +366,7 @@ export class AccountingDocumentsService {
          */
         const dueDate = dto.dueDate
             ? new Date(dto.dueDate)
-            : (await this.dueDateFromOrders(dto, orderIds)).dueDate;
+            : (await this.dueDateFromOrders(dto, orderIds, companyId)).dueDate;
 
         const created = await this.prisma.$transaction(async (tx) => {
             const number = await this.nextNumber(
@@ -1293,6 +1293,12 @@ export class AccountingDocumentsService {
      * входящего это дата контрагента (`externalDate`), а не день, когда мы
      * завели документ у себя: перевозчик считает срок от своего числа. То же
      * правило, что и в пересчёте плановых дат по рейсу.
+     *
+     * Если в рейсе отсрочка не записана (рейс завели до того, как заполнили
+     * карточку, или условия добавили в карточку позже), берём её из карточки
+     * контрагента — нашей карточки справочника (задачи шефа, H2: «отсрочку
+     * брать из контрагента»). Условия компании, которая сама работает на
+     * платформе, — не наша договорённость, их не подставляем.
      */
     private async dueDateFromOrders(
         document: {
@@ -1300,8 +1306,10 @@ export class AccountingDocumentsService {
             direction: AccountingDocumentDirection;
             documentDate?: string | Date | null;
             externalDate?: string | Date | null;
+            counterpartyId?: string | null;
         },
         orderIds: string[],
+        companyId?: string,
     ) {
         if (document.type !== AccountingDocumentType.PAYMENT_INVOICE || !orderIds.length) {
             return { dueDate: null, dependsOn: null };
@@ -1325,16 +1333,37 @@ export class AccountingDocumentsService {
             },
         });
 
-        const terms: OrderPaymentTerms[] = orders.map((order) => ({
-            orderNumber: order.orderNumber,
-            days: outgoing ? order.customerPaymentDays : order.carrierPaymentDays,
-            from: outgoing ? order.customerPaymentFrom : order.carrierPaymentFrom,
-            originalsAt: outgoing ? order.customerOriginalsAt : order.carrierOriginalsAt,
-            // Выгрузка — последняя точка доставки в маршруте, как и в
-            // пересчёте сроков по рейсу.
-            unloadAt: [...order.routePoints].reverse()
-                .find((point) => point.pointType === 'DELIVERY')?.expectedDate ?? null,
-        }));
+        const card = companyId && document.counterpartyId
+            && orders.some((order) => (outgoing ? order.customerPaymentDays : order.carrierPaymentDays) == null)
+            ? await this.prisma.company.findFirst({
+                where: { id: document.counterpartyId, isExternal: true, createdByCompanyId: companyId },
+                select: {
+                    customerPaymentDays: true, customerPaymentFrom: true,
+                    carrierPaymentDays: true, carrierPaymentFrom: true,
+                },
+            })
+            : null;
+        const cardTerms = card
+            ? {
+                days: outgoing ? card.customerPaymentDays : card.carrierPaymentDays,
+                from: outgoing ? card.customerPaymentFrom : card.carrierPaymentFrom,
+            }
+            : null;
+
+        const terms: OrderPaymentTerms[] = orders.map((order) => {
+            const days = outgoing ? order.customerPaymentDays : order.carrierPaymentDays;
+            const fromCard = days == null && cardTerms?.days != null;
+            return {
+                orderNumber: order.orderNumber,
+                days: fromCard ? cardTerms!.days : days,
+                from: fromCard ? cardTerms!.from : (outgoing ? order.customerPaymentFrom : order.carrierPaymentFrom),
+                originalsAt: outgoing ? order.customerOriginalsAt : order.carrierOriginalsAt,
+                // Выгрузка — последняя точка доставки в маршруте, как и в
+                // пересчёте сроков по рейсу.
+                unloadAt: [...order.routePoints].reverse()
+                    .find((point) => point.pointType === 'DELIVERY')?.expectedDate ?? null,
+            };
+        });
 
         const anchorDate = outgoing
             ? document.documentDate
@@ -1375,8 +1404,12 @@ export class AccountingDocumentsService {
         );
 
         const { dueDate, dependsOn } = await this.dueDateFromOrders(
-            { type, direction: query.direction, documentDate: query.documentDate, externalDate: query.externalDate },
+            {
+                type, direction: query.direction, documentDate: query.documentDate,
+                externalDate: query.externalDate, counterpartyId: query.counterpartyId,
+            },
             orderIds,
+            companyId,
         );
         return { dueDate: dueDate ? dueDate.toISOString().slice(0, 10) : null, dependsOn };
     }

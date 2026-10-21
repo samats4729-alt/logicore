@@ -271,7 +271,7 @@ export async function createAccountingDocument(
 /** Срок оплаты по рейсам счёта — вместе с причиной, если посчитать нельзя. */
 export interface InvoiceDueDatePreview {
     dueDate: string | null;
-    /** «ждём оригиналы накладных», «в рейсе не задана отсрочка». */
+    /** «ждём оригиналы накладных», «не задана отсрочка — ни в рейсе, ни в карточке контрагента». */
     dependsOn: string | null;
 }
 

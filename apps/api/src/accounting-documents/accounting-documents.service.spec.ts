@@ -1004,3 +1004,80 @@ describe('AccountingDocumentsService', () => {
         });
     });
 });
+
+describe('срок оплаты из карточки контрагента (H2)', () => {
+    const order = (extra: Record<string, unknown> = {}) => ({
+        orderNumber: 'ЗК-1',
+        customerPaymentDays: null, customerPaymentFrom: null,
+        carrierPaymentDays: null, carrierPaymentFrom: null,
+        customerOriginalsAt: null, carrierOriginalsAt: null,
+        routePoints: [],
+        ...extra,
+    });
+    const invoice = (direction: AccountingDocumentDirection) => ({
+        type: AccountingDocumentType.PAYMENT_INVOICE,
+        direction,
+        documentDate: '2026-10-01',
+        counterpartyId: COUNTERPARTY,
+    });
+
+    it('в рейсе отсрочки нет — берёт её из нашей карточки заказчика', async () => {
+        const { service, prisma } = makeService();
+        prisma.order.findMany.mockResolvedValue([order()]);
+        prisma.company.findFirst = jest.fn().mockResolvedValue({
+            customerPaymentDays: 10, customerPaymentFrom: 'INVOICE',
+            carrierPaymentDays: 30, carrierPaymentFrom: 'INVOICE',
+        });
+
+        const result = await (service as any).dueDateFromOrders(
+            invoice(AccountingDocumentDirection.OUTGOING), ['o1'], COMPANY,
+        );
+
+        expect(result.dueDate.toISOString().slice(0, 10)).toBe('2026-10-11');
+        // Только наша карточка справочника: условия платформенной компании — не наша договорённость.
+        expect(prisma.company.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: COUNTERPARTY, isExternal: true, createdByCompanyId: COMPANY },
+        }));
+    });
+
+    it('входящий счёт — условия перевозчика из карточки', async () => {
+        const { service, prisma } = makeService();
+        prisma.order.findMany.mockResolvedValue([order()]);
+        prisma.company.findFirst = jest.fn().mockResolvedValue({
+            customerPaymentDays: 10, customerPaymentFrom: 'INVOICE',
+            carrierPaymentDays: 30, carrierPaymentFrom: 'INVOICE',
+        });
+
+        const result = await (service as any).dueDateFromOrders(
+            invoice(AccountingDocumentDirection.INCOMING), ['o1'], COMPANY,
+        );
+
+        expect(result.dueDate.toISOString().slice(0, 10)).toBe('2026-10-31');
+    });
+
+    it('отсрочка в рейсе есть — карточку не спрашивает, договорённость рейса главнее', async () => {
+        const { service, prisma } = makeService();
+        prisma.order.findMany.mockResolvedValue([order({ customerPaymentDays: 5, customerPaymentFrom: 'INVOICE' })]);
+        prisma.company.findFirst = jest.fn();
+
+        const result = await (service as any).dueDateFromOrders(
+            invoice(AccountingDocumentDirection.OUTGOING), ['o1'], COMPANY,
+        );
+
+        expect(result.dueDate.toISOString().slice(0, 10)).toBe('2026-10-06');
+        expect(prisma.company.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('карточки нет (платформенная компания) — срок пустой с объяснением, как раньше', async () => {
+        const { service, prisma } = makeService();
+        prisma.order.findMany.mockResolvedValue([order()]);
+        prisma.company.findFirst = jest.fn().mockResolvedValue(null);
+
+        const result = await (service as any).dueDateFromOrders(
+            invoice(AccountingDocumentDirection.OUTGOING), ['o1'], COMPANY,
+        );
+
+        expect(result.dueDate).toBeNull();
+        expect(result.dependsOn).toContain('отсрочка');
+    });
+});

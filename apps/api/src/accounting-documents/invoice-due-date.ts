@@ -78,7 +78,7 @@ export function invoiceDueDate(
             // Условий нет вовсе — старые рейсы, заведённые до того, как
             // отсрочку стали хранить числом. Ждать тут нечего, заполнять
             // придётся руками.
-            return { dueDate: null, dependsOn: 'в рейсе не задана отсрочка' };
+            return { dueDate: null, dependsOn: 'не задана отсрочка — ни в рейсе, ни в карточке контрагента' };
         }
 
         const anchor = order.from === 'INVOICE'
