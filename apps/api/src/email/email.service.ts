@@ -191,11 +191,16 @@ export class EmailService {
         pdfBuffer: Buffer,
         driverInfo?: {
             fullName?: string;
+            /** Документ водителя одной строкой: вид, номер, кем и когда выдан, срок. */
+            document?: string;
             vehicleModel?: string;
             vehiclePlate?: string;
+            trailer?: string;
             phone?: string;
             route?: string;
         },
+        /** Дополнительные файлы к письму: документы водителя и др. (D3). */
+        extraAttachments: { filename: string; content: Buffer }[] = [],
     ): Promise<void> {
         const subject = `Доверенность к заявке № ${orderNumber} — LogiCore`;
 
@@ -208,12 +213,28 @@ export class EmailService {
                     <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.fullName}</td>
                 </tr>`);
         }
+        // Документ водителя, тягач и прицеп — отдельными строками: так требует
+        // заказчик (задачи шефа, D5), охрана склада сверяет их по одному.
+        if (driverInfo?.document) {
+            driverRows.push(`
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🪪 Документ</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.document}</td>
+                </tr>`);
+        }
         if (driverInfo?.vehicleModel || driverInfo?.vehiclePlate) {
             const vehicleText = [driverInfo.vehicleModel, driverInfo.vehiclePlate].filter(Boolean).join(' · ');
             driverRows.push(`
                 <tr>
-                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚛 Транспорт</td>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚛 Тягач</td>
                     <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${vehicleText}</td>
+                </tr>`);
+        }
+        if (driverInfo?.trailer) {
+            driverRows.push(`
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚚 Прицеп</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.trailer}</td>
                 </tr>`);
         }
         if (driverInfo?.phone) {
@@ -262,7 +283,7 @@ export class EmailService {
                 Здравствуйте!
             </p>
             <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-                Вам направлена доверенность на водителя от компании <strong>${senderCompanyName}</strong> по заявке <strong>№ ${orderNumber}</strong>. Документ прикреплен к этому письму в формате PDF.
+                Вам направлена доверенность на водителя от компании <strong>${senderCompanyName}</strong> по заявке <strong>№ ${orderNumber}</strong>. Документ прикреплен к этому письму в формате PDF${extraAttachments.length ? `, вместе с ним — ${extraAttachments.length} ${extraAttachments.length === 1 ? 'файл' : 'файла'}: ${extraAttachments.map((a) => a.filename).join(', ')}` : ''}.
             </p>
             
             <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 24px 0;">
@@ -286,7 +307,7 @@ export class EmailService {
                 to,
                 subject,
                 html,
-                attachments: [{ filename: `doverennost_order_${orderNumber}.pdf`, content: pdfBuffer }],
+                attachments: [{ filename: `doverennost_order_${orderNumber}.pdf`, content: pdfBuffer }, ...extraAttachments],
             });
             this.logger.log(`📧 Power of Attorney email sent to ${to}, id: ${(result as any)?.data?.id}`);
         } catch (error: any) {

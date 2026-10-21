@@ -83,6 +83,31 @@ export class AuditService {
     }
 
     /**
+     * Журнал отправленных доверенностей компании за период (задачи шефа, D4):
+     * кому, когда, по какой заявке, на какого водителя и машину, с какими
+     * вложениями. Пишется с 21.10.2026 — раньше отправки не записывались.
+     */
+    async attorneysSent(companyId: string, from?: string, to?: string) {
+        const range: { gte?: Date; lte?: Date } = {};
+        if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) range.gte = new Date(`${from}T00:00:00+05:00`);
+        if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) range.lte = new Date(`${to}T23:59:59.999+05:00`);
+        const rows = await this.prisma.auditLog.findMany({
+            where: { companyId, entity: 'power_of_attorney_sent', ...(range.gte || range.lte ? { createdAt: range } : {}) },
+            orderBy: { createdAt: 'desc' },
+            take: 1000,
+            select: { id: true, createdAt: true, userName: true, orderId: true, details: true },
+        });
+        return rows.map((r) => {
+            const d = (r.details ?? {}) as { orderNumber?: string; emails?: string[]; driver?: string | null; vehicle?: string | null; attachments?: string[] };
+            return {
+                id: r.id, sentAt: r.createdAt, sentBy: r.userName, orderId: r.orderId,
+                orderNumber: d.orderNumber ?? null, emails: d.emails ?? [], driver: d.driver ?? null,
+                vehicle: d.vehicle ?? null, attachments: d.attachments ?? [],
+            };
+        });
+    }
+
+    /**
      * История одного рейса одной лентой: смены статуса и действия людей.
      *
      * Статусы и журнал действий лежат в разных таблицах и заполнялись

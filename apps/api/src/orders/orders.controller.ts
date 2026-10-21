@@ -1,8 +1,13 @@
-import { Controller, Delete, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Controller, Delete, Get, Post, Put, Body, Param, Query, UseGuards, UseInterceptors, UploadedFiles, Request, Res, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { OrdersExportService } from './orders-export.service';
 import { OrderDeleteService } from './order-delete.service';
+import { readStoredFile } from './stored-file';
+import { S3Service } from '../s3/s3.service';
+import { assertAllowedUpload } from '../documents/allowed-files';
+import { decodeUploadName } from '../common/utils/upload-name';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
 import { OrderDocumentsService } from './order-documents.service';
@@ -20,6 +25,19 @@ import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
 import { AuditService } from '../audit/audit.service';
+
+/**
+ * Документ водителя одной строкой для письма с доверенностью (задачи шефа,
+ * D5): «Удостоверение личности № 049…, выдано 12.03.2019 МВД РК, действительно
+ * до 12.03.2029». Нет номера — ничего: в письме строки не будет.
+ */
+function driverDocumentLine(driver: { docType?: string | null; docNumber?: string | null; docIssuedAt?: Date | null; docIssuedBy?: string | null; docExpiresAt?: Date | null } | null | undefined): string | undefined {
+    if (!driver?.docNumber) return undefined;
+    const day = (d?: Date | null) => (d ? new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty' }) : null);
+    const kind = driver.docType === 'PASSPORT' ? 'Паспорт' : 'Удостоверение личности';
+    const issued = [day(driver.docIssuedAt), driver.docIssuedBy].filter(Boolean).join(' ');
+    return [`${kind} № ${driver.docNumber}`, issued ? `выдано ${issued}` : null, driver.docExpiresAt ? `действительно до ${day(driver.docExpiresAt)}` : null].filter(Boolean).join(', ');
+}
 
 @ApiTags('orders')
 @Controller('orders')
@@ -39,7 +57,15 @@ export class OrdersController {
         private ordersExport: OrdersExportService,
         private auditService: AuditService,
         private orderDelete: OrderDeleteService,
+        private s3: S3Service,
     ) { }
+
+    @Get('attorneys/sent')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Журнал отправленных доверенностей за период' })
+    attorneysSent(@Request() req: any, @Query('from') from?: string, @Query('to') to?: string) {
+        return this.auditService.attorneysSent(req.user.companyId, from, to);
+    }
 
     @Post()
     @RequireVerifiedCompany()
@@ -481,14 +507,27 @@ export class OrdersController {
     @Post(':id/share-power-of-attorney')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Отправить доверенность по email получателям' })
+    // Вложения (задачи шефа, D3): файлы с компьютера — полем files, файлы
+    // рейса — documentIds. Без вложений запрос идёт JSON-ом, как раньше.
+    @UseInterceptors(FilesInterceptor('files', 6, { limits: { fileSize: 10 * 1024 * 1024 } }))
     async sharePowerOfAttorney(
         @Param('id') id: string,
-        @Body() body: { emails: string[] },
+        @Body() rawBody: { emails: string[] | string; documentIds?: string[] | string },
         @Request() req: any,
+        @UploadedFiles() files?: Express.Multer.File[],
     ) {
-        if (!body.emails || !Array.isArray(body.emails) || body.emails.length === 0) {
+        // Из формы с файлами списки приходят строкой — JSON или через запятую.
+        const list = (v: string[] | string | undefined): string[] => {
+            if (Array.isArray(v)) return v.filter(Boolean);
+            if (!v) return [];
+            try { const parsed = JSON.parse(v); if (Array.isArray(parsed)) return parsed.filter(Boolean); } catch { /* не JSON */ }
+            return v.split(',').map((s) => s.trim()).filter(Boolean);
+        };
+        const body = { emails: list(rawBody?.emails), documentIds: list(rawBody?.documentIds) };
+        if (body.emails.length === 0) {
             throw new BadRequestException('Не указаны email-адреса для рассылки');
         }
+        for (const file of files ?? []) assertAllowedUpload(file);
 
         const order = await this.ordersService.findById(id, {
             userId: req.user.sub,
@@ -527,22 +566,59 @@ export class OrdersController {
         const pickupCity = pickupPoint?.location?.city || pickupPoint?.location?.address || '';
         const deliveryCity = deliveryPoint?.location?.city || deliveryPoint?.location?.address || '';
 
+        // Машина рейса — снимок в заявке (как в самой доверенности), иначе карточка водителя.
+        const снимок = !!(order as any).assignedDriverPlate;
         const driverInfo = {
             fullName: driver
                 ? `${driver.lastName || ''} ${driver.firstName || ''} ${driver.middleName || ''}`.trim()
                 : ((order as any).assignedDriverName || undefined),
+            // Документ водителя (задачи шефа, D5: «номер, дата и кем выдан» — так требует заказчик).
+            document: driverDocumentLine(driver),
             vehicleModel: driver?.vehicleModel || undefined,
-            vehiclePlate: driver?.vehiclePlate || (order as any).assignedDriverPlate || undefined,
+            vehiclePlate: (снимок ? (order as any).assignedDriverPlate : driver?.vehiclePlate) || undefined,
+            trailer: (снимок ? (order as any).assignedDriverTrailer : driver?.trailerNumber) || undefined,
             phone: driver?.phone || (order as any).assignedDriverPhone || undefined,
             route: (pickupCity && deliveryCity) ? `${pickupCity} → ${deliveryCity}` : undefined,
         };
 
+        // Вложения: файлы рейса по выбору и файлы с компьютера.
+        const attachments: { filename: string; content: Buffer }[] = [];
+        if (body.documentIds.length) {
+            const docs = await this.prisma.document.findMany({
+                where: { id: { in: body.documentIds }, orderId: id },
+                select: { fileName: true, fileUrl: true },
+            });
+            for (const d of docs) {
+                const content = await readStoredFile(this.s3, d.fileUrl);
+                if (content) attachments.push({ filename: d.fileName, content });
+            }
+        }
+        for (const f of files ?? []) attachments.push({ filename: decodeUploadName(f.originalname) || 'документ', content: f.buffer });
+
         // Send emails in parallel
         await Promise.all(
             body.emails.map(email =>
-                this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, senderCompanyName, pdfBuffer, driverInfo)
+                this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, senderCompanyName, pdfBuffer, driverInfo, attachments)
             )
         );
+
+        // Журнал отправленных доверенностей (задачи шефа, D4): кому, когда, по какой заявке, с чем.
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'power_of_attorney_sent',
+            entityId: id,
+            orderId: id,
+            entityLabel: `Доверенность по заявке № ${order.orderNumber} отправлена: ${body.emails.join(', ')}`,
+            details: {
+                orderNumber: order.orderNumber,
+                emails: body.emails,
+                driver: driverInfo.fullName ?? null,
+                vehicle: [driverInfo.vehiclePlate, driverInfo.trailer].filter(Boolean).join(' / ') || null,
+                attachments: attachments.map((a) => a.filename),
+            },
+        });
 
         return { success: true, message: 'Доверенность успешно отправлена на указанные адреса' };
     }
@@ -749,4 +825,4 @@ export class OrdersController {
     ) {
         return this.ordersService.addDeliveryPoint(id, dto.locationId, dto.notes, req.user);
     }
-}
+}

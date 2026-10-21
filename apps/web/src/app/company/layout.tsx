@@ -264,6 +264,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 children: [
                     { key: '/company/orders', label: 'Все заявки' },
                     { key: '/company/orders/create', label: 'Новая заявка' },
+                    { key: '/company/orders/attorneys', label: 'Доверенности' },
                     // Биржа — только если открыта на сервере и этой компании.
                     ...(exchangeOn ? [{ key: '/company/exchange', label: 'Биржа', badge: newOffers }] : []),
                 ],

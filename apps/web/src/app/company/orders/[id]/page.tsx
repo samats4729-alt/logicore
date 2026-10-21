@@ -36,6 +36,7 @@ import PillTabs from '@/components/ui/PillTabs';
 import OrderDetails, { OrderSideCards } from '@/components/orders/OrderDetails';
 import { OrderStageBar } from '@/components/orders/OrderStageBar';
 import DeleteOrderDialog from '@/components/orders/DeleteOrderDialog';
+import { NO_ATTACHMENTS, type PoaAttachments } from '@/components/orders/PoaAttachmentsPicker';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
@@ -314,6 +315,7 @@ export default function OrderDetailPage() {
 
     // Share PoA modal
     const [sharePoAModalOpen, setSharePoAModalOpen] = useState(false);
+    const [poaAttachments, setPoaAttachments] = useState<PoaAttachments>(NO_ATTACHMENTS);
     const [sharePoALoading, setSharePoALoading] = useState(false);
     const [shareEmailsList, setShareEmailsList] = useState<{ email: string; checked: boolean; label: string }[]>([]);
     const [customEmailInput, setCustomEmailInput] = useState('');
@@ -1297,6 +1299,7 @@ export default function OrderDetailPage() {
         }
         setShareEmailsList(uniqueList);
         setCustomEmailInput('');
+        setPoaAttachments(NO_ATTACHMENTS);
         setSharePoAModalOpen(true);
     };
 
@@ -1306,7 +1309,16 @@ export default function OrderDetailPage() {
         const uniqueEmails = Array.from(new Set(selectedEmails));
         setSharePoALoading(true);
         try {
-            await api.post(`/orders/${orderId}/share-power-of-attorney`, { emails: uniqueEmails });
+            // С вложениями — формой с файлами, без них — как раньше.
+            if (poaAttachments.files.length || poaAttachments.documentIds.length) {
+                const form = new FormData();
+                form.append('emails', JSON.stringify(uniqueEmails));
+                form.append('documentIds', JSON.stringify(poaAttachments.documentIds));
+                poaAttachments.files.forEach((f) => form.append('files', f));
+                await api.post(`/orders/${orderId}/share-power-of-attorney`, form);
+            } else {
+                await api.post(`/orders/${orderId}/share-power-of-attorney`, { emails: uniqueEmails });
+            }
             toast.success('Доверенность отправлена');
             setSharePoAModalOpen(false);
         } catch (error: any) {
@@ -2316,6 +2328,8 @@ export default function OrderDetailPage() {
                 customEmailInput={customEmailInput}
                 setCustomEmailInput={setCustomEmailInput}
                 handleAddCustomEmail={handleAddCustomEmail}
+                poaAttachments={poaAttachments}
+                setPoaAttachments={setPoaAttachments}
                 driverLinkModalOpen={driverLinkModalOpen}
                 setDriverLinkModalOpen={setDriverLinkModalOpen}
                 driverLinkUrl={driverLinkUrl}

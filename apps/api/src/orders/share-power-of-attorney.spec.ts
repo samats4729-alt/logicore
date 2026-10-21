@@ -33,7 +33,10 @@ describe('рассылка доверенности по почте', () => {
         };
         const prisma: any = {
             company: { findUnique: jest.fn().mockResolvedValue({ name: 'ТОО «Экспедитор»' }) },
+            document: { findMany: jest.fn().mockResolvedValue([]) },
         };
+        const auditService: any = { log: jest.fn() };
+        const s3: any = { isS3Enabled: () => false };
 
         const controller = new OrdersController(
             ordersService,
@@ -45,11 +48,12 @@ describe('рассылка доверенности по почте', () => {
             prisma,
             {} as any,
             {} as any,
+            auditService,
             {} as any,
-            {} as any,
+            s3,
         );
 
-        return { controller, poaService, emailService };
+        return { controller, poaService, emailService, auditService, prisma };
     };
 
     const запрос = { user: { sub: 'user-1', role: 'COMPANY_ADMIN', companyId: КОМПАНИЯ } };
@@ -87,5 +91,26 @@ describe('рассылка доверенности по почте', () => {
 
         expect(poaService.generatePdf).not.toHaveBeenCalled();
         expect(emailService.sendPowerOfAttorneyEmail).not.toHaveBeenCalled();
+    });
+    it('в письме — документ водителя, тягач и прицеп отдельно (D5); отправка — в журнал (D4)', async () => {
+        const { controller, emailService, auditService } = собрать();
+        (controller as any).ordersService.findById.mockResolvedValue({
+            id: 'order-1', orderNumber: 'ЗК-2601', routePoints: [], assignedDriverPlate: '123ABC02', assignedDriverTrailer: '45ПП02',
+            driver: { lastName: 'Иванов', firstName: 'Иван', middleName: null, phone: '+77010000000', vehicleModel: 'Volvo FH',
+                docType: 'ID_CARD', docNumber: '049123456', docIssuedAt: new Date('2019-03-12T00:00:00Z'), docIssuedBy: 'МВД РК', docExpiresAt: new Date('2029-03-12T00:00:00Z') },
+        });
+        await controller.sharePowerOfAttorney('order-1', { emails: ['skl@example.kz'] }, запрос);
+        const info = emailService.sendPowerOfAttorneyEmail.mock.calls[0][4];
+        expect(info).toMatchObject({ vehiclePlate: '123ABC02', trailer: '45ПП02', vehicleModel: 'Volvo FH' });
+        expect(info.document).toBe('Удостоверение личности № 049123456, выдано 12.03.2019 МВД РК, действительно до 12.03.2029');
+        expect(auditService.log.mock.calls[0][0]).toMatchObject({ entity: 'power_of_attorney_sent', orderId: 'order-1', details: { emails: ['skl@example.kz'] } });
+    });
+
+    it('с формы с файлами адреса приходят строкой, файлы — вложениями (D3)', async () => {
+        const { controller, emailService } = собрать();
+        const file: any = { originalname: 'udostoverenie.pdf', mimetype: 'application/pdf', size: 10, buffer: Buffer.from('%PDF-1.4') };
+        await controller.sharePowerOfAttorney('order-1', { emails: '["a@x.kz","b@x.kz"]' } as any, запрос, [file]);
+        expect(emailService.sendPowerOfAttorneyEmail).toHaveBeenCalledTimes(2);
+        expect(emailService.sendPowerOfAttorneyEmail.mock.calls[0][5]).toEqual([{ filename: 'udostoverenie.pdf', content: file.buffer }]);
     });
 });
