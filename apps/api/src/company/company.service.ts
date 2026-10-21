@@ -14,6 +14,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { maskForCustomer } from '../orders/order-visibility';
+import { documentNotices } from './document-notices';
 import { managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
 import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
 import { MODULE_PERMISSIONS } from '../auth/module-permissions';
@@ -2084,6 +2085,11 @@ export class CompanyService {
             orderId: o.id, orderNumber: o.orderNumber,
             status: o.status, changedAt: o.updatedAt.toISOString(),
         }));
+    }
+
+    /** Вести о документах для колокольчика: ТТН, счета перевозчиков, оплаты (C5/H8). */
+    getDocumentNotices(companyId: string, viewer: { role?: string | null; userId?: string | null }) {
+        return documentNotices(this.prisma, companyId, viewer);
     }
 
     /** Заявки компании, ожидающие подтверждения завершения */

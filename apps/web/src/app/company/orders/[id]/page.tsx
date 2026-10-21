@@ -1153,7 +1153,9 @@ export default function OrderDetailPage() {
     const [activeTab, setActiveTab] = useState('details');
     // Из колокольчика и с биржи ведут прямо на отклики: ?tab=offers.
     useEffect(() => {
-        if (new URLSearchParams(window.location.search).get('tab') === 'offers') setActiveTab('offers');
+        // Из вести о ТТН — на документы, о деньгах — на финансы.
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        if (tab === 'offers' || tab === 'documents' || tab === 'finances') setActiveTab(tab);
     }, []);
     const [contracts, setContracts] = useState<any[]>([]);
     const [poaDocuments, setPoaDocuments] = useState<any[]>([]);

@@ -2015,11 +2015,13 @@ export class AccountingDocumentsService {
     }
 
     /** Документы, доставленные нам контрагентами с платформы. */
-    async listIncomingDelivered(companyId: string, query: { status?: string } = {}) {
+    async listIncomingDelivered(companyId: string, query: { status?: string; orderId?: string } = {}) {
         return this.prisma.accountingDocument.findMany({
             where: {
                 recipientCompanyId: companyId,
                 sentAt: { not: null },
+                // Из карточки заявки: что прислали по этому рейсу (H8).
+                ...(query.orderId ? { orders: { some: { orderId: query.orderId } } } : {}),
                 ...(query.status === 'PENDING' ? { receiptStatus: null } : {}),
                 ...(query.status === 'ACCEPTED' || query.status === 'REJECTED'
                     ? { receiptStatus: query.status }

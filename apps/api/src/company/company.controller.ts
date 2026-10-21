@@ -783,6 +783,15 @@ export class CompanyController {
         });
     }
 
+    @Get('notices')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Вести о документах для колокольчика: ТТН, счета перевозчиков, оплаты' })
+    getDocumentNotices(@Request() req: any) {
+        return this.companyService.getDocumentNotices(req.user.companyId, {
+            role: req.user.role, userId: req.user.id ?? req.user.sub,
+        });
+    }
+
     // ==================== Подтверждения завершения ====================
 
     @Get('orders/pending-confirmations')

@@ -253,8 +253,8 @@ export class AccountingDocumentsController {
         summary: 'Документы, присланные нам контрагентами с платформы',
         description: 'Это тот же документ, что у отправителя, — не копия. Править его нельзя.',
     })
-    incomingDelivered(@Request() req: any, @Query('status') status?: string) {
-        return this.documents.listIncomingDelivered(req.user.companyId, { status });
+    incomingDelivered(@Request() req: any, @Query('status') status?: string, @Query('orderId') orderId?: string) {
+        return this.documents.listIncomingDelivered(req.user.companyId, { status, orderId });
     }
 
     @Get(':id/delivery')
