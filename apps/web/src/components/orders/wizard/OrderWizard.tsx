@@ -1998,6 +1998,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 {/* Сбросить — забыть набранное и начать с пустой формы. Только у
                     новой заявки: у правки источник — сама заявка. */}
                 {!editingId && <ResetButton onConfirm={начатьЗаново} />}
+                {/* Подсказка про клавиши (задачи шефа, E3). */}
+                <span className="hidden text-[12px] text-muted-foreground md:inline">Enter или Tab — к следующему полю</span>
                 <div className="ml-auto flex items-center gap-2">
                     <Button variant="outline" size="sm" className="h-8 rounded-lg px-3 text-[13px] font-normal" onClick={onClose}>
                         Отмена

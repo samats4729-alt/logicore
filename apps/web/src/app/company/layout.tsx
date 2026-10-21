@@ -41,6 +41,7 @@ import { isNavItemActive } from '@/lib/cabinet-nav';
 import { ROLE_LABELS } from '@/lib/vocabulary';
 import { exchangeStatus } from '@/lib/exchange';
 import { useNewOffersCount, useOffersFeedPolling } from '@/lib/offers-feed';
+import { useEnterToNextField } from '@/lib/enter-to-next';
 
 /**
  * Название пункта меню с подписью «бета-тестирование».
@@ -134,6 +135,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     // любой страницы кабинета (владелец, 15.10.2026).
     useOffersFeedPolling();
     const newOffers = useNewOffersCount();
+    // Enter — к следующему полю формы, как в 1С (задачи шефа, E3).
+    useEnterToNextField();
 
     useEffect(() => {
         if (!user?.companyId) return;
