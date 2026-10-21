@@ -278,6 +278,44 @@ export default function DriverFormDialog({
                                     placeholder="Иванович" className="h-9 text-[13px]" />
                             </Field>
                         </div>
+                    </Section>
+
+                    {/* Порядок, как просил шеф (E1): ФИО → удостоверение → телефон → машина. */}
+                    <Section title="Документ" hint="для доверенности">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <Field label="Вид">
+                                <select
+                                    value={values.docType}
+                                    onChange={(e) => set('docType', e.target.value)}
+                                    className="h-9 w-full rounded-xl border border-input bg-background px-3 text-[13px]"
+                                >
+                                    <option value="">не указан</option>
+                                    <option value="ID_CARD">Удостоверение личности</option>
+                                    <option value="PASSPORT">Паспорт</option>
+                                </select>
+                            </Field>
+                            <Field label="Номер">
+                                <Input value={values.docNumber} onChange={(e) => set('docNumber', e.target.value)}
+                                    placeholder="012345678" className="h-9 text-[13px] tabular-nums" />
+                            </Field>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <Field label="Выдан">
+                                <DateStringField value={values.docIssuedAt} onChange={(v) => set('docIssuedAt', v)}
+                                    className="h-9 w-full text-[13px]" />
+                            </Field>
+                            <Field label="Кем выдан">
+                                <Input value={values.docIssuedBy} onChange={(e) => set('docIssuedBy', e.target.value)}
+                                    placeholder="МВД РК" className="h-9 text-[13px]" />
+                            </Field>
+                            <Field label="Действует до">
+                                <DateStringField value={values.docExpiresAt} onChange={(v) => set('docExpiresAt', v)}
+                                    className="h-9 w-full text-[13px]" />
+                            </Field>
+                        </div>
+                    </Section>
+
+                    <Section title="Связь">
                         <div className="grid gap-3 sm:grid-cols-2">
                             <Field label="Телефон" error={errors.phone} required>
                                 <Input value={values.phone} onChange={(e) => set('phone', e.target.value)}
@@ -316,40 +354,6 @@ export default function DriverFormDialog({
                                         <option key={t} value={t}>{t}</option>
                                     ))}
                                 </select>
-                            </Field>
-                        </div>
-                    </Section>
-
-                    <Section title="Документ" hint="для доверенности">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <Field label="Вид">
-                                <select
-                                    value={values.docType}
-                                    onChange={(e) => set('docType', e.target.value)}
-                                    className="h-9 w-full rounded-xl border border-input bg-background px-3 text-[13px]"
-                                >
-                                    <option value="">не указан</option>
-                                    <option value="ID_CARD">Удостоверение личности</option>
-                                    <option value="PASSPORT">Паспорт</option>
-                                </select>
-                            </Field>
-                            <Field label="Номер">
-                                <Input value={values.docNumber} onChange={(e) => set('docNumber', e.target.value)}
-                                    placeholder="012345678" className="h-9 text-[13px] tabular-nums" />
-                            </Field>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <Field label="Выдан">
-                                <DateStringField value={values.docIssuedAt} onChange={(v) => set('docIssuedAt', v)}
-                                    className="h-9 w-full text-[13px]" />
-                            </Field>
-                            <Field label="Действует до">
-                                <DateStringField value={values.docExpiresAt} onChange={(v) => set('docExpiresAt', v)}
-                                    className="h-9 w-full text-[13px]" />
-                            </Field>
-                            <Field label="Кем выдан">
-                                <Input value={values.docIssuedBy} onChange={(e) => set('docIssuedBy', e.target.value)}
-                                    placeholder="МВД РК" className="h-9 text-[13px]" />
                             </Field>
                         </div>
                     </Section>

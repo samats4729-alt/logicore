@@ -1589,14 +1589,6 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                     <UiInput className={FIELD} placeholder="Иванович" />
                                 </Form.Item>
                             </div>
-                            <div className="grid gap-x-3 sm:grid-cols-2">
-                                <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите телефон' }]}>
-                                    <UiInput className={FIELD} placeholder="+77001234567" />
-                                </Form.Item>
-                                <Form.Item name="iin" label="ИИН">
-                                    <UiInput className={FIELD} placeholder="123456789012" maxLength={12} />
-                                </Form.Item>
-                            </div>
 
                             <SubTitle>Документ</SubTitle>
                             <div className="grid gap-x-3 sm:grid-cols-2">
@@ -1617,11 +1609,22 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                 <Form.Item name="docIssuedAt" label="Дата выдачи">
                                     <DateField style={{ width: '100%' }} />
                                 </Form.Item>
+                                <Form.Item name="docIssuedBy" label="Кем выдан">
+                                    <UiInput className={FIELD} placeholder="МВД РК" />
+                                </Form.Item>
                                 <Form.Item name="docExpiresAt" label="Срок действия">
                                     <DateField style={{ width: '100%' }} />
                                 </Form.Item>
-                                <Form.Item name="docIssuedBy" label="Кем выдан">
-                                    <UiInput className={FIELD} placeholder="МВД РК" />
+                            </div>
+
+                            {/* Порядок, как просил шеф (E1): ФИО → удостоверение → телефон → машина. */}
+                            <SubTitle>Связь</SubTitle>
+                            <div className="grid gap-x-3 sm:grid-cols-2">
+                                <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите телефон' }]}>
+                                    <UiInput className={FIELD} placeholder="+77001234567" />
+                                </Form.Item>
+                                <Form.Item name="iin" label="ИИН">
+                                    <UiInput className={FIELD} placeholder="123456789012" maxLength={12} />
                                 </Form.Item>
                             </div>
 
