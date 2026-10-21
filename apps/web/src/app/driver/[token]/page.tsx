@@ -199,8 +199,6 @@ export default function DriverPage() {
 
     const step = stepIndex(order.status);
     const statusTint = order.isProblem ? RED : order.isFinished ? GREEN : BLUE;
-    // ТТН водитель отправляет только доехав до выгрузки (и после завершения — если забыл)
-    const canSendTtn = ['AT_DELIVERY', 'UNLOADING', 'COMPLETED'].includes(order.status);
 
     return (
         <div style={wrap}>
@@ -214,6 +212,18 @@ export default function DriverPage() {
                     </span>
                 </div>
                 {order.driverName && <div style={{ marginTop: 8, fontSize: 14, color: 'var(--lc-text-sec)' }}>{order.driverName}{order.vehiclePlate ? ` · ${order.vehiclePlate}` : ''}</div>}
+            </div>
+
+            {/* ТТН — наверху и в любой момент рейса (задачи шефа, M1): накладную
+                выдают на погрузке, и ждать с фото до выгрузки незачем. */}
+            <div style={card}>
+                <div style={eyebrow}>Накладная (ТТН){order.ttnCount > 0 ? ` · отправлено ${order.ttnCount}` : ''}</div>
+                <label style={{ ...outlineBtn, display: 'block', textAlign: 'center', cursor: 'pointer', opacity: ttnBusy ? 0.6 : 1, boxSizing: 'border-box' }}>
+                    {ttnBusy ? 'Отправка…' : order.ttnCount > 0 ? 'Отправить ещё фото' : 'Сфотографировать и отправить'}
+                    <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={ttnBusy}
+                        onChange={(e) => { uploadTtn(e.target.files); e.currentTarget.value = ''; }} />
+                </label>
+                {order.ttnCount > 0 && <div style={{ marginTop: 10, fontSize: 14, color: GREEN, textAlign: 'center', fontWeight: 600 }}>Диспетчер получил накладную</div>}
             </div>
 
             {/* Прогресс рейса */}
@@ -302,19 +312,6 @@ export default function DriverPage() {
                 </div>
                 {order.requirements && <div style={{ fontSize: 14, color: 'var(--lc-text-sec)', marginTop: 10 }}>Требования: {order.requirements}</div>}
             </div>
-
-            {/* ТТН — только после прибытия на выгрузку */}
-            {canSendTtn && (
-                <div style={card}>
-                    <div style={eyebrow}>Накладная (ТТН){order.ttnCount > 0 ? ` · отправлено ${order.ttnCount}` : ''}</div>
-                    <label style={{ ...outlineBtn, display: 'block', textAlign: 'center', cursor: 'pointer', opacity: ttnBusy ? 0.6 : 1 }}>
-                        {ttnBusy ? 'Отправка…' : order.ttnCount > 0 ? 'Отправить ещё фото' : 'Сфотографировать и отправить'}
-                        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={ttnBusy}
-                            onChange={(e) => { uploadTtn(e.target.files); e.currentTarget.value = ''; }} />
-                    </label>
-                    {order.ttnCount > 0 && <div style={{ marginTop: 10, fontSize: 14, color: GREEN, textAlign: 'center', fontWeight: 600 }}>Диспетчер получил накладную</div>}
-                </div>
-            )}
 
             {/* Действия */}
             <div style={{ position: 'sticky', bottom: 0, padding: '10px 0 22px', background: 'linear-gradient(transparent, var(--lc-bg) 28px)' }}>
