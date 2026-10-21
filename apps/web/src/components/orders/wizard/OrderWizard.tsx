@@ -58,6 +58,16 @@ import { DriverPicker } from '@/components/orders/DriverPicker';
 import { PartnerPicker } from './PartnerPicker';
 import { ExchangeCarrierCheckbox, ExchangeCarrierSlot, ExchangeOnBoardNote, publishNewOrder, useExchangeForNewOrder, useOrderExchangeState } from './ExchangeOption';
 import { ChoiceField } from './ChoiceField';
+
+/** Частые кузова — сверху окна выбора; остальные — поиском (M4). */
+const FREQUENT_BODY = ['тент', 'рефрижератор', 'изотерм', 'бортовая'];
+const BODY_TYPE_GROUPS = [
+    { label: 'Частые', items: FREQUENT_BODY.map((t) => ({ id: t, title: t })) },
+    {
+        label: 'Все кузова',
+        items: VEHICLE_TYPES.filter((t) => t !== 'не указан' && !FREQUENT_BODY.includes(t)).map((t) => ({ id: t, title: t })),
+    },
+];
 import { DRIVER_CARD_FIELDS, alreadyExistsMessage, fetchDriverPool, tripVehicle, type PoolDriver } from '@/lib/driver-pool';
 
 interface LocationState {
@@ -1631,9 +1641,14 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                             <SubTitle>Машина</SubTitle>
                             <div className="grid gap-x-3 sm:grid-cols-2">
                                 <Form.Item name="vehicleType" label="Тип транспорта">
-                                    <FormSelect
+                                    <ChoiceField
+                                        aria-label="Тип транспорта"
+                                        title="Тип кузова"
                                         placeholder="Выберите тип кузова"
-                                        options={VEHICLE_TYPES.map(t => ({ value: t, label: t }))}
+                                        searchPlaceholder="Например: тент, реф, борт"
+                                        recentKey="body-type"
+                                        onChange={() => undefined}
+                                                    groups={BODY_TYPE_GROUPS}
                                     />
                                 </Form.Item>
                                 <Form.Item name="vehicleModel" label="Модель автомобиля">
@@ -1831,10 +1846,17 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                         />
                     </Form.Item>
                     <Form.Item name="cargoType" label="Тип кузова">
-                        <FormSelect
+                        {/* Кузовов полсотни — окно с поиском и частыми сверху (задачи шефа, M4). */}
+                        <ChoiceField
+                            aria-label="Тип кузова"
+                            title="Тип кузова"
                             placeholder="Тент, реф…"
+                            searchPlaceholder="Например: тент, реф, борт"
                             allowClear
-                            options={VEHICLE_TYPES.map(t => ({ value: t, label: t }))}
+                            clearLabel="Не указан"
+                            recentKey="body-type"
+                            onChange={() => undefined}
+                            groups={BODY_TYPE_GROUPS}
                         />
                     </Form.Item>
                 </div>
