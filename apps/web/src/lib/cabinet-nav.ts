@@ -43,6 +43,7 @@ const FINANCE_ROUTES = [
  */
 export const REPORTS_ROUTES = [
     '/company/reports', '/company/accounting/pnl', '/company/accounting/carrier-profit',
+    '/company/accounting/manager-profit',
     '/company/accounting/registry', '/company/accounting/cashflow',
     '/company/accounting/expenses-by-category',
 ];

@@ -842,6 +842,18 @@ export class AccountingController {
         return this.accountingService.getCarrierProfitReport(req.user.companyId, query);
     }
 
+    @Get('manager-profit')
+    @Roles(...FINANCE_VIEW_ROLES)
+    @RequirePermissions(REPORTS_PERMISSION)
+    async getManagerProfitReport(
+        @Request() req: any,
+        @Query() query: { startDate?: string; endDate?: string },
+    ) {
+        return this.accountingService.getManagerProfitReport(req.user.companyId, query, {
+            role: req.user.role, userId: req.user.id ?? req.user.sub,
+        });
+    }
+
     @Get('expenses-by-category')
     @Roles(...FINANCE_VIEW_ROLES)
     @RequirePermissions(REPORTS_PERMISSION)

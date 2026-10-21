@@ -329,6 +329,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 children: [
                     { key: '/company/accounting/pnl', label: 'Отчёт по прибыли' },
                     { key: '/company/accounting/carrier-profit', label: 'Прибыль по перевозчику' },
+                    { key: '/company/accounting/manager-profit', label: 'Маржа по менеджерам' },
                     { key: '/company/accounting/registry', label: 'Реестр заявок' },
                     { key: '/company/accounting/cashflow', label: 'Движение денег' },
                     { key: '/company/accounting/expenses-by-category', label: 'Расходы по статьям' },

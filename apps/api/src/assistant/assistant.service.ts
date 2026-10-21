@@ -73,6 +73,7 @@ export const ROUTES = `
 - /company/accounting/cashflow — Движение денежных средств
 - /company/accounting/registry — Реестр заявок
 - /company/accounting/carrier-profit — Прибыль по перевозчикам
+- /company/accounting/manager-profit — Маржа по менеджерам: выручка, оплата перевозчикам и маржа каждого менеджера; строка раскрывается его сделками
 - /company/accounting/expenses-by-category — Расходы по статьям
 
 Хаб «Запросы» (/company/requests) — оттуда открывается:
