@@ -42,6 +42,9 @@ describe('Дашборд: история показателей по дням', 
             orderStatusHistory: {
                 findMany: jest.fn().mockResolvedValueOnce(opts.history).mockResolvedValue([]),
             },
+            // Сроки удостоверений водителей (R5) — здесь их нет.
+            company: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue({ isPark: false }) },
+            user: { findMany: jest.fn().mockResolvedValue([]) },
         };
         return { service: new DashboardBoardService(prisma, {} as any), prisma };
     }
@@ -94,6 +97,8 @@ describe('Дашборд: история показателей по дням', 
                     .mockResolvedValueOnce([])
                     .mockResolvedValueOnce([{ orderId: 'P', changedAt: since, comment: 'Очередь на складе' }]),
             },
+            company: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue({ isPark: false }) },
+            user: { findMany: jest.fn().mockResolvedValue([]) },
         };
         const service = new DashboardBoardService(prisma, {} as any);
         const r = await service.ordersOverview(req, { period: 'month' });

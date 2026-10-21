@@ -82,6 +82,7 @@ export default function LoadsScreen() {
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                     ListHeaderComponent={
                         <>
+                            <IdExpiryNote expiresAt={me?.idExpiresAt ?? null} />
                             <OffersStrip offers={myOffers} />
                             {shown.length > 0 && (
                                 <Text style={[styles.count, { color: colors.textTertiary }]}>
@@ -106,6 +107,33 @@ export default function LoadsScreen() {
                 />
             )}
         </View>
+    );
+}
+
+/**
+ * Срок удостоверения подходит к концу (задачи шефа, R5): за 30 дней —
+ * предупреждение, после — красным. С просроченным документом водителя
+ * разворачивают на посту и у ворот склада, и узнавать об этом там поздно.
+ */
+function IdExpiryNote({ expiresAt }: { expiresAt: string | null }) {
+    const { colors } = useAppTheme();
+    if (!expiresAt) return null;
+    const until = new Date(expiresAt);
+    const days = Math.ceil((until.getTime() - Date.now()) / 86_400_000);
+    if (days > 30) return null;
+    const date = until.toLocaleDateString('ru-RU', { timeZone: 'UTC' });
+    const expired = days < 0;
+    return (
+        <Card style={{ marginBottom: 10, borderWidth: 1, borderColor: expired ? colors.danger : '#f59e0b' }}>
+            <Text style={{ color: expired ? colors.danger : colors.text, fontSize: 15, fontFamily: FONT.semibold }}>
+                {expired ? `Удостоверение просрочено — с ${date}` : `Удостоверение действует до ${date}`}
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4, lineHeight: 18 }}>
+                {expired
+                    ? 'С просроченным документом рейс не дадут. Получите новое удостоверение и сообщите в парк.'
+                    : 'Срок скоро закончится. Получите новое удостоверение заранее и сообщите в парк.'}
+            </Text>
+        </Card>
     );
 }
 

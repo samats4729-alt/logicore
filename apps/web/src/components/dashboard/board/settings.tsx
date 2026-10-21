@@ -26,7 +26,7 @@ export interface BlockSettingsMap {
     byStatus: { kind: 'hbars' | 'vbars' | 'donut'; color: ColorKey | 'status'; completed: boolean };
     calendar: { only: 'all' | 'pending'; color: ColorKey };
     upcoming: { only: 'all' | 'pending'; columns: ('date' | 'status' | 'price')[]; limit: '5' | '10' | 'all' };
-    attention: { kinds: ('problems' | 'overdueIn' | 'overdueOut' | 'pendingSoon' | 'noTtn')[] };
+    attention: { kinds: ('problems' | 'overdueIn' | 'overdueOut' | 'pendingSoon' | 'noTtn' | 'docsExpiring')[] };
     inTransit: { columns: ('driver' | 'progress' | 'status')[]; color: ColorKey };
     debtors: { only: 'all' | 'overdue'; noInvoice: boolean };
     drivers: { lists: ('free' | 'trip')[]; plate: boolean };
@@ -47,7 +47,7 @@ export const DEFAULTS: { [K in SettingsId]: BlockSettingsMap[K] } = {
     byStatus: { kind: 'hbars', color: 'graphite', completed: true },
     calendar: { only: 'all', color: 'graphite' },
     upcoming: { only: 'all', columns: ['date', 'status', 'price'], limit: 'all' },
-    attention: { kinds: ['problems', 'overdueIn', 'overdueOut', 'pendingSoon', 'noTtn'] },
+    attention: { kinds: ['problems', 'overdueIn', 'overdueOut', 'pendingSoon', 'noTtn', 'docsExpiring'] },
     inTransit: { columns: ['driver', 'progress', 'status'], color: 'graphite' },
     debtors: { only: 'all', noInvoice: true },
     drivers: { lists: ['free', 'trip'], plate: true },
@@ -121,6 +121,7 @@ export const FIELDS: { [K in SettingsId]: Field[] } = {
                 { value: 'overdueOut', label: 'Мы просрочили оплату' },
                 { value: 'pendingSoon', label: 'Заявки без исполнителя' },
                 { value: 'noTtn', label: 'Рейсы без ТТН' },
+                { value: 'docsExpiring', label: 'Истекает удостоверение водителя' },
             ],
         },
     ],

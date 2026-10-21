@@ -366,15 +366,16 @@ export function UpcomingBlock() {
 
 // ==================== Требуют внимания ====================
 
-type AttentionKind = 'problems' | 'overdueIn' | 'overdueOut' | 'pendingSoon' | 'noTtn';
+type AttentionKind = 'problems' | 'overdueIn' | 'overdueOut' | 'pendingSoon' | 'noTtn' | 'docsExpiring';
 interface AttentionItem { kind: AttentionKind; key: string; title: string; text: string; badge: string; tone: 'neg' | 'muted'; href: string }
 
 /**
  * Что требует внимания — сначала то, что стоит денег.
  *
  * Только то, что платформа знает наверняка: проблемы в пути, просроченные
- * счета, заявки без исполнителя накануне погрузки, рейсы без накладной.
- * Сроков доверенностей и страховок в системе нет — их здесь и нет.
+ * счета, заявки без исполнителя накануне погрузки, рейсы без накладной,
+ * удостоверения водителей, у которых кончается срок (R5). Сроков
+ * доверенностей и страховок в системе нет — их здесь и нет.
  */
 export function AttentionBlock() {
     const { orders, planned } = useBoardData();
@@ -441,6 +442,25 @@ export function AttentionBlock() {
             badge: 'Документы',
             tone: 'muted',
             href: a.noTtn.length === 1 ? `/company/orders/${a.noTtn[0].id}` : '/company/orders',
+        });
+    }
+
+    // Удостоверения: сначала просроченные — с ними водителя развернут на посту.
+    const docs = a?.docsExpiring ?? [];
+    if (docs.length) {
+        const expired = docs.filter((d) => d.expired);
+        const first = docs[0];
+        items.push({
+            kind: 'docsExpiring',
+            key: 'docs-expiring',
+            title: expired.length
+                ? `Просрочено удостоверение у ${expired.length} ${plural(expired.length, 'водителя', 'водителей', 'водителей')}`
+                : `Удостоверение истекает у ${docs.length} ${plural(docs.length, 'водителя', 'водителей', 'водителей')}`,
+            text: `${first.name} — ${first.expired ? 'истекло' : 'до'} ${shortDate(first.expiresAt)}`
+                + (docs.length > 1 ? ` · ещё ${docs.length - 1}` : ''),
+            badge: 'Документы',
+            tone: expired.length ? 'neg' : 'muted',
+            href: docs.length === 1 ? first.href : (first.kind === 'PARK_DRIVER' ? '/company/park/drivers' : '/company/drivers'),
         });
     }
 
