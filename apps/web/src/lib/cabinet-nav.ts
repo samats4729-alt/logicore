@@ -48,7 +48,7 @@ export const REPORTS_ROUTES = [
     '/company/accounting/expenses-by-category',
 ];
 
-const REQUESTS_ROUTES = ['/company/requests', '/company/calculator'];
+const REQUESTS_ROUTES = ['/company/requests', '/company/calculator', '/company/driver-calculator'];
 
 export const HUB_ROUTES: Record<string, string[]> = {
     '/company/cabinet': CABINET_ROUTES,

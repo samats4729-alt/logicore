@@ -283,6 +283,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 children: [
                     { key: '/company/requests', label: 'Запросы на расчёт' },
                     { key: '/company/calculator', label: 'Калькулятор рейса' },
+                    { key: '/company/driver-calculator', label: 'Расчёт водителя без ИП' },
                 ],
             });
         }
