@@ -343,6 +343,7 @@ export class ExchangePayoutsService {
         return {
             parkName: driver.park?.name ?? null,
             rates,
+            opvSaved: await this.opvSaved(driver.id),
             iban: driver.payoutIban,
             bank: driver.payoutBank,
             available: (() => { const t = sumLines(lines); return { ...t, workNet: t.net, net: t.toPay }; })(),
@@ -352,6 +353,22 @@ export class ExchangePayoutsService {
                 requestedAt: p.requestedAt, exportedAt: p.exportedAt, paidAt: p.paidAt, rejectReason: p.rejectReason,
             })),
         };
+    }
+
+    /**
+     * Сколько ОПВ парк уже удержал и перечислил на пенсионный счёт водителя
+     * (задачи шефа, Q14: «ОПВ копится и видно водителю»). Считается по
+     * выплаченным выплатам: ОПВ удерживается при выплате, и пока деньги не
+     * ушли водителю, взнос тоже не перечислен.
+     */
+    private async opvSaved(driverId: string) {
+        const year = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Almaty', year: 'numeric' });
+        const yearStart = new Date(`${year}-01-01T00:00:00+05:00`);
+        const [total, thisYear] = await Promise.all([
+            this.prisma.driverPayout.aggregate({ where: { driverId, status: 'PAID' }, _sum: { opv: true } }),
+            this.prisma.driverPayout.aggregate({ where: { driverId, status: 'PAID', paidAt: { gte: yearStart } }, _sum: { opv: true } }),
+        ]);
+        return { total: num(total._sum.opv), year: Number(year), thisYear: num(thisYear._sum.opv) };
     }
 
     async setAccount(userId: string, dto: { iban: string; bank?: string }) {

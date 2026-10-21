@@ -231,6 +231,8 @@ export type PayoutStatus = 'REQUESTED' | 'EXPORTED' | 'PAID' | 'REJECTED';
 export interface Earnings {
     parkName: string | null;
     rates: { commissionPct: number; opvPct: number; vosmsPct: number; ipnPct: number; soPct: number };
+    /** Сколько ОПВ уже ушло на пенсионный счёт (по выплаченным выплатам). Старый сервер не присылает. */
+    opvSaved?: { total: number; year: number; thisYear: number };
     iban: string | null;
     bank: string | null;
     available: PayoutAmounts;

@@ -165,6 +165,15 @@ export default function EarningsScreen() {
                 <View style={[styles.states, data.trips.length > 0 && { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border2 }]}>
                     <StateLine label="Ожидает выплаты" value={деньги(waitingSum)} hint={open ? `запрошено выплат: ${waiting.length}` : 'запросов нет'} colors={colors} />
                     <StateLine label="Выплачено" value={деньги(paidSum)} hint="за всё время" colors={colors} />
+                    {/* ОПВ копится — водитель видит, сколько уже на пенсионном счёте (задачи шефа, Q14). */}
+                    {data.opvSaved && (
+                        <StateLine
+                            label="На ваш пенсионный счёт (ОПВ)"
+                            value={деньги(data.opvSaved.total)}
+                            hint={`${data.rates.opvPct}% с оплаты за работу · в ${data.opvSaved.year} году — ${деньги(data.opvSaved.thisYear)}`}
+                            colors={colors}
+                        />
+                    )}
                 </View>
             </Section>
 
