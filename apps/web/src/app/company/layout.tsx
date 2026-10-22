@@ -350,6 +350,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 { key: '/company/locations', label: 'Адреса и склады' },
                 ...(hasPerm('partners') ? [{ key: '/company/contracts', label: 'Договоры' }] : []),
                 ...(isAdmin ? [{ key: '/company/users', label: 'Сотрудники' }] : []),
+                ...(isAdmin || user.role === 'ACCOUNTANT' ? [{ key: '/company/one-c', label: 'Обмен с 1С' }] : []),
                 ...(hasPerm('documents') ? [{ key: '/company/documents', label: 'Документы' }] : []),
                 ...(isAdmin && auditEnabled ? [{ key: '/company/audit', label: 'Журнал действий' }] : []),
             ],

@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -14,7 +15,11 @@ async function bootstrap() {
 
     initSentry();
 
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+    // Обмен с 1С идёт по SOAP: тело — XML, а не JSON. Без этого Nest отдаёт
+    // контроллеру пустое тело, и 1С получает «пустой запрос».
+    app.useBodyParser('text', { type: ['text/xml', 'application/soap+xml', 'application/xml'], limit: '64mb' });
 
     // Включение сжатия ответов (gzip/brotli) для ускорения загрузки данных
     app.use(compression());

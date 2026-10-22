@@ -546,6 +546,8 @@ model Company {
   parkPayoutRates ParkPayoutRates?
   /// Выплаты водителям парка.
   driverPayouts   DriverPayout[]
+  /// Прямой обмен с 1С компании.
+  oneCConnections OneCConnection[]
   exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
   /// Отклики компании-перевозчика на заявки других компаний с биржи.
   exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")
@@ -3312,6 +3314,60 @@ model ExchangeDriverContract {
 
   @@index([driverId, signedAt])
   @@index([parkCompanyId])
+}
+
+/// Прямой обмен с 1С компании (решение владельца 22–23.10.2026).
+///
+/// 1С подключается к LogiCore как к «другой программе» через Интернет:
+/// «Администрирование» → «Настройки синхронизации данных» → «Другая
+/// программа». Компания вписывает в свою 1С адрес, логин и пароль отсюда —
+/// программист не нужен. LogiCore отвечает 1С так, как ответила бы другая
+/// база 1С (веб-сервисы InterfaceVersion и Exchange_3_0_1_1).
+model OneCConnection {
+  id                String    @id @default(cuid())
+  companyId         String
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Логин для 1С. Пароль хранится только хешем и показывается один раз.
+  login             String    @unique
+  passwordHash      String
+  enabled           Boolean   @default(true)
+  /// Код узла LogiCore в этом обмене — 1С видит его как код корреспондента.
+  nodeCode          String
+  /// Что прислала 1С при настройке: план обмена, её код узла, название,
+  /// версия программы и формата, строка настроек подключения целиком.
+  exchangePlanName  String?
+  peerNodeCode      String?
+  peerName          String?
+  peerConfigVersion String?
+  formatVersion     String?
+  settingsXml       String?
+  setupAt           DateTime?
+  lastSeenAt        DateTime?
+  /// Номера сообщений обмена — по ним 1С и LogiCore подтверждают получение.
+  sentNo            Int       @default(0)
+  receivedNo        Int       @default(0)
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  log OneCExchangeLog[]
+
+  @@index([companyId])
+}
+
+/// Журнал обмена с 1С: что 1С спрашивала и чем кончилось — для экрана
+/// «Обмен с 1С» и для разбора, если что-то не легло.
+model OneCExchangeLog {
+  id           String         @id @default(cuid())
+  connectionId String
+  connection   OneCConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  operation    String
+  ok           Boolean
+  message      String?
+  details      Json?
+  createdAt    DateTime       @default(now())
+
+  @@index([connectionId, createdAt])
 }
 
 /// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с
