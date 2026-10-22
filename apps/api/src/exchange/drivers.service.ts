@@ -45,6 +45,7 @@ const DRIVER_SELECT = {
     submittedAt: true, reviewedAt: true, rejectReason: true, blockedAt: true, blockedReason: true,
     tripsCompleted: true, createdAt: true,
     deductionRequested: true, deductionRequestedAt: true, deletionRequestedAt: true,
+    extraPhones: true, docsEmail: true, docsContact: true,
     user: { select: { email: true } },
     documents: { select: { id: true, kind: true, fileName: true, mimeType: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
 } satisfies Prisma.ExchangeDriverSelect;
@@ -277,6 +278,40 @@ export class ExchangeDriversService {
             where: { id: driver.id },
             data: { deductionRequested: requested, deductionRequestedAt: requested ? new Date() : null },
         });
+        return this.me(userId);
+    }
+
+    /**
+     * Ещё номера и почта для документов (задачи шефа, Q6).
+     *
+     * Второй, третий или зарубежный номер нужен, когда водитель в рейсе за
+     * границей или основной сел. Почта — для актов и счетов от заказчика.
+     * Это не личность и не вход, поэтому анкета на проверку не уходит.
+     */
+    async setContacts(userId: string, dto: { extraPhones?: string[]; docsEmail?: string | null; docsContact?: string | null }) {
+        const driver = await this.ownDriver(userId);
+        if (driver.status === 'BLOCKED') throw new ForbiddenException('Вы заблокированы на бирже');
+        const data: Prisma.ExchangeDriverUpdateInput = {};
+
+        if (dto.extraPhones !== undefined) {
+            const main = normalizePhone(driver.phone) || digitsOnly(driver.phone);
+            const phones: string[] = [];
+            for (const raw of dto.extraPhones.map((p) => p.trim()).filter(Boolean)) {
+                // Казахстанский — к виду +7…; зарубежный — как есть, только цифры с плюсом.
+                const phone = normalizePhone(raw) || (digitsOnly(raw).length >= 10 ? `+${digitsOnly(raw)}` : '');
+                if (!phone) throw new BadRequestException(`«${raw}» не похоже на номер телефона: нужно не меньше 10 цифр`);
+                if (phone !== main && !phones.includes(phone)) phones.push(phone);
+            }
+            data.extraPhones = phones;
+        }
+        if (dto.docsEmail !== undefined) {
+            const email = dto.docsEmail?.trim().toLowerCase() || null;
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new BadRequestException('Почта для документов указана с ошибкой');
+            data.docsEmail = email;
+        }
+        if (dto.docsContact !== undefined) data.docsContact = dto.docsContact?.trim() || null;
+
+        await this.prisma.exchangeDriver.update({ where: { id: driver.id }, data });
         return this.me(userId);
     }
 

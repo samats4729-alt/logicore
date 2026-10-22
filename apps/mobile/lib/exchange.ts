@@ -12,6 +12,10 @@ export interface DriverProfile {
     middleName: string | null;
     iin: string | null;
     phone: string | null;
+    /** Ещё номера и контакты для документов (Q6). Старый сервер не присылает. */
+    extraPhones?: string[];
+    docsEmail?: string | null;
+    docsContact?: string | null;
     /** Из ИИН — сервер считает сам. */
     birthDate: string | null;
     /** Удостоверение личности: номер, кем выдано, даты «ГГГГ-ММ-ДД…». */
@@ -393,6 +397,8 @@ export const exchangeApi = {
     cancelDeletion: () => api.post('/exchange/driver/me/delete/cancel'),
     /** Заявление на базовый вычет по ИПН. */
     setDeduction: (requested: boolean) => api.put<DriverProfile>('/exchange/driver/me/deduction', { requested }).then((r) => r.data),
+    setContacts: (data: { extraPhones: string[]; docsEmail: string | null; docsContact: string | null }) =>
+        api.put<DriverProfile>('/exchange/driver/me/contacts', data).then((r) => r.data),
 
     feed: (bodyType?: string) =>
         api.get<ExchangeOrder[]>('/exchange/driver/loads', { params: bodyType ? { bodyType } : {} }).then((r) => r.data),

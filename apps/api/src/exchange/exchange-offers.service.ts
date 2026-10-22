@@ -16,6 +16,7 @@ const DRIVER_IN_OFFER = {
     ipName: true, vehiclePlate: true, vehicleBodyType: true, vehicleCapacityKg: true,
     tripsCompleted: true, createdAt: true, parkCompanyId: true,
     park: { select: { id: true, name: true } },
+    extraPhones: true, docsEmail: true, docsContact: true,
 } satisfies Prisma.ExchangeDriverSelect;
 
 const OFFER_SELECT = {
@@ -54,6 +55,10 @@ function offerView(o: OfferRow) {
             vehicleCapacityKg: d.vehicleCapacityKg,
             tripsCompleted: d.tripsCompleted,
             since: d.createdAt,
+            /** Ещё номера и куда слать акты и счета (Q6). */
+            extraPhones: d.extraPhones,
+            docsEmail: d.docsEmail,
+            docsContact: d.docsContact,
         } : null,
         company: o.company ? { name: o.company.name, bin: o.company.bin } : null,
     };

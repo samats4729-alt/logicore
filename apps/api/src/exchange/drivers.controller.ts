@@ -49,7 +49,7 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
 }
 import {
     AddParkDriverDto, AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
-    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
+    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, DriverContactsDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -263,6 +263,12 @@ export class ExchangeDriverController {
     @ApiOperation({ summary: 'Отозвать просьбу удалить аккаунт' })
     cancelDeletion(@Request() req: any) {
         return this.drivers.cancelDeletion(req.user.sub);
+    }
+
+    @Put('me/contacts')
+    @ApiOperation({ summary: 'Ещё номера и почта для бухгалтерских документов' })
+    setContacts(@Request() req: any, @Body() dto: DriverContactsDto) {
+        return this.drivers.setContacts(req.user.sub, dto);
     }
 
     @Put('me/deduction')

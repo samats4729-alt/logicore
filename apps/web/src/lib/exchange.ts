@@ -83,6 +83,10 @@ export interface ExchangeOffer {
         vehicleCapacityKg: number | null;
         tripsCompleted: number;
         since: string;
+        /** Ещё номера и куда слать акты и счета (Q6). Старый сервер не присылает. */
+        extraPhones?: string[];
+        docsEmail?: string | null;
+        docsContact?: string | null;
     } | null;
     company: { name: string; bin: string | null } | null;
 }
@@ -258,6 +262,10 @@ export interface ExchangeDriver {
     middleName: string | null;
     iin: string | null;
     phone: string | null;
+    /** Ещё номера и контакты для документов (Q6). Старый сервер не присылает. */
+    extraPhones?: string[];
+    docsEmail?: string | null;
+    docsContact?: string | null;
     /** Из ИИН — сервер считает сам. */
     birthDate: string | null;
     idNumber: string | null;

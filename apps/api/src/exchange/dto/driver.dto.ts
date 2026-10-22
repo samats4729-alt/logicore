@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ExchangeDriverDocumentKind, ExchangeDriverKind, ExchangeDriverStatus } from '@prisma/client';
 import {
-    IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength,
+    ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength,
 } from 'class-validator';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../../auth/password-policy';
 
@@ -232,6 +232,22 @@ export class FuelSeasonDto {
 export class DeductionRequestDto {
     @ApiProperty({ description: 'true — прошу применять базовый вычет; у другого работодателя не получаю' })
     @IsBoolean() requested: boolean;
+}
+
+/** Ещё номера и контакты для документов (Q6) — меняются без повторной проверки. */
+export class DriverContactsDto {
+    @ApiProperty({ type: [String], required: false, description: 'До трёх номеров: второй, третий, зарубежный' })
+    @IsOptional() @IsArray() @ArrayMaxSize(3, { message: 'Дополнительных номеров — не больше трёх' })
+    @IsString({ each: true }) @MaxLength(30, { each: true })
+    extraPhones?: string[];
+
+    @ApiProperty({ required: false, description: 'Почта для бухгалтерских документов' })
+    @IsOptional() @IsString() @MaxLength(120)
+    docsEmail?: string | null;
+
+    @ApiProperty({ required: false, description: 'Кто по документам: имя и телефон' })
+    @IsOptional() @IsString() @MaxLength(200)
+    docsContact?: string | null;
 }
 
 export class DeletionRequestDto {

@@ -214,6 +214,28 @@ describe('Биржа: поменять данные после допуска', 
     });
 });
 
+describe('Биржа: ещё номера и почта для документов (Q6)', () => {
+    it('номера приводятся к виду, зарубежный сохраняется, основной и повторы отбрасываются; проверки не нужно', async () => {
+        const { service, prisma } = build(driverRow({ status: 'APPROVED' }));
+        await service.setContacts('u-1', {
+            extraPhones: ['8 707 765 43 21', '+998 90 123 45 67', '+7 701 123 45 67', '87077654321', ' '],
+            docsEmail: ' Buh@Serik.KZ ',
+            docsContact: ' Айгуль, бухгалтер ',
+        });
+        const data = prisma.exchangeDriver.update.mock.calls[0][0].data;
+        expect(data).toEqual({ extraPhones: ['+77077654321', '+998901234567'], docsEmail: 'buh@serik.kz', docsContact: 'Айгуль, бухгалтер' });
+        // Статус не трогаем — анкета не уходит на проверку.
+        expect(data.status).toBeUndefined();
+    });
+
+    it('кривой номер или почта — понятный отказ; заблокированному — нельзя', async () => {
+        const { service } = build(driverRow({ status: 'APPROVED' }));
+        await expect(service.setContacts('u-1', { extraPhones: ['12345'] })).rejects.toThrow(/не похоже на номер/);
+        await expect(service.setContacts('u-1', { docsEmail: 'buh@serik' })).rejects.toThrow(/Почта для документов/);
+        await expect(build(driverRow({ status: 'BLOCKED' })).service.setContacts('u-1', { docsEmail: null })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+});
+
 describe('Биржа: анкета', () => {
     it('ИИН с ошибкой не сохраняется', async () => {
         const { service } = build();
