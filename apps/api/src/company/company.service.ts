@@ -26,6 +26,7 @@ import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
 import { vehicleDocDates, VehicleDocDatesInput } from './document-expiry';
+import { assertNotBlocked } from '../blocklist/blocklist';
 import { kzMonthShifted, kzStartOfMonth, kzStartOfMonthShifted, kzStartOfToday } from '../common/utils/business-date';
 import {
     FinanceCalculatorService,
@@ -1448,6 +1449,7 @@ export class CompanyService {
      */
     async createVehicle(companyId: string, data: { type: string; plate: string; model: string; trailerNumber?: string; driverId?: string } & VehicleDocDatesInput) {
         const { driverId, insuranceUntil, inspectionUntil, ...vehicleData } = data;
+        await assertNotBlocked(this.prisma, companyId, { plates: [data.plate, data.trailerNumber] });
         const vehicle = await this.prisma.vehicle.create({
             data: {
                 ...vehicleData,
@@ -1501,6 +1503,12 @@ export class CompanyService {
 
         const { driverId, insuranceUntil, inspectionUntil, ...vehicleData } = data;
         const oldPlate = vehicle.plate;
+        await assertNotBlocked(this.prisma, companyId, {
+            plates: [
+                data.plate && data.plate !== vehicle.plate ? data.plate : null,
+                data.trailerNumber && data.trailerNumber !== vehicle.trailerNumber ? data.trailerNumber : null,
+            ],
+        });
 
         const updatedVehicle = await this.prisma.vehicle.update({
             where: { id },

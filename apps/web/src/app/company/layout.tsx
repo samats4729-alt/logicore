@@ -355,6 +355,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 ...(isAdmin ? [{ key: '/company/vehicles', label: 'Автопарк' }] : []),
                 { key: '/company/locations', label: 'Адреса и склады' },
                 ...(hasPerm('partners') ? [{ key: '/company/contracts', label: 'Договоры' }] : []),
+                ...(hasPerm('partners') || hasPerm('drivers') ? [{ key: '/company/blocklist', label: 'Чёрный список' }] : []),
                 ...(isAdmin ? [{ key: '/company/users', label: 'Сотрудники' }] : []),
                 ...(hasPerm('documents') ? [{ key: '/company/documents', label: 'Документы' }] : []),
                 ...(isAdmin && auditEnabled ? [{ key: '/company/audit', label: 'Журнал действий' }] : []),

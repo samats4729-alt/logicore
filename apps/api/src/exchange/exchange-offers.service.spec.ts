@@ -108,6 +108,19 @@ describe('Биржа: отклик', () => {
         prisma.company.findUnique.mockResolvedValue({ isPark: true });
         await expect(service.offerAsCompany(CARRIER, 'user-c', 'order-1', { agree: true })).resolves.toBeDefined();
     });
+
+    it('в чёрном списке компании, выставившей заявку, — отклик не принимается (F5/S2)', async () => {
+        const { service, prisma } = build();
+        prisma.companyBlocklist = { findFirst: jest.fn().mockResolvedValue({ kind: 'BIN_IIN', value: '123456789012', name: null, reason: 'не платит' }) };
+        prisma.company.findUnique.mockResolvedValue({ isPark: false, bin: '123456789012', phone: null });
+        await expect(service.offerAsCompany(CARRIER, 'user-c', 'order-1', { agree: true })).rejects.toThrow(/не принимает ваши отклики/);
+        // Ищем в списке той, кто выставил заявку, — у нас это экспедитор.
+        expect(prisma.companyBlocklist.findFirst.mock.calls[0][0].where.companyId).toBe(OUR);
+
+        prisma.exchangeDriver.findUnique.mockResolvedValue({ id: 'd-1', iin: null, phone: '+77011234567', vehiclePlate: null, park: null });
+        await expect(service.offerAsDriver('u-driver', 'order-1', { agree: true })).rejects.toThrow(/не принимает ваши отклики/);
+        expect(prisma.exchangeOffer.upsert).not.toHaveBeenCalled();
+    });
 });
 
 describe('Биржа: выбор исполнителя', () => {

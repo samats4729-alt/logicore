@@ -701,6 +701,16 @@ export default function PartnerDetailPage() {
                     >
                         Назад к списку
                     </button>
+                    {/* Мошенник — в чёрный список (F5): окно откроется с его БИН. */}
+                    {partner.bin && (
+                        <button
+                            type="button"
+                            className={nova.action}
+                            onClick={() => router.push(`/company/blocklist?kind=BIN_IIN&value=${encodeURIComponent(partner.bin)}&name=${encodeURIComponent(partner.name)}`)}
+                        >
+                            В чёрный список
+                        </button>
+                    )}
                     {isExternal && (
                         <button
                             type="button"

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, ForbiddenException,
 import { CompanyVerificationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isInvoiceTiming, isPaymentAnchor } from '../common/utils/payment-terms';
+import { assertNotBlocked } from '../blocklist/blocklist';
 
 /**
  * Что разрешено записывать в карточку контрагента.
@@ -136,6 +137,9 @@ export class ExternalCompaniesService {
         const isCarrier = data.isCarrier !== undefined ? data.isCarrier : (data.type === 'FORWARDER');
         const bin = data.bin?.trim() || undefined;
 
+        // Мошенника из своего чёрного списка заново не заведёшь (F5).
+        await assertNotBlocked(this.prisma, companyId, { binIin: [bin], phones: [data.phone] });
+
         // Один БИН — один контрагент в справочнике.
         //
         // Ту же фирму можно было завести сколько угодно раз: в списке строки
@@ -214,6 +218,13 @@ export class ExternalCompaniesService {
         if (!company.isExternal || company.createdByCompanyId !== companyId) {
             throw new ForbiddenException('Нет доступа');
         }
+
+        // Чёрный список — только для того, что меняют сейчас: старую карточку
+        // с совпадением можно поправить, чтобы разобраться с ней (F5).
+        await assertNotBlocked(this.prisma, companyId, {
+            binIin: [data.bin?.trim() && data.bin.trim() !== company.bin ? data.bin : null],
+            phones: [data.phone && data.phone !== company.phone ? data.phone : null],
+        });
 
         // Тот же запрет, что и при заведении: правкой БИН нельзя получить
         // вторую карточку той же фирмы.

@@ -554,6 +554,8 @@ model Company {
   exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
   /// Отклики компании-перевозчика на заявки других компаний с биржи.
   exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")
+  /// Свой чёрный список (задачи шефа, F5/S2).
+  blocklist       CompanyBlocklist[]
 }
 
 // ... existing models ...
@@ -3330,6 +3332,28 @@ model ExchangeDriverContract {
 
   @@index([driverId, signedAt])
   @@index([parkCompanyId])
+}
+
+/// Чёрный список компании (задачи шефа, F5/S2): мошенники по БИН/ИИН,
+/// телефону и госномеру. Записанное здесь компания не может завести в свой
+/// справочник контрагентов, водителей и машин, и с ним не пройдёт отклик
+/// на её биржевую заявку. Список у каждой компании свой: чужое мнение о
+/// контрагенте на других не распространяется.
+model CompanyBlocklist {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// BIN_IIN, PHONE или PLATE.
+  kind        String
+  /// Приведённое значение: цифры у БИН/ИИН, +7… у телефона, госномер заглавными без пробелов.
+  value       String
+  /// Кто это — название фирмы или ФИО, как записал сотрудник.
+  name        String?
+  reason      String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([companyId, kind, value])
 }
 
 /// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с
