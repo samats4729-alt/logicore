@@ -40,6 +40,9 @@ interface Partner {
     customerPaymentFrom?: string | null;
     carrierPaymentDays?: number | null;
     carrierPaymentFrom?: string | null;
+    /** Отсрочка в банковских днях (F3). */
+    customerPaymentBanking?: boolean;
+    carrierPaymentBanking?: boolean;
 }
 
 import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEmails';
@@ -829,6 +832,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 customerPaymentFrom: e.customerPaymentFrom ?? null,
                 carrierPaymentDays: e.carrierPaymentDays ?? null,
                 carrierPaymentFrom: e.carrierPaymentFrom ?? null,
+                customerPaymentBanking: !!e.customerPaymentBanking,
+                carrierPaymentBanking: !!e.carrierPaymentBanking,
             }));
             const combined = [...partnersList, ...externalList];
             setFetchedPartners(combined);
@@ -1489,12 +1494,12 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                         <div className="min-w-0 flex-1 text-muted-foreground">
                             {[
                                 customerTerms && `заказчик — ${vatLabel(customerTerms.vatPayer, customerTerms.vatRate)}`
-                                    + (paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom)
-                                        ? `, оплата ${paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom)}`
+                                    + (paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom, customerTerms.customerPaymentBanking)
+                                        ? `, оплата ${paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom, customerTerms.customerPaymentBanking)}`
                                         : ', срок оплаты не указан'),
                                 carrierTerms && `перевозчик — ${vatLabel(carrierTerms.vatPayer, carrierTerms.vatRate)}`
-                                    + (paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom)
-                                        ? `, платим ${paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom)}`
+                                    + (paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom, carrierTerms.carrierPaymentBanking)
+                                        ? `, платим ${paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom, carrierTerms.carrierPaymentBanking)}`
                                         : ', срок оплаты не указан'),
                             ].filter(Boolean).join(' · ')}
                         </div>

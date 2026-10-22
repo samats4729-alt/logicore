@@ -1,3 +1,5 @@
+import { addKzBankingDays } from './kz-holidays';
+
 /**
  * Условия оплаты: сколько дней отсрочки и от какого дня они идут.
  *
@@ -52,14 +54,18 @@ export const anchorLabel = (anchor: unknown): string | null =>
 export const invoiceTimingLabel = (timing: unknown): string | null =>
     (isInvoiceTiming(timing) ? TIMING_ON_SCREEN[timing] : null);
 
-/** «календарный день» / «календарных дня» / «календарных дней». */
-function calendarDays(days: number): string {
+/**
+ * «календарный день» / «календарных дня» / «календарных дней» — или то же
+ * с «банковский», если отсрочка в банковских днях (F3).
+ */
+function calendarDays(days: number, banking = false): string {
+    const [one, many] = banking ? ['банковский', 'банковских'] : ['календарный', 'календарных'];
     const tail = days % 100;
     const last = days % 10;
-    if (tail > 10 && tail < 20) return `${days} календарных дней`;
-    if (last === 1) return `${days} календарный день`;
-    if (last >= 2 && last <= 4) return `${days} календарных дня`;
-    return `${days} календарных дней`;
+    if (tail > 10 && tail < 20) return `${days} ${many} дней`;
+    if (last === 1) return `${days} ${one} день`;
+    if (last >= 2 && last <= 4) return `${days} ${many} дня`;
+    return `${days} ${many} дней`;
 }
 
 /**
@@ -71,21 +77,23 @@ function calendarDays(days: number): string {
 export function paymentConditionText(
     days: number | null | undefined,
     anchor: unknown,
+    banking = false,
 ): string | null {
     if (days === null || days === undefined) return null;
     if (!Number.isFinite(days) || days < 0) return null;
     if (!isPaymentAnchor(anchor)) return null;
     if (days === 0) return `Оплата по факту ${ANCHOR_IN_DOCUMENT[anchor]}.`;
-    return `Оплата в течение ${calendarDays(days)} ${ANCHOR_IN_DOCUMENT[anchor]}.`;
+    return `Оплата в течение ${calendarDays(days, banking)} ${ANCHOR_IN_DOCUMENT[anchor]}.`;
 }
 
 /** То же одной строкой для экрана: «15 дней от выгрузки». */
 export function paymentTermsShort(
     days: number | null | undefined,
     anchor: unknown,
+    banking = false,
 ): string | null {
     if (days === null || days === undefined || !isPaymentAnchor(anchor)) return null;
-    return `${days === 0 ? 'по факту' : `${days} дн.`} ${ANCHOR_ON_SCREEN[anchor]}`;
+    return `${days === 0 ? 'по факту' : `${days} ${banking ? 'банк. дн.' : 'дн.'}`} ${ANCHOR_ON_SCREEN[anchor]}`;
 }
 
 /**
@@ -112,11 +120,14 @@ export function asCalendarDay(value: Date | string | null | undefined): Date | n
 export function dueDateFrom(
     anchorDate: Date | string | null | undefined,
     days: number | null | undefined,
+    /** Отсрочка в банковских днях: без выходных и праздников РК (F3). */
+    banking = false,
 ): Date | null {
     if (!anchorDate || days === null || days === undefined) return null;
     if (!Number.isFinite(days) || days < 0) return null;
     const from = anchorDate instanceof Date ? anchorDate : new Date(anchorDate);
     if (Number.isNaN(from.getTime())) return null;
+    if (banking) return addKzBankingDays(from, days);
     return new Date(Date.UTC(
         from.getUTCFullYear(),
         from.getUTCMonth(),

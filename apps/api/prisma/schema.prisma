@@ -531,6 +531,11 @@ model Company {
   carrierPaymentDays Int?
   carrierPaymentFrom String?
 
+  /// Отсрочка считается в банковских днях (без выходных и праздников РК),
+  /// а не в календарных. Отдельно по сторонам — как и сами отсрочки (F3).
+  customerPaymentBanking Boolean @default(false)
+  carrierPaymentBanking  Boolean @default(false)
+
   /// Грузы компании на бирже.
 
   /// Парк — компания-посредник на бирже: арендует машину с экипажем у
@@ -904,6 +909,9 @@ model Order {
   customerPaymentFrom String?
   carrierPaymentDays  Int?
   carrierPaymentFrom  String?
+  /// Отсрочка в банковских днях — снимок из карточки, как и сами дни (F3).
+  customerPaymentBanking Boolean @default(false)
+  carrierPaymentBanking  Boolean @default(false)
 
   /// Когда оригиналы накладных дошли до того, кто их ждёт.
   ///

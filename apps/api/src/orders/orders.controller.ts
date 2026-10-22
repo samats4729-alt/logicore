@@ -394,6 +394,8 @@ export class OrdersController {
         customerPaymentFrom?: string | null;
         carrierPaymentDays?: number | null;
         carrierPaymentFrom?: string | null;
+        customerPaymentBanking?: boolean;
+        carrierPaymentBanking?: boolean;
     }) {
         const state = await this.settlements.patchTerms(id, req.user.companyId, req.user.sub, dto);
         await this.auditService.log({

@@ -113,6 +113,8 @@ export class ExternalCompaniesService {
                 customerPaymentFrom: true,
                 carrierPaymentDays: true,
                 carrierPaymentFrom: true,
+                customerPaymentBanking: true,
+                carrierPaymentBanking: true,
                 isActive: true,
                 createdAt: true,
                 responsibleManagerId: true,
@@ -284,6 +286,8 @@ export class ExternalCompaniesService {
         customerPaymentFrom?: string | null;
         carrierPaymentDays?: number | null;
         carrierPaymentFrom?: string | null;
+        customerPaymentBanking?: boolean;
+        carrierPaymentBanking?: boolean;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: externalId },
@@ -354,6 +358,9 @@ export class ExternalCompaniesService {
             patch.carrierPaymentDays = company.isCarrier ? side.days : null;
             patch.carrierPaymentFrom = company.isCarrier ? side.from : null;
         }
+        // Банковские дни — к отсрочке той же стороны (F3).
+        if (data.customerPaymentBanking !== undefined) patch.customerPaymentBanking = company.isCustomer && !!data.customerPaymentBanking;
+        if (data.carrierPaymentBanking !== undefined) patch.carrierPaymentBanking = company.isCarrier && !!data.carrierPaymentBanking;
 
         return this.prisma.company.update({
             where: { id: externalId },
@@ -363,6 +370,7 @@ export class ExternalCompaniesService {
                 vatPayer: true, vatRate: true, invoiceTiming: true,
                 customerPaymentDays: true, customerPaymentFrom: true,
                 carrierPaymentDays: true, carrierPaymentFrom: true,
+                customerPaymentBanking: true, carrierPaymentBanking: true,
             },
         });
     }

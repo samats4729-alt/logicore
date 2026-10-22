@@ -1324,6 +1324,8 @@ export class AccountingDocumentsService {
                 customerPaymentFrom: true,
                 carrierPaymentDays: true,
                 carrierPaymentFrom: true,
+                customerPaymentBanking: true,
+                carrierPaymentBanking: true,
                 customerOriginalsAt: true,
                 carrierOriginalsAt: true,
                 routePoints: {
@@ -1340,6 +1342,7 @@ export class AccountingDocumentsService {
                 select: {
                     customerPaymentDays: true, customerPaymentFrom: true,
                     carrierPaymentDays: true, carrierPaymentFrom: true,
+                    customerPaymentBanking: true, carrierPaymentBanking: true,
                 },
             })
             : null;
@@ -1347,6 +1350,7 @@ export class AccountingDocumentsService {
             ? {
                 days: outgoing ? card.customerPaymentDays : card.carrierPaymentDays,
                 from: outgoing ? card.customerPaymentFrom : card.carrierPaymentFrom,
+                banking: outgoing ? card.customerPaymentBanking : card.carrierPaymentBanking,
             }
             : null;
 
@@ -1357,6 +1361,7 @@ export class AccountingDocumentsService {
                 orderNumber: order.orderNumber,
                 days: fromCard ? cardTerms!.days : days,
                 from: fromCard ? cardTerms!.from : (outgoing ? order.customerPaymentFrom : order.carrierPaymentFrom),
+                banking: fromCard ? cardTerms!.banking : (outgoing ? order.customerPaymentBanking : order.carrierPaymentBanking),
                 originalsAt: outgoing ? order.customerOriginalsAt : order.carrierOriginalsAt,
                 // Выгрузка — последняя точка доставки в маршруте, как и в
                 // пересчёте сроков по рейсу.
