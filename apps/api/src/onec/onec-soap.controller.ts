@@ -99,7 +99,11 @@ export class OneCSoapController {
             },
         });
         if (!connection || !connection.enabled || connection.login !== login) return null;
-        if (!(await bcrypt.compare(password, connection.passwordHash))) return null;
+        if (!(await bcrypt.compare(password, connection.passwordHash))) {
+            // Логин верный, пароль нет: чаще всего в 1С не стоит «Запомнить пароль». Скажем об этом в журнале.
+            await this.exchange.logBadPassword(connection.id, password === '');
+            return null;
+        }
         return {
             id: connection.id, companyId: connection.companyId, nodeCode: connection.nodeCode,
             peerNodeCode: connection.peerNodeCode, exchangePlanName: connection.exchangePlanName,

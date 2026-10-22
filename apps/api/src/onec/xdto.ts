@@ -9,7 +9,7 @@
  *
  * Здесь — перевод между ними и обычными значениями TypeScript:
  *   Структура → объект, Массив → массив, Неопределено → null,
- *   УникальныйИдентификатор → V8Uuid, прочее (перечисления 1С,
+ *   УникальныйИдентификатор → V8Uuid, ДвоичныеДанные → Buffer, прочее (перечисления 1С,
  *   хранилища значений) — V8Raw: текст и тип, как пришли.
  */
 
@@ -35,6 +35,7 @@ export type V8Value =
     | Date
     | V8Uuid
     | V8Raw
+    | Buffer
     | V8Value[]
     | { [key: string]: V8Value };
 
@@ -57,6 +58,7 @@ function valueParts(value: V8Value): { attrs: string; inner: string } {
     if (value instanceof Date) return { attrs: ' xsi:type="xs:dateTime"', inner: v8Date(value) };
     if (value instanceof V8Uuid) return { attrs: ' xsi:type="v8:UUID"', inner: escapeXml(value.value) };
     if (value instanceof V8Raw) return { attrs: ` xsi:type="${escapeXml(value.type)}"`, inner: escapeXml(value.text) };
+    if (Buffer.isBuffer(value)) return { attrs: ' xsi:type="xs:base64Binary"', inner: value.toString('base64') };
     if (Array.isArray(value)) return { attrs: ' xsi:type="v8:Array"', inner: arrayContent(value) };
     return { attrs: ' xsi:type="v8:Structure"', inner: structureContent(value) };
 }
@@ -118,6 +120,8 @@ export function readValue(node: XmlNode, declaredType?: string): V8Value {
             return new Date(`${node.text.trim()}Z`);
         case 'UUID':
             return new V8Uuid(node.text.trim());
+        case 'base64Binary':
+            return Buffer.from(node.text.replace(/\s+/g, ''), 'base64');
         case 'Structure':
             return readStructure(node);
         case 'Array':

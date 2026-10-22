@@ -127,6 +127,7 @@ function outElement(name: string, type: string, value: V8Value | undefined): str
     if (type === 'v8:Array') return `<m:${name}>${arrayContent(value as V8Value[])}</m:${name}>`;
     if (typeof value === 'boolean') return `<m:${name}>${value ? 'true' : 'false'}</m:${name}>`;
     if (value instanceof V8Uuid) return `<m:${name}>${escapeXml(value.value)}</m:${name}>`;
+    if (Buffer.isBuffer(value)) return `<m:${name}>${value.toString('base64')}</m:${name}>`;
     return `<m:${name}>${escapeXml(String(value))}</m:${name}>`;
 }
 

@@ -1,6 +1,6 @@
 import { EXCHANGE_3_0_1_1, INTERFACE_VERSION } from './services';
 import { buildFault, buildResponse, buildWsdl, parseCall } from './soap';
-import { V8Raw } from './xdto';
+import { V8Raw, V8Uuid } from './xdto';
 
 /** SOAP для 1С: описание службы, разбор вызова, ответ (обмен с 1С, этап 1). */
 describe('SOAP для 1С', () => {
@@ -58,6 +58,21 @@ describe('SOAP для 1С', () => {
         expect(params).toContain('<m:return><v8:Property name="ПланОбменаСуществует"><v8:Value xsi:type="xs:boolean">true</v8:Value></v8:Property>'
             + '<v8:Property name="Версии"><v8:Value xsi:type="v8:Array"><v8:Value xsi:type="xs:string">1.8</v8:Value></v8:Value></v8:Property></m:return>');
         expect(params).toContain('<m:ResultMessage></m:ResultMessage>');
+    });
+
+    it('часть файла: двоичные данные туда и обратно, номер сессии — УникальныйИдентификатор', () => {
+        const xml = `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>
+<m:PutFilePart xmlns:m="http://www.1c.ru/SSL/Exchange_3_0_1_1"><m:TransferId>0f9c5ad4-8f43-4a43-9d58-5c3f2a3c1b11</m:TransferId>
+<m:PartNumber>2</m:PartNumber><m:PartData>0J/RgNC40LLQtdGC
+LCAxwqE=</m:PartData></m:PutFilePart></soap:Body></soap:Envelope>`;
+        const { args } = parseCall(EXCHANGE_3_0_1_1, xml);
+        expect(args.TransferId).toEqual(new V8Uuid('0f9c5ad4-8f43-4a43-9d58-5c3f2a3c1b11'));
+        expect(args.PartNumber).toBe(2);
+        expect((args.PartData as Buffer).toString('utf8')).toBe('Привет, 1¡');
+
+        const getPart = EXCHANGE_3_0_1_1.operations.find((o) => o.name === 'GetFilePart')!;
+        expect(buildResponse(EXCHANGE_3_0_1_1, getPart, '', { PartData: Buffer.from('zip') }))
+            .toContain('<m:return></m:return><m:PartData>emlw</m:PartData>');
     });
 
     it('ошибка — текстом, который 1С покажет человеку', () => {
