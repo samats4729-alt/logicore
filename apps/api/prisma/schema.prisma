@@ -3171,6 +3171,8 @@ model ExchangeDriver {
   contracts ExchangeDriverContract[]
   settlements   ExchangeTripSettlement[]
   fuelReceipts  ExchangeFuelReceipt[]
+  /// Тягачи и прицепы водителя (R4); основной тягач — машина из анкеты.
+  vehicles      ExchangeDriverVehicle[]
   advanceRequests DriverAdvanceRequest[]
 
   /// Счёт для выплат через парк: IBAN и банк. Без счёта выплату не запросить.
@@ -3408,6 +3410,34 @@ model DriverAdvanceRequest {
   @@index([parkCompanyId, status])
   @@index([driverId])
   @@index([orderId])
+}
+
+/// Транспорт водителя биржи (задачи шефа, R4): несколько тягачей и прицепов.
+///
+/// Основной тягач — это машина из анкеты (её проверяет парк и называет
+/// договор с парком); запись здесь держится с анкетой заодно. Основной
+/// прицеп уходит в рейс, когда компания выбирает водителя.
+model ExchangeDriverVehicle {
+  id         String         @id @default(cuid())
+  driverId   String
+  driver     ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// TRACTOR — тягач (или грузовик), TRAILER — прицеп или полуприцеп.
+  kind       String
+  /// Госномер — заглавными, без пробелов.
+  plate      String
+  model      String?
+  bodyType   String?
+  capacityKg Int?
+  /// Номер техпаспорта.
+  regNumber  String?
+  /// Записана на водителя; нет — нужна доверенность от владельца.
+  isOwn      Boolean        @default(true)
+  isMain     Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([driverId, kind, plate])
+  @@index([driverId])
 }
 
 /// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с

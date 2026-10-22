@@ -211,7 +211,7 @@ export default function OffersList({ orderId, onAccepted, newSince = null }: {
                                         {o.driver ? (
                                             <span className="inline-flex items-center gap-1.5">
                                                 <Truck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                                {[o.driver.vehiclePlate, o.driver.vehicleBodyType, тонн(o.driver.vehicleCapacityKg)].filter(Boolean).join(' · ') || 'не указана'}
+                                                {[o.driver.vehiclePlate, o.driver.trailerPlate ? `прицеп ${o.driver.trailerPlate}` : null, o.driver.vehicleBodyType, тонн(o.driver.vehicleCapacityKg)].filter(Boolean).join(' · ') || 'не указана'}
                                             </span>
                                         ) : <span className="text-muted-foreground">своя у перевозчика</span>}
                                     </TableCell>

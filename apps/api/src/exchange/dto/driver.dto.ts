@@ -237,6 +237,24 @@ export class DeductionRequestDto {
     @IsBoolean() requested: boolean;
 }
 
+/** Тягач или прицеп в «Транспорт» водителя (R4). */
+export class DriverVehicleDto {
+    @ApiProperty({ enum: ['TRACTOR', 'TRAILER'] })
+    @IsIn(['TRACTOR', 'TRAILER'], { message: 'Выберите: тягач или прицеп' })
+    kind: 'TRACTOR' | 'TRAILER';
+
+    @ApiProperty({ example: '123ABC02' })
+    @IsString() @IsNotEmpty({ message: 'Впишите госномер' }) @MaxLength(20)
+    plate: string;
+
+    @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(100) model?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(50) bodyType?: string;
+    @ApiProperty({ required: false, description: 'Грузоподъёмность, кг' })
+    @IsOptional() @IsInt({ message: 'Грузоподъёмность — целым числом, кг' }) @Min(1) @Max(100000) capacityKg?: number;
+    @ApiProperty({ required: false, description: 'Номер техпаспорта' }) @IsOptional() @IsString() @MaxLength(30) regNumber?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsBoolean() isOwn?: boolean;
+}
+
 /** Ещё номера и контакты для документов (Q6) — меняются без повторной проверки. */
 export class DriverContactsDto {
     @ApiProperty({ type: [String], required: false, description: 'До трёх номеров: второй, третий, зарубежный' })

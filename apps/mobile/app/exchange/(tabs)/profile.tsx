@@ -160,6 +160,17 @@ export default function ExchangeProfile() {
                 <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
             </Card>
 
+            <Card onPress={() => router.push('/exchange/vehicles')} style={styles.menuItem}>
+                <Ionicons name="bus-outline" size={20} color={colors.text} />
+                <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>Транспорт</Text>
+                    <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
+                        Тягачи и прицепы, какой из них основной
+                    </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </Card>
+
             <Card onPress={() => router.push('/exchange/contacts')} style={styles.menuItem}>
                 <Ionicons name="call-outline" size={20} color={colors.text} />
                 <View style={{ flex: 1 }}>

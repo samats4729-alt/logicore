@@ -226,6 +226,20 @@ export interface TripFuel {
     locked: boolean;
 }
 
+/** Транспорт водителя: тягачи и прицепы (R4). */
+export type VehicleKind = 'TRACTOR' | 'TRAILER';
+export interface DriverVehicle {
+    id: string; kind: VehicleKind; plate: string; model: string | null; bodyType: string | null;
+    capacityKg: number | null; regNumber: string | null; isOwn: boolean; isMain: boolean; createdAt: string;
+}
+export interface DriverVehicles {
+    kind: 'IP' | 'PARK' | null;
+    /** Идёт рейс — основной тягач не сменить. */
+    onTrip: boolean;
+    tractors: DriverVehicle[];
+    trailers: DriverVehicle[];
+}
+
 /** Деньги заранее по рейсу: на топливо или аванс (Q17). */
 export type AdvanceKind = 'FUEL' | 'ADVANCE';
 export type AdvanceStatus = 'REQUESTED' | 'CHECK' | 'REUPLOAD' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
@@ -409,6 +423,11 @@ export const exchangeApi = {
     cancelDeletion: () => api.post('/exchange/driver/me/delete/cancel'),
     /** Заявление на базовый вычет по ИПН. */
     setDeduction: (requested: boolean) => api.put<DriverProfile>('/exchange/driver/me/deduction', { requested }).then((r) => r.data),
+    vehicles: () => api.get<DriverVehicles>('/exchange/driver/me/vehicles').then((r) => r.data),
+    addVehicle: (input: { kind: VehicleKind; plate: string; model?: string; bodyType?: string; capacityKg?: number; regNumber?: string; isOwn?: boolean }) =>
+        api.post<DriverVehicles>('/exchange/driver/me/vehicles', input).then((r) => r.data),
+    removeVehicle: (id: string) => api.delete<DriverVehicles>(`/exchange/driver/me/vehicles/${id}`).then((r) => r.data),
+    makeMainVehicle: (id: string) => api.post<DriverVehicles & { needsReview: boolean }>(`/exchange/driver/me/vehicles/${id}/main`).then((r) => r.data),
     setContacts: (data: { extraPhones: string[]; docsEmail: string | null; docsContact: string | null }) =>
         api.put<DriverProfile>('/exchange/driver/me/contacts', data).then((r) => r.data),
 

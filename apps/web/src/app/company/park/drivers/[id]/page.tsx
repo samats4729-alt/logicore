@@ -11,6 +11,7 @@ import { ExchangeDriver, ответСервера, иинКрасиво, фио�
 import { Button } from '@/components/ui/button';
 import StatusPill from '@/components/ui/StatusPill';
 import { DriverDocuments } from '@/components/exchange/DriverDocuments';
+import { DriverVehicles } from '@/components/exchange/DriverVehicles';
 import { DriverDecisionDialog } from '@/components/exchange/DriverDecisionDialog';
 import styles from '@/components/nova/nova.module.css';
 
@@ -186,6 +187,7 @@ export default function ParkDriverPage() {
                         <Row label="Кузов" value={driver.vehicleBodyType || '—'} />
                         <Row label="Грузоподъёмность" value={driver.vehicleCapacityKg ? `${driver.vehicleCapacityKg / 1000} т` : '—'} />
                         <Row label="Владелец" value={driver.vehicleIsOwn ? 'сам водитель' : 'другой человек — нужна доверенность'} />
+                        <DriverVehicles driverId={driver.id} />
                     </div>
                 </section>
             </div>

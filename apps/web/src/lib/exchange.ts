@@ -87,6 +87,8 @@ export interface ExchangeOffer {
         extraPhones?: string[];
         docsEmail?: string | null;
         docsContact?: string | null;
+        /** Основной прицеп водителя (R4). Старый сервер не присылает. */
+        trailerPlate?: string | null;
     } | null;
     company: { name: string; bin: string | null } | null;
 }
@@ -251,6 +253,20 @@ export const DRIVER_DOCUMENT_TITLES: Record<DriverDocumentKind, string> = {
     POWER_OF_ATTORNEY: 'Доверенность от владельца машины',
     IP_CERTIFICATE: 'Документ о регистрации ИП',
 };
+
+/** Тягач или прицеп водителя биржи (R4). */
+export interface DriverVehicle {
+    id: string;
+    kind: 'TRACTOR' | 'TRAILER';
+    plate: string;
+    model: string | null;
+    bodyType: string | null;
+    capacityKg: number | null;
+    regNumber: string | null;
+    isOwn: boolean;
+    isMain: boolean;
+    createdAt: string;
+}
 
 export interface ExchangeDriver {
     id: string;

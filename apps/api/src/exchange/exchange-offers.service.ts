@@ -17,6 +17,8 @@ const DRIVER_IN_OFFER = {
     tripsCompleted: true, createdAt: true, parkCompanyId: true,
     park: { select: { id: true, name: true } },
     extraPhones: true, docsEmail: true, docsContact: true,
+    /** Основной прицеп — уходит в рейс вместе с водителем (R4). */
+    vehicles: { where: { kind: 'TRAILER', isMain: true }, select: { plate: true }, take: 1 },
 } satisfies Prisma.ExchangeDriverSelect;
 
 const OFFER_SELECT = {
@@ -59,6 +61,7 @@ function offerView(o: OfferRow) {
             extraPhones: d.extraPhones,
             docsEmail: d.docsEmail,
             docsContact: d.docsContact,
+            trailerPlate: d.vehicles?.[0]?.plate ?? null,
         } : null,
         company: o.company ? { name: o.company.name, bin: o.company.bin } : null,
     };
@@ -400,6 +403,7 @@ export class ExchangeOffersService {
                 assignedDriverName: view.name,
                 assignedDriverPhone: d.phone,
                 assignedDriverPlate: d.vehiclePlate,
+                assignedDriverTrailer: d.vehicles?.[0]?.plate ?? null,
                 assignedAt: now,
                 isConfirmed: true,
             };

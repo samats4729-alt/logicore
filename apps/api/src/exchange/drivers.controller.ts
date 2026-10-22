@@ -32,6 +32,7 @@ import { fuelChangeText, fuelView } from './fuel-history';
 import { PlatformFeeDto } from './dto/fuel.dto';
 import { AdvanceDecisionDto, AdvanceRequestDto, FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
 import { ExchangeAdvanceRequestsService } from './advance-requests.service';
+import { ExchangeDriverVehiclesService } from './driver-vehicles.service';
 
 /**
  * Отдать PDF договора. В браузере телефона — открыть на месте, а не
@@ -50,7 +51,7 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
 }
 import {
     AddParkDriverDto, AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
-    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, DriverContactsDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
+    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, DriverContactsDto, DriverVehicleDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -116,7 +117,35 @@ export class ExchangeDriverController {
         private readonly contracts: ParkContractService,
         private readonly fuel: ExchangeFuelService,
         private readonly advances: ExchangeAdvanceRequestsService,
+        private readonly vehicles: ExchangeDriverVehiclesService,
     ) {}
+
+    // ==================== транспорт: тягачи и прицепы (R4) ====================
+
+    @Get('me/vehicles')
+    @ApiOperation({ summary: 'Тягачи и прицепы водителя' })
+    myVehicles(@Request() req: any) {
+        return this.vehicles.list(req.user.sub);
+    }
+
+    @Post('me/vehicles')
+    @ApiOperation({ summary: 'Добавить тягач или прицеп' })
+    addVehicle(@Request() req: any, @Body() dto: DriverVehicleDto) {
+        return this.vehicles.add(req.user.sub, dto);
+    }
+
+    @Delete('me/vehicles/:id')
+    @ApiOperation({ summary: 'Убрать тягач или прицеп' })
+    removeVehicle(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.remove(req.user.sub, id);
+    }
+
+    @Post('me/vehicles/:id/main')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Сделать основным' })
+    mainVehicle(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.makeMain(req.user.sub, id);
+    }
 
     // ==================== топливо и аванс заранее (Q17) ====================
 
@@ -413,6 +442,7 @@ export class ExchangeParkController {
         private readonly fuel: ExchangeFuelService,
         private readonly registry: ExchangeParkRegistryService,
         private readonly advances: ExchangeAdvanceRequestsService,
+        private readonly vehicles: ExchangeDriverVehiclesService,
     ) {}
 
     // ==================== запросы водителей на топливо и аванс (Q17) ====================
@@ -649,6 +679,12 @@ export class ExchangeParkController {
     @ApiOperation({ summary: 'Анкета водителя' })
     card(@Request() req: any, @Param('id') id: string) {
         return this.drivers.parkDriverCard(req.user.companyId, id);
+    }
+
+    @Get('drivers/:id/vehicles')
+    @ApiOperation({ summary: 'Тягачи и прицепы водителя (R4)' })
+    driverVehicles(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.forPark(req.user.companyId, id);
     }
 
     @Get('documents/:id')
