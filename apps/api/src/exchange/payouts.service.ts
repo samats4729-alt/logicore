@@ -7,6 +7,7 @@ import { PayoutAmounts, PayoutRates, calcPayout, normalizeIban, sumPayouts } fro
 import { SettlementRates, actualPayout, money, payoutOf } from './settlement-calc';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService, PARK_DEFAULTS } from './settlement.service';
+import { DEFAULT_ADVANCE_LIMIT_PCT } from './advance-requests.service';
 
 /** Настройки парка: ставки и расчёт «на руки» (топливо на км, вычет, НДС). */
 type ParkRatesInput = PayoutRates & {
@@ -14,6 +15,8 @@ type ParkRatesInput = PayoutRates & {
     vatPayer?: boolean; vatPct?: number;
     fuelConsumption?: number; fuelPriceSummer?: number; fuelPriceWinter?: number | null; fuelSeason?: string;
     ipnHighPct?: number; ipnThresholdMrp?: number;
+    /** Сколько от суммы за рейс можно попросить заранее, % (Q17). */
+    advanceLimitPct?: number;
 };
 
 /** Поля налоговой схемы: их правка снимает подтверждение бухгалтера. Топливо — нет. */
@@ -176,6 +179,7 @@ export class ExchangePayoutsService {
             fuelPerKm: (await this.settlement.parkSettings(parkId)).fuelPerKm,
             ipnHighPct: row ? num(row.ipnHighPct) : PARK_DEFAULTS.ipnHighPct,
             ipnThresholdMrp: row ? row.ipnThresholdMrp : PARK_DEFAULTS.ipnThresholdMrp,
+            advanceLimitPct: row ? row.advanceLimitPct : DEFAULT_ADVANCE_LIMIT_PCT,
             applyDeduction: row ? row.applyDeduction : PARK_DEFAULTS.applyDeduction,
             deductionMrp: row ? row.deductionMrp : PARK_DEFAULTS.deductionMrp,
             mrp: row ? row.mrp : PARK_DEFAULTS.mrp,
@@ -198,8 +202,11 @@ export class ExchangePayoutsService {
         await this.drivers.assertPark(parkId);
         const {
             fuelPerKm, applyDeduction, deductionMrp, mrp, vatPayer, vatPct,
-            fuelConsumption, fuelPriceSummer, fuelPriceWinter, fuelSeason, ipnHighPct, ipnThresholdMrp, ...percents
+            fuelConsumption, fuelPriceSummer, fuelPriceWinter, fuelSeason, ipnHighPct, ipnThresholdMrp, advanceLimitPct, ...percents
         } = dto;
+        if (advanceLimitPct != null && (!Number.isInteger(advanceLimitPct) || advanceLimitPct < 0 || advanceLimitPct > 100)) {
+            throw new BadRequestException('Доля, которую можно попросить заранее, — целое число от 0 до 100 %');
+        }
         for (const [k, v] of Object.entries({ ...percents, ...(vatPct != null ? { vatPct } : {}), ...(ipnHighPct != null ? { ipnHighPct } : {}) })) {
             if (typeof v !== 'number' || v < 0 || v > 100) throw new BadRequestException(`Ставка ${k} — от 0 до 100 %`);
         }
@@ -217,6 +224,7 @@ export class ExchangePayoutsService {
             ...(fuelSeason != null ? { fuelSeason } : {}),
             ...(ipnHighPct != null ? { ipnHighPct } : {}),
             ...(ipnThresholdMrp != null ? { ipnThresholdMrp } : {}),
+            ...(advanceLimitPct != null ? { advanceLimitPct } : {}),
         };
         const before = await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId } });
         const next: Record<string, number | boolean | string | null> = { ...percents, ...extra };

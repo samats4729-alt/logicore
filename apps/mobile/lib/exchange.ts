@@ -226,6 +226,18 @@ export interface TripFuel {
     locked: boolean;
 }
 
+/** Деньги заранее по рейсу: на топливо или аванс (Q17). */
+export type AdvanceKind = 'FUEL' | 'ADVANCE';
+export type AdvanceStatus = 'REQUESTED' | 'CHECK' | 'REUPLOAD' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+export interface TripAdvances {
+    /** Нет — у рейса нет расчёта суммы водителю, просить не из чего. */
+    limit: { pct: number; tripTotal: number; cap: number; issued: number; pending: number; available: number } | null;
+    requests: {
+        id: string; kind: AdvanceKind; amount: number; comment: string | null; status: AdvanceStatus;
+        parkNote: string | null; issuedAmount: number | null; createdAt: string;
+    }[];
+}
+
 /** Фото чека на топливо — отдаёт только сервер и только самому водителю. */
 export const fuelReceiptPath = (id: string) => `/exchange/driver/fuel-receipts/${id}/file`;
 
@@ -419,6 +431,11 @@ export const exchangeApi = {
         }).then((r) => r.data);
     },
     removeFuelReceipt: (id: string) => api.delete<TripFuel>(`/exchange/driver/fuel-receipts/${id}`).then((r) => r.data),
+    tripAdvances: (orderId: string) => api.get<TripAdvances>(`/exchange/driver/trips/${orderId}/advances`).then((r) => r.data),
+    requestAdvance: (orderId: string, input: { kind: AdvanceKind; amount: number; comment?: string }) =>
+        api.post<TripAdvances>(`/exchange/driver/trips/${orderId}/advances`, input).then((r) => r.data),
+    resubmitAdvance: (id: string) => api.post<TripAdvances>(`/exchange/driver/advances/${id}/resubmit`).then((r) => r.data),
+    cancelAdvance: (id: string) => api.post<TripAdvances>(`/exchange/driver/advances/${id}/cancel`).then((r) => r.data),
     setPayoutAccount: (iban: string, bank?: string) => api.put('/exchange/driver/me/payout-account', { iban, bank }).then((r) => r.data),
     requestPayout: () => api.post<{ id: string; net: number; trips: number }>('/exchange/driver/payouts/request').then((r) => r.data),
 };

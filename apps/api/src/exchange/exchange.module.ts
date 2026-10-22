@@ -20,6 +20,7 @@ import { ExchangeFuelService } from './fuel.service';
 import { StampImageService } from '../common/services/stamp-image.service';
 import { DriverCalculatorController } from './driver-calculator.controller';
 import { OrdersModule } from '../orders/orders.module';
+import { ExchangeAdvanceRequestsService } from './advance-requests.service';
 
 /** Биржа грузов. Выключена, пока на сервере нет `EXCHANGE_ENABLED=true`. */
 @Module({
@@ -29,6 +30,6 @@ import { OrdersModule } from '../orders/orders.module';
         ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController, ExchangeAdminController,
         ExchangePublicController, DriverCalculatorController,
     ],
-    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService, ExchangeParkService, ExchangePayoutsService, ParkContractService, StampImageService, ExchangeSettlementService, ExchangeFuelService, ExchangeParkRegistryService],
+    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService, ExchangeParkService, ExchangePayoutsService, ParkContractService, StampImageService, ExchangeSettlementService, ExchangeFuelService, ExchangeParkRegistryService, ExchangeAdvanceRequestsService],
 })
 export class ExchangeModule {}

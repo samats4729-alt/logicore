@@ -30,7 +30,8 @@ import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
 import { fuelChangeText, fuelView } from './fuel-history';
 import { PlatformFeeDto } from './dto/fuel.dto';
-import { FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
+import { AdvanceDecisionDto, AdvanceRequestDto, FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
+import { ExchangeAdvanceRequestsService } from './advance-requests.service';
 
 /**
  * Отдать PDF договора. В браузере телефона — открыть на месте, а не
@@ -114,7 +115,36 @@ export class ExchangeDriverController {
         private readonly s3: S3Service,
         private readonly contracts: ParkContractService,
         private readonly fuel: ExchangeFuelService,
+        private readonly advances: ExchangeAdvanceRequestsService,
     ) {}
+
+    // ==================== топливо и аванс заранее (Q17) ====================
+
+    @Get('trips/:orderId/advances')
+    @ApiOperation({ summary: 'Сколько можно попросить по рейсу и прежние запросы' })
+    tripAdvances(@Request() req: any, @Param('orderId') orderId: string) {
+        return this.advances.forDriver(req.user.sub, orderId);
+    }
+
+    @Post('trips/:orderId/advances')
+    @ApiOperation({ summary: 'Попросить на топливо или аванс по рейсу' })
+    requestAdvance(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: AdvanceRequestDto) {
+        return this.advances.request(req.user.sub, orderId, dto);
+    }
+
+    @Post('advances/:id/resubmit')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Перезагрузил документы — отправить запрос снова' })
+    resubmitAdvance(@Request() req: any, @Param('id') id: string) {
+        return this.advances.resubmit(req.user.sub, id);
+    }
+
+    @Post('advances/:id/cancel')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Отозвать свой запрос, пока парк не решил' })
+    cancelAdvance(@Request() req: any, @Param('id') id: string) {
+        return this.advances.cancel(req.user.sub, id);
+    }
 
     // ==================== топливо рейса ====================
     // Водитель доезжает до заправки, звонит в парк, чек пробивают на БИН парка —
@@ -382,7 +412,35 @@ export class ExchangeParkController {
         private readonly contracts: ParkContractService,
         private readonly fuel: ExchangeFuelService,
         private readonly registry: ExchangeParkRegistryService,
+        private readonly advances: ExchangeAdvanceRequestsService,
     ) {}
+
+    // ==================== запросы водителей на топливо и аванс (Q17) ====================
+    // Решает бухгалтер парка: он смотрит рейс, накладную и подтверждение
+    // получателя — поэтому здесь и бухгалтер, и право «Бухгалтерия».
+
+    @Get('advances')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @RequirePermissions('orders', 'accounting')
+    @ApiOperation({ summary: 'Запросы водителей на топливо и аванс' })
+    advanceRequests(@Request() req: any, @Query('scope') scope?: string) {
+        return this.advances.forPark(req.user.companyId, scope === 'all' ? 'all' : 'open');
+    }
+
+    @Post('advances/:id/decide')
+    @HttpCode(HttpStatus.OK)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @RequirePermissions('orders', 'accounting')
+    @ApiOperation({ summary: 'Решение по запросу: выдать, доп. проверка, перезагрузить документы, отказ' })
+    async decideAdvance(@Request() req: any, @Param('id') id: string, @Body() dto: AdvanceDecisionDto) {
+        const result = await this.advances.decide(req.user.companyId, req.user.sub, id, dto);
+        const what = { APPROVE: 'выдано', CHECK: 'на доп. проверку', REUPLOAD: 'перезагрузить документы', REJECT: 'отказ' }[dto.action];
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'STATUS', entity: 'driver_advance', entityId: id, orderId: result.orderId,
+            entityLabel: `${result.kind === 'FUEL' ? 'Топливо' : 'Аванс'} водителю ${result.driver.name}, ${result.amount.toLocaleString('ru-RU')} ₸: ${what}${result.parkNote ? ` — ${result.parkNote}` : ''}`,
+        });
+        return result;
+    }
 
     @Get('overview')
     @ApiOperation({ summary: 'Кабинет парка: водители, рейсы, заработок за месяц, код приглашения' })

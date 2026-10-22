@@ -376,6 +376,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     { key: '/company/park', label: 'Обзор' },
                     { key: '/company/park/drivers', label: 'Водители парка' },
                     { key: '/company/park/trips', label: 'Рейсы водителей' },
+                    { key: '/company/park/advances', label: 'Запросы водителей' },
                     { key: '/company/park/payouts', label: 'Выплаты водителям' },
                     { key: '/company/park/registry', label: 'Реестр бухгалтера' },
                 ],

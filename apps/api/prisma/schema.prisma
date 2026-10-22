@@ -556,6 +556,7 @@ model Company {
   parkPayoutRates ParkPayoutRates?
   /// Выплаты водителям парка.
   driverPayouts   DriverPayout[]
+  driverAdvanceRequests DriverAdvanceRequest[]
   exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
   /// Отклики компании-перевозчика на заявки других компаний с биржи.
   exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")
@@ -1015,6 +1016,8 @@ model Order {
   /// Топливо рейса: что парк оплатил или перевёл и чеки водителя.
   exchangeFuelIssues    ExchangeFuelIssue[]
   exchangeFuelReceipts  ExchangeFuelReceipt[]
+  /// Запросы водителя на топливо и аванс по рейсу (Q17).
+  advanceRequests       DriverAdvanceRequest[]
 
   // Relations
   routePoints               OrderRoutePoint[]
@@ -3168,6 +3171,7 @@ model ExchangeDriver {
   contracts ExchangeDriverContract[]
   settlements   ExchangeTripSettlement[]
   fuelReceipts  ExchangeFuelReceipt[]
+  advanceRequests DriverAdvanceRequest[]
 
   /// Счёт для выплат через парк: IBAN и банк. Без счёта выплату не запросить.
   payoutIban String?
@@ -3369,6 +3373,43 @@ model CompanyBlocklist {
   @@unique([companyId, kind, value])
 }
 
+/// Запрос водителя парка на топливо или аванс по рейсу (задачи шефа, Q17).
+///
+/// Водитель в рейсе просит часть денег заранее — не больше доли от суммы за
+/// рейс, которую задал парк (по умолчанию 50 %). Запрос приходит в кабинет
+/// парка; бухгалтер выдаёт, отправляет на доп. проверку, просит перезагрузить
+/// документы или отказывает. Выданное записывается как «дали на топливо» по
+/// рейсу и вычитается из выплаты в конце — так же, как деньги на заправке.
+model DriverAdvanceRequest {
+  id            String         @id @default(cuid())
+  parkCompanyId String
+  park          Company        @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
+  driverId      String
+  driver        ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  orderId       String
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// FUEL — на топливо, ADVANCE — аванс (предоплата).
+  kind          String
+  amount        Decimal        @db.Decimal(18, 2)
+  comment       String?
+  /// REQUESTED — ждёт парка; CHECK — на доп. проверке; REUPLOAD — перезагрузить
+  /// документы; APPROVED — выдано; REJECTED — отказ; CANCELLED — водитель отозвал.
+  status        String         @default("REQUESTED")
+  /// Что сказал парк: что проверяют, что перезагрузить, почему отказ.
+  parkNote      String?
+  decidedById   String?
+  decidedAt     DateTime?
+  /// Сколько выдали и запись «дали на топливо», которой выдали.
+  issuedAmount  Decimal?       @db.Decimal(18, 2)
+  fuelIssueId   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([parkCompanyId, status])
+  @@index([driverId])
+  @@index([orderId])
+}
+
 /// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с
 /// тем же ИИН, ни с тем же телефоном, ни с той же машиной.
 model ExchangeBlocklist {
@@ -3477,6 +3518,9 @@ model ParkPayoutRates {
   vatPayer       Boolean @default(false)
   /// Ставка НДС, % (2026: 16).
   vatPct         Decimal @default(16) @db.Decimal(5, 2)
+  /// Сколько от суммы за рейс водитель может попросить до конца рейса — на
+  /// топливо или авансом, % (задачи шефа, Q17: «50 %, если не задано иначе»).
+  advanceLimitPct Int    @default(50)
   /// Бухгалтер парка подтвердил ставки и порядок расчёта. Пока пусто — расчёт
   /// «предварительный»: выгрузка в 1С и «выплачено» — только с явным согласием.
   /// Любая правка ставок снимает подтверждение.

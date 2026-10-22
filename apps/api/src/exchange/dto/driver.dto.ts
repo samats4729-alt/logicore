@@ -222,6 +222,9 @@ export class PayoutRatesDto {
 
     @ApiProperty({ required: false, description: 'Порог годового дохода для повышенной ставки, МРП' })
     @IsOptional() @IsInt({ message: 'Порог — целым числом МРП' }) @Min(0) @Max(1000000) ipnThresholdMrp?: number;
+    /** Сколько от суммы за рейс водитель может попросить заранее, % (Q17). */
+    @ApiProperty({ required: false })
+    @IsOptional() @IsInt({ message: 'Доля — целым числом процентов' }) @Min(0) @Max(100) advanceLimitPct?: number;
 }
 
 export class FuelSeasonDto {

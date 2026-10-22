@@ -24,6 +24,7 @@ import { ProblemSheet } from '@/components/ProblemSheet';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
 import { useTabBarSpace } from '@/components/TabBar';
 import { TripFuel } from '@/components/TripFuel';
+import { TripAdvance } from '@/components/TripAdvance';
 import { appendPhoto } from '@/lib/upload';
 
 /** Высота ползунка «смахните вправо» (кружок 54 + поля). */
@@ -421,6 +422,8 @@ export default function CurrentTrip({
 
                 {/* ===== Топливо (водитель парка) ===== */}
                 {fuel && <TripFuel orderId={currentOrder.id} />}
+                {/* ===== Деньги заранее: топливо и аванс (Q17) ===== */}
+                {fuel && <TripAdvance orderId={currentOrder.id} />}
             </View>
         </ScrollView>
 

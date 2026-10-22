@@ -458,6 +458,8 @@ export interface PayoutRates {
     /** Прогрессивный ИПН: повышенная ставка выше порога годового дохода, МРП. */
     ipnHighPct?: number;
     ipnThresholdMrp?: number;
+    /** Сколько от суммы за рейс водитель может попросить заранее, % (Q17). */
+    advanceLimitPct?: number;
     /** Бухгалтер парка подтвердил ставки и порядок расчёта; пока нет — расчёт «предварительный». */
     confirmedAt?: string | null;
     preliminary?: boolean;

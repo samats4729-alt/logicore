@@ -404,6 +404,7 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
     const [extra, setExtra] = useState({
         applyDeduction: true, deductionMrp: '', mrp: '', vatPayer: false, vatPct: '',
         fuelConsumption: '', fuelPriceSummer: '', fuelPriceWinter: '', ipnHighPct: '', ipnThresholdMrp: '',
+        advanceLimitPct: '',
     });
     const [seasonSaving, setSeasonSaving] = useState(false);
     /** История цен на топливо (задачи шефа, Q15): кто, когда и что поменял. */
@@ -430,6 +431,7 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                 fuelPriceWinter: r.data.fuelPriceWinter != null ? String(r.data.fuelPriceWinter) : '',
                 ipnHighPct: String(r.data.ipnHighPct ?? 15),
                 ipnThresholdMrp: String(r.data.ipnThresholdMrp ?? 8500),
+                advanceLimitPct: String(r.data.advanceLimitPct ?? 50),
             });
         }).catch(() => setRates(null));
     }, []);
@@ -489,11 +491,13 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
         const ipnThresholdMrp = Number(extra.ipnThresholdMrp);
         if (!Number.isFinite(ipnHighPct) || ipnHighPct < 0 || ipnHighPct > 100) { toast.error('Повышенный ИПН — число от 0 до 100'); return; }
         if (!Number.isInteger(ipnThresholdMrp) || ipnThresholdMrp < 0) { toast.error('Порог — целым числом МРП'); return; }
+        const advanceLimitPct = Number(extra.advanceLimitPct);
+        if (!Number.isInteger(advanceLimitPct) || advanceLimitPct < 0 || advanceLimitPct > 100) { toast.error('Доля аванса — целое число от 0 до 100'); return; }
         setSaving(true);
         try {
             const { data } = await api.put('/exchange/park/rates', {
                 ...body, applyDeduction: extra.applyDeduction, deductionMrp, mrp, vatPayer: extra.vatPayer, vatPct,
-                fuelConsumption, fuelPriceSummer, fuelPriceWinter, ipnHighPct, ipnThresholdMrp,
+                fuelConsumption, fuelPriceSummer, fuelPriceWinter, ipnHighPct, ipnThresholdMrp, advanceLimitPct,
             });
             const wasConfirmed = !!rates?.confirmedAt;
             setRates(data);
@@ -655,6 +659,14 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                             </label>
                         )}
                     </div>
+                    {/* Сколько водитель может попросить до конца рейса (Q17). */}
+                    <label className="flex w-full max-w-md flex-col gap-1 border-0 border-t border-solid border-border pt-2">
+                        <span className="text-[12px] font-medium text-muted-foreground">Топливо и аванс заранее, % от суммы за рейс</span>
+                        <Input value={extra.advanceLimitPct} onChange={(e) => setExtra((x) => ({ ...x, advanceLimitPct: e.target.value }))} inputMode="numeric" className="h-9 w-32 text-[13px] tabular-nums" />
+                        <span className="text-[11px] text-muted-foreground">
+                            столько водитель может попросить в приложении до конца рейса, за вычетом уже выданного; 0 — просить нельзя
+                        </span>
+                    </label>
                 </div>
                 <Button onClick={save} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Сохранить ставки</Button>
             </div>
