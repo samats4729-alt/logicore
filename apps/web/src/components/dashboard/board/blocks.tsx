@@ -374,8 +374,8 @@ interface AttentionItem { kind: AttentionKind; key: string; title: string; text:
  *
  * Только то, что платформа знает наверняка: проблемы в пути, просроченные
  * счета, заявки без исполнителя накануне погрузки, рейсы без накладной,
- * удостоверения водителей, у которых кончается срок (R5). Сроков
- * доверенностей и страховок в системе нет — их здесь и нет.
+ * удостоверения водителей, страховка и техосмотр своих машин, у которых
+ * кончается срок (R5). Сроков доверенностей в системе нет — их здесь и нет.
  */
 export function AttentionBlock() {
     const { orders, planned } = useBoardData();
@@ -446,7 +446,8 @@ export function AttentionBlock() {
     }
 
     // Удостоверения: сначала просроченные — с ними водителя развернут на посту.
-    const docs = a?.docsExpiring ?? [];
+    const allDocs = a?.docsExpiring ?? [];
+    const docs = allDocs.filter((d) => d.kind === 'COMPANY_DRIVER' || d.kind === 'PARK_DRIVER');
     if (docs.length) {
         const expired = docs.filter((d) => d.expired);
         const first = docs[0];
@@ -461,6 +462,25 @@ export function AttentionBlock() {
             badge: 'Документы',
             tone: expired.length ? 'neg' : 'muted',
             href: docs.length === 1 ? first.href : (first.kind === 'PARK_DRIVER' ? '/company/park/drivers' : '/company/drivers'),
+        });
+    }
+    // Страховка и техосмотр своих машин — отдельной строкой: решает их не тот, кто водителей.
+    const cars = allDocs.filter((d) => d.kind === 'VEHICLE_INSURANCE' || d.kind === 'VEHICLE_INSPECTION');
+    if (cars.length) {
+        const expired = cars.filter((d) => d.expired);
+        const first = cars[0];
+        const what = (d: typeof first) => d.kind === 'VEHICLE_INSURANCE' ? 'страховка' : 'техосмотр';
+        items.push({
+            kind: 'docsExpiring',
+            key: 'vehicle-docs-expiring',
+            title: expired.length
+                ? `Просрочены документы у ${expired.length} ${plural(expired.length, 'машины', 'машин', 'машин')}`
+                : `Истекают документы у ${cars.length} ${plural(cars.length, 'машины', 'машин', 'машин')}`,
+            text: `${first.name}: ${what(first)} ${first.expired ? 'истекла' : 'до'} ${shortDate(first.expiresAt)}`
+                + (cars.length > 1 ? ` · ещё ${cars.length - 1}` : ''),
+            badge: 'Документы',
+            tone: expired.length ? 'neg' : 'muted',
+            href: '/company/vehicles',
         });
     }
 

@@ -2045,6 +2045,9 @@ model Vehicle {
   plate         String // license plate
   model         String // model details
   trailerNumber String? // optional trailer plate
+  // Сроки документов машины (задачи шефа, R5): напоминание в «Требуют внимания».
+  insuranceUntil  DateTime? @db.Date // страховка (ОГПО ВТС) действует до
+  inspectionUntil DateTime? @db.Date // техосмотр действует до
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

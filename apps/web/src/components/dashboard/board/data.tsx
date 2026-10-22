@@ -53,7 +53,7 @@ export interface OrdersOverview {
         pendingSoon: (Omit<OrderBrief, 'status'> & { loadingDate: string | null })[];
         noTtn: { id: string; orderNumber: string; completedAt: string }[];
         /** Удостоверения водителей, у которых кончается срок (R5). Старый сервер не присылает. */
-        docsExpiring?: { id: string; name: string; kind: 'COMPANY_DRIVER' | 'PARK_DRIVER'; expiresAt: string; expired: boolean; href: string }[];
+        docsExpiring?: { id: string; name: string; kind: 'COMPANY_DRIVER' | 'PARK_DRIVER' | 'VEHICLE_INSURANCE' | 'VEHICLE_INSPECTION'; expiresAt: string; expired: boolean; href: string }[];
     };
 }
 

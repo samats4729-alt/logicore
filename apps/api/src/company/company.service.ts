@@ -25,6 +25,7 @@ import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
+import { vehicleDocDates, VehicleDocDatesInput } from './document-expiry';
 import { kzMonthShifted, kzStartOfMonth, kzStartOfMonthShifted, kzStartOfToday } from '../common/utils/business-date';
 import {
     FinanceCalculatorService,
@@ -1445,11 +1446,12 @@ export class CompanyService {
     /**
      * Создать транспорт
      */
-    async createVehicle(companyId: string, data: { type: string; plate: string; model: string; trailerNumber?: string; driverId?: string }) {
-        const { driverId, ...vehicleData } = data;
+    async createVehicle(companyId: string, data: { type: string; plate: string; model: string; trailerNumber?: string; driverId?: string } & VehicleDocDatesInput) {
+        const { driverId, insuranceUntil, inspectionUntil, ...vehicleData } = data;
         const vehicle = await this.prisma.vehicle.create({
             data: {
                 ...vehicleData,
+                ...vehicleDocDates({ insuranceUntil, inspectionUntil }),
                 companyId,
                 isActive: true,
             },
@@ -1489,7 +1491,7 @@ export class CompanyService {
     /**
      * Обновить транспорт
      */
-    async updateVehicle(companyId: string, id: string, data: Partial<{ type: string; plate: string; model: string; trailerNumber?: string; driverId?: string | null }>) {
+    async updateVehicle(companyId: string, id: string, data: Partial<{ type: string; plate: string; model: string; trailerNumber?: string; driverId?: string | null }> & VehicleDocDatesInput) {
         const vehicle = await this.prisma.vehicle.findFirst({
             where: { id, companyId },
         });
@@ -1497,12 +1499,12 @@ export class CompanyService {
             throw new NotFoundException('Транспорт не найден');
         }
 
-        const { driverId, ...vehicleData } = data;
+        const { driverId, insuranceUntil, inspectionUntil, ...vehicleData } = data;
         const oldPlate = vehicle.plate;
 
         const updatedVehicle = await this.prisma.vehicle.update({
             where: { id },
-            data: vehicleData,
+            data: { ...vehicleData, ...vehicleDocDates({ insuranceUntil, inspectionUntil }) },
         });
 
         if (driverId !== undefined) {

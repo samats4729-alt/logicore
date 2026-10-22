@@ -121,7 +121,7 @@ export const FIELDS: { [K in SettingsId]: Field[] } = {
                 { value: 'overdueOut', label: 'Мы просрочили оплату' },
                 { value: 'pendingSoon', label: 'Заявки без исполнителя' },
                 { value: 'noTtn', label: 'Рейсы без ТТН' },
-                { value: 'docsExpiring', label: 'Истекает удостоверение водителя' },
+                { value: 'docsExpiring', label: 'Истекают документы водителей и машин' },
             ],
         },
     ],
