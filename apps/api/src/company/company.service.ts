@@ -15,7 +15,7 @@ import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { maskForCustomer } from '../orders/order-visibility';
 import { documentNotices } from './document-notices';
-import { managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
+import { legacyManagedOrderWhere, managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
 import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
 import { MODULE_PERMISSIONS } from '../auth/module-permissions';
 import { D, ZERO, toNum } from '../common/utils/money';
@@ -879,7 +879,7 @@ export class CompanyService {
             this.prisma.order.findMany({
                 where: {
                     AND: [
-                        { OR: [...participant, { responsibleManager: { companyId } }] },
+                        { OR: [...participant, legacyManagedOrderWhere(companyId)] },
                         // Заявка «в ожидании», которую ещё не подтвердили, —
                         // не работа и не деньги: договорённости по ней нет.
                         { OR: [{ isConfirmed: true }, { status: { not: 'PENDING' } }] },

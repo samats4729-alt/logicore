@@ -23,7 +23,7 @@ import * as XLSX from 'xlsx';
 import { SharedReportLinkService, ВИД_ССЫЛКИ } from './shared-report-link.service';
 import { CurrencyRevaluationService } from './currency-revaluation.service';
 import { kzToday } from '../../common/utils/business-date';
-import { documentsOfOwnOrders, managerOrdersFilter } from '../../common/manager-orders';
+import { documentsOfOwnOrders, legacyManagedOrderWhere, managerOrdersFilter } from '../../common/manager-orders';
 import type { JournalViewer } from '../../common/journal-company';
 import { periodStart, periodEnd, calendarDay } from '../../common/utils/period';
 import { exchangeOutcome, paymentInBase } from './exchange-difference';
@@ -435,7 +435,8 @@ export class FinancialReportsService {
                         { forwarderId: companyId },
                         { partnerId: companyId },
                         { subForwarderId: companyId },
-                        { responsibleManager: { companyId: companyId } },
+                        // Чужая заявка, которую ведёт наш сотрудник, — не наши деньги (J1).
+                        legacyManagedOrderWhere(companyId),
                     ]
                 },
                 {
