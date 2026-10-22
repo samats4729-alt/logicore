@@ -190,6 +190,11 @@ export class UpdateCompanyProfileDto {
     @IsBoolean()
     @IsOptional()
     invoiceApprovalRequired?: boolean;
+
+    @ApiProperty({ description: 'Договор-заявка перевозчику — автоматически по каждой сделке (A14)', required: false })
+    @IsBoolean()
+    @IsOptional()
+    autoContractRequest?: boolean;
 }
 
 export class CreateDriverDto {

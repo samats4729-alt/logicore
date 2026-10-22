@@ -25,6 +25,7 @@ import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
 import { AuditService } from '../audit/audit.service';
+import { OrderContractAutoService } from './order-contract-auto.service';
 
 /**
  * Документ водителя одной строкой для письма с доверенностью (задачи шефа,
@@ -58,6 +59,7 @@ export class OrdersController {
         private auditService: AuditService,
         private orderDelete: OrderDeleteService,
         private s3: S3Service,
+        private autoContract: OrderContractAutoService,
     ) { }
 
     @Get('attorneys/sent')
@@ -109,6 +111,8 @@ export class OrdersController {
             details: { customerPrice: dto.customerPrice ?? null, driverCost: dto.driverCost ?? null },
             orderId: order.id,
         });
+        // Договор-заявка перевозчику — сама, если так настроено (A14).
+        this.autoContract.schedule(order.id, req.user.companyId, req.user);
 
         return order;
     }
@@ -741,6 +745,8 @@ export class OrdersController {
             details: Object.keys(moneyChanges).length ? moneyChanges : null,
             orderId: id,
         });
+        // Договор-заявка перевозчику — сама, если так настроено (A14).
+        this.autoContract.schedule(id, req.user.companyId, req.user);
 
         return updated;
     }

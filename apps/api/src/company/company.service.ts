@@ -1028,6 +1028,7 @@ export class CompanyService {
         managersSeeOwnOrdersOnly?: boolean;
         managersSeeOwnPartnersOnly?: boolean;
         invoiceApprovalRequired?: boolean;
+        autoContractRequest?: boolean;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },

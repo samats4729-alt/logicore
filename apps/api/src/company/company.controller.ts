@@ -21,6 +21,7 @@ import { AssignDriverDto } from '../orders/dto/order.dto';
 import { setAuthCookie } from '../auth/auth-cookie';
 import * as path from 'path';
 import * as fs from 'fs';
+import { OrderContractAutoService } from '../orders/order-contract-auto.service';
 
 @ApiTags('company')
 @Controller('company')
@@ -35,6 +36,7 @@ export class CompanyController {
         private billingService: BillingService,
         private auditService: AuditService,
         private dashboardBoard: DashboardBoardService,
+        private autoContract: OrderContractAutoService,
     ) { }
 
     // ==================== Уведомления ====================
@@ -494,7 +496,7 @@ export class CompanyController {
         @Body() dto: AssignDriverDto,
         @Request() req: any,
     ) {
-        return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
+        const result = await this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
             assignedDriverName: dto.assignedDriverName,
             assignedDriverPhone: dto.assignedDriverPhone,
             assignedDriverPlate: dto.assignedDriverPlate,
@@ -506,6 +508,9 @@ export class CompanyController {
             trip: { plate: dto.tripPlate, trailer: dto.tripTrailer },
             userId: req.user.id,
         });
+        // Договор-заявка перевозчику — сама, если так настроено (A14).
+        this.autoContract.schedule(id, req.user.companyId, req.user);
+        return result;
     }
 
     @Put('orders/:id/responsible')
@@ -534,7 +539,10 @@ export class CompanyController {
         @Body() dto: { partnerId: string; price: number },
         @Request() req: any
     ) {
-        return this.ordersService.assignForwarder(id, req.user.companyId, dto.partnerId, dto.price);
+        const result = await this.ordersService.assignForwarder(id, req.user.companyId, dto.partnerId, dto.price);
+        // Договор-заявка перевозчику — сама, если так настроено (A14).
+        this.autoContract.schedule(id, req.user.companyId, req.user);
+        return result;
     }
 
     // ==================== Водители компании ====================

@@ -19,10 +19,11 @@ import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeFuelService } from './fuel.service';
 import { StampImageService } from '../common/services/stamp-image.service';
 import { DriverCalculatorController } from './driver-calculator.controller';
+import { OrdersModule } from '../orders/orders.module';
 
 /** Биржа грузов. Выключена, пока на сервере нет `EXCHANGE_ENABLED=true`. */
 @Module({
-    imports: [PrismaModule, AuditModule, AuthModule],
+    imports: [PrismaModule, AuditModule, AuthModule, OrdersModule],
     controllers: [
         ExchangeStatusController, ExchangeController,
         ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController, ExchangeAdminController,

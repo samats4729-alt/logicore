@@ -11,6 +11,7 @@ import { ExchangeOffersService } from './exchange-offers.service';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
 import { companyHasExchange, ExchangeCompanyAccessGuard, soleTraderBlock } from './exchange-access';
 import { ExchangeBoardQueryDto, MakeOfferDto, PublishOrderDto, RoutePricesQueryDto, UnpublishOrderDto } from './dto/exchange-order.dto';
+import { OrderContractAutoService } from '../orders/order-contract-auto.service';
 
 /**
  * Включена ли биржа и парк ли компания — кабинет по этому решает, какие
@@ -59,6 +60,7 @@ export class ExchangeController {
         private readonly service: ExchangeService,
         private readonly offers: ExchangeOffersService,
         private readonly audit: AuditService,
+        private readonly autoContract: OrderContractAutoService,
     ) {}
 
     @Get('board')
@@ -130,6 +132,8 @@ export class ExchangeController {
             entityLabel: `Заявка ${result.orderNumber}: с биржи выбран исполнитель ${result.executor} за ${result.price.toLocaleString('ru-RU')} ₸`,
             orderId: id,
         });
+        // Договор-заявка перевозчику — сама, если так настроено (A14).
+        this.autoContract.schedule(id, req.user.companyId, req.user);
         return result;
     }
 

@@ -51,6 +51,7 @@ describe('рассылка доверенности по почте', () => {
             auditService,
             {} as any,
             s3,
+            {} as any,
         );
 
         return { controller, poaService, emailService, auditService, prisma };

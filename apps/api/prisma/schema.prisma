@@ -399,6 +399,11 @@ model Company {
   /// пока финотдел не разберёт завал, которого вчера не было.
   invoiceApprovalSince    DateTime?
 
+  /// Договор-заявка перевозчику — сама по каждой сделке (задачи шефа, A14):
+  /// формируется, проводится без бухгалтера и уходит перевозчику, как только
+  /// у рейса есть перевозчик и ставка. Выключено по умолчанию.
+  autoContractRequest     Boolean   @default(false)
+
   managersSeeOwnOrdersOnly   Boolean @default(true) // менеджер видит только свои заявки
   managersSeeOwnPartnersOnly Boolean @default(false) // менеджер видит только своих контрагентов
 

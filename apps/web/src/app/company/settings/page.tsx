@@ -137,6 +137,7 @@ export default function SettingsPage() {
                 vatCertificateNumber: company.vatCertificateNumber,
                 vatCertificateDate: company.vatCertificateDate ? dayjs(company.vatCertificateDate) : null,
                 vatScheme: company.vatScheme || 'STANDARD',
+                autoContractRequest: company.autoContractRequest === true,
             });
         } catch (error) {
             console.error('Ошибка загрузки профиля компании:', error);
@@ -480,6 +481,19 @@ export default function SettingsPage() {
                                                 </Form.Item>
                                             </Col>
                                         </Row>
+
+                                        {/* Договор-заявка — сама по каждой сделке (задачи шефа, A14). */}
+                                        <div className="lc-sec-title" style={{ marginTop: 8 }}>Договор-заявка перевозчику</div>
+                                        <div className="lc-sec-hint" style={{ marginBottom: 12 }}>
+                                            Как только у рейса появились перевозчик и его ставка, система сама формирует договор-заявку
+                                            и отправляет её: в кабинет перевозчика, если он работает на платформе, иначе на почту из его
+                                            карточки. Документ проводится без бухгалтера — включайте, если ставки и условия у вас
+                                            проверяют до назначения перевозчика. Исправления (другой водитель, другая ставка) — как и
+                                            раньше, кнопкой «Исправить» в рейсе.
+                                        </div>
+                                        <Form.Item name="autoContractRequest" valuePropName="checked" style={{ marginBottom: 24 }}>
+                                            <Checkbox>Формировать и отправлять договор-заявку автоматически по каждой сделке</Checkbox>
+                                        </Form.Item>
 
                                         <div className="lc-sec-title" style={{ marginTop: 8 }}>Как считается НДС</div>
                                         <div className="lc-sec-hint" style={{ marginBottom: 18 }}>
