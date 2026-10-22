@@ -1225,6 +1225,13 @@ model Contract {
   notes     String?
   content   Json? // Содержимое: массив статей [{title, paragraphs: [{number, text}]}]
 
+  // Подписанный экземпляр (задачи шефа, G5): скан или PDF с подписями сторон.
+  signedFileUrl    String?
+  signedFileName   String?
+  signedFileMime   String?
+  signedFileSize   Int?
+  signedUploadedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

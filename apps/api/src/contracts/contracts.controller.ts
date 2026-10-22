@@ -1,7 +1,10 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, Res, Header } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, Res, Header, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ContractsService } from './contracts.service';
 import { ContractPdfService } from './contract-pdf.service';
+import { ContractSignedFileService } from './contract-signed-file.service';
+import { fileResponseHeaders, MAX_UPLOAD_SIZE } from '../documents/allowed-files';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
@@ -17,6 +20,7 @@ export class ContractsController {
     constructor(
         private contractsService: ContractsService,
         private contractPdfService: ContractPdfService,
+        private signedFiles: ContractSignedFileService,
     ) { }
 
     // ==================== CONTRACTS ====================
@@ -167,6 +171,37 @@ export class ContractsController {
             'Content-Length': pdfBuffer.length,
         });
         res.end(pdfBuffer);
+    }
+
+    // Подписанный экземпляр (G5): один файл на договор, видят обе стороны.
+
+    @Post(':id/signed-file')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE } }))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Приложить подписанный договор' })
+    async uploadSignedFile(
+        @Param('id') id: string,
+        @Request() req: any,
+        @UploadedFile() file: Express.Multer.File,
+    ) {
+        return this.signedFiles.attach(id, req.user.companyId, file);
+    }
+
+    @Get(':id/signed-file')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Скачать подписанный договор' })
+    async downloadSignedFile(@Param('id') id: string, @Request() req: any, @Res() res: Response) {
+        const { fileName, mimeType, stream } = await this.signedFiles.open(id, req.user.companyId);
+        res.set(fileResponseHeaders(fileName, mimeType));
+        stream.pipe(res);
+    }
+
+    @Delete(':id/signed-file')
+    @Roles(UserRole.FORWARDER, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Убрать подписанный договор' })
+    async removeSignedFile(@Param('id') id: string, @Request() req: any) {
+        return this.signedFiles.remove(id, req.user.companyId);
     }
 
     @Get(':id')

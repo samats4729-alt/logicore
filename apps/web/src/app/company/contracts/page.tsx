@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { DateField, DateRangeField } from '@/components/ui/DateField';
+import { SignedContractFile } from '@/components/contracts/SignedContractFile';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -57,6 +58,9 @@ interface Contract {
     customerCompany: { id: string; name: string; bin?: string };
     forwarderCompany: { id: string; name: string; bin?: string };
     agreements: Agreement[];
+    /** Подписанный экземпляр (G5). */
+    signedFileName?: string | null;
+    signedUploadedAt?: string | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -619,6 +623,13 @@ export default function CompanyContractsPage() {
                                                         >
                                                             <DownloadOutlined /> Скачать PDF
                                                         </Dropdown.Button>
+                                                        <SignedContractFile
+                                                            contractId={contract.id}
+                                                            contractNumber={contract.contractNumber}
+                                                            fileName={contract.signedFileName}
+                                                            uploadedAt={contract.signedUploadedAt}
+                                                            onChanged={fetchContracts}
+                                                        />
                                                         <Button
                                                             size="small"
                                                             icon={<PlusOutlined />}
