@@ -11,9 +11,11 @@ const randomString = (length: number) => Array.from({ length }, () => ALPHABET[r
 /**
  * Подключение 1С компании — в кабинете (решение владельца 22–23.10.2026).
  *
- * Компания включает обмен и получает три строки для своей 1С: адрес, логин
- * и пароль. Пароль показывается один раз — у нас он только хешем. Забыли —
- * выдаём новый, старый перестаёт работать.
+ * Компания включает обмен и получает для своей 1С адрес с ключом — его
+ * достаточно, логин и пароль в 1С можно не вписывать (облачная 1С их и не
+ * присылает). Для 1С, которая просит логин и пароль, они тоже выдаются; ключ
+ * в адресе и пароль — одно и то же. Показываются один раз — у нас только
+ * хеш. Забыли — выдаём новый, старый перестаёт работать.
  */
 @Injectable()
 export class OneCConnectionsService {
@@ -54,7 +56,7 @@ export class OneCConnectionsService {
             },
             select: { id: true, login: true },
         });
-        return { id: row.id, address: this.addressOf(row.id), login: row.login, password };
+        return this.secret(row.id, row.login, password);
     }
 
     private async own(companyId: string, id: string) {
@@ -68,7 +70,13 @@ export class OneCConnectionsService {
         const row = await this.own(companyId, id);
         const password = randomString(16);
         await this.prisma.oneCConnection.update({ where: { id }, data: { passwordHash: await bcrypt.hash(password, 10) } });
-        return { id, address: this.addressOf(id), login: row.login, password };
+        return this.secret(id, row.login, password);
+    }
+
+    /** Что показать один раз: адрес с ключом, а также логин и пароль для 1С, которая их просит. */
+    private secret(id: string, login: string, password: string) {
+        const address = this.addressOf(id);
+        return { id, address, keyAddress: `${address}/${password}`, login, password };
     }
 
     async setEnabled(companyId: string, id: string, enabled: boolean) {

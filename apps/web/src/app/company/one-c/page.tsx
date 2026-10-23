@@ -28,7 +28,7 @@ interface Connection {
 }
 
 interface Secret {
-    address: string;
+    keyAddress: string;
     login: string;
     password: string;
 }
@@ -38,7 +38,7 @@ const STEPS = [
     '«Администрирование» → «Синхронизация данных» — поставьте галочку «Синхронизация данных».',
     'Откройте «Настройки синхронизации данных» → «Создать» → «Другая программа».',
     '«Настроить параметры подключения» → «Подключение к другой программе через Интернет».',
-    'Вставьте адрес, пользователя и пароль отсюда и обязательно поставьте галочку «Запомнить пароль» → «Далее» → «Далее» → «Готово».',
+    'Вставьте «Адрес для 1С» отсюда — целиком, с ключом. «Пользователь» и «Пароль» можно не заполнять → «Далее» → «Далее» → «Готово».',
     '«Настроить правила отправки и получения данных» → «Записать и закрыть».',
     '«Выполнить начальную выгрузку данных» → «Далее». Дальше — кнопка «Синхронизировать» или расписание в 1С.',
 ];
@@ -46,9 +46,10 @@ const STEPS = [
 /**
  * «Обмен с 1С» (решение владельца 22–23.10.2026).
  *
- * Компания сама подключает свою 1С: включает обмен здесь, получает адрес,
- * логин и пароль и вписывает их в 1С в обычной настройке «Другая
- * программа». Программист 1С не нужен. Пароль показывается один раз.
+ * Компания сама подключает свою 1С: включает обмен здесь, получает адрес с
+ * ключом и вставляет его в 1С в обычной настройке «Другая программа».
+ * Программист 1С не нужен. Адрес с ключом показывается один раз; для 1С,
+ * которая просит пользователя и пароль, они выдаются вместе с ним.
  */
 export default function OneCPage() {
     const user = useAuthStore((s) => s.user);
@@ -146,10 +147,9 @@ export default function OneCPage() {
                         </div>
                         <div className={cn(styles.cardBody, 'grid gap-4 text-[13px] lg:grid-cols-2')}>
                             <div className="space-y-2">
-                                <Field label="Адрес программы" value={connection.address} onCopy={() => copy('address', connection.address)} copied={copied === 'address'} />
-                                <Field label="Пользователь" value={connection.login} onCopy={() => copy('login', connection.login)} copied={copied === 'login'} />
                                 <div className="text-muted-foreground">
-                                    Пароль показывается один раз, когда его выдают. Потеряли — выдайте новый: старый перестанет работать.
+                                    Адрес для 1С с ключом показывается один раз, когда его выдают. Потеряли — нажмите «Новый адрес»:
+                                    старый перестанет работать, новый надо будет вставить в 1С.
                                 </div>
                                 {connection.connected && (
                                     <div>
@@ -164,7 +164,7 @@ export default function OneCPage() {
                                 {canManage && (
                                     <div className="flex flex-wrap gap-2 pt-1">
                                         <Button variant="outline" size="sm" onClick={() => newPassword(connection.id)} disabled={busy}>
-                                            <KeyRound className="h-3.5 w-3.5" /> Новый пароль
+                                            <KeyRound className="h-3.5 w-3.5" /> Новый адрес
                                         </Button>
                                         <Button variant="outline" size="sm" onClick={() => toggle(connection)} disabled={busy}>
                                             {connection.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -221,12 +221,21 @@ export default function OneCPage() {
                         <DialogTitle className="text-[15px]">Данные для вашей 1С</DialogTitle>
                     </DialogHeader>
                     {secret && (
-                        <div className="space-y-3 text-[13px]">
-                            <Field label="Адрес программы" value={secret.address} onCopy={() => copy('s-address', secret.address)} copied={copied === 's-address'} />
-                            <Field label="Пользователь" value={secret.login} onCopy={() => copy('s-login', secret.login)} copied={copied === 's-login'} />
-                            <Field label="Пароль" value={secret.password} onCopy={() => copy('s-password', secret.password)} copied={copied === 's-password'} />
+                        // min-w-0: длинный адрес с ключом не должен распирать окно — он обрезается в поле.
+                        <div className="min-w-0 space-y-3 text-[13px]">
+                            <Field label="Адрес для 1С" value={secret.keyAddress} onCopy={() => copy('s-address', secret.keyAddress)} copied={copied === 's-address'} />
+                            <p className="m-0">
+                                Вставьте его в 1С в поле «Адрес программы» целиком. «Пользователь» и «Пароль» в 1С можно не заполнять.
+                            </p>
+                            <details className="rounded-lg border border-solid border-border px-3 py-2">
+                                <summary className="cursor-pointer text-muted-foreground">Если 1С всё же просит пользователя и пароль</summary>
+                                <div className="mt-2 space-y-2">
+                                    <Field label="Пользователь" value={secret.login} onCopy={() => copy('s-login', secret.login)} copied={copied === 's-login'} />
+                                    <Field label="Пароль" value={secret.password} onCopy={() => copy('s-password', secret.password)} copied={copied === 's-password'} />
+                                </div>
+                            </details>
                             <p className="m-0 text-muted-foreground">
-                                Пароль показывается один раз — после закрытия окна его не увидит никто, даже вы. Впишите его в 1С сейчас.
+                                Адрес показывается один раз — после закрытия окна его не увидит никто, даже вы. Вставьте его в 1С сейчас.
                             </p>
                             <div className="flex justify-end">
                                 <Button onClick={() => setSecret(null)}>Готово</Button>
@@ -241,7 +250,7 @@ export default function OneCPage() {
 
 function Field({ label, value, onCopy, copied }: { label: string; value: string; onCopy: () => void; copied: boolean }) {
     return (
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
             <span className="text-[12px] font-medium text-muted-foreground">{label}</span>
             <div className="flex items-center gap-2">
                 <code className="min-w-0 flex-1 truncate rounded-lg border border-solid border-border bg-muted/40 px-2.5 py-1.5 text-[13px]">{value}</code>

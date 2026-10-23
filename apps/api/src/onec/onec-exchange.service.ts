@@ -120,8 +120,8 @@ export class OneCExchangeService {
     }
 
     /**
-     * 1С пришла с верным логином и неверным паролем. Сама 1С покажет
-     * человеку невнятное «обращение к несуществующему ресурсу», поэтому
+     * 1С пришла по верному адресу, но без пароля или с неверным. Сама 1С
+     * покажет человеку невнятное «аутентификация не выполнена», поэтому
      * причину пишем в журнал обмена — не чаще раза в десять минут, 1С
      * повторяет попытки.
      */
@@ -132,14 +132,14 @@ export class OneCExchangeService {
         });
         if (recent) return;
         await this.log({ id: connectionId }, BAD_PASSWORD, false, empty
-            ? '1С обратилась без пароля. В 1С откройте настройку синхронизации → «Настроить параметры подключения», '
-                + 'впишите пароль и поставьте галочку «Запомнить пароль».'
-            : '1С обратилась с неверным паролем. Если выдавали новый пароль — впишите его в 1С: настройка синхронизации → '
-                + '«Настроить параметры подключения».');
+            ? '1С обратилась без пароля. Нажмите здесь «Новый адрес» и вставьте его в 1С: '
+                + 'настройка синхронизации → «Настроить параметры подключения». С ним пароль в 1С не нужен.'
+            : '1С обратилась со старым или неверным паролем. Нажмите здесь «Новый адрес» и вставьте его в 1С: '
+                + 'настройка синхронизации → «Настроить параметры подключения».');
     }
 
     async handle(service: ServiceSpec, op: OpSpec, args: Record<string, V8Value>, peer: OneCPeer): Promise<OperationResult> {
-        if (service.name === 'InterfaceVersion') return this.getVersions(args);
+        if (service.name === 'InterfaceVersion') return this.versions(args);
         switch (op.name) {
             case 'Ping':
                 return { result: '' };
@@ -181,7 +181,7 @@ export class OneCExchangeService {
     }
 
     /** «Какие версии интерфейса знаешь»: для обмена — только 3.0.1.1, её требует «Другая программа». */
-    private getVersions(args: Record<string, V8Value>): OperationResult {
+    versions(args: Record<string, V8Value>): OperationResult {
         return { result: args.InterfaceName === 'ОбменДанными' ? ['3.0.1.1'] : [] };
     }
 

@@ -1,6 +1,7 @@
 import { EXCHANGE_3_0_1_1, INTERFACE_VERSION } from './services';
 import { buildFault, buildResponse, buildWsdl, parseCall } from './soap';
 import { V8Raw, V8Uuid } from './xdto';
+import { keyFromPath } from './onec-soap.controller';
 
 /** SOAP для 1С: описание службы, разбор вызова, ответ (обмен с 1С, этап 1). */
 describe('SOAP для 1С', () => {
@@ -73,6 +74,14 @@ LCAxwqE=</m:PartData></m:PutFilePart></soap:Body></soap:Envelope>`;
         const getPart = EXCHANGE_3_0_1_1.operations.find((o) => o.name === 'GetFilePart')!;
         expect(buildResponse(EXCHANGE_3_0_1_1, getPart, '', { PartData: Buffer.from('zip') }))
             .toContain('<m:return></m:return><m:PartData>emlw</m:PartData>');
+    });
+
+    it('ключ подключения из адреса: только между подключением и /ws/, только буквы и цифры', () => {
+        expect(keyFromPath('/1c/cmconn1/abcDEF2345678xyz/ws/Exchange_3_0_1_1')).toBe('abcDEF2345678xyz');
+        expect(keyFromPath('/1c/cmconn1/ws/Exchange_3_0_1_1')).toBeNull();
+        expect(keyFromPath('/1c/cmconn1/short/ws/Exchange_3_0_1_1')).toBeNull();
+        expect(keyFromPath('/1c/cmconn1/abcDEF2345678xy%2F/ws/Exchange_3_0_1_1')).toBeNull();
+        expect(keyFromPath('/1c/cmconn1/abcDEF2345678xyz/extra/ws/Exchange_3_0_1_1')).toBeNull();
     });
 
     it('ошибка — текстом, который 1С покажет человеку', () => {
