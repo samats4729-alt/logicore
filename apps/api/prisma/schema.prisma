@@ -3350,9 +3350,30 @@ model OneCConnection {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  log OneCExchangeLog[]
+  log       OneCExchangeLog[]
+  objectMap OneCObjectMap[]
 
   @@index([companyId])
+}
+
+/// Что из 1С с чем у нас связано: ссылка 1С (её УникальныйИдентификатор) →
+/// наша запись. По ней повторная синхронизация обновляет ту же карточку, а
+/// не заводит вторую, и по ней же потом отправляем в 1С счета и акты.
+model OneCObjectMap {
+  id           String         @id @default(cuid())
+  connectionId String
+  connection   OneCConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// Вид объекта 1С: «Справочник.Контрагенты», «Справочник.Организации»…
+  objectType   String
+  /// Ссылка объекта в 1С.
+  ref          String
+  /// id нашей записи (для контрагентов и организации — Company).
+  localId      String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([connectionId, objectType, ref])
+  @@index([connectionId, objectType, localId])
 }
 
 /// Журнал обмена с 1С: что 1С спрашивала и чем кончилось — для экрана

@@ -7,6 +7,7 @@ import { SoapError } from './soap';
 import { V8Raw, V8Uuid, V8Value } from './xdto';
 import { OneCFileStore } from './onec-files';
 import { ObjectType, buildMessage, countObjects, readMessage } from './message';
+import { OneCImportService, describeImport } from './onec-import.service';
 
 /** Подключение, от имени которого 1С сейчас спрашивает. */
 export interface OneCPeer {
@@ -55,17 +56,6 @@ export const OBJECT_TYPES: ObjectType[] = [
     { name: 'Документ.ПКОРасчетыСКонтрагентами', receiving: true },
 ];
 
-/** Названия объектов 1С для журнала — словами бухгалтера. */
-const OBJECT_LABELS: Record<string, string> = {
-    'Справочник.Организации': 'организации',
-    'Справочник.Контрагенты': 'контрагенты',
-    'Справочник.Договоры': 'договоры',
-    'Справочник.БанковскиеСчета': 'банковские счета',
-    'Документ.ПБДСРасчетыСКонтрагентами': 'оплаты на счёт',
-    'Документ.ПКОРасчетыСКонтрагентами': 'оплаты в кассу',
-    УдалениеОбъекта: 'удаления',
-};
-
 /** УникальныйИдентификатор из параметра: 1С шлёт его то типом, то строкой. */
 const uuidOf = (v: V8Value): string => OneCFileStore.id(v instanceof V8Uuid ? v.value : String(v ?? ''));
 /** ДвоичныеДанные из параметра. */
@@ -93,9 +83,10 @@ const textOf = (v: unknown): string | null => {
  * говорит. При синхронизации 1С сначала забирает наше сообщение
  * (UploadData), потом отдаёт своё (DownloadData) — оба файлом по частям.
  *
- * Этап 2: сообщения ходят в обе стороны, номера подтверждений ведутся, что
- * пришло — пишется в журнал. Разнесение объектов по LogiCore и отправка
- * счетов и актов — следующие этапы; до тех пор наше сообщение без объектов.
+ * Сообщения ходят в обе стороны, номера подтверждений ведутся. Что пришло
+ * из 1С, разносит OneCImportService (контрагенты по БИН, их банковские
+ * реквизиты, своя организация). Отправка счетов и актов в 1С — следующий
+ * этап; до тех пор наше сообщение без объектов.
  */
 @Injectable()
 export class OneCExchangeService {
@@ -104,6 +95,7 @@ export class OneCExchangeService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly files: OneCFileStore,
+        private readonly importer: OneCImportService,
     ) {}
 
     async log(peer: Pick<OneCPeer, 'id'>, operation: string, ok: boolean, message?: string | null, details?: Record<string, unknown>) {
@@ -324,8 +316,10 @@ export class OneCExchangeService {
             return done;
         }
 
+        // Разносим до подтверждения: если разнесение упадёт целиком, номер
+        // принятого не сдвинется и 1С пришлёт то же сообщение ещё раз.
         const counts = countObjects(msg.objects);
-        const summary = Object.entries(counts).map(([name, n]) => `${OBJECT_LABELS[name] ?? name} — ${n}`).join(', ');
+        const imported = await this.importer.import(peer.id, peer.companyId, msg.objects);
         await this.prisma.oneCConnection.update({
             where: { id: peer.id },
             data: {
@@ -334,9 +328,8 @@ export class OneCExchangeService {
             },
         });
         await this.log(
-            peer, 'DownloadData', true,
-            summary ? `Из 1С пришло: ${summary}` : '1С на связи: новых данных нет',
-            { messageNo: msg.messageNo, peerReceivedNo: msg.receivedNo, version: msg.version, objects: counts },
+            peer, 'DownloadData', imported.errors.length === 0, describeImport(imported, counts),
+            { messageNo: msg.messageNo, peerReceivedNo: msg.receivedNo, version: msg.version, objects: counts, imported },
         );
         return done;
     }
