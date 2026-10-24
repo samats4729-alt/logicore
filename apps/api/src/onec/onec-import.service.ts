@@ -6,7 +6,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ExternalCompaniesService } from '../external-companies/external-companies.service';
 import { AccountingService } from '../accounting/accounting.service';
 import { PaymentAllocationService } from '../accounting-documents/payment-allocation.service';
-import { findBlock } from '../blocklist/blocklist';
 import { currencyLetter } from './enterprise-data';
 import { XmlNode } from './xdto';
 
@@ -363,8 +362,9 @@ export class OneCImportService {
             return 'linked';
         }
         if (!cp.bin) return 'noBin';
-        // Чёрный список — не заводим, и это не ошибка обмена.
-        if (await findBlock(this.prisma, companyId, { binIin: [cp.bin] })) return 'blocked';
+        // Проверка по чёрному списку компании (findBlock, «не заводим — и это не
+        // ошибка обмена») вернётся вместе с самим списком: он пока в ветке
+        // boss-tasks-set3 и в main не пришёл. Счётчик blocked оставлен под неё.
 
         const carrier = !!role?.carrier && !role.customer;
         const created = await this.externalCompanies.createExternalCompany(companyId, {
