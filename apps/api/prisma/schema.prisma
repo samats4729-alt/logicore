@@ -3354,6 +3354,12 @@ model OneCConnection {
   sendActs              Boolean @default(true)
   receiveCounterparties Boolean @default(false)
   receivePayments       Boolean @default(false)
+  /// Акты перевозчиков (входящие) → «Поступление услуг» в 1С; договоры — чтобы
+  /// документы ложились в 1С на свой договор, а не на «Основной»; оплаты
+  /// перевозчикам из 1С (решение владельца 24.10: «делай всё, что сможешь»).
+  sendCarrierActs        Boolean @default(false)
+  sendContracts          Boolean @default(false)
+  receiveCarrierPayments Boolean @default(false)
   createdById       String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

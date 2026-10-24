@@ -55,6 +55,20 @@ export interface SalesLine {
     content?: string | null;
 }
 
+/** Договор LogiCore в 1С: с заказчиком — «с покупателем», с перевозчиком — «с поставщиком». */
+export interface ContractKey {
+    ref: string;
+    kind: 'СПокупателем' | 'СПоставщиком';
+    organization: OrganizationKey;
+    counterparty: CounterpartyKey;
+    currency: CurrencyKey;
+    number: string;
+    /** Дата договора, ГГГГ-ММ-ДД. */
+    date?: string | null;
+    /** До какого числа действует, ГГГГ-ММ-ДД. */
+    validTo?: string | null;
+}
+
 export interface SalesDocument {
     ref: string;
     /** Дата документа 1С; время ставим полдень — граница суток в другом поясе не сдвинет день. */
@@ -66,7 +80,16 @@ export interface SalesDocument {
     currency: CurrencyKey;
     amount: string;
     comment?: string | null;
+    /** Договор — если компания отправляет договоры; нет — 1С возьмёт «Основной договор». */
+    contract?: ContractKey | null;
     lines: SalesLine[];
+}
+
+/** Акт перевозчика (входящий) → «Поступление (акт, накладная)» с услугами. */
+export interface PurchaseDocument extends SalesDocument {
+    /** Номер и дата на бумаге перевозчика — 1С показывает их как «входящий документ». */
+    incomingNumber?: string | null;
+    incomingDate?: string | null;
 }
 
 export const organizationKey = (o: OrganizationKey) => n('Организация',
@@ -104,37 +127,103 @@ export function serviceObject(s: ServiceKey, version?: string | null): string {
         classifier('ЕдиницаИзмерения', version, '876', 'усл. ед'));
 }
 
+const currencyOfVersion = (name: string, version: string | null | undefined, c: CurrencyKey) => classifier(name, version, c.code, c.name);
+
+/** Ключевые свойства договора — и в самом договоре, и в ссылке на него из документа. */
+const contractFields = (c: ContractKey, version: string | null | undefined) =>
+    t('Ссылка', c.ref) + t('ВидДоговора', c.kind) + organizationKey(c.organization)
+    + n('Контрагент', counterpartyFields(c.counterparty))
+    + currencyOfVersion('ВалютаВзаиморасчетов', version, c.currency)
+    + t('Наименование', `Договор № ${c.number}${c.date ? ` от ${c.date.split('-').reverse().join('.')}` : ''}`)
+    + t('Дата', c.date) + t('Номер', c.number);
+
+/** Договор целиком: 1С заведёт его у контрагента или узнает свой по ссылке. */
+export function contractObject(c: ContractKey, version?: string | null): string {
+    return n('Справочник.Договоры',
+        n('КлючевыеСвойства', contractFields(c, version)),
+        t('СрокДействия', c.validTo),
+        t('Комментарий', 'Из LogiCore'));
+}
+
+/** Расчёты по документу: договор (если отправляем договоры) и валюта. */
+const settlement = (d: SalesDocument, version: string | null | undefined) => n('ДанныеВзаиморасчетов',
+    d.contract ? n('Договор', contractFields(d.contract, version)) : '',
+    currencyOfVersion('ВалютаВзаиморасчетов', version, d.currency));
+
+const serviceRows = (lines: SalesLine[], own: boolean) => lines.map((l, i) => n('Строка',
+    t('НомерСтрокиДокумента', i + 1),
+    n('Номенклатура', t('Ссылка', l.service.ref), t('НаименованиеПолное', l.service.name), t('Наименование', l.service.name)),
+    t('Количество', l.quantity),
+    t('Сумма', l.amount),
+    t('Цена', l.price),
+    t('СтавкаНДС', l.vatRate),
+    t('СуммаНДС', l.vatAmount),
+    t('Содержание', l.content),
+    // «Собственные» — свои услуги в реализации; в поступлении такого поля нет.
+    own ? t('ТипУслуги', 'Собственные') : '')).join('');
+
 /** Акт выполненных работ LogiCore → «Реализация (акт, накладная)» с услугами. */
 export function salesObject(d: SalesDocument, version?: string | null): string {
-    const currencyKey = (name: string, c: CurrencyKey) => classifier(name, version, c.code, c.name);
-    const lines = d.lines.map((l, i) => n('Строка',
-        t('НомерСтрокиДокумента', i + 1),
-        n('Номенклатура', t('Ссылка', l.service.ref), t('НаименованиеПолное', l.service.name), t('Наименование', l.service.name)),
-        t('Количество', l.quantity),
-        t('Сумма', l.amount),
-        t('Цена', l.price),
-        t('СтавкаНДС', l.vatRate),
-        t('СуммаНДС', l.vatAmount),
-        t('Содержание', l.content),
-        t('ТипУслуги', 'Собственные'))).join('');
     return n('Документ.РеализацияТоваровУслуг',
         n('КлючевыеСвойства', t('Ссылка', d.ref), t('Дата', `${d.date}T12:00:00`), t('Номер', d.number), organizationKey(d.organization)),
         t('ВидОперации', 'РеализацияКлиенту'),
-        currencyKey('Валюта', d.currency),
+        currencyOfVersion('Валюта', version, d.currency),
         t('Сумма', d.amount),
         t('СуммаВключаетНДС', true),
         n('Контрагент', counterpartyFields(d.counterparty)),
-        n('ДанныеВзаиморасчетов', currencyKey('ВалютаВзаиморасчетов', d.currency)),
+        settlement(d, version),
         t('Комментарий', d.comment),
-        n('Услуги', lines));
+        n('Услуги', serviceRows(d.lines, true)));
+}
+
+/**
+ * Акт перевозчика LogiCore → «Поступление (акт, накладная)» с услугами:
+ * расход на перевозку. Порядок элементов другой, чем у реализации (услуги —
+ * сразу за ключевыми свойствами, контрагент — внутри них): так в схеме
+ * всех версий формата 1.6–1.10.
+ */
+export function purchaseObject(d: PurchaseDocument, version?: string | null): string {
+    return n('Документ.ПоступлениеТоваровУслуг',
+        n('КлючевыеСвойства',
+            t('Ссылка', d.ref), t('Дата', `${d.date}T12:00:00`), t('Номер', d.number), organizationKey(d.organization),
+            n('ДанныеВходящегоДокумента', t('НомерВходящегоДокумента', d.incomingNumber), t('ДатаВходящегоДокумента', d.incomingDate)),
+            n('Контрагент', counterpartyFields(d.counterparty))),
+        n('Услуги', serviceRows(d.lines, false)),
+        currencyOfVersion('Валюта', version, d.currency),
+        t('ВидОперации', 'ПокупкаУПоставщика'),
+        t('Сумма', d.amount),
+        t('СуммаВключаетНДС', true),
+        settlement(d, version),
+        t('Комментарий', d.comment));
 }
 
 /** Документ отменили в LogiCore после отправки — 1С его удаляет (помечает на удаление). */
 export function salesDeletion(ref: string): string {
-    return n('УдалениеОбъекта', n('СсылкаНаОбъект', n('СсылкаНаОбъект', t('РеализацияТоваровУслугСсылка', ref))));
+    return deletion('РеализацияТоваровУслугСсылка', ref);
 }
 
+export function purchaseDeletion(ref: string): string {
+    return deletion('ПоступлениеТоваровУслугСсылка', ref);
+}
+
+const deletion = (refType: string, ref: string) =>
+    n('УдалениеОбъекта', n('СсылкаНаОбъект', n('СсылкаНаОбъект', t(refType, ref))));
+
 // ==================== перевод значений ====================
+
+/**
+ * Юрлицо или физлицо (ИП) — для 1С это разные виды контрагента. В LogiCore
+ * отдельного признака нет, но он есть в самом номере: у казахстанского БИН
+ * пятая цифра — вид юрлица (4, 5, 6), у ИИН на этом месте день рождения
+ * (0–3). Российский ИНН из 12 цифр — тоже у физлица. И «ИП …» в названии.
+ * 24.10.2026 перевозчик-ИП ушёл в учебную 1С юрлицом — отсюда правило.
+ */
+export function isLegalEntity(bin: string | null | undefined, name: string): boolean {
+    if (/^(ИП|Индивидуальный предприниматель)(\s|$)/i.test(name.trim())) return false;
+    const digits = (bin ?? '').replace(/\D/g, '');
+    if (digits.length === 12 && '0123'.includes(digits[4])) return false;
+    return true;
+}
 
 /** Цифровой код валюты по буквенному. Нет в списке — документ в 1С не уйдёт, скажем об этом в журнале. */
 const CURRENCY_CODES: Record<string, string> = {

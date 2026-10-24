@@ -6,14 +6,23 @@ import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Что компания решает сама: идёт ли обмен вообще и что в нём передаётся.
- * Акты — из LogiCore в 1С; контрагенты и оплаты клиентов — из 1С в LogiCore.
+ * Из LogiCore в 1С — свои акты, акты перевозчиков, договоры; из 1С в
+ * LogiCore — контрагенты, оплаты клиентов, оплаты перевозчикам.
  */
 export interface OneCConnectionChoices {
     enabled?: boolean;
     sendActs?: boolean;
+    sendCarrierActs?: boolean;
+    sendContracts?: boolean;
     receiveCounterparties?: boolean;
     receivePayments?: boolean;
+    receiveCarrierPayments?: boolean;
 }
+
+const CHOICE_KEYS = [
+    'enabled', 'sendActs', 'sendCarrierActs', 'sendContracts', 'receiveCounterparties', 'receivePayments', 'receiveCarrierPayments',
+] as const;
+const CHOICE_SELECT = Object.fromEntries(CHOICE_KEYS.map((k) => [k, true])) as Record<(typeof CHOICE_KEYS)[number], true>;
 
 /** Без похожих друг на друга букв и цифр: пароль переписывают в 1С руками. */
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -47,8 +56,7 @@ export class OneCConnectionsService {
             where: { companyId },
             orderBy: { createdAt: 'asc' },
             select: {
-                id: true, login: true, enabled: true, peerName: true, peerNodeCode: true, formatVersion: true,
-                sendActs: true, receiveCounterparties: true, receivePayments: true,
+                id: true, login: true, peerName: true, peerNodeCode: true, formatVersion: true, ...CHOICE_SELECT,
                 exchangePlanName: true, setupAt: true, lastSeenAt: true, createdAt: true,
                 log: { orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, operation: true, ok: true, message: true, createdAt: true } },
             },
@@ -94,12 +102,11 @@ export class OneCConnectionsService {
     /** Приостановить или возобновить обмен и выбрать, что передавать. */
     async update(companyId: string, id: string, data: OneCConnectionChoices) {
         await this.own(companyId, id);
-        const fields = (['enabled', 'sendActs', 'receiveCounterparties', 'receivePayments'] as const)
-            .filter((k) => typeof data[k] === 'boolean');
+        const fields = CHOICE_KEYS.filter((k) => typeof data[k] === 'boolean');
         const row = await this.prisma.oneCConnection.update({
             where: { id },
             data: Object.fromEntries(fields.map((k) => [k, data[k]])),
-            select: { id: true, enabled: true, sendActs: true, receiveCounterparties: true, receivePayments: true },
+            select: { id: true, ...CHOICE_SELECT },
         });
         return row;
     }

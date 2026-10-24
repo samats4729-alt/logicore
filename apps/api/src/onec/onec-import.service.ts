@@ -30,7 +30,10 @@ import { XmlNode } from './xdto';
  *    платежом LogiCore тем же путём, что кнопкой в кабинете; если 1С
  *    указала, что это оплата нашего акта, — гасит счета по заявкам этого
  *    акта, остаток — сам акт. Без указания — платёж ложится на контрагента,
- *    разносит бухгалтер.
+ *    разносит бухгалтер;
+ *  - оплата перевозчику (списание со счёта, расходный ордер) — так же
+ *    исходящим платежом; по нашему акту перевозчика (он ушёл в 1С
+ *    «Поступлением») гасит его счета по тем же заявкам и сам акт.
  */
 
 export const CP = 'Справочник.Контрагенты';
@@ -39,13 +42,21 @@ export const BANK = 'Справочник.БанковскиеСчета';
 export const CONTRACT = 'Справочник.Договоры';
 export const PAY_BANK = 'Документ.ПБДСРасчетыСКонтрагентами';
 export const PAY_CASH = 'Документ.ПКОРасчетыСКонтрагентами';
-/** Наш акт в 1С — тот же вид, что в onec-export (здесь, чтобы не было цикла импортов). */
+export const PAY_OUT_BANK = 'Документ.СБДСРасчетыСКонтрагентами';
+export const PAY_OUT_CASH = 'Документ.РКОРасчетыСКонтрагентами';
+const PAY_IN = [PAY_BANK, PAY_CASH];
+const PAY_OUT = [PAY_OUT_BANK, PAY_OUT_CASH];
+/** Наши акты в 1С — те же виды, что в onec-export (здесь, чтобы не было цикла импортов). */
 const SALES_REF = 'Документ.РеализацияТоваровУслуг';
+const PURCHASE_REF = 'Документ.ПоступлениеТоваровУслуг';
 
 /** Что компания решила принимать из 1С. */
 export interface ImportChoices {
     counterparties: boolean;
+    /** Оплаты от клиентов. */
     payments: boolean;
+    /** Оплаты перевозчикам. */
+    carrierPayments?: boolean;
 }
 
 export interface ImportSummary {
@@ -53,6 +64,7 @@ export interface ImportSummary {
     bankFilled: number;
     organizationLinked: boolean;
     payments: { created: number; allocated: number; known: number; notCustomer: number };
+    carrierPayments: { created: number; allocated: number; known: number; notSupplier: number };
     /** Что пришло, но пока не разносится: вид объекта → сколько. */
     other: Record<string, number>;
     /** Что пришло, но компания приём этого выключила: вид объекта → сколько. */
@@ -129,16 +141,20 @@ export function readBankAccount(node: XmlNode): BankAccount1C | null {
 export interface Payment1C {
     ref: string;
     cash: boolean;
+    /** Деньги ушли от нас (списание со счёта, расходный ордер). */
+    out: boolean;
     date: string;
     number: string;
     amount: number;
     /** Буквенный код валюты; не узнали — null. */
     currency: string | null;
     customer: boolean;
+    /** Расчёты «с поставщиком» — для нас это перевозчик. */
+    supplier: boolean;
     counterparty: Counterparty1C | null;
     purpose: string | null;
-    /** Строки расшифровки: сумма и, если 1С указала, наш акт (ссылка). */
-    lines: Array<{ amount: number; actRef: string | null }>;
+    /** Строки расшифровки: сумма и, если 1С указала, наш акт или акт перевозчика (ссылка). */
+    lines: Array<{ amount: number; actRef: string | null; purchaseRef: string | null }>;
 }
 
 export function readPayment(node: XmlNode): Payment1C | null {
@@ -147,24 +163,28 @@ export function readPayment(node: XmlNode): Payment1C | null {
     const common = child(node, 'ОбщиеДанные');
     const amount = Number(text(child(common, 'Сумма')));
     if (!ref || !amount) return null;
-    const cash = node.name === PAY_CASH;
+    const cash = node.name === PAY_CASH || node.name === PAY_OUT_CASH;
     const cp = child(node, 'Контрагент');
     const rows = child(child(node, 'РасшифровкаПлатежа'), 'Строка') ? child(node, 'РасшифровкаПлатежа')!.children : [];
+    const kind = text(child(node, 'ВидРасчетов'));
     return {
         ref,
         cash,
+        out: PAY_OUT.includes(node.name),
         date: (text(child(keys, 'Дата')) ?? '').slice(0, 10),
         number: text(child(keys, 'Номер')) ?? '',
         amount,
         // До версии формата 1.7 код прямо в «Валюта», с 1.7 — в «ДанныеКлассификатора».
         currency: currencyLetter(text(child(child(common, 'Валюта'), 'Код'))
             ?? text(child(child(child(common, 'Валюта'), 'ДанныеКлассификатора'), 'Код'))),
-        customer: text(child(node, 'ВидРасчетов')) === 'СПокупателем',
+        customer: kind === 'СПокупателем',
+        supplier: kind === 'СПоставщиком',
         counterparty: cp ? readCounterparty(cp) : null,
-        purpose: text(child(common, cash ? 'Основание' : 'НазначениеПлатежа')),
+        purpose: text(child(common, cash ? 'Основание' : 'НазначениеПлатежа')) ?? text(child(common, 'Комментарий')),
         lines: rows.filter((r) => r.name === 'Строка').map((r) => ({
             amount: Number(text(child(r, 'Сумма'))) || 0,
             actRef: text(child(child(child(r, 'ДокументРасчетов'), 'РеализацияТоваровУслугСсылка'), 'Ссылка')),
+            purchaseRef: text(child(child(child(r, 'ДокументРасчетов'), 'ПоступлениеТоваровУслугСсылка'), 'Ссылка')),
         })),
     };
 }
@@ -192,6 +212,8 @@ export const OBJECT_LABELS: Record<string, string> = {
     [BANK]: 'банковские счета',
     'Документ.ПБДСРасчетыСКонтрагентами': 'оплаты на счёт',
     'Документ.ПКОРасчетыСКонтрагентами': 'оплаты в кассу',
+    [PAY_OUT_BANK]: 'оплаты перевозчикам со счёта',
+    [PAY_OUT_CASH]: 'оплаты перевозчикам из кассы',
     УдалениеОбъекта: 'удаления',
 };
 
@@ -220,6 +242,15 @@ export function describeImport(s: ImportSummary, counts: Record<string, number>)
             p.notCustomer && `не от покупателей, пропущены — ${p.notCustomer}`,
         ].filter(Boolean);
         parts.push(`оплаты ${(counts[PAY_BANK] ?? 0) + (counts[PAY_CASH] ?? 0)}${d.length ? ` (${d.join(', ')})` : ''}`);
+    }
+    if (counts[PAY_OUT_BANK] || counts[PAY_OUT_CASH]) {
+        const p = s.carrierPayments;
+        const d = [
+            p.created && `приняты — ${p.created}${p.allocated ? `, из них разнесены на документы — ${p.allocated}` : ''}`,
+            p.known && `уже были — ${p.known}`,
+            p.notSupplier && `не перевозчикам, пропущены — ${p.notSupplier}`,
+        ].filter(Boolean);
+        parts.push(`оплаты перевозчикам ${(counts[PAY_OUT_BANK] ?? 0) + (counts[PAY_OUT_CASH] ?? 0)}${d.length ? ` (${d.join(', ')})` : ''}`);
     }
     const ignored = Object.entries(s.ignored).map(([name, n]) => `${OBJECT_LABELS[name] ?? name} — ${n}`);
     if (ignored.length) parts.push(`не принято, приём выключен в настройках обмена: ${ignored.join(', ')}`);
@@ -254,6 +285,7 @@ export class OneCImportService {
             bankFilled: 0,
             organizationLinked: false,
             payments: { created: 0, allocated: 0, known: 0, notCustomer: 0 },
+            carrierPayments: { created: 0, allocated: 0, known: 0, notSupplier: 0 },
             other: {},
             ignored: {},
             errors: [],
@@ -262,7 +294,8 @@ export class OneCImportService {
         // всё-таки (старая настройка в 1С, ручная выгрузка) — не разносим.
         const off = new Set([
             ...(accept.counterparties ? [] : [CP, BANK, CONTRACT]),
-            ...(accept.payments ? [] : [PAY_BANK, PAY_CASH]),
+            ...(accept.payments ? [] : PAY_IN),
+            ...(accept.carrierPayments ? [] : PAY_OUT),
         ]);
         for (const o of objects.filter((x) => off.has(x.name))) summary.ignored[o.name] = (summary.ignored[o.name] ?? 0) + 1;
         objects = objects.filter((x) => !off.has(x.name));
@@ -299,7 +332,7 @@ export class OneCImportService {
             }
         }
 
-        for (const o of objects.filter((x) => x.name === PAY_BANK || x.name === PAY_CASH)) {
+        for (const o of objects.filter((x) => PAY_IN.includes(x.name))) {
             const pay = readPayment(o);
             if (!pay) continue;
             try {
@@ -311,7 +344,19 @@ export class OneCImportService {
             }
         }
 
-        for (const o of objects.filter((x) => ![CP, BANK, ORG, PAY_BANK, PAY_CASH].includes(x.name))) {
+        for (const o of objects.filter((x) => PAY_OUT.includes(x.name))) {
+            const pay = readPayment(o);
+            if (!pay) continue;
+            try {
+                const result = await this.carrierPayment(connectionId, companyId, pay, userId, accept.counterparties);
+                if (result === 'allocated') summary.carrierPayments.created++;
+                summary.carrierPayments[result]++;
+            } catch (e) {
+                this.fail(summary, `оплата перевозчику №${pay.number} от ${pay.date}`, e);
+            }
+        }
+
+        for (const o of objects.filter((x) => ![CP, BANK, ORG, ...PAY_IN, ...PAY_OUT].includes(x.name))) {
             summary.other[o.name] = (summary.other[o.name] ?? 0) + 1;
         }
         return summary;
@@ -383,7 +428,44 @@ export class OneCImportService {
         connectionId: string, companyId: string, pay: Payment1C, userId: string | null | undefined, mayCreateCounterparty: boolean,
     ): Promise<'created' | 'allocated' | 'known' | 'notCustomer'> {
         if (!pay.customer) return 'notCustomer';
-        if (await this.mapped(connectionId, pay.cash ? PAY_CASH : PAY_BANK, pay.ref)) return 'known';
+        return this.recordPayment(connectionId, companyId, pay, userId, mayCreateCounterparty, {
+            objectType: pay.cash ? PAY_CASH : PAY_BANK,
+            direction: PaymentDirection.IN,
+            kind: pay.cash ? 'приходный кассовый ордер' : 'поступление на расчётный счёт',
+            role: { customer: true, carrier: false },
+            docRef: SALES_REF,
+            docDirection: AccountingDocumentDirection.OUTGOING,
+        });
+    }
+
+    /** Оплата перевозчику → исходящий платёж LogiCore; по акту перевозчика — сразу разнесённый. */
+    private async carrierPayment(
+        connectionId: string, companyId: string, pay: Payment1C, userId: string | null | undefined, mayCreateCounterparty: boolean,
+    ): Promise<'created' | 'allocated' | 'known' | 'notSupplier'> {
+        if (!pay.supplier) return 'notSupplier';
+        return this.recordPayment(connectionId, companyId, pay, userId, mayCreateCounterparty, {
+            objectType: pay.cash ? PAY_OUT_CASH : PAY_OUT_BANK,
+            direction: PaymentDirection.OUT,
+            kind: pay.cash ? 'расходный кассовый ордер' : 'списание с расчётного счёта',
+            role: { customer: false, carrier: true },
+            docRef: PURCHASE_REF,
+            docDirection: AccountingDocumentDirection.INCOMING,
+        });
+    }
+
+    /**
+     * Общее для оплат в обе стороны: платёж заводится тем же путём, что
+     * кнопкой в кабинете, связь с документом 1С запоминается (повтор не
+     * задвоит), затем — разнесение по документу, который 1С указала.
+     */
+    private async recordPayment(
+        connectionId: string, companyId: string, pay: Payment1C, userId: string | null | undefined, mayCreateCounterparty: boolean,
+        how: {
+            objectType: string; direction: PaymentDirection; kind: string; role: { customer: boolean; carrier: boolean };
+            docRef: string; docDirection: AccountingDocumentDirection;
+        },
+    ): Promise<'created' | 'allocated' | 'known'> {
+        if (await this.mapped(connectionId, how.objectType, pay.ref)) return 'known';
         if (!pay.counterparty) throw new Error('в 1С у оплаты не указан контрагент');
         if (!pay.currency) throw new Error('валюта оплаты не распознана');
         if (!userId) throw new Error('не знаем, от чьего имени завести платёж: подключение 1С без автора');
@@ -393,49 +475,54 @@ export class OneCImportService {
             throw new Error(`контрагента «${pay.counterparty.name}» нет в LogiCore. Заведите его или включите в настройках обмена «Принимаем из 1С → Контрагенты»`);
         }
         if (!company) {
-            const made = await this.counterparty(connectionId, companyId, pay.counterparty);
+            const made = await this.counterparty(connectionId, companyId, pay.counterparty, how.role);
             if (made !== 'created') throw new Error(`контрагента «${pay.counterparty.name}» нет в LogiCore, и завести его нельзя (${made === 'noBin' ? 'без БИН' : 'в чёрном списке'})`);
             company = await this.findCounterparty(connectionId, companyId, pay.counterparty);
         }
 
-        const kind = pay.cash ? 'приходный кассовый ордер' : 'поступление на расчётный счёт';
         const payment = await this.accounting.createPayment(companyId, userId, {
             counterpartyId: company!.id,
-            direction: PaymentDirection.IN,
+            direction: how.direction,
             amount: pay.amount,
             date: pay.date,
             method: pay.cash ? PaymentMethod.CASH : PaymentMethod.BANK,
             currency: pay.currency,
-            note: `Из 1С: ${kind} №${pay.number} от ${pay.date}${pay.purpose ? `. ${pay.purpose}` : ''}`,
+            note: `Из 1С: ${how.kind} №${pay.number} от ${pay.date}${pay.purpose ? `. ${pay.purpose}` : ''}`,
         });
-        await this.link(connectionId, pay.cash ? PAY_CASH : PAY_BANK, pay.ref, payment.id);
+        await this.link(connectionId, how.objectType, pay.ref, payment.id);
 
-        const plan = await this.allocationPlan(connectionId, companyId, company!.id, pay);
+        const plan = await this.allocationPlan(connectionId, companyId, company!.id, pay, how.docRef, how.docDirection);
         if (!plan.length) return 'created';
         try {
             await this.allocations.apply(companyId, userId, payment.id, plan);
             return 'allocated';
         } catch (e) {
-            // Платёж записан; не разнёсся — разнесёт бухгалтер, причина в журнале.
+            // Платёж записан; не разнёсся (например, счёт перевозчика ещё не
+            // согласован) — разнесёт бухгалтер, причина в журнале сервера.
             this.logger.warn(`1С → LogiCore, разнесение оплаты №${pay.number}: ${(e as Error).message}`);
             return 'created';
         }
     }
 
     /**
-     * Куда разнести оплату по нашему акту: сначала неоплаченные счета по тем
-     * же заявкам (долг в LogiCore висит на счёте), старые вперёд; что
-     * осталось — на сам акт, если по нему есть долг.
+     * Куда разнести оплату по акту (нашему или перевозчика): сначала
+     * неоплаченные счета того же контрагента по тем же заявкам (долг в
+     * LogiCore висит на счёте), старые вперёд; что осталось — на сам акт,
+     * если по нему есть долг.
      */
-    private async allocationPlan(connectionId: string, companyId: string, counterpartyId: string, pay: Payment1C) {
+    private async allocationPlan(
+        connectionId: string, companyId: string, counterpartyId: string, pay: Payment1C,
+        docRef: string, direction: AccountingDocumentDirection,
+    ) {
         const plan = new Map<string, number>();
         const open = new Map<string, number>();
         for (const line of pay.lines) {
-            if (!line.actRef || line.amount <= 0) continue;
-            const actId = await this.mapped(connectionId, SALES_REF, line.actRef);
+            const ref = docRef === PURCHASE_REF ? line.purchaseRef : line.actRef;
+            if (!ref || line.amount <= 0) continue;
+            const actId = await this.mapped(connectionId, docRef, ref);
             if (!actId) continue;
             const act = await this.prisma.accountingDocument.findFirst({
-                where: { id: actId, companyId, counterpartyId, status: AccountingDocumentStatus.POSTED },
+                where: { id: actId, companyId, counterpartyId, direction, status: AccountingDocumentStatus.POSTED },
                 select: { id: true, currency: true, balanceDue: true, orders: { select: { orderId: true } } },
             });
             if (!act || act.currency !== pay.currency) continue;
@@ -445,7 +532,7 @@ export class OneCImportService {
                     where: {
                         companyId, counterpartyId, currency: pay.currency,
                         type: AccountingDocumentType.PAYMENT_INVOICE,
-                        direction: AccountingDocumentDirection.OUTGOING,
+                        direction,
                         status: AccountingDocumentStatus.POSTED,
                         balanceDue: { gt: 0 },
                         orders: { some: { orderId: { in: orderIds } } },

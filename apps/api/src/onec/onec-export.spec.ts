@@ -1,4 +1,4 @@
-import { currencyLetter, currencyOf, salesDeletion, salesObject, serviceObject, shortNumber, vatRateOf } from './enterprise-data';
+import { currencyLetter, currencyOf, isLegalEntity, salesDeletion, salesObject, serviceObject, shortNumber, vatRateOf } from './enterprise-data';
 import { OneCExportService, SALES, SERVICE } from './onec-export.service';
 import { ORG } from './onec-import.service';
 import { notLoadedNotice, objectTypesFor } from './onec-exchange.service';
@@ -22,6 +22,15 @@ describe('Объекты для 1С', () => {
         expect(currencyOf('XXX')).toBeNull();
         expect(currencyLetter('643')).toBe('RUB');
         expect(currencyLetter('398')).toBe('KZT');
+    });
+
+    it('ИП — физлицо, ТОО — юрлицо: по пятой цифре БИН/ИИН и по «ИП» в названии', () => {
+        expect(isLegalEntity('150840001234', 'ТОО «Ромашка»')).toBe(true); // БИН: пятая цифра 4
+        expect(isLegalEntity('880101300123', 'Сериков Б.')).toBe(false); // ИИН: день рождения 01
+        expect(isLegalEntity('150840001234', 'ИП Сериков')).toBe(false);
+        expect(isLegalEntity(null, 'Индивидуальный предприниматель Ахметов')).toBe(false);
+        expect(isLegalEntity('7707083893', 'ООО «Вектор»')).toBe(true); // российский ИНН юрлица
+        expect(isLegalEntity(null, 'ТОО «Без БИН»')).toBe(true);
     });
 
     it('реализация: элементы в порядке схемы, сумма с НДС, услуги строками', () => {
@@ -73,11 +82,14 @@ function fakeDb(opts: { orgMapped: boolean }) {
     const conn = { companyId: 'co-1', setupAt: new Date('2026-10-01'), peerReceivedNo: 0, company: { name: 'ТОО «ЛогиКор»', bin: '123456789012' } };
     const map: any[] = opts.orgMapped ? [{ connectionId: 'conn-1', objectType: ORG, ref: 'org-1c', localId: 'co-1', createdAt: new Date(0), sentNo: null, hash: null }] : [];
     const acts: any[] = [{
-        id: 'act-1', number: 'АКТ-2026-000001', documentDate: new Date('2026-10-20'), currency: 'KZT', total: 112000, status: 'POSTED',
+        id: 'act-1', number: 'АКТ-2026-000001', direction: 'OUTGOING', documentDate: new Date('2026-10-20'), currency: 'KZT', total: 112000, status: 'POSTED',
         counterparty: { id: 'cp-local', name: 'ТОО «Ромашка»', bin: '150840001234' },
         lines: [{ name: 'Перевозка груза', description: null, quantity: 1, total: 112000, vatTreatment: 'STANDARD', vatRate: 12, vatAmount: 12000 }],
     }];
     const match = (row: any, where: any) => Object.entries(where).every(([k, v]) => (v && typeof v === 'object' && 'in' in (v as any) ? (v as any).in.includes(row[k]) : row[k] === v));
+    // Проведённые нужного направления; входящий с отказом в согласовании — нет.
+    const posted = (a: any, where: any) => a.status === 'POSTED' && (!where?.direction || a.direction === where.direction)
+        && (!where?.OR || a.approvalStatus !== 'REJECTED');
     let created = 0;
     const prisma: any = {
         oneCConnection: { findUniqueOrThrow: async () => ({ ...conn }) },
@@ -92,8 +104,8 @@ function fakeDb(opts: { orgMapped: boolean }) {
             },
         },
         accountingDocument: {
-            findMany: async ({ where }: any) => (where.id ? acts.filter((a) => where.id.in.includes(a.id) && a.status === where.status) : acts.filter((a) => a.status === 'POSTED')),
-            count: async () => acts.filter((a) => a.status === 'POSTED').length,
+            findMany: async ({ where }: any) => (where.id ? acts.filter((a) => where.id.in.includes(a.id) && a.status === where.status) : acts.filter((a) => posted(a, where))),
+            count: async ({ where }: any) => acts.filter((a) => posted(a, where)).length,
         },
     };
     return { prisma, conn, map, acts, created: () => created };
@@ -158,14 +170,79 @@ describe('Отправка актов в 1С', () => {
     });
 });
 
+describe('Акты перевозчиков и договоры в 1С', () => {
+    const carrierAct = () => ({
+        id: 'cact-1', number: 'АКТ-2026-000007', direction: 'INCOMING', documentDate: new Date('2026-10-21'), currency: 'KZT', total: 90000,
+        status: 'POSTED', externalNumber: '15', externalDate: new Date('2026-10-20'), approvalStatus: null,
+        counterparty: { id: 'carrier-1', name: 'ИП Сериков', bin: '880101300123' },
+        contract: { id: 'ctr-2', contractNumber: 'П-3', startDate: new Date('2026-02-01'), endDate: null, forwarderCompanyId: 'carrier-1' },
+        lines: [{ name: 'Перевозка груза', description: 'Алматы — Астана', quantity: 1, total: 90000, vatTreatment: 'WITHOUT_VAT', vatRate: 0, vatAmount: 0 }],
+    });
+    const ALL = { acts: true, carrierActs: true, contracts: true };
+
+    it('акт перевозчика уходит «Поступлением» с номером и датой его бумаги; договоры — с покупателем и с поставщиком, раньше документов', async () => {
+        const db = fakeDb({ orgMapped: true });
+        db.acts[0].contract = { id: 'ctr-1', contractNumber: 'Д-15', startDate: new Date('2026-01-15'), endDate: new Date('2026-12-31'), forwarderCompanyId: 'co-1' };
+        db.acts.push(carrierAct());
+
+        const r = await new OneCExportService(db.prisma).build('conn-1', ALL);
+        expect([r.sales, r.purchases, r.contracts]).toEqual([1, 1, 2]);
+        expect(r.body).toContain('<Документ.ПоступлениеТоваровУслуг>');
+        expect(r.body).toContain('<ДанныеВходящегоДокумента><НомерВходящегоДокумента>15</НомерВходящегоДокумента><ДатаВходящегоДокумента>2026-10-20</ДатаВходящегоДокумента></ДанныеВходящегоДокумента>');
+        expect(r.body).toContain('<ВидОперации>ПокупкаУПоставщика</ВидОперации>');
+        expect(r.body).toContain('<ВидДоговора>СПокупателем</ВидДоговора>');
+        expect(r.body).toContain('<ВидДоговора>СПоставщиком</ВидДоговора>');
+        expect(r.body).toContain('<Наименование>Договор № Д-15 от 15.01.2026</Наименование>');
+        expect(r.body).toContain('<СрокДействия>2026-12-31</СрокДействия>');
+        expect(r.body.indexOf('<Справочник.Договоры>')).toBeLessThan(r.body.indexOf('<Документ.РеализацияТоваровУслуг>'));
+        await r.commit(7);
+        expect(db.map.find((m) => m.objectType === 'Документ.ПоступлениеТоваровУслуг')).toMatchObject({ localId: 'cact-1', sentNo: 7 });
+
+        // Подтвердили — договоры второй раз не уходят, если не менялись.
+        db.conn.peerReceivedNo = 7;
+        db.acts[1].total = 95000;
+        db.acts[1].lines[0].total = 95000;
+        const changed = await new OneCExportService(db.prisma).build('conn-1', ALL);
+        expect([changed.sales, changed.purchases, changed.contracts]).toEqual([0, 1, 0]);
+    });
+
+    it('выключено — не уходит: без договоров документ без договора, без актов перевозчиков — «Поступлений» нет', async () => {
+        const db = fakeDb({ orgMapped: true });
+        db.acts[0].contract = { id: 'ctr-1', contractNumber: 'Д-15', startDate: null, endDate: null, forwarderCompanyId: 'co-1' };
+        db.acts.push(carrierAct());
+        const r = await new OneCExportService(db.prisma).build('conn-1', { acts: true, carrierActs: false, contracts: false });
+        expect([r.sales, r.purchases, r.contracts]).toEqual([1, 0, 0]);
+        expect(r.body).not.toContain('Договор');
+        expect(r.body).not.toContain('ПоступлениеТоваровУслуг');
+    });
+
+    it('акт перевозчика с отказом в согласовании не уходит: платить по нему не будут', async () => {
+        const db = fakeDb({ orgMapped: true });
+        db.acts.push({ ...carrierAct(), approvalStatus: 'REJECTED' });
+        const r = await new OneCExportService(db.prisma).build('conn-1', { acts: false, carrierActs: true, contracts: false });
+        expect(r.purchases).toBe(0);
+    });
+});
+
 describe('Что LogiCore просит у 1С', () => {
+    const NONE = { sendActs: false, sendCarrierActs: false, sendContracts: false, receiveCounterparties: false, receivePayments: false, receiveCarrierPayments: false };
+    const names = (c: any) => objectTypesFor(c).map((t) => `${t.name}:${[t.sending && 'отправка', t.receiving && 'приём'].filter(Boolean).join('+')}`);
+
     it('только выбранное компанией; организацию — всегда, и список никогда не пуст', () => {
-        const names = (c: any) => objectTypesFor(c).map((t) => `${t.name}:${t.sending ? 'отправка' : 'приём'}`);
-        expect(names({ sendActs: false, receiveCounterparties: false, receivePayments: false })).toEqual(['Справочник.Организации:приём']);
-        expect(names({ sendActs: true, receiveCounterparties: false, receivePayments: false })).toEqual([
+        expect(names(NONE)).toEqual(['Справочник.Организации:приём']);
+        expect(names({ ...NONE, sendActs: true })).toEqual([
             'Справочник.Организации:приём', 'Справочник.Номенклатура:отправка', 'Документ.РеализацияТоваровУслуг:отправка',
         ]);
-        expect(names({ sendActs: true, receiveCounterparties: true, receivePayments: true })).toHaveLength(8);
+        expect(names({ ...NONE, sendActs: true, receiveCounterparties: true, receivePayments: true })).toHaveLength(8);
+    });
+
+    it('акты перевозчиков — «Поступление», оплаты перевозчикам — списания и расходные ордера; договор и туда, и обратно — одной строкой', () => {
+        expect(names({ ...NONE, sendCarrierActs: true, receiveCarrierPayments: true })).toEqual([
+            'Справочник.Организации:приём', 'Справочник.Номенклатура:отправка', 'Документ.ПоступлениеТоваровУслуг:отправка',
+            'Документ.СБДСРасчетыСКонтрагентами:приём', 'Документ.РКОРасчетыСКонтрагентами:приём',
+        ]);
+        expect(names({ ...NONE, sendContracts: true })).toEqual(['Справочник.Организации:приём']); // без документов договоры не нужны
+        expect(names({ ...NONE, sendActs: true, sendContracts: true, receiveCounterparties: true })).toContain('Справочник.Договоры:отправка+приём');
     });
 });
 

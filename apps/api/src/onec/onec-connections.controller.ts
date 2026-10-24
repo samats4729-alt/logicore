@@ -12,6 +12,9 @@ class ChoicesDto implements OneCConnectionChoices {
     @IsOptional() @IsBoolean() sendActs?: boolean;
     @IsOptional() @IsBoolean() receiveCounterparties?: boolean;
     @IsOptional() @IsBoolean() receivePayments?: boolean;
+    @IsOptional() @IsBoolean() sendCarrierActs?: boolean;
+    @IsOptional() @IsBoolean() sendContracts?: boolean;
+    @IsOptional() @IsBoolean() receiveCarrierPayments?: boolean;
 }
 
 /** Как изменение назвать в журнале действий — словами руководителя. */
@@ -20,6 +23,9 @@ const CHOICE_LABELS: Record<keyof OneCConnectionChoices, [string, string]> = {
     sendActs: ['Обмен с 1С: акты отправляются в 1С', 'Обмен с 1С: акты в 1С не отправляются'],
     receiveCounterparties: ['Обмен с 1С: контрагенты принимаются из 1С', 'Обмен с 1С: контрагенты из 1С не принимаются'],
     receivePayments: ['Обмен с 1С: оплаты клиентов принимаются из 1С', 'Обмен с 1С: оплаты из 1С не принимаются'],
+    sendCarrierActs: ['Обмен с 1С: акты перевозчиков отправляются в 1С', 'Обмен с 1С: акты перевозчиков в 1С не отправляются'],
+    sendContracts: ['Обмен с 1С: договоры отправляются в 1С', 'Обмен с 1С: договоры в 1С не отправляются'],
+    receiveCarrierPayments: ['Обмен с 1С: оплаты перевозчикам принимаются из 1С', 'Обмен с 1С: оплаты перевозчикам из 1С не принимаются'],
 };
 
 /**

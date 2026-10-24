@@ -25,8 +25,11 @@ interface Connection {
     lastSeenAt: string | null;
     createdAt: string;
     sendActs: boolean;
+    sendCarrierActs: boolean;
+    sendContracts: boolean;
     receiveCounterparties: boolean;
     receivePayments: boolean;
+    receiveCarrierPayments: boolean;
     log: { id: string; operation: string; ok: boolean; message: string | null; createdAt: string }[];
 }
 
@@ -36,7 +39,7 @@ interface Secret {
     password: string;
 }
 
-type Choice = 'sendActs' | 'receiveCounterparties' | 'receivePayments';
+type Choice = 'sendActs' | 'sendCarrierActs' | 'sendContracts' | 'receiveCounterparties' | 'receivePayments' | 'receiveCarrierPayments';
 
 /**
  * Какие данные ходят — решает компания (решение владельца 24.10.2026). По
@@ -53,6 +56,20 @@ const CHOICES: { key: Choice; direction: 'to1c' | 'from1c'; title: string; hint:
         on: 'Акты будут уходить в 1С', off: 'Акты в 1С больше не уходят',
     },
     {
+        key: 'sendCarrierActs',
+        direction: 'to1c',
+        title: 'Акты перевозчиков',
+        hint: 'Расход на перевозку сам появится в 1С — вбивать его руками не нужно.',
+        on: 'Акты перевозчиков будут уходить в 1С', off: 'Акты перевозчиков в 1С больше не уходят',
+    },
+    {
+        key: 'sendContracts',
+        direction: 'to1c',
+        title: 'Договоры',
+        hint: 'Акт ляжет в 1С на свой договор, а не на «Основной».',
+        on: 'Договоры будут уходить в 1С', off: 'Договоры в 1С больше не уходят',
+    },
+    {
         key: 'receiveCounterparties',
         direction: 'from1c',
         title: 'Контрагенты',
@@ -65,6 +82,13 @@ const CHOICES: { key: Choice; direction: 'to1c' | 'from1c'; title: string; hint:
         title: 'Оплаты от клиентов',
         hint: 'Станут платежами в LogiCore и закроют долг по счетам.',
         on: 'Оплаты из 1С будут приходить', off: 'Оплаты из 1С больше не принимаются',
+    },
+    {
+        key: 'receiveCarrierPayments',
+        direction: 'from1c',
+        title: 'Оплаты перевозчикам',
+        hint: 'Счёт перевозчика сам станет оплаченным, когда бухгалтер заплатит из 1С.',
+        on: 'Оплаты перевозчикам из 1С будут приходить', off: 'Оплаты перевозчикам из 1С больше не принимаются',
     },
 ];
 

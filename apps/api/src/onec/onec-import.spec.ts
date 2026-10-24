@@ -1,6 +1,6 @@
 import { readMessage } from './message';
 import {
-    BANK, CP, OneCImportService, PAY_BANK, accountOf, binOf, describeImport, readBankAccount, readCounterparty, readPayment,
+    BANK, CP, OneCImportService, PAY_BANK, PAY_OUT_BANK, PAY_OUT_CASH, accountOf, binOf, describeImport, readBankAccount, readCounterparty, readPayment,
     rolesFromContracts,
 } from './onec-import.service';
 
@@ -271,6 +271,78 @@ describe('Разнесение из 1С: что компания выбрала 
         const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', { counterparties: false, payments: true });
         expect(s.errors[0]).toContain('Заведите его или включите в настройках обмена «Принимаем из 1С → Контрагенты»');
         expect(db.external.createExternalCompany).not.toHaveBeenCalled();
+        expect(db.accounting.createPayment).not.toHaveBeenCalled();
+    });
+});
+
+
+const CARRIER_PAYMENT_MESSAGE = `<Message xmlns:msg="http://www.1c.ru/SSL/Exchange/Message"><msg:Header>
+  <msg:Format>http://v8.1c.ru/edi/edi_stnd/EnterpriseData/1.6</msg:Format><msg:AvailableVersion>1.6</msg:AvailableVersion></msg:Header>
+  <Body xmlns="http://v8.1c.ru/edi/edi_stnd/EnterpriseData/1.6">
+    <Документ.СБДСРасчетыСКонтрагентами>
+      <КлючевыеСвойства><Ссылка>out-ref-1</Ссылка><Дата>2026-10-24T09:00:00</Дата><Номер>0000-000011</Номер>
+        <Организация><Ссылка>org-1</Ссылка><Наименование>Наша организация</Наименование></Организация></КлючевыеСвойства>
+      <ОбщиеДанные><ДатаВыписки>2026-10-24</ДатаВыписки><Валюта><Код>398</Код><Наименование>KZT</Наименование></Валюта>
+        <Сумма>90000</Сумма><Комментарий>Оплата по акту 15</Комментарий></ОбщиеДанные>
+      <Контрагент><Ссылка>carrier-1c</Ссылка><Наименование>ИП Сериков</Наименование><ИНН>880101300123</ИНН>
+        <ЮридическоеФизическоеЛицо>ФизическоеЛицо</ЮридическоеФизическоеЛицо></Контрагент>
+      <ВидРасчетов>СПоставщиком</ВидРасчетов>
+      <РасшифровкаПлатежа><Строка><Сумма>90000</Сумма><ДанныеВзаиморасчетов/>
+        <ДокументРасчетов><ПоступлениеТоваровУслугСсылка><Ссылка>purchase-ref-1</Ссылка><Дата>2026-10-21T12:00:00</Дата><Номер>LC26-000007</Номер>
+        </ПоступлениеТоваровУслугСсылка></ДокументРасчетов></Строка></РасшифровкаПлатежа>
+    </Документ.СБДСРасчетыСКонтрагентами>
+    <Документ.РКОРасчетыСКонтрагентами>
+      <КлючевыеСвойства><Ссылка>out-ref-2</Ссылка><Дата>2026-10-24T10:00:00</Дата><Номер>0000-000012</Номер></КлючевыеСвойства>
+      <ОбщиеДанные><Валюта><Код>398</Код></Валюта><Сумма>3000</Сумма></ОбщиеДанные>
+      <Контрагент><Ссылка>cust-1c</Ссылка><Наименование>ТОО Клиент</Наименование><ИНН>150840001234</ИНН>
+        <ЮридическоеФизическоеЛицо>ЮридическоеЛицо</ЮридическоеФизическоеЛицо></Контрагент>
+      <ВидРасчетов>СПокупателем</ВидРасчетов>
+    </Документ.РКОРасчетыСКонтрагентами>
+  </Body></Message>`;
+
+describe('Разнесение из 1С: оплаты перевозчикам', () => {
+    const { objects } = readMessage(CARRIER_PAYMENT_MESSAGE);
+    const WITH_CARRIERS = { counterparties: false, payments: false, carrierPayments: true };
+
+    it('читает списание со счёта: деньги ушли от нас, перевозчику, по нашему акту перевозчика', () => {
+        expect(readPayment(objects[0])).toMatchObject({
+            ref: 'out-ref-1', cash: false, out: true, supplier: true, customer: false, amount: 90000, currency: 'KZT',
+            purpose: 'Оплата по акту 15', lines: [{ amount: 90000, purchaseRef: 'purchase-ref-1', actRef: null }],
+        });
+        expect(readPayment(objects[1])).toMatchObject({ cash: true, out: true, supplier: false });
+    });
+
+    it('оплата по акту перевозчика: исходящий платёж, сначала его счёт по той же заявке, остаток — акт; не перевозчику — пропуск', async () => {
+        const db = fakeDb('co-1');
+        db.companies.push({ id: 'carrier-1', bin: '880101300123', isExternal: true, createdByCompanyId: 'co-1' });
+        db.docs.push(
+            { id: 'cact-1', type: 'SERVICE_ACT', currency: 'KZT', balanceDue: 90000, orders: [{ orderId: 'o2' }], counterpartyId: 'carrier-1' },
+            { id: 'cinv-1', type: 'PAYMENT_INVOICE', currency: 'KZT', balanceDue: 50000, orders: [{ orderId: 'o2' }], counterpartyId: 'carrier-1' },
+        );
+        db.map.push({ connectionId: 'conn-1', objectType: 'Документ.ПоступлениеТоваровУслуг', ref: 'purchase-ref-1', localId: 'cact-1' });
+
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', WITH_CARRIERS);
+
+        expect(s.carrierPayments).toEqual({ created: 1, allocated: 1, known: 0, notSupplier: 1 });
+        expect(db.accounting.createPayment).toHaveBeenCalledWith('co-1', 'user-1', expect.objectContaining({
+            counterpartyId: 'carrier-1', direction: 'OUT', amount: 90000, date: '2026-10-24', method: 'BANK', currency: 'KZT',
+        }));
+        expect(db.allocations.apply).toHaveBeenCalledWith('co-1', 'user-1', 'pay-1', [
+            { documentId: 'cinv-1', amount: '50000.00' },
+            { documentId: 'cact-1', amount: '40000.00' },
+        ]);
+        expect(describeImport(s, { [PAY_OUT_BANK]: 1, [PAY_OUT_CASH]: 1 }))
+            .toBe('Из 1С: оплаты перевозчикам 2 (приняты — 1, из них разнесены на документы — 1, не перевозчикам, пропущены — 1)');
+
+        const again = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', WITH_CARRIERS);
+        expect(again.carrierPayments.known).toBe(1);
+        expect(db.accounting.createPayment).toHaveBeenCalledTimes(1);
+    });
+
+    it('приём оплат перевозчикам выключен — не разносим, в журнале видно', async () => {
+        const db = fakeDb('co-1');
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', ALL);
+        expect(s.ignored).toEqual({ 'Документ.СБДСРасчетыСКонтрагентами': 1, 'Документ.РКОРасчетыСКонтрагентами': 1 });
         expect(db.accounting.createPayment).not.toHaveBeenCalled();
     });
 });
