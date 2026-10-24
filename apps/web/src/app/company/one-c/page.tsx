@@ -81,7 +81,7 @@ const CHOICES: { key: Choice; direction: 'to1c' | 'from1c'; title: string; hint:
         key: 'receivePayments',
         direction: 'from1c',
         title: 'Оплаты от клиентов',
-        hint: 'Станут платежами в LogiCore и закроют долг по счетам.',
+        hint: 'Станут платежами в LogiCore и закроют задолженность по счетам.',
         on: 'Оплаты из 1С будут приходить', off: 'Оплаты из 1С больше не принимаются',
     },
     {
@@ -379,9 +379,9 @@ export default function OneCPage() {
                         </div>
                         {/* Остатки расчётов 1С при синхронизации не отдаёт — только отчётом. */}
                         <p className="m-0 px-4 pb-4 text-[12px] text-muted-foreground">
-                            Долги на день начала работы обмен не переносит — загрузите их оборотно-сальдовой ведомостью из 1С:{' '}
+                            Начальные остатки дебиторской и кредиторской задолженности обмен не переносит — загрузите их оборотно-сальдовой ведомостью из 1С:{' '}
                             <Link href="/company/accounting/opening-balances" className="text-foreground underline underline-offset-2">
-                                «Ввод начальных остатков» → «Загрузить долги из 1С»
+                                «Ввод начальных остатков» → «Загрузить остатки из 1С»
                             </Link>
                         </p>
                     </section>

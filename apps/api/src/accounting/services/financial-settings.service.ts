@@ -489,7 +489,7 @@ export class FinancialSettingsService {
         data: { openingReceivable?: number; openingPayable?: number; openingDate?: string | null; note?: string | null },
     ) {
         if (counterpartyId === companyId) {
-            throw new BadRequestException('Нельзя ввести долг самому себе');
+            throw new BadRequestException('Нельзя ввести остаток по своей же организации');
         }
         const counterparty = await this.prisma.company.findUnique({ where: { id: counterpartyId }, select: { id: true } });
         if (!counterparty) throw new NotFoundException('Контрагент не найден');
@@ -507,7 +507,7 @@ export class FinancialSettingsService {
     }
 
     /**
-     * Начальные долги из оборотно-сальдовой ведомости 1С — разом, после того
+     * Начальные остатки из оборотно-сальдовой ведомости 1С — разом, после того
      * как человек сверил сопоставление на экране. Сторона, которой в
      * ведомости нет (ноль), не затирается: ведомости по покупателям и по
      * поставщикам загружают по очереди, и вторая не должна стереть первую.
@@ -521,14 +521,14 @@ export class FinancialSettingsService {
         if (rows.length > 2000) throw new BadRequestException('Слишком много строк за раз — не больше 2000');
         const money = (v: unknown) => {
             const n = Number(v ?? 0);
-            if (!Number.isFinite(n) || n < 0) throw new BadRequestException('Сумма долга должна быть числом не меньше нуля');
+            if (!Number.isFinite(n) || n < 0) throw new BadRequestException('Сальдо должно быть числом не меньше нуля');
             return Math.round(n * 100) / 100;
         };
         // Два названия из 1С могли сопоставить с одним контрагентом — суммы складываем.
         const byCounterparty = new Map<string, { counterpartyId: string; receivable: number; payable: number }>();
         for (const r of rows) {
             if (!r.counterpartyId || typeof r.counterpartyId !== 'string') throw new BadRequestException('У строки не выбран контрагент');
-            if (r.counterpartyId === companyId) throw new BadRequestException('Нельзя ввести долг самому себе');
+            if (r.counterpartyId === companyId) throw new BadRequestException('Нельзя ввести остаток по своей же организации');
             const prev = byCounterparty.get(r.counterpartyId) ?? { counterpartyId: r.counterpartyId, receivable: 0, payable: 0 };
             prev.receivable = Math.round((prev.receivable + money(r.receivable)) * 100) / 100;
             prev.payable = Math.round((prev.payable + money(r.payable)) * 100) / 100;

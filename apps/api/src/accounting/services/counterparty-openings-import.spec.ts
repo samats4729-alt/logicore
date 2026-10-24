@@ -1,6 +1,6 @@
 import { FinancialSettingsService } from './financial-settings.service';
 
-/** Память вместо базы — ровно то, что читает и пишет запись начальных долгов. */
+/** Память вместо базы — ровно то, что читает и пишет запись начальных остатков. */
 function fakeDb() {
     const companies = ['co-1', 'cp-a', 'cp-b'];
     const openings: any[] = [{ companyId: 'co-1', counterpartyId: 'cp-b', openingReceivable: 0, openingPayable: 40000, openingDate: null, note: null }];
@@ -20,7 +20,7 @@ function fakeDb() {
     return { prisma, openings };
 }
 
-describe('Начальные долги из ведомости 1С — разом', () => {
+describe('Начальные остатки из ведомости 1С — разом', () => {
     it('записывает сверенные строки; сторону, которой в ведомости нет, не затирает', async () => {
         const db = fakeDb();
         const service = new FinancialSettingsService(db.prisma);
@@ -31,7 +31,7 @@ describe('Начальные долги из ведомости 1С — разо
         });
         expect(r).toEqual({ saved: 2 });
         expect(db.openings.find((o) => o.counterpartyId === 'cp-a')).toMatchObject({ openingReceivable: 80000, openingPayable: 0 });
-        // Долг перед cp-b (40 000, из ведомости по поставщикам) остался, добавился долг cp-b перед нами.
+        // Кредит cp-b (40 000, из ведомости по поставщикам) остался, добавился дебет.
         expect(db.openings.find((o) => o.counterpartyId === 'cp-b')).toMatchObject({ openingReceivable: 12500, openingPayable: 40000, note: 'Из 1С: ведомость по счёту 1210' });
     });
 
@@ -41,7 +41,7 @@ describe('Начальные долги из ведомости 1С — разо
         await expect(service.importCounterpartyOpenings('co-1', { rows: [] })).rejects.toThrow('Нет строк');
         await expect(service.importCounterpartyOpenings('co-1', { rows: [{ counterpartyId: 'nobody', receivable: 1 }] })).rejects.toThrow('не найдена');
         await expect(service.importCounterpartyOpenings('co-1', { rows: [{ counterpartyId: 'cp-a', receivable: -5 }] })).rejects.toThrow('не меньше нуля');
-        await expect(service.importCounterpartyOpenings('co-1', { rows: [{ counterpartyId: 'co-1', receivable: 5 }] })).rejects.toThrow('самому себе');
+        await expect(service.importCounterpartyOpenings('co-1', { rows: [{ counterpartyId: 'co-1', receivable: 5 }] })).rejects.toThrow('своей же организации');
         expect(db.openings).toHaveLength(1);
     });
 });

@@ -623,7 +623,7 @@ export class AccountingController {
     @Roles(...FINANCE_CHANGE_ROLES)
     @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
     @ApiConsumes('multipart/form-data')
-    @ApiOperation({ summary: 'Разобрать оборотно-сальдовую ведомость из 1С: долги контрагентов на конец периода' })
+    @ApiOperation({ summary: 'Разобрать оборотно-сальдовую ведомость из 1С: сальдо контрагентов на конец периода' })
     parseOpeningsFrom1C(@UploadedFile() file: Express.Multer.File) {
         if (!file) throw new BadRequestException('Файл не приложен');
         try {
@@ -636,7 +636,7 @@ export class AccountingController {
 
     @Post('counterparty-openings/from-1c')
     @Roles(...FINANCE_CHANGE_ROLES)
-    @ApiOperation({ summary: 'Записать начальные долги, сверенные с ведомостью 1С' })
+    @ApiOperation({ summary: 'Записать начальные остатки, сверенные с ведомостью 1С' })
     async saveOpeningsFrom1C(
         @Request() req: any,
         @Body() body: { openingDate?: string | null; note?: string | null; rows?: Array<{ counterpartyId?: string; receivable?: number; payable?: number }> },
@@ -644,7 +644,7 @@ export class AccountingController {
         const result = await this.accountingService.importCounterpartyOpenings(req.user.companyId, body);
         await this.auditService.log({
             companyId: req.user.companyId, user: req.user, action: 'SETTINGS', entity: 'counterparty_opening',
-            entityLabel: `Начальные долги из 1С: контрагентов — ${result.saved}`,
+            entityLabel: `Начальные остатки из 1С: контрагентов — ${result.saved}`,
             details: { openingDate: body.openingDate ?? null, note: body.note ?? null },
         });
         return result;

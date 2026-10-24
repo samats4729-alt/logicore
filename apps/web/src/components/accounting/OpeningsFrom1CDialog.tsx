@@ -72,7 +72,8 @@ function matchPartner(name: string, partners: OpeningsPartner[]): Pick<Line, 'co
 const money = (v: number) => (v ? v.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—');
 
 /**
- * Долги на начало работы — из оборотно-сальдовой ведомости 1С.
+ * Начальные остатки дебиторской и кредиторской задолженности — из
+ * оборотно-сальдовой ведомости 1С.
  *
  * Прямой обмен с 1С остатки не передаёт (1С считает их только при полной
  * выгрузке базы), поэтому — отчёт, который бухгалтер и так умеет
@@ -111,7 +112,7 @@ export function OpeningsFrom1CDialog({ open, onOpenChange, partners, openings, o
             form.append('file', file);
             const { data } = await api.post<ParsedSheet>('/accounting/counterparty-openings/from-1c/parse', form);
             if (!data.rows.length) {
-                toast.error('В ведомости нет контрагентов с долгом на конец периода');
+                toast.error('В ведомости нет контрагентов с сальдо на конец периода');
                 return;
             }
             setSheet(data);
@@ -136,12 +137,12 @@ export function OpeningsFrom1CDialog({ open, onOpenChange, partners, openings, o
                 note: `Из 1С: оборотно-сальдовая ведомость${sheet?.account ? ` по счёту ${sheet.account}` : ''}`,
                 rows: chosen.map((l) => ({ counterpartyId: l.counterpartyId, receivable: l.debit, payable: l.credit })),
             });
-            toast.success(`Начальные долги записаны: контрагентов — ${data.saved}`);
+            toast.success(`Начальные остатки записаны: контрагентов — ${data.saved}`);
             onSaved();
             onOpenChange(false);
             reset();
         } catch (e) {
-            toast.error(ответСервера(e, 'Не удалось записать долги'));
+            toast.error(ответСервера(e, 'Не удалось записать остатки'));
         } finally {
             setBusy(false);
         }
@@ -153,9 +154,9 @@ export function OpeningsFrom1CDialog({ open, onOpenChange, partners, openings, o
         <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
             <DialogContent className="max-w-[920px]">
                 <DialogHeader>
-                    <DialogTitle>Долги на начало — из 1С</DialogTitle>
+                    <DialogTitle>Начальные остатки — из 1С</DialogTitle>
                     <DialogDescription>
-                        Загрузите оборотно-сальдовую ведомость: LogiCore возьмёт из неё, кто сколько должен на конец периода.
+                        Загрузите оборотно-сальдовую ведомость: LogiCore возьмёт из неё сальдо на конец периода по каждому контрагенту.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -185,10 +186,10 @@ export function OpeningsFrom1CDialog({ open, onOpenChange, partners, openings, o
                         <div className="flex flex-wrap items-center gap-3">
                             <span className="flex items-center gap-1.5 font-medium">
                                 <FileSpreadsheet className="h-4 w-4" />
-                                {sheet.account ? `Счёт ${sheet.account}` : 'Ведомость'} · строк с долгом: {lines.length}
+                                {sheet.account ? `Счёт ${sheet.account}` : 'Ведомость'} · контрагентов с сальдо: {lines.length}
                             </span>
                             <label className="flex items-center gap-2 text-muted-foreground">
-                                Долги на дату
+                                Остатки на дату
                                 <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-8 w-[150px]" />
                             </label>
                             <Button variant="ghost" size="sm" onClick={reset} disabled={busy}>Другой файл</Button>
@@ -199,11 +200,11 @@ export function OpeningsFrom1CDialog({ open, onOpenChange, partners, openings, o
                                 <thead className="sticky top-0 bg-muted/60 text-left text-[12px] text-muted-foreground">
                                     <tr>
                                         <th className="w-8 px-2 py-2" />
-                                        <th className="px-2 py-2 font-medium">В 1С</th>
+                                        <th className="px-2 py-2 font-medium">Контрагент в 1С</th>
                                         <th className="px-2 py-2 font-medium">Контрагент в LogiCore</th>
-                                        <th className="px-2 py-2 text-right font-medium">Нам должны</th>
-                                        <th className="px-2 py-2 text-right font-medium">Мы должны</th>
-                                        <th className="px-2 py-2 text-right font-medium">Сейчас в LogiCore</th>
+                                        <th className="px-2 py-2 text-right font-medium">Сальдо Дт</th>
+                                        <th className="px-2 py-2 text-right font-medium">Сальдо Кт</th>
+                                        <th className="px-2 py-2 text-right font-medium">Сейчас в LogiCore, Дт / Кт</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -217,7 +218,7 @@ export function OpeningsFrom1CDialog({ open, onOpenChange, partners, openings, o
                                                         checked={l.checked}
                                                         disabled={!l.counterpartyId || busy}
                                                         onCheckedChange={(v) => update(i, { checked: v === true })}
-                                                        aria-label={`Записать долг ${l.name}`}
+                                                        aria-label={`Записать остаток ${l.name}`}
                                                     />
                                                 </td>
                                                 <td className="px-2 py-1.5">{l.name}</td>
@@ -248,10 +249,10 @@ export function OpeningsFrom1CDialog({ open, onOpenChange, partners, openings, o
 
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <p className="m-0 text-[12px] text-muted-foreground">
-                                Что в ведомости нулём, не затирается: загрузите по очереди покупателей и перевозчиков.
+                                Нулевое сальдо не затирает введённое раньше: ведомости по покупателям и по поставщикам загружайте по очереди.
                             </p>
                             <Button className="h-9" onClick={save} disabled={busy || !chosen.length}>
-                                {busy && <Loader2 className="h-4 w-4 animate-spin" />} Записать долги ({chosen.length})
+                                {busy && <Loader2 className="h-4 w-4 animate-spin" />} Записать остатки ({chosen.length})
                             </Button>
                         </div>
                     </div>
