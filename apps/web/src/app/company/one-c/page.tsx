@@ -2,15 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import dayjs from 'dayjs';
-import { Check, Copy, KeyRound, Loader2, Pause, Play, Plug } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Copy, KeyRound, Loader2, Pause, Play, Plug, PlayCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ответСервера } from '@/lib/exchange';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { OneCGuide } from '@/components/onec/OneCGuide';
 import { cn } from '@/lib/utils';
 import styles from '@/components/nova/nova.module.css';
 
@@ -37,16 +36,6 @@ interface Secret {
     password: string;
 }
 
-/** Шаги в самой 1С — словами бухгалтера, а не программиста. */
-const STEPS = [
-    '«Администрирование» → «Синхронизация данных» — поставьте галочку «Синхронизация данных».',
-    'Откройте «Настройки синхронизации данных» → «Создать» → «Другая программа».',
-    '«Настроить параметры подключения» → «Подключение к другой программе через Интернет».',
-    'Вставьте «Адрес для 1С» отсюда — целиком, с ключом. «Пользователь» и «Пароль» можно не заполнять → «Далее» → «Далее» → «Готово».',
-    '«Настроить правила отправки и получения данных» → «Записать и закрыть».',
-    '«Выполнить начальную выгрузку данных» → «Далее». Дальше — кнопка «Синхронизировать» или расписание в 1С.',
-];
-
 type Choice = 'sendActs' | 'receiveCounterparties' | 'receivePayments';
 
 /**
@@ -57,31 +46,40 @@ type Choice = 'sendActs' | 'receiveCounterparties' | 'receivePayments';
 const CHOICES: { key: Choice; title: string; hint: string; on: string; off: string }[] = [
     {
         key: 'sendActs',
-        title: 'Отправлять в 1С акты выполненных работ',
-        hint: 'Акты, проведённые в LogiCore после подключения, появятся в 1С документом «Реализация (акт, накладная)».',
+        title: 'Акты выполненных работ → в 1С',
+        hint: 'Проведённые в LogiCore акты появятся в 1С сами.',
         on: 'Акты будут уходить в 1С', off: 'Акты в 1С больше не уходят',
     },
     {
         key: 'receiveCounterparties',
-        title: 'Получать из 1С контрагентов',
-        hint: 'Новые контрагенты из 1С появятся в справочнике LogiCore. Уже заведённые с тем же БИН — не задвоятся.',
+        title: 'Контрагенты ← из 1С',
+        hint: 'Новые появятся в справочнике, дублей по БИН не будет.',
         on: 'Контрагенты из 1С будут приходить', off: 'Контрагенты из 1С больше не принимаются',
     },
     {
         key: 'receivePayments',
-        title: 'Получать из 1С оплаты клиентов',
-        hint: 'Поступления на счёт и в кассу от клиентов станут платежами в LogiCore и закроют долг по счетам.',
+        title: 'Оплаты клиентов ← из 1С',
+        hint: 'Станут платежами в LogiCore и закроют долг.',
         on: 'Оплаты из 1С будут приходить', off: 'Оплаты из 1С больше не принимаются',
     },
 ];
 
+/** «5 минут назад» — для последнего обмена. */
+function ago(iso: string) {
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (min < 1) return 'только что';
+    if (min < 60) return `${min} мин назад`;
+    if (min < 24 * 60) return `${Math.floor(min / 60)} ч назад`;
+    return dayjs(iso).format('DD.MM.YYYY HH:mm');
+}
+
 /**
- * «Обмен с 1С» (решение владельца 22–23.10.2026).
+ * «Обмен с 1С» (решение владельца 22–24.10.2026).
  *
- * Компания сама подключает свою 1С: включает обмен здесь, получает адрес с
- * ключом и вставляет его в 1С в обычной настройке «Другая программа».
- * Программист 1С не нужен. Адрес с ключом показывается один раз; для 1С,
- * которая просит пользователя и пароль, они выдаются вместе с ним.
+ * Три состояния, по одному действию в каждом: обмен не включён — «Подключить
+ * 1С»; включён, но 1С ещё не пришла — адрес и мини-видео, как вставить его
+ * в 1С; 1С подключена — что передавать и журнал. Программист 1С не нужен.
+ * Адрес с ключом показывается один раз — потерян, выдаём новый.
  */
 export default function OneCPage() {
     const user = useAuthStore((s) => s.user);
@@ -91,6 +89,8 @@ export default function OneCPage() {
     const [busy, setBusy] = useState(false);
     const [secret, setSecret] = useState<Secret | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
+    const [showGuide, setShowGuide] = useState(false);
+    const [allLog, setAllLog] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -103,6 +103,26 @@ export default function OneCPage() {
     }, []);
 
     useEffect(() => { void load(); }, [load]);
+
+    const connection = rows?.[0];
+    const waiting = !!connection && connection.enabled && !connection.connected;
+
+    // Пока ждём 1С — заглядываем раз в 8 секунд: подключилась — страница сама это покажет.
+    useEffect(() => {
+        if (!waiting) return;
+        const timer = setInterval(() => { void load(); }, 8000);
+        return () => clearInterval(timer);
+    }, [waiting, load]);
+
+    const [wasWaiting, setWasWaiting] = useState(false);
+    useEffect(() => {
+        if (waiting) setWasWaiting(true);
+        else if (wasWaiting && connection?.connected) {
+            setWasWaiting(false);
+            setSecret(null);
+            toast.success('1С подключилась к LogiCore');
+        }
+    }, [waiting, wasWaiting, connection?.connected]);
 
     const run = async (fn: () => Promise<unknown>, done?: string) => {
         setBusy(true);
@@ -118,7 +138,7 @@ export default function OneCPage() {
     };
 
     const create = () => run(async () => setSecret((await api.post<Secret>('/company/one-c')).data));
-    const newPassword = (id: string) => run(async () => setSecret((await api.post<Secret>(`/company/one-c/${id}/password`)).data));
+    const newAddress = (id: string) => run(async () => setSecret((await api.post<Secret>(`/company/one-c/${id}/password`)).data));
     const toggle = (c: Connection) => run(() => api.patch(`/company/one-c/${c.id}`, { enabled: !c.enabled }),
         c.enabled ? 'Обмен с 1С приостановлен' : 'Обмен с 1С возобновлён');
 
@@ -137,18 +157,13 @@ export default function OneCPage() {
         }
     };
 
-    const connection = rows?.[0];
-
     return (
         <div className={styles.page}>
             <div className={styles.hero}>
                 <div>
                     <div className={styles.eyebrow}>Кабинет · Интеграции</div>
                     <h1 className={styles.title}>Обмен с 1С</h1>
-                    <p className={styles.subtitle}>
-                        Ваша 1С подключается к LogiCore сама, обычной настройкой «Другая программа» — программист не нужен.
-                        Подходит и облачная 1С, и 1С на компьютере в офисе.
-                    </p>
+                    <p className={styles.subtitle}>Акты из LogiCore сами появляются в вашей 1С — облачной или на компьютере.</p>
                 </div>
             </div>
 
@@ -157,92 +172,164 @@ export default function OneCPage() {
             ) : !rows ? (
                 <div className="space-y-2 p-4" aria-label="Загрузка">{[0, 1].map((i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/60" />)}</div>
             ) : !connection ? (
+                // ===== 1. Обмен не включён =====
                 <section className={styles.card}>
-                    <div className={cn(styles.cardBody, 'space-y-3 text-[13px]')}>
-                        <p className="m-0">
-                            Обмен ещё не включён. После включения здесь появятся адрес, пользователь и пароль — их нужно вписать
-                            в вашу 1С.
-                        </p>
+                    <div className={cn(styles.cardBody, 'space-y-4')}>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            {[
+                                { icon: Plug, title: 'Подключите', text: 'Одна кнопка ниже' },
+                                { icon: Copy, title: 'Вставьте адрес в 1С', text: 'Пять минут по видео' },
+                                { icon: CheckCircle2, title: 'Готово', text: 'Акты сами появятся в 1С' },
+                            ].map((s, i) => (
+                                <div key={s.title} className="flex items-start gap-3 rounded-xl bg-muted/40 p-3">
+                                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-background text-[13px] font-semibold shadow-soft">{i + 1}</div>
+                                    <div>
+                                        <div className="flex items-center gap-1.5 text-[13px] font-semibold"><s.icon className="h-3.5 w-3.5" />{s.title}</div>
+                                        <div className="text-[12px] text-muted-foreground">{s.text}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                         {canManage ? (
-                            <Button onClick={create} disabled={busy}>
-                                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} Включить обмен с 1С
+                            <Button className="h-9" onClick={create} disabled={busy}>
+                                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} Подключить 1С
                             </Button>
                         ) : (
-                            <p className="m-0 text-muted-foreground">Включает руководитель компании.</p>
+                            <p className="m-0 text-[13px] text-muted-foreground">Подключает руководитель компании.</p>
                         )}
                     </div>
                 </section>
-            ) : (
-                <>
+            ) : !connection.connected ? (
+                // ===== 2. Подключаем: адрес + мини-видео =====
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_minmax(0,752px)]">
                     <section className={styles.card}>
                         <div className={styles.cardHead}>
                             <Plug size={14} />
-                            <h2 className={styles.cardTitle}>Подключение</h2>
-                            <span className={cn(styles.chip, !connection.enabled ? styles.chipNeg : connection.connected ? '' : styles.chipWarn)}>
-                                {!connection.enabled ? 'Приостановлен' : connection.connected ? '1С подключена' : 'Ждём подключения 1С'}
+                            <h2 className={styles.cardTitle}>Подключение 1С</h2>
+                            <span className={cn(styles.chip, connection.enabled ? styles.chipWarn : styles.chipNeg)}>
+                                {connection.enabled ? 'Ждём 1С' : 'Приостановлен'}
                             </span>
                         </div>
-                        <div className={cn(styles.cardBody, 'grid gap-4 text-[13px] lg:grid-cols-2')}>
-                            <div className="space-y-2">
-                                <div className="text-muted-foreground">
-                                    Адрес для 1С с ключом показывается один раз, когда его выдают. Потеряли — нажмите «Новый адрес»:
-                                    старый перестанет работать, новый надо будет вставить в 1С.
-                                </div>
-                                {connection.connected && (
-                                    <div>
-                                        Подключена: <b>{connection.peerName}</b>
-                                        {connection.formatVersion && <span className="text-muted-foreground"> · формат {connection.formatVersion}</span>}
-                                        {connection.setupAt && <span className="text-muted-foreground"> · с {dayjs(connection.setupAt).format('DD.MM.YYYY HH:mm')}</span>}
+                        <ol className={cn(styles.cardBody, 'm-0 list-none space-y-4 text-[13px]')}>
+                            <Step n={1} title="Скопируйте адрес">
+                                {secret ? (
+                                    <div className="space-y-1.5">
+                                        <AddressField value={secret.keyAddress} copied={copied === 'address'} onCopy={() => copy('address', secret.keyAddress)} />
+                                        <p className="m-0 text-[12px] text-muted-foreground">Показывается один раз — не закрывайте страницу, пока не вставите в 1С.</p>
                                     </div>
+                                ) : canManage ? (
+                                    <div className="space-y-1.5">
+                                        <p className="m-0 text-[12px] text-muted-foreground">Адрес показывался один раз. Не сохранили — выдайте новый.</p>
+                                        <Button size="sm" variant="outline" onClick={() => newAddress(connection.id)} disabled={busy}>
+                                            <KeyRound className="h-3.5 w-3.5" /> Показать новый адрес
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <p className="m-0 text-[12px] text-muted-foreground">Адрес выдаёт руководитель компании.</p>
                                 )}
-                                {connection.lastSeenAt && (
-                                    <div className="text-muted-foreground">Последнее обращение 1С: {dayjs(connection.lastSeenAt).format('DD.MM.YYYY HH:mm')}</div>
-                                )}
+                            </Step>
+                            <Step n={2} title="Вставьте его в 1С">
+                                <p className="m-0 text-[12px] text-muted-foreground">Смотрите видео — три коротких главы. Поля «Пользователь» и «Пароль» в 1С оставьте пустыми.</p>
+                            </Step>
+                            <Step n={3} title="Подождите пару секунд">
+                                <p className="m-0 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                                    {connection.enabled && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                    Как только 1С подключится, страница обновится сама.
+                                </p>
+                            </Step>
+                        </ol>
+                        {secret && (
+                            <details className="mx-4 mb-4 rounded-lg border border-solid border-border px-3 py-2 text-[12px]">
+                                <summary className="cursor-pointer text-muted-foreground">Если 1С попросит пароль</summary>
+                                <div className="mt-2 space-y-2">
+                                    {/* Настольная 1С спрашивает его на первой выгрузке, если не отмечено «Запомнить пароль». */}
+                                    <p className="m-0 text-muted-foreground">Так бывает в 1С на компьютере на шаге первой выгрузки. Вставьте:</p>
+                                    <div className="space-y-1">
+                                        <div className="text-muted-foreground">Пароль</div>
+                                        <AddressField value={secret.password} copied={copied === 'password'} onCopy={() => copy('password', secret.password)} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="text-muted-foreground">Пользователь — если 1С спросит и его</div>
+                                        <AddressField value={secret.login} copied={copied === 'login'} onCopy={() => copy('login', secret.login)} />
+                                    </div>
+                                </div>
+                            </details>
+                        )}
+                    </section>
+                    <section className={styles.card}>
+                        <div className={styles.cardBody}>
+                            <OneCGuide />
+                        </div>
+                    </section>
+                </div>
+            ) : (
+                // ===== 3. 1С подключена =====
+                <>
+                    <section className={styles.card}>
+                        <div className={cn(styles.cardBody, 'flex flex-wrap items-center gap-4')}>
+                            <div className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-full', connection.enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-muted text-muted-foreground')}>
+                                {connection.enabled ? <CheckCircle2 className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <div className="text-[15px] font-semibold">{connection.enabled ? '1С подключена' : 'Обмен приостановлен'}</div>
+                                <div className="truncate text-[12px] text-muted-foreground">
+                                    {connection.peerName}
+                                    {connection.lastSeenAt && ` · последний обмен ${ago(connection.lastSeenAt)}`}
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <Button variant="outline" size="sm" onClick={() => setShowGuide((v) => !v)}>
+                                    <PlayCircle className="h-3.5 w-3.5" /> Инструкция
+                                </Button>
                                 {canManage && (
-                                    <div className="flex flex-wrap gap-2 pt-1">
-                                        <Button variant="outline" size="sm" onClick={() => newPassword(connection.id)} disabled={busy}>
+                                    <>
+                                        <Button variant="outline" size="sm" onClick={() => newAddress(connection.id)} disabled={busy}>
                                             <KeyRound className="h-3.5 w-3.5" /> Новый адрес
                                         </Button>
                                         <Button variant="outline" size="sm" onClick={() => toggle(connection)} disabled={busy}>
                                             {connection.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                                             {connection.enabled ? 'Приостановить' : 'Возобновить'}
                                         </Button>
-                                    </div>
+                                    </>
                                 )}
                             </div>
-                            <div>
-                                <div className="mb-1.5 font-medium">Что сделать в 1С</div>
-                                <ol className="m-0 space-y-1.5 pl-5">
-                                    {STEPS.map((s) => <li key={s}>{s}</li>)}
-                                </ol>
-                            </div>
                         </div>
+                        {secret && (
+                            <div className="mx-4 mb-4 space-y-1.5 rounded-xl bg-muted/40 p-3 text-[12px]">
+                                <div className="font-medium">Новый адрес — вставьте его в 1С вместо старого</div>
+                                <AddressField value={secret.keyAddress} copied={copied === 'address'} onCopy={() => copy('address', secret.keyAddress)} />
+                                <div className="text-muted-foreground">
+                                    В 1С: «Настройки синхронизации данных» → строка LogiCore → «Настроить параметры подключения». Старый адрес уже не работает.
+                                </div>
+                            </div>
+                        )}
                     </section>
+
+                    {showGuide && (
+                        <section className={cn(styles.card, 'max-w-[752px]')}>
+                            <div className={styles.cardBody}><OneCGuide /></div>
+                        </section>
+                    )}
 
                     <section className={styles.card}>
                         <div className={styles.cardHead}>
                             <h2 className={styles.cardTitle}>Что передавать</h2>
                         </div>
-                        <div className={cn(styles.cardBody, 'space-y-3 text-[13px]')}>
+                        <div className={cn(styles.cardBody, 'grid gap-3 text-[13px] md:grid-cols-3')}>
                             {CHOICES.map((choice) => (
-                                <label key={choice.key} className="flex cursor-pointer items-start gap-3">
+                                <label key={choice.key} className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-muted/40 p-3">
                                     <Checkbox
                                         className="mt-0.5"
                                         checked={connection[choice.key]}
                                         disabled={!canManage || busy}
                                         onCheckedChange={(v) => choose(connection, choice.key, v === true)}
                                     />
-                                    <span className="space-y-0.5">
+                                    <span>
                                         <span className="block font-medium">{choice.title}</span>
-                                        <span className="block text-muted-foreground">{choice.hint}</span>
+                                        <span className="block text-[12px] text-muted-foreground">{choice.hint}</span>
                                     </span>
                                 </label>
                             ))}
-                            <p className="m-0 text-muted-foreground">
-                                {canManage
-                                    ? 'Изменения начнут действовать со следующей синхронизации. Что выключено, 1С не присылает вовсе.'
-                                    : 'Что передавать, выбирает руководитель компании.'}
-                            </p>
                         </div>
                     </section>
 
@@ -254,74 +341,52 @@ export default function OneCPage() {
                         {connection.log.length === 0 ? (
                             <div className={styles.empty}>Пока пусто — здесь появится всё, что 1С присылала и получала.</div>
                         ) : (
-                            <Table className="border-collapse text-[13px]">
-                                <TableHeader>
-                                    <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
-                                        <TableHead className="h-9 w-40">Когда</TableHead>
-                                        <TableHead className="h-9">Что</TableHead>
-                                        <TableHead className="h-9 w-28">Итог</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {connection.log.map((l) => (
-                                        <TableRow key={l.id} className="border-0 border-b border-solid border-border">
-                                            <TableCell className="py-2 text-muted-foreground">{dayjs(l.createdAt).format('DD.MM HH:mm:ss')}</TableCell>
-                                            <TableCell className="py-2">{l.message ?? l.operation}</TableCell>
-                                            <TableCell className="py-2">
-                                                <span className={cn(styles.chip, !l.ok && styles.chipNeg)}>{l.ok ? 'Готово' : 'Ошибка'}</span>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                            <ul className="m-0 list-none p-0 text-[13px]">
+                                {(allLog ? connection.log : connection.log.slice(0, 5)).map((l) => (
+                                    <li key={l.id} className="flex items-start gap-2.5 border-0 border-t border-solid border-border px-4 py-2.5">
+                                        {l.ok
+                                            ? <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Готово" />
+                                            : <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Ошибка" />}
+                                        <span className="min-w-0 flex-1">{l.message ?? l.operation}</span>
+                                        <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums">{dayjs(l.createdAt).format('DD.MM HH:mm')}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {connection.log.length > 5 && (
+                            <div className="border-0 border-t border-solid border-border px-4 py-2">
+                                <Button variant="ghost" size="sm" onClick={() => setAllLog((v) => !v)}>
+                                    {allLog ? 'Свернуть' : `Показать всё (${connection.log.length})`}
+                                </Button>
+                            </div>
                         )}
                     </section>
                 </>
             )}
-
-            <Dialog open={!!secret} onOpenChange={(o) => { if (!o) setSecret(null); }}>
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle className="text-[15px]">Данные для вашей 1С</DialogTitle>
-                    </DialogHeader>
-                    {secret && (
-                        // min-w-0: длинный адрес с ключом не должен распирать окно — он обрезается в поле.
-                        <div className="min-w-0 space-y-3 text-[13px]">
-                            <Field label="Адрес для 1С" value={secret.keyAddress} onCopy={() => copy('s-address', secret.keyAddress)} copied={copied === 's-address'} />
-                            <p className="m-0">
-                                Вставьте его в 1С в поле «Адрес программы» целиком. «Пользователь» и «Пароль» в 1С можно не заполнять.
-                            </p>
-                            <details className="rounded-lg border border-solid border-border px-3 py-2">
-                                <summary className="cursor-pointer text-muted-foreground">Если 1С всё же просит пользователя и пароль</summary>
-                                <div className="mt-2 space-y-2">
-                                    <Field label="Пользователь" value={secret.login} onCopy={() => copy('s-login', secret.login)} copied={copied === 's-login'} />
-                                    <Field label="Пароль" value={secret.password} onCopy={() => copy('s-password', secret.password)} copied={copied === 's-password'} />
-                                </div>
-                            </details>
-                            <p className="m-0 text-muted-foreground">
-                                Адрес показывается один раз — после закрытия окна его не увидит никто, даже вы. Вставьте его в 1С сейчас.
-                            </p>
-                            <div className="flex justify-end">
-                                <Button onClick={() => setSecret(null)}>Готово</Button>
-                            </div>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }
 
-function Field({ label, value, onCopy, copied }: { label: string; value: string; onCopy: () => void; copied: boolean }) {
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
     return (
-        <div className="flex min-w-0 flex-col gap-1">
-            <span className="text-[12px] font-medium text-muted-foreground">{label}</span>
-            <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 truncate rounded-lg border border-solid border-border bg-muted/40 px-2.5 py-1.5 text-[13px]">{value}</code>
-                <Button variant="outline" size="sm" onClick={onCopy} aria-label={`Скопировать: ${label}`}>
-                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                </Button>
+        <li className="flex gap-3">
+            <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-foreground text-[12px] font-semibold text-background">{n}</div>
+            <div className="min-w-0 flex-1 space-y-1">
+                <div className="font-semibold">{title}</div>
+                {children}
             </div>
+        </li>
+    );
+}
+
+function AddressField({ value, onCopy, copied }: { value: string; onCopy: () => void; copied: boolean }) {
+    return (
+        <div className="flex min-w-0 items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-lg border border-solid border-border bg-muted/40 px-2.5 py-1.5 text-[12px]">{value}</code>
+            <Button size="sm" onClick={onCopy} aria-label="Скопировать">
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? 'Скопировано' : 'Скопировать'}
+            </Button>
         </div>
     );
 }
