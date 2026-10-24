@@ -209,3 +209,31 @@ describe('Видимость денег по рейсу', () => {
         });
     });
 });
+
+describe('Исполнитель не видит сделку экспедитора с заказчиком (задачи шефа, P10)', () => {
+    const рейс = () => ({
+        customerCompanyId: 'заказчик', forwarderId: 'экспедитор', partnerId: 'парк', subForwarderId: null,
+        customerPrice: 520000, customerPriceBase: 520000, isCustomerPaid: true, customerPaidAt: new Date(),
+        customerPaymentDays: 15, hasVat: true, vatRate: 16,
+        driverCost: 430000, settlementsConfirmedAt: new Date(),
+    });
+
+    it('парк-перевозчик: своя ставка видна, цена заказчика — нет', () => {
+        const order = maskForCustomer(рейс() as any, 'парк');
+        expect(order.driverCost).toBe(430000);
+        expect(order.customerPrice).toBeNull();
+        expect(order.customerPriceBase).toBeNull();
+        expect(order.isCustomerPaid).toBe(false);
+        expect(order.customerPaymentDays).toBeNull();
+    });
+
+    it('экспедитор видит обе стороны', () => {
+        const order = maskForCustomer(рейс() as any, 'экспедитор');
+        expect(order).toMatchObject({ customerPrice: 520000, driverCost: 430000 });
+    });
+
+    it('парк сам и экспедитор этой заявки — видит всё: это его сделка', () => {
+        const order = maskForCustomer({ ...рейс(), forwarderId: 'парк' } as any, 'парк');
+        expect(order.customerPrice).toBe(520000);
+    });
+});
