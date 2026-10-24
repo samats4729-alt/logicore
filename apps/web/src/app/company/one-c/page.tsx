@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import dayjs from 'dayjs';
-import { AlertCircle, Check, CheckCircle2, Copy, KeyRound, Loader2, Pause, Play, Plug, PlayCircle } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, CheckCircle2, Copy, KeyRound, Loader2, Pause, Play, Plug, PlayCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ответСервера } from '@/lib/exchange';
@@ -39,30 +39,39 @@ interface Secret {
 type Choice = 'sendActs' | 'receiveCounterparties' | 'receivePayments';
 
 /**
- * Что передавать — решает компания (решение владельца 24.10.2026). По
- * умолчанию включены только акты в 1С. Тексты — что увидит бухгалтер, а не
- * как это устроено.
+ * Какие данные ходят — решает компания (решение владельца 24.10.2026). По
+ * умолчанию включены только акты в 1С. Сгруппировано по направлению:
+ * отдельно что уходит в 1С, отдельно что приходит из неё (просьба владельца).
+ * Тексты — что увидит бухгалтер, а не как это устроено.
  */
-const CHOICES: { key: Choice; title: string; hint: string; on: string; off: string }[] = [
+const CHOICES: { key: Choice; direction: 'to1c' | 'from1c'; title: string; hint: string; on: string; off: string }[] = [
     {
         key: 'sendActs',
-        title: 'Акты выполненных работ → в 1С',
-        hint: 'Проведённые в LogiCore акты появятся в 1С сами.',
+        direction: 'to1c',
+        title: 'Акты выполненных работ',
+        hint: 'Проведённый в LogiCore акт сам появится в 1С.',
         on: 'Акты будут уходить в 1С', off: 'Акты в 1С больше не уходят',
     },
     {
         key: 'receiveCounterparties',
-        title: 'Контрагенты ← из 1С',
-        hint: 'Новые появятся в справочнике, дублей по БИН не будет.',
+        direction: 'from1c',
+        title: 'Контрагенты',
+        hint: 'Новые попадут в справочник, дублей по БИН не будет.',
         on: 'Контрагенты из 1С будут приходить', off: 'Контрагенты из 1С больше не принимаются',
     },
     {
         key: 'receivePayments',
-        title: 'Оплаты клиентов ← из 1С',
-        hint: 'Станут платежами в LogiCore и закроют долг.',
+        direction: 'from1c',
+        title: 'Оплаты от клиентов',
+        hint: 'Станут платежами в LogiCore и закроют долг по счетам.',
         on: 'Оплаты из 1С будут приходить', off: 'Оплаты из 1С больше не принимаются',
     },
 ];
+
+const DIRECTIONS = [
+    { key: 'to1c', title: 'Отправляем в 1С', from: 'LogiCore', to: '1С' },
+    { key: 'from1c', title: 'Принимаем из 1С', from: '1С', to: 'LogiCore' },
+] as const;
 
 /** «5 минут назад» — для последнего обмена. */
 function ago(iso: string) {
@@ -78,7 +87,7 @@ function ago(iso: string) {
  *
  * Три состояния, по одному действию в каждом: обмен не включён — «Подключить
  * 1С»; включён, но 1С ещё не пришла — адрес и мини-видео, как вставить его
- * в 1С; 1С подключена — что передавать и журнал. Программист 1С не нужен.
+ * в 1С; 1С подключена — настройки обмена и журнал. Программист 1С не нужен.
  * Адрес с ключом показывается один раз — потерян, выдаём новый.
  */
 export default function OneCPage() {
@@ -313,22 +322,34 @@ export default function OneCPage() {
 
                     <section className={styles.card}>
                         <div className={styles.cardHead}>
-                            <h2 className={styles.cardTitle}>Что передавать</h2>
+                            <h2 className={styles.cardTitle}>Настройки обмена</h2>
                         </div>
-                        <div className={cn(styles.cardBody, 'grid gap-3 text-[13px] md:grid-cols-3')}>
-                            {CHOICES.map((choice) => (
-                                <label key={choice.key} className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-muted/40 p-3">
-                                    <Checkbox
-                                        className="mt-0.5"
-                                        checked={connection[choice.key]}
-                                        disabled={!canManage || busy}
-                                        onCheckedChange={(v) => choose(connection, choice.key, v === true)}
-                                    />
-                                    <span>
-                                        <span className="block font-medium">{choice.title}</span>
-                                        <span className="block text-[12px] text-muted-foreground">{choice.hint}</span>
-                                    </span>
-                                </label>
+                        <div className={cn(styles.cardBody, 'grid gap-3 text-[13px] md:grid-cols-2')}>
+                            {DIRECTIONS.map((dir) => (
+                                <div key={dir.key} className="rounded-xl bg-muted/40 p-3">
+                                    <div className="mb-2 flex items-center gap-2">
+                                        <span className="font-semibold">{dir.title}</span>
+                                        <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+                                            {dir.from} <ArrowRight className="h-3 w-3" aria-label="в" /> {dir.to}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        {CHOICES.filter((c) => c.direction === dir.key).map((choice) => (
+                                            <label key={choice.key} className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-background px-3 py-2.5">
+                                                <Checkbox
+                                                    className="mt-0.5"
+                                                    checked={connection[choice.key]}
+                                                    disabled={!canManage || busy}
+                                                    onCheckedChange={(v) => choose(connection, choice.key, v === true)}
+                                                />
+                                                <span>
+                                                    <span className="block font-medium">{choice.title}</span>
+                                                    <span className="block text-[12px] text-muted-foreground">{choice.hint}</span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     </section>
