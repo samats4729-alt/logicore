@@ -1,19 +1,30 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsBoolean } from 'class-validator';
+import { IsBoolean, IsOptional } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { AuditService } from '../audit/audit.service';
-import { OneCConnectionsService } from './onec-connections.service';
+import { OneCConnectionChoices, OneCConnectionsService } from './onec-connections.service';
 
-class EnabledDto {
-    @IsBoolean() enabled!: boolean;
+class ChoicesDto implements OneCConnectionChoices {
+    @IsOptional() @IsBoolean() enabled?: boolean;
+    @IsOptional() @IsBoolean() sendActs?: boolean;
+    @IsOptional() @IsBoolean() receiveCounterparties?: boolean;
+    @IsOptional() @IsBoolean() receivePayments?: boolean;
 }
 
+/** Как изменение назвать в журнале действий — словами руководителя. */
+const CHOICE_LABELS: Record<keyof OneCConnectionChoices, [string, string]> = {
+    enabled: ['Обмен с 1С возобновлён', 'Обмен с 1С приостановлен'],
+    sendActs: ['Обмен с 1С: акты отправляются в 1С', 'Обмен с 1С: акты в 1С не отправляются'],
+    receiveCounterparties: ['Обмен с 1С: контрагенты принимаются из 1С', 'Обмен с 1С: контрагенты из 1С не принимаются'],
+    receivePayments: ['Обмен с 1С: оплаты клиентов принимаются из 1С', 'Обмен с 1С: оплаты из 1С не принимаются'],
+};
+
 /**
- * «Обмен с 1С» в кабинете: включить, получить адрес, логин и пароль для
- * своей 1С, сменить пароль, приостановить. Это решение руководителя:
+ * «Обмен с 1С» в кабинете: включить, получить адрес для своей 1С, выдать
+ * новый, приостановить и выбрать, что передавать. Это решение руководителя:
  * подключение открывает 1С компании дорогу к её данным в LogiCore.
  */
 @ApiTags('one-c')
@@ -60,13 +71,16 @@ export class OneCConnectionsController {
 
     @Patch(':id')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
-    @ApiOperation({ summary: 'Приостановить или возобновить обмен с 1С' })
-    async setEnabled(@Request() req: any, @Param('id') id: string, @Body() dto: EnabledDto) {
-        const result = await this.connections.setEnabled(req.user.companyId, id, dto.enabled);
-        await this.audit.log({
-            companyId: req.user.companyId, user: req.user, action: 'SETTINGS', entity: 'one_c_connection',
-            entityId: id, entityLabel: dto.enabled ? 'Обмен с 1С возобновлён' : 'Обмен с 1С приостановлен',
-        });
+    @ApiOperation({ summary: 'Приостановить или возобновить обмен с 1С, выбрать, что передавать' })
+    async update(@Request() req: any, @Param('id') id: string, @Body() dto: ChoicesDto) {
+        const result = await this.connections.update(req.user.companyId, id, dto);
+        for (const key of Object.keys(CHOICE_LABELS) as (keyof OneCConnectionChoices)[]) {
+            if (typeof dto[key] !== 'boolean') continue;
+            await this.audit.log({
+                companyId: req.user.companyId, user: req.user, action: 'SETTINGS', entity: 'one_c_connection',
+                entityId: id, entityLabel: CHOICE_LABELS[key][dto[key] ? 0 : 1],
+            });
+        }
         return result;
     }
 }

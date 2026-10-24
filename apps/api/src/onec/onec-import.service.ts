@@ -43,6 +43,12 @@ export const PAY_CASH = 'Документ.ПКОРасчетыСКонтраге
 /** Наш акт в 1С — тот же вид, что в onec-export (здесь, чтобы не было цикла импортов). */
 const SALES_REF = 'Документ.РеализацияТоваровУслуг';
 
+/** Что компания решила принимать из 1С. */
+export interface ImportChoices {
+    counterparties: boolean;
+    payments: boolean;
+}
+
 export interface ImportSummary {
     counterparties: { created: number; linked: number; noBin: number; blocked: number };
     bankFilled: number;
@@ -50,6 +56,8 @@ export interface ImportSummary {
     payments: { created: number; allocated: number; known: number; notCustomer: number };
     /** Что пришло, но пока не разносится: вид объекта → сколько. */
     other: Record<string, number>;
+    /** Что пришло, но компания приём этого выключила: вид объекта → сколько. */
+    ignored: Record<string, number>;
     errors: string[];
 }
 
@@ -212,6 +220,8 @@ export function describeImport(s: ImportSummary, counts: Record<string, number>)
         ].filter(Boolean);
         parts.push(`оплаты ${(counts[PAY_BANK] ?? 0) + (counts[PAY_CASH] ?? 0)}${d.length ? ` (${d.join(', ')})` : ''}`);
     }
+    const ignored = Object.entries(s.ignored).map(([name, n]) => `${OBJECT_LABELS[name] ?? name} — ${n}`);
+    if (ignored.length) parts.push(`не принято, приём выключен в настройках обмена: ${ignored.join(', ')}`);
     if (s.errors.length) parts.push(`не разнесено из-за ошибок — ${s.errors.length}`);
     return parts.length ? `Из 1С: ${parts.join('; ')}` : '1С на связи: новых данных нет';
 }
@@ -231,16 +241,30 @@ export class OneCImportService {
 
     /**
      * @param userId от чьего имени заводить платежи — кто подключал 1С.
+     * @param accept что компания решила принимать из 1С (кабинет → «Обмен с 1С»).
+     *   Организация принимается всегда: по ней 1С узнаёт себя в наших актах.
      */
-    async import(connectionId: string, companyId: string, objects: XmlNode[], userId?: string | null): Promise<ImportSummary> {
+    async import(
+        connectionId: string, companyId: string, objects: XmlNode[], userId?: string | null,
+        accept: ImportChoices = { counterparties: false, payments: false },
+    ): Promise<ImportSummary> {
         const summary: ImportSummary = {
             counterparties: { created: 0, linked: 0, noBin: 0, blocked: 0 },
             bankFilled: 0,
             organizationLinked: false,
             payments: { created: 0, allocated: 0, known: 0, notCustomer: 0 },
             other: {},
+            ignored: {},
             errors: [],
         };
+        // Выключенное компанией 1С не присылает — мы его и не просим. Пришло
+        // всё-таки (старая настройка в 1С, ручная выгрузка) — не разносим.
+        const off = new Set([
+            ...(accept.counterparties ? [] : [CP, BANK, CONTRACT]),
+            ...(accept.payments ? [] : [PAY_BANK, PAY_CASH]),
+        ]);
+        for (const o of objects.filter((x) => off.has(x.name))) summary.ignored[o.name] = (summary.ignored[o.name] ?? 0) + 1;
+        objects = objects.filter((x) => !off.has(x.name));
         const roles = rolesFromContracts(objects);
 
         // Сначала контрагенты: банковские счета ссылаются на них, а в сообщении
@@ -278,7 +302,7 @@ export class OneCImportService {
             const pay = readPayment(o);
             if (!pay) continue;
             try {
-                const result = await this.payment(connectionId, companyId, pay, userId);
+                const result = await this.payment(connectionId, companyId, pay, userId, accept.counterparties);
                 if (result === 'allocated') summary.payments.created++;
                 summary.payments[result]++;
             } catch (e) {
@@ -354,7 +378,7 @@ export class OneCImportService {
 
     /** Оплата от покупателя → платёж LogiCore; по нашему акту — сразу разнесённый. */
     private async payment(
-        connectionId: string, companyId: string, pay: Payment1C, userId?: string | null,
+        connectionId: string, companyId: string, pay: Payment1C, userId: string | null | undefined, mayCreateCounterparty: boolean,
     ): Promise<'created' | 'allocated' | 'known' | 'notCustomer'> {
         if (!pay.customer) return 'notCustomer';
         if (await this.mapped(connectionId, pay.cash ? PAY_CASH : PAY_BANK, pay.ref)) return 'known';
@@ -363,6 +387,9 @@ export class OneCImportService {
         if (!userId) throw new Error('не знаем, от чьего имени завести платёж: подключение 1С без автора');
 
         let company = await this.findCounterparty(connectionId, companyId, pay.counterparty);
+        if (!company && !mayCreateCounterparty) {
+            throw new Error(`контрагента «${pay.counterparty.name}» нет в LogiCore. Заведите его или включите «Получать из 1С контрагентов»`);
+        }
         if (!company) {
             const made = await this.counterparty(connectionId, companyId, pay.counterparty);
             if (made !== 'created') throw new Error(`контрагента «${pay.counterparty.name}» нет в LogiCore, и завести его нельзя (${made === 'noBin' ? 'без БИН' : 'в чёрном списке'})`);

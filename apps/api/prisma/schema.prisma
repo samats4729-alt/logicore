@@ -3349,6 +3349,11 @@ model OneCConnection {
   /// Последнее наше сообщение, которое 1С подтвердила. Что отправлено позже
   /// и не подтверждено, уходит ещё раз.
   peerReceivedNo    Int       @default(0)
+  /// Что компания решила передавать (кабинет → «Обмен с 1С»). По умолчанию —
+  /// только акты в 1С: контрагентов и оплаты из 1С компания включает сама.
+  sendActs              Boolean @default(true)
+  receiveCounterparties Boolean @default(false)
+  receivePayments       Boolean @default(false)
   createdById       String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

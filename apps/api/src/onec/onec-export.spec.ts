@@ -1,6 +1,7 @@
 import { currencyLetter, currencyOf, salesDeletion, salesObject, serviceObject, shortNumber, vatRateOf } from './enterprise-data';
 import { OneCExportService, SALES, SERVICE } from './onec-export.service';
 import { ORG } from './onec-import.service';
+import { objectTypesFor } from './onec-exchange.service';
 
 /** Что LogiCore отправляет в 1С (этап 4): акты как «Реализация (акт, накладная)». */
 describe('Объекты для 1С', () => {
@@ -135,5 +136,16 @@ describe('Отправка актов в 1С', () => {
         await r.commit(4);
         db.conn.peerReceivedNo = 4;
         expect((await exporter.build('conn-1')).deletions).toBe(0);
+    });
+});
+
+describe('Что LogiCore просит у 1С', () => {
+    it('только выбранное компанией; организацию — всегда, и список никогда не пуст', () => {
+        const names = (c: any) => objectTypesFor(c).map((t) => `${t.name}:${t.sending ? 'отправка' : 'приём'}`);
+        expect(names({ sendActs: false, receiveCounterparties: false, receivePayments: false })).toEqual(['Справочник.Организации:приём']);
+        expect(names({ sendActs: true, receiveCounterparties: false, receivePayments: false })).toEqual([
+            'Справочник.Организации:приём', 'Справочник.Номенклатура:отправка', 'Документ.РеализацияТоваровУслуг:отправка',
+        ]);
+        expect(names({ sendActs: true, receiveCounterparties: true, receivePayments: true })).toHaveLength(8);
     });
 });

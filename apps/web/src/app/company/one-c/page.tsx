@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { ответСервера } from '@/lib/exchange';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,9 @@ interface Connection {
     setupAt: string | null;
     lastSeenAt: string | null;
     createdAt: string;
+    sendActs: boolean;
+    receiveCounterparties: boolean;
+    receivePayments: boolean;
     log: { id: string; operation: string; ok: boolean; message: string | null; createdAt: string }[];
 }
 
@@ -41,6 +45,34 @@ const STEPS = [
     'Вставьте «Адрес для 1С» отсюда — целиком, с ключом. «Пользователь» и «Пароль» можно не заполнять → «Далее» → «Далее» → «Готово».',
     '«Настроить правила отправки и получения данных» → «Записать и закрыть».',
     '«Выполнить начальную выгрузку данных» → «Далее». Дальше — кнопка «Синхронизировать» или расписание в 1С.',
+];
+
+type Choice = 'sendActs' | 'receiveCounterparties' | 'receivePayments';
+
+/**
+ * Что передавать — решает компания (решение владельца 24.10.2026). По
+ * умолчанию включены только акты в 1С. Тексты — что увидит бухгалтер, а не
+ * как это устроено.
+ */
+const CHOICES: { key: Choice; title: string; hint: string; on: string; off: string }[] = [
+    {
+        key: 'sendActs',
+        title: 'Отправлять в 1С акты выполненных работ',
+        hint: 'Акты, проведённые в LogiCore после подключения, появятся в 1С документом «Реализация (акт, накладная)».',
+        on: 'Акты будут уходить в 1С', off: 'Акты в 1С больше не уходят',
+    },
+    {
+        key: 'receiveCounterparties',
+        title: 'Получать из 1С контрагентов',
+        hint: 'Новые контрагенты из 1С появятся в справочнике LogiCore. Уже заведённые с тем же БИН — не задвоятся.',
+        on: 'Контрагенты из 1С будут приходить', off: 'Контрагенты из 1С больше не принимаются',
+    },
+    {
+        key: 'receivePayments',
+        title: 'Получать из 1С оплаты клиентов',
+        hint: 'Поступления на счёт и в кассу от клиентов станут платежами в LogiCore и закроют долг по счетам.',
+        on: 'Оплаты из 1С будут приходить', off: 'Оплаты из 1С больше не принимаются',
+    },
 ];
 
 /**
@@ -89,6 +121,11 @@ export default function OneCPage() {
     const newPassword = (id: string) => run(async () => setSecret((await api.post<Secret>(`/company/one-c/${id}/password`)).data));
     const toggle = (c: Connection) => run(() => api.patch(`/company/one-c/${c.id}`, { enabled: !c.enabled }),
         c.enabled ? 'Обмен с 1С приостановлен' : 'Обмен с 1С возобновлён');
+
+    const choose = (c: Connection, key: Choice, value: boolean) => {
+        const choice = CHOICES.find((x) => x.key === key)!;
+        return run(() => api.patch(`/company/one-c/${c.id}`, { [key]: value }), value ? choice.on : choice.off);
+    };
 
     const copy = async (key: string, value: string) => {
         try {
@@ -179,6 +216,33 @@ export default function OneCPage() {
                                     {STEPS.map((s) => <li key={s}>{s}</li>)}
                                 </ol>
                             </div>
+                        </div>
+                    </section>
+
+                    <section className={styles.card}>
+                        <div className={styles.cardHead}>
+                            <h2 className={styles.cardTitle}>Что передавать</h2>
+                        </div>
+                        <div className={cn(styles.cardBody, 'space-y-3 text-[13px]')}>
+                            {CHOICES.map((choice) => (
+                                <label key={choice.key} className="flex cursor-pointer items-start gap-3">
+                                    <Checkbox
+                                        className="mt-0.5"
+                                        checked={connection[choice.key]}
+                                        disabled={!canManage || busy}
+                                        onCheckedChange={(v) => choose(connection, choice.key, v === true)}
+                                    />
+                                    <span className="space-y-0.5">
+                                        <span className="block font-medium">{choice.title}</span>
+                                        <span className="block text-muted-foreground">{choice.hint}</span>
+                                    </span>
+                                </label>
+                            ))}
+                            <p className="m-0 text-muted-foreground">
+                                {canManage
+                                    ? 'Изменения начнут действовать со следующей синхронизации. Что выключено, 1С не присылает вовсе.'
+                                    : 'Что передавать, выбирает руководитель компании.'}
+                            </p>
                         </div>
                     </section>
 

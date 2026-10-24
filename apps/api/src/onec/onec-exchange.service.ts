@@ -7,7 +7,7 @@ import { SoapError } from './soap';
 import { V8Raw, V8Uuid, V8Value } from './xdto';
 import { OneCFileStore } from './onec-files';
 import { ObjectType, buildMessage, countObjects, readMessage } from './message';
-import { OneCImportService, describeImport } from './onec-import.service';
+import { BANK, CONTRACT, CP, ORG, OneCImportService, PAY_BANK, PAY_CASH, describeImport } from './onec-import.service';
 import { OneCExportService, SALES, SERVICE } from './onec-export.service';
 
 /** Подключение, от имени которого 1С сейчас спрашивает. */
@@ -40,25 +40,32 @@ const BAD_PASSWORD = 'Вход';
 /** Префикс LogiCore в номерах объектов 1С. */
 const PREFIX = 'LC';
 
+/** Что компания выбрала передавать (кабинет → «Обмен с 1С»). */
+export interface ExchangeChoices {
+    sendActs: boolean;
+    receiveCounterparties: boolean;
+    receivePayments: boolean;
+}
+
 /**
  * Что LogiCore объявляет 1С в каждом сообщении. 1С отправляет только то,
- * что другая сторона умеет принимать, — без этого списка она считает, что
- * мы принимаем всё, и выгружает всю базу.
+ * что другая сторона умеет принимать, — поэтому выключенное компанией 1С
+ * даже не присылает. Список не бывает пустым: без него 1С считает, что мы
+ * принимаем всё, и выгружает всю базу.
  *
- * Принимаем: свою организацию, контрагентов с договорами и счетами и оплаты
- * от них. Отправляем: акты выполненных работ (реализация услуг) и сами
- * услуги — без них 1С завела бы услугу товаром.
+ * Организацию принимаем всегда: по ней 1С узнаёт себя в наших актах, без
+ * неё акты не отправляются. Остальное — по выбору компании: акты и сами
+ * услуги (без карточки 1С завела бы услугу товаром) — в 1С; контрагенты с
+ * договорами и счетами, оплаты клиентов — из 1С.
  */
-export const OBJECT_TYPES: ObjectType[] = [
-    { name: 'Справочник.Организации', receiving: true },
-    { name: 'Справочник.Контрагенты', receiving: true },
-    { name: 'Справочник.Договоры', receiving: true },
-    { name: 'Справочник.БанковскиеСчета', receiving: true },
-    { name: SERVICE, sending: true },
-    { name: SALES, sending: true },
-    { name: 'Документ.ПБДСРасчетыСКонтрагентами', receiving: true },
-    { name: 'Документ.ПКОРасчетыСКонтрагентами', receiving: true },
-];
+export function objectTypesFor(c: ExchangeChoices): ObjectType[] {
+    return [
+        { name: ORG, receiving: true },
+        ...(c.receiveCounterparties ? [{ name: CP, receiving: true }, { name: CONTRACT, receiving: true }, { name: BANK, receiving: true }] : []),
+        ...(c.sendActs ? [{ name: SERVICE, sending: true }, { name: SALES, sending: true }] : []),
+        ...(c.receivePayments ? [{ name: PAY_BANK, receiving: true }, { name: PAY_CASH, receiving: true }] : []),
+    ];
+}
 
 /** УникальныйИдентификатор из параметра: 1С шлёт его то типом, то строкой. */
 const uuidOf = (v: V8Value): string => OneCFileStore.id(v instanceof V8Uuid ? v.value : String(v ?? ''));
@@ -276,11 +283,17 @@ export class OneCExchangeService {
         this.assertNode(args, peer);
         const conn = await this.prisma.oneCConnection.findUniqueOrThrow({
             where: { id: peer.id },
-            select: { sentNo: true, receivedNo: true, formatVersion: true, exchangePlanName: true },
+            select: {
+                sentNo: true, receivedNo: true, formatVersion: true, exchangePlanName: true,
+                sendActs: true, receiveCounterparties: true, receivePayments: true,
+            },
         });
         const messageNo = conn.sentNo + 1;
         const version = conn.formatVersion ?? FORMAT_VERSIONS[FORMAT_VERSIONS.length - 1];
-        const exported = await this.exporter.build(peer.id);
+        // Акты не отправляем, если компания это выключила.
+        const exported = conn.sendActs
+            ? await this.exporter.build(peer.id)
+            : { body: '', sales: 0, deletions: 0, skipped: [] as string[], commit: async () => {} };
         const xmlText = buildMessage({
             format: `${ENTERPRISE_DATA}/${version}`,
             exchangePlan: conn.exchangePlanName ?? DEFAULT_PLAN,
@@ -289,7 +302,7 @@ export class OneCExchangeService {
             messageNo,
             receivedNo: conn.receivedNo,
             versions: FORMAT_VERSIONS,
-            objectTypes: OBJECT_TYPES,
+            objectTypes: objectTypesFor(conn),
             prefix: PREFIX,
         }, exported.body);
         const fileId = await this.files.storeOutgoing(peer.id, `Message_${PREFIX}_${messageNo}.xml`, Buffer.from(xmlText, 'utf8'));
@@ -329,7 +342,7 @@ export class OneCExchangeService {
             return done;
         }
 
-        const conn = await this.prisma.oneCConnection.findUniqueOrThrow({ where: { id: peer.id }, select: { receivedNo: true, createdById: true } });
+        const conn = await this.prisma.oneCConnection.findUniqueOrThrow({ where: { id: peer.id }, select: { receivedNo: true, createdById: true, receiveCounterparties: true, receivePayments: true } });
         if (msg.messageNo !== null && msg.messageNo <= conn.receivedNo) {
             await this.log(peer, 'DownloadData', true, '1С повторно прислала уже принятые данные — пропущено');
             return done;
@@ -338,7 +351,10 @@ export class OneCExchangeService {
         // Разносим до подтверждения: если разнесение упадёт целиком, номер
         // принятого не сдвинется и 1С пришлёт то же сообщение ещё раз.
         const counts = countObjects(msg.objects);
-        const imported = await this.importer.import(peer.id, peer.companyId, msg.objects, conn.createdById ?? await this.companyAdmin(peer.companyId));
+        const imported = await this.importer.import(
+            peer.id, peer.companyId, msg.objects, conn.createdById ?? await this.companyAdmin(peer.companyId),
+            { counterparties: conn.receiveCounterparties, payments: conn.receivePayments },
+        );
         await this.prisma.oneCConnection.update({
             where: { id: peer.id },
             data: {

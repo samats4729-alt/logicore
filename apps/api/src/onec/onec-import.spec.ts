@@ -135,6 +135,9 @@ function fakeDb(companyId: string) {
     return { prisma, external, accounting, allocations, companies, map, blocked, docs };
 }
 
+/** Компания приняла всё — как в кабинете со всеми галочками. */
+const ALL = { counterparties: true, payments: true };
+
 const importerOf = (db: ReturnType<typeof fakeDb>) =>
     new OneCImportService(db.prisma, db.external as any, db.accounting as any, db.allocations as any);
 
@@ -143,7 +146,7 @@ describe('Разнесение из 1С: в справочник LogiCore', () =
 
     it('новый — заводится, уже заведённый по БИН — связывается, без БИН — пропускается', async () => {
         const db = fakeDb('co-1');
-        const s = await importerOf(db).import('conn-1', 'co-1', objects);
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', ALL);
 
         expect(s.counterparties).toEqual({ created: 1, linked: 1, noBin: 1, blocked: 0 });
         expect(db.external.createExternalCompany).toHaveBeenCalledTimes(1);
@@ -164,8 +167,8 @@ describe('Разнесение из 1С: в справочник LogiCore', () =
     it('повторная синхронизация: второго контрагента не заводит', async () => {
         const db = fakeDb('co-1');
         const importer = importerOf(db);
-        await importer.import('conn-1', 'co-1', objects);
-        const again = await importer.import('conn-1', 'co-1', objects);
+        await importer.import('conn-1', 'co-1', objects, 'user-1', ALL);
+        const again = await importer.import('conn-1', 'co-1', objects, 'user-1', ALL);
         expect(again.counterparties).toEqual({ created: 0, linked: 2, noBin: 1, blocked: 0 });
         expect(db.external.createExternalCompany).toHaveBeenCalledTimes(1);
     });
@@ -173,7 +176,7 @@ describe('Разнесение из 1С: в справочник LogiCore', () =
     it('пустой счёт в карточке — дописывается из 1С', async () => {
         const db = fakeDb('co-1');
         db.companies.find((c) => c.id === 'gk-local').bankAccount = null;
-        const s = await importerOf(db).import('conn-1', 'co-1', objects);
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', ALL);
         expect(s.bankFilled).toBe(1);
         expect(db.companies.find((c) => c.id === 'gk-local')).toMatchObject({ bankAccount: 'KZ12009NPS0413609816', bankBic: 'GCVPKZ2A' });
     });
@@ -181,7 +184,7 @@ describe('Разнесение из 1С: в справочник LogiCore', () =
     it('БИН из чёрного списка — не заводится и не считается ошибкой', async () => {
         const db = fakeDb('co-1');
         db.blocked.push('150840001234');
-        const s = await importerOf(db).import('conn-1', 'co-1', objects);
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', ALL);
         expect(s.counterparties.blocked).toBe(1);
         expect(db.external.createExternalCompany).not.toHaveBeenCalled();
         expect(s.errors).toEqual([]);
@@ -226,7 +229,7 @@ describe('Разнесение из 1С: оплаты покупателей', (
         db.companies.push({ id: 'new-1', bin: '150840001234', isExternal: true, createdByCompanyId: 'co-1' });
         db.map.push({ connectionId: 'conn-1', objectType: 'Документ.РеализацияТоваровУслуг', ref: 'act-ref-1', localId: 'act-1' });
 
-        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1');
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', ALL);
 
         expect(s.payments).toEqual({ created: 1, allocated: 1, known: 0, notCustomer: 1 });
         expect(db.accounting.createPayment).toHaveBeenCalledWith('co-1', 'user-1', expect.objectContaining({
@@ -239,7 +242,7 @@ describe('Разнесение из 1С: оплаты покупателей', (
         expect(describeImport(s, { [PAY_BANK]: 2 })).toBe('Из 1С: оплаты 2 (приняты — 1, из них разнесены на документы — 1, не от покупателей, пропущены — 1)');
 
         // Та же оплата второй раз — второго платежа нет.
-        const again = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1');
+        const again = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', ALL);
         expect(again.payments.known).toBe(1);
         expect(db.accounting.createPayment).toHaveBeenCalledTimes(1);
     });
@@ -247,8 +250,31 @@ describe('Разнесение из 1С: оплаты покупателей', (
     it('без автора подключения платёж не заводится — ошибка в журнал, а не тихий пропуск', async () => {
         const db = fakeDb('co-1');
         db.companies.push({ id: 'new-1', bin: '150840001234', isExternal: true, createdByCompanyId: 'co-1' });
-        const s = await importerOf(db).import('conn-1', 'co-1', objects, null);
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, null, ALL);
         expect(s.errors[0]).toContain('от чьего имени');
+        expect(db.accounting.createPayment).not.toHaveBeenCalled();
+    });
+});
+
+describe('Разнесение из 1С: что компания выбрала принимать', () => {
+    it('по умолчанию из 1С ничего, кроме организации, не принимается — и это видно в журнале', async () => {
+        const db = fakeDb('co-1');
+        const { objects } = readMessage(KZ_MESSAGE);
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1');
+        expect(s.counterparties).toEqual({ created: 0, linked: 0, noBin: 0, blocked: 0 });
+        expect(s.organizationLinked).toBe(true);
+        expect(s.ignored).toEqual({ 'Справочник.БанковскиеСчета': 1, 'Справочник.Контрагенты': 3, 'Справочник.Договоры': 1 });
+        expect(db.external.createExternalCompany).not.toHaveBeenCalled();
+        expect(describeImport(s, { [CP]: 3, [BANK]: 1, 'Справочник.Организации': 1, 'Справочник.Договоры': 1 }))
+            .toContain('не принято, приём выключен в настройках обмена: банковские счета — 1, контрагенты — 3, договоры — 1');
+    });
+
+    it('оплаты включены, контрагенты — нет: незнакомого контрагента не заводим, говорим, что сделать', async () => {
+        const db = fakeDb('co-1');
+        const { objects } = readMessage(PAYMENT_MESSAGE);
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', { counterparties: false, payments: true });
+        expect(s.errors[0]).toContain('Заведите его или включите «Получать из 1С контрагентов»');
+        expect(db.external.createExternalCompany).not.toHaveBeenCalled();
         expect(db.accounting.createPayment).not.toHaveBeenCalled();
     });
 });
