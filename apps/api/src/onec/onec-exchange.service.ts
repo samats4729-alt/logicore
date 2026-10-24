@@ -8,6 +8,7 @@ import { V8Raw, V8Uuid, V8Value } from './xdto';
 import { OneCFileStore } from './onec-files';
 import { ObjectType, buildMessage, countObjects, readMessage } from './message';
 import { OneCImportService, describeImport } from './onec-import.service';
+import { OneCExportService, SALES, SERVICE } from './onec-export.service';
 
 /** Подключение, от имени которого 1С сейчас спрашивает. */
 export interface OneCPeer {
@@ -45,13 +46,16 @@ const PREFIX = 'LC';
  * мы принимаем всё, и выгружает всю базу.
  *
  * Принимаем: свою организацию, контрагентов с договорами и счетами и оплаты
- * от них. Отправка (счета, акты) появится вместе с её разбором.
+ * от них. Отправляем: акты выполненных работ (реализация услуг) и сами
+ * услуги — без них 1С завела бы услугу товаром.
  */
 export const OBJECT_TYPES: ObjectType[] = [
     { name: 'Справочник.Организации', receiving: true },
     { name: 'Справочник.Контрагенты', receiving: true },
     { name: 'Справочник.Договоры', receiving: true },
     { name: 'Справочник.БанковскиеСчета', receiving: true },
+    { name: SERVICE, sending: true },
+    { name: SALES, sending: true },
     { name: 'Документ.ПБДСРасчетыСКонтрагентами', receiving: true },
     { name: 'Документ.ПКОРасчетыСКонтрагентами', receiving: true },
 ];
@@ -96,6 +100,7 @@ export class OneCExchangeService {
         private readonly prisma: PrismaService,
         private readonly files: OneCFileStore,
         private readonly importer: OneCImportService,
+        private readonly exporter: OneCExportService,
     ) {}
 
     async log(peer: Pick<OneCPeer, 'id'>, operation: string, ok: boolean, message?: string | null, details?: Record<string, unknown>) {
@@ -275,6 +280,7 @@ export class OneCExchangeService {
         });
         const messageNo = conn.sentNo + 1;
         const version = conn.formatVersion ?? FORMAT_VERSIONS[FORMAT_VERSIONS.length - 1];
+        const exported = await this.exporter.build(peer.id);
         const xmlText = buildMessage({
             format: `${ENTERPRISE_DATA}/${version}`,
             exchangePlan: conn.exchangePlanName ?? DEFAULT_PLAN,
@@ -285,10 +291,19 @@ export class OneCExchangeService {
             versions: FORMAT_VERSIONS,
             objectTypes: OBJECT_TYPES,
             prefix: PREFIX,
-        });
+        }, exported.body);
         const fileId = await this.files.storeOutgoing(peer.id, `Message_${PREFIX}_${messageNo}.xml`, Buffer.from(xmlText, 'utf8'));
         await this.prisma.oneCConnection.update({ where: { id: peer.id }, data: { sentNo: messageNo } });
-        await this.log(peer, 'UploadData', true, '1С забрала данные из LogiCore (пока без документов)', { messageNo, receivedNo: conn.receivedNo });
+        await exported.commit(messageNo);
+        const sent = [
+            exported.sales && `актов — ${exported.sales}`,
+            exported.deletions && `отменённых актов (удаление) — ${exported.deletions}`,
+        ].filter(Boolean).join(', ');
+        await this.log(
+            peer, 'UploadData', exported.skipped.length === 0,
+            [sent ? `1С забрала из LogiCore: ${sent}` : '1С забрала данные из LogiCore: нового для неё нет', ...exported.skipped].join('. '),
+            { messageNo, receivedNo: conn.receivedNo, sales: exported.sales, deletions: exported.deletions, skipped: exported.skipped },
+        );
         return { result: '', outs: { FileID: fileId, ContinuousOperation: false, Operation: '' } };
     }
 
@@ -305,12 +320,16 @@ export class OneCExchangeService {
         if (msg.to && msg.to !== peer.nodeCode) {
             throw new SoapError('Сообщение адресовано не этой компании в LogiCore. Проверьте адрес программы в настройке 1С.');
         }
+        // До какого нашего сообщения 1С всё получила: отправленное позже уйдёт ещё раз.
+        if (msg.receivedNo !== null) {
+            await this.prisma.oneCConnection.update({ where: { id: peer.id }, data: { peerReceivedNo: msg.receivedNo } });
+        }
         if (!msg.hasBody) {
             await this.log(peer, 'DownloadData', true, '1С прислала свои настройки обмена', { versions: msg.versions });
             return done;
         }
 
-        const conn = await this.prisma.oneCConnection.findUniqueOrThrow({ where: { id: peer.id }, select: { receivedNo: true } });
+        const conn = await this.prisma.oneCConnection.findUniqueOrThrow({ where: { id: peer.id }, select: { receivedNo: true, createdById: true } });
         if (msg.messageNo !== null && msg.messageNo <= conn.receivedNo) {
             await this.log(peer, 'DownloadData', true, '1С повторно прислала уже принятые данные — пропущено');
             return done;
@@ -319,7 +338,7 @@ export class OneCExchangeService {
         // Разносим до подтверждения: если разнесение упадёт целиком, номер
         // принятого не сдвинется и 1С пришлёт то же сообщение ещё раз.
         const counts = countObjects(msg.objects);
-        const imported = await this.importer.import(peer.id, peer.companyId, msg.objects);
+        const imported = await this.importer.import(peer.id, peer.companyId, msg.objects, conn.createdById ?? await this.companyAdmin(peer.companyId));
         await this.prisma.oneCConnection.update({
             where: { id: peer.id },
             data: {
@@ -332,6 +351,16 @@ export class OneCExchangeService {
             { messageNo: msg.messageNo, peerReceivedNo: msg.receivedNo, version: msg.version, objects: counts, imported },
         );
         return done;
+    }
+
+    /** От чьего имени заводить платежи, если подключавший 1С уже удалён: руководитель компании. */
+    private async companyAdmin(companyId: string): Promise<string | null> {
+        const admin = await this.prisma.user.findFirst({
+            where: { companyId, role: 'COMPANY_ADMIN' },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
+        });
+        return admin?.id ?? null;
     }
 
     /** 1С удалила настройку у себя — забываем и мы. */

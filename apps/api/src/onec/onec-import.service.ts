@@ -1,7 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+    AccountingDocumentDirection, AccountingDocumentStatus, AccountingDocumentType, PaymentDirection, PaymentMethod,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExternalCompaniesService } from '../external-companies/external-companies.service';
+import { AccountingService } from '../accounting/accounting.service';
+import { PaymentAllocationService } from '../accounting-documents/payment-allocation.service';
 import { findBlock } from '../blocklist/blocklist';
+import { currencyLetter } from './enterprise-data';
 import { XmlNode } from './xdto';
 
 /**
@@ -20,18 +26,28 @@ import { XmlNode } from './xdto';
  *    служебные; в справочнике LogiCore они только мешают;
  *  - в уже заведённой карточке дописываем только пустые поля — что люди
  *    заполнили в LogiCore, 1С не перезаписывает;
- *  - удаления из 1С не применяем: карточку убирает человек.
+ *  - удаления из 1С не применяем: карточку убирает человек;
+ *  - оплата от покупателя (поступление на счёт, приходный ордер) заводится
+ *    платежом LogiCore тем же путём, что кнопкой в кабинете; если 1С
+ *    указала, что это оплата нашего акта, — гасит счета по заявкам этого
+ *    акта, остаток — сам акт. Без указания — платёж ложится на контрагента,
+ *    разносит бухгалтер.
  */
 
 export const CP = 'Справочник.Контрагенты';
 export const ORG = 'Справочник.Организации';
 export const BANK = 'Справочник.БанковскиеСчета';
 export const CONTRACT = 'Справочник.Договоры';
+export const PAY_BANK = 'Документ.ПБДСРасчетыСКонтрагентами';
+export const PAY_CASH = 'Документ.ПКОРасчетыСКонтрагентами';
+/** Наш акт в 1С — тот же вид, что в onec-export (здесь, чтобы не было цикла импортов). */
+const SALES_REF = 'Документ.РеализацияТоваровУслуг';
 
 export interface ImportSummary {
     counterparties: { created: number; linked: number; noBin: number; blocked: number };
     bankFilled: number;
     organizationLinked: boolean;
+    payments: { created: number; allocated: number; known: number; notCustomer: number };
     /** Что пришло, но пока не разносится: вид объекта → сколько. */
     other: Record<string, number>;
     errors: string[];
@@ -103,6 +119,47 @@ export function readBankAccount(node: XmlNode): BankAccount1C | null {
  * Кто контрагент по договорам из этого же сообщения: договор «с покупателем»
  * — заказчик, «с поставщиком» — перевозчик. Прочие виды роли не меняют.
  */
+export interface Payment1C {
+    ref: string;
+    cash: boolean;
+    date: string;
+    number: string;
+    amount: number;
+    /** Буквенный код валюты; не узнали — null. */
+    currency: string | null;
+    customer: boolean;
+    counterparty: Counterparty1C | null;
+    purpose: string | null;
+    /** Строки расшифровки: сумма и, если 1С указала, наш акт (ссылка). */
+    lines: Array<{ amount: number; actRef: string | null }>;
+}
+
+export function readPayment(node: XmlNode): Payment1C | null {
+    const keys = keysOf(node);
+    const ref = text(child(keys, 'Ссылка'));
+    const common = child(node, 'ОбщиеДанные');
+    const amount = Number(text(child(common, 'Сумма')));
+    if (!ref || !amount) return null;
+    const cash = node.name === PAY_CASH;
+    const cp = child(node, 'Контрагент');
+    const rows = child(child(node, 'РасшифровкаПлатежа'), 'Строка') ? child(node, 'РасшифровкаПлатежа')!.children : [];
+    return {
+        ref,
+        cash,
+        date: (text(child(keys, 'Дата')) ?? '').slice(0, 10),
+        number: text(child(keys, 'Номер')) ?? '',
+        amount,
+        currency: currencyLetter(text(child(child(common, 'Валюта'), 'Код'))),
+        customer: text(child(node, 'ВидРасчетов')) === 'СПокупателем',
+        counterparty: cp ? readCounterparty(cp) : null,
+        purpose: text(child(common, cash ? 'Основание' : 'НазначениеПлатежа')),
+        lines: rows.filter((r) => r.name === 'Строка').map((r) => ({
+            amount: Number(text(child(r, 'Сумма'))) || 0,
+            actRef: text(child(child(child(r, 'ДокументРасчетов'), 'РеализацияТоваровУслугСсылка'), 'Ссылка')),
+        })),
+    };
+}
+
 export function rolesFromContracts(objects: XmlNode[]): Map<string, { customer: boolean; carrier: boolean }> {
     const roles = new Map<string, { customer: boolean; carrier: boolean }>();
     for (const o of objects.filter((x) => x.name === CONTRACT)) {
@@ -146,6 +203,15 @@ export function describeImport(s: ImportSummary, counts: Record<string, number>)
     if (counts[ORG]) parts.push(s.organizationLinked ? 'ваша организация сверена' : 'организация с другим БИН — не связана');
     const other = Object.entries(s.other).map(([name, n]) => `${OBJECT_LABELS[name] ?? name} — ${n}`);
     if (other.length) parts.push(`пока только в журнал: ${other.join(', ')}`);
+    if (counts[PAY_BANK] || counts[PAY_CASH]) {
+        const p = s.payments;
+        const d = [
+            p.created && `приняты — ${p.created}${p.allocated ? `, из них разнесены на документы — ${p.allocated}` : ''}`,
+            p.known && `уже были — ${p.known}`,
+            p.notCustomer && `не от покупателей, пропущены — ${p.notCustomer}`,
+        ].filter(Boolean);
+        parts.push(`оплаты ${(counts[PAY_BANK] ?? 0) + (counts[PAY_CASH] ?? 0)}${d.length ? ` (${d.join(', ')})` : ''}`);
+    }
     if (s.errors.length) parts.push(`не разнесено из-за ошибок — ${s.errors.length}`);
     return parts.length ? `Из 1С: ${parts.join('; ')}` : '1С на связи: новых данных нет';
 }
@@ -159,13 +225,19 @@ export class OneCImportService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly externalCompanies: ExternalCompaniesService,
+        private readonly accounting: AccountingService,
+        private readonly allocations: PaymentAllocationService,
     ) {}
 
-    async import(connectionId: string, companyId: string, objects: XmlNode[]): Promise<ImportSummary> {
+    /**
+     * @param userId от чьего имени заводить платежи — кто подключал 1С.
+     */
+    async import(connectionId: string, companyId: string, objects: XmlNode[], userId?: string | null): Promise<ImportSummary> {
         const summary: ImportSummary = {
             counterparties: { created: 0, linked: 0, noBin: 0, blocked: 0 },
             bankFilled: 0,
             organizationLinked: false,
+            payments: { created: 0, allocated: 0, known: 0, notCustomer: 0 },
             other: {},
             errors: [],
         };
@@ -202,7 +274,19 @@ export class OneCImportService {
             }
         }
 
-        for (const o of objects.filter((x) => ![CP, BANK, ORG].includes(x.name))) {
+        for (const o of objects.filter((x) => x.name === PAY_BANK || x.name === PAY_CASH)) {
+            const pay = readPayment(o);
+            if (!pay) continue;
+            try {
+                const result = await this.payment(connectionId, companyId, pay, userId);
+                if (result === 'allocated') summary.payments.created++;
+                summary.payments[result]++;
+            } catch (e) {
+                this.fail(summary, `оплата №${pay.number} от ${pay.date}`, e);
+            }
+        }
+
+        for (const o of objects.filter((x) => ![CP, BANK, ORG, PAY_BANK, PAY_CASH].includes(x.name))) {
             summary.other[o.name] = (summary.other[o.name] ?? 0) + 1;
         }
         return summary;
@@ -266,6 +350,93 @@ export class OneCImportService {
         });
         await this.link(connectionId, CP, cp.ref, created.id);
         return 'created';
+    }
+
+    /** Оплата от покупателя → платёж LogiCore; по нашему акту — сразу разнесённый. */
+    private async payment(
+        connectionId: string, companyId: string, pay: Payment1C, userId?: string | null,
+    ): Promise<'created' | 'allocated' | 'known' | 'notCustomer'> {
+        if (!pay.customer) return 'notCustomer';
+        if (await this.mapped(connectionId, pay.cash ? PAY_CASH : PAY_BANK, pay.ref)) return 'known';
+        if (!pay.counterparty) throw new Error('в 1С у оплаты не указан контрагент');
+        if (!pay.currency) throw new Error('валюта оплаты не распознана');
+        if (!userId) throw new Error('не знаем, от чьего имени завести платёж: подключение 1С без автора');
+
+        let company = await this.findCounterparty(connectionId, companyId, pay.counterparty);
+        if (!company) {
+            const made = await this.counterparty(connectionId, companyId, pay.counterparty);
+            if (made !== 'created') throw new Error(`контрагента «${pay.counterparty.name}» нет в LogiCore, и завести его нельзя (${made === 'noBin' ? 'без БИН' : 'в чёрном списке'})`);
+            company = await this.findCounterparty(connectionId, companyId, pay.counterparty);
+        }
+
+        const kind = pay.cash ? 'приходный кассовый ордер' : 'поступление на расчётный счёт';
+        const payment = await this.accounting.createPayment(companyId, userId, {
+            counterpartyId: company!.id,
+            direction: PaymentDirection.IN,
+            amount: pay.amount,
+            date: pay.date,
+            method: pay.cash ? PaymentMethod.CASH : PaymentMethod.BANK,
+            currency: pay.currency,
+            note: `Из 1С: ${kind} №${pay.number} от ${pay.date}${pay.purpose ? `. ${pay.purpose}` : ''}`,
+        });
+        await this.link(connectionId, pay.cash ? PAY_CASH : PAY_BANK, pay.ref, payment.id);
+
+        const plan = await this.allocationPlan(connectionId, companyId, company!.id, pay);
+        if (!plan.length) return 'created';
+        try {
+            await this.allocations.apply(companyId, userId, payment.id, plan);
+            return 'allocated';
+        } catch (e) {
+            // Платёж записан; не разнёсся — разнесёт бухгалтер, причина в журнале.
+            this.logger.warn(`1С → LogiCore, разнесение оплаты №${pay.number}: ${(e as Error).message}`);
+            return 'created';
+        }
+    }
+
+    /**
+     * Куда разнести оплату по нашему акту: сначала неоплаченные счета по тем
+     * же заявкам (долг в LogiCore висит на счёте), старые вперёд; что
+     * осталось — на сам акт, если по нему есть долг.
+     */
+    private async allocationPlan(connectionId: string, companyId: string, counterpartyId: string, pay: Payment1C) {
+        const plan = new Map<string, number>();
+        const open = new Map<string, number>();
+        for (const line of pay.lines) {
+            if (!line.actRef || line.amount <= 0) continue;
+            const actId = await this.mapped(connectionId, SALES_REF, line.actRef);
+            if (!actId) continue;
+            const act = await this.prisma.accountingDocument.findFirst({
+                where: { id: actId, companyId, counterpartyId, status: AccountingDocumentStatus.POSTED },
+                select: { id: true, currency: true, balanceDue: true, orders: { select: { orderId: true } } },
+            });
+            if (!act || act.currency !== pay.currency) continue;
+            const orderIds = act.orders.map((o) => o.orderId);
+            const invoices = orderIds.length
+                ? await this.prisma.accountingDocument.findMany({
+                    where: {
+                        companyId, counterpartyId, currency: pay.currency,
+                        type: AccountingDocumentType.PAYMENT_INVOICE,
+                        direction: AccountingDocumentDirection.OUTGOING,
+                        status: AccountingDocumentStatus.POSTED,
+                        balanceDue: { gt: 0 },
+                        orders: { some: { orderId: { in: orderIds } } },
+                    },
+                    orderBy: [{ documentDate: 'asc' }, { createdAt: 'asc' }],
+                    select: { id: true, balanceDue: true },
+                })
+                : [];
+            let rest = line.amount;
+            for (const target of [...invoices, act]) {
+                if (rest <= 0) break;
+                const left = open.get(target.id) ?? Number(target.balanceDue);
+                const take = Math.min(rest, left);
+                if (take <= 0) continue;
+                plan.set(target.id, (plan.get(target.id) ?? 0) + take);
+                open.set(target.id, left - take);
+                rest -= take;
+            }
+        }
+        return [...plan.entries()].map(([documentId, amount]) => ({ documentId, amount: amount.toFixed(2) }));
     }
 
     /** Реквизиты счёта — только в пустые поля карточки. */

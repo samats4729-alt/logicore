@@ -3346,6 +3346,9 @@ model OneCConnection {
   /// Номера сообщений обмена — по ним 1С и LogiCore подтверждают получение.
   sentNo            Int       @default(0)
   receivedNo        Int       @default(0)
+  /// Последнее наше сообщение, которое 1С подтвердила. Что отправлено позже
+  /// и не подтверждено, уходит ещё раз.
+  peerReceivedNo    Int       @default(0)
   createdById       String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -3367,8 +3370,14 @@ model OneCObjectMap {
   objectType   String
   /// Ссылка объекта в 1С.
   ref          String
-  /// id нашей записи (для контрагентов и организации — Company).
+  /// id нашей записи (для контрагентов и организации — Company, для
+  /// документов — AccountingDocument, для оплат — Payment, для услуги —
+  /// «service:<название>»).
   localId      String
+  /// Для того, что LogiCore отправляет в 1С: в каком сообщении ушло и
+  /// отпечаток содержимого. Изменилось после отправки — уйдёт ещё раз.
+  sentNo       Int?
+  hash         String?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
