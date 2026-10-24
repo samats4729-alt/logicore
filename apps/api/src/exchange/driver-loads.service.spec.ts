@@ -80,12 +80,11 @@ describe('Биржа · водитель: лента', () => {
         expect(prisma.order.findMany.mock.calls[0][0].where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
         // Схема шефа: 400 000 − топливо 126 000 (1 200 км × 30 л × 350 ₸) = 274 000 за работу,
         // минус ОПВ 27 400 — на руки 246 600. Без заявления на вычет ИПН со всего.
-        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 246600, fuelEstimate: 126000, orderNumber: '7A-0042' });
-        // Водителю — только сумма за рейс, топливо и ОПВ (Q14): 400 000 − 126 000 − 27 400 = 246 600.
-        expect(feed[0].split).toEqual({ base: 400000, fuel: 126000, opv: 27400, opvPct: 10, driverTotal: 246600, preliminary: true });
+        // Схема шефа: 400 000 − топливо 126 000 − ОПВ 27 400 = 246 600 на руки.
+        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 246600, orderNumber: '7A-0042' });
     });
 
-    it('цена для компании, комиссия и налоги парка водителю не уходят (Q14)', async () => {
+    it('водителю — только сумма на руки: ни суммы за рейс, ни топлива, ни налогов (Q14)', async () => {
         const { service, prisma } = build();
         prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...{
             commissionPct: 10, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
@@ -97,9 +96,11 @@ describe('Биржа · водитель: лента', () => {
         expect(load.price).toBe(246600);
         for (const v of [load, card]) {
             expect(v).not.toHaveProperty('breakdown');
-            // 486 717 без НДС и 564 591,72 с НДС — цена для компании; её в ответе нет нигде.
+            expect(v).not.toHaveProperty('fuelEstimate');
+            // 400 000 — сумма за рейс, 126 000 — топливо, 27 400 — ОПВ,
+            // 564 591,72 — цена для компании с НДС: ничего из этого в ответе нет.
             const json = JSON.stringify(v);
-            for (const hidden of ['customerPrice', 'commission', 'parkFee', 'platformFee', 'vosms', 'ipn', '"so"', 'vat', '486717', '564591']) {
+            for (const hidden of ['customerPrice', 'commission', 'parkFee', 'platformFee', 'opv', 'vosms', 'ipn', '"so"', 'vat', 'fuel', '400000', '126000', '27400', '564591']) {
                 expect(json).not.toContain(hidden);
             }
         }

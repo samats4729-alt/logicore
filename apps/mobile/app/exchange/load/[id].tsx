@@ -18,8 +18,8 @@ const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
  * Заявка с биржи.
  *
  * Всё, чтобы решить «повезу или нет»: маршрут по точкам с датами, груз,
- * сколько получите на руки и что ещё важно компании. Сумма на руки — вместе
- * с топливом; налоги и комиссии парк досчитывает сверху (12.10.2026). Точные адреса компания откроет тому, кого
+ * сколько получите на руки и что ещё важно компании. Сумма на руки — чистыми:
+ * налоги и топливо уже вычтены, расшифровки водитель не видит (Q14, 25.10.2026). Точные адреса компания откроет тому, кого
  * выберет. Внизу — отклик: «согласен за цену компании» одной кнопкой или
  * своя цена. Решает компания; пока не решила, отклик можно отозвать.
  */
@@ -128,15 +128,13 @@ export default function OrderScreen() {
                 <Card>
                     <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>ВЫ ПОЛУЧИТЕ НА РУКИ</Text>
                     <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'Цена договорная'}</Text>
-                    {me.kind === 'PARK' && (
+                    {/* Водителю парка — только сумма чистыми на руки, без расшифровки
+                        (Q14, владелец 25.10.2026): налоги и топливо уже вычтены. */}
+                    {me.kind === 'PARK' && order.price != null && (
                         <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
-                            {order.fuelEstimate
-                                ? `Топливо оплачивает парк: по расчёту около ${деньги(order.fuelEstimate)}${order.distanceKm ? ` на ${Math.round(order.distanceKm).toLocaleString('ru-RU')} км` : ''}. Заправка через парк, чек — на БИН парка. `
-                                : 'Топливо оплачивает парк: заправка через парк, чек — на БИН парка. '}
-                            Пенсионные уже удержаны, остальные налоги платит парк — эта сумма ваша.
+                            Чистыми, на руки — эта сумма ваша.
                         </Text>
                     )}
-                    {me.kind === 'PARK' && order.split && <Breakdown b={order.split} />}
                 </Card>
 
                 <Card>
@@ -195,54 +193,12 @@ export default function OrderScreen() {
                 )}
             </View>
 
-            <OfferSheet visible={sheet} mine={mine} busy={busy} fuelEstimate={order.fuelEstimate ?? null} onSubmit={send} onClose={() => setSheet(false)} />
-        </View>
-    );
-}
-
-/**
- * Из чего сложилась сумма на руки — как просит шеф (Q14, владелец 25.10.2026):
- * сумма за рейс, топливо, пенсионные, на руки. Цену для компании, комиссию
- * и налоги парка водитель не видит — сервер их и не присылает. Суммы — до
- * тенге и сходятся до тенге: пенсионные считаются остатком от округлённых
- * строк, иначе при сложении «на глаз» вылезал бы лишний тенге.
- */
-function Breakdown({ b }: { b: NonNullable<ExchangeOrder['split']> }) {
-    const { colors } = useAppTheme();
-    const total = Math.round(b.base);
-    const fuel = Math.round(b.fuel);
-    const onHand = Math.round(b.driverTotal);
-    const opv = total - fuel - onHand;
-    const pct = b.opvPct.toLocaleString('ru-RU');
-    const line = (label: string, value: string, strong = false) => (
-        <View style={styles.bLine}>
-            <Text style={[styles.bLabel, { color: strong ? colors.text : colors.textSecondary }, strong && { fontFamily: FONT.semibold }]}>{label}</Text>
-            <Text style={[styles.bValue, { color: colors.text }, strong && { fontFamily: FONT.bold }]}>{value}</Text>
-        </View>
-    );
-    return (
-        <View style={[styles.breakdown, { borderTopColor: colors.border2 }]}>
-            <Text style={[styles.priceLabel, { color: colors.textTertiary, marginBottom: 6 }]}>ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА</Text>
-            {line('Сумма за рейс', деньги(total))}
-            {line('Топливо — оплачивает парк', `− ${деньги(fuel)}`)}
-            {line(`Пенсионные ${pct} % — на ваш счёт`, `− ${деньги(opv)}`)}
-            <View style={[styles.bRule, { backgroundColor: colors.border2 }]} />
-            {line('Вам на руки', деньги(onHand), true)}
-            <Text style={[styles.bNote, { color: colors.textTertiary }]}>
-                {`${pct} % от оплаты за работу (сумма за рейс без топлива) отчисляем на ваш пенсионный счёт. Остальные налоги парк платит за вас сам — из вашей суммы они не вычитаются.`}
-                {b.preliminary ? ' Расчёт предварительный: бухгалтер парка его ещё не подтвердил. Ваша сумма на руки от этого не меняется.' : ''}
-            </Text>
+            <OfferSheet visible={sheet} mine={mine} busy={busy} onSubmit={send} onClose={() => setSheet(false)} />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    breakdown: { marginTop: 14, paddingTop: 12, borderTopWidth: 1 },
-    bLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingVertical: 4 },
-    bLabel: { flex: 1, fontFamily: FONT.regular, fontSize: 14 },
-    bValue: { fontFamily: FONT.semibold, fontSize: 14.5, fontVariant: ['tabular-nums'] },
-    bRule: { height: 1, marginVertical: 6 },
-    bNote: { fontFamily: FONT.regular, fontSize: 12, lineHeight: 17, marginTop: 8 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     head: { fontFamily: FONT.bold, marginBottom: 10 },
     point: { flexDirection: 'row', gap: 12 },
