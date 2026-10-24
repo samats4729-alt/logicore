@@ -311,7 +311,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     { key: '/company/accounting/incoming', label: 'Входящие документы' },
                     { key: '/company/accounting/operations', label: 'Платежи' },
                     { key: '/company/accounting/calendar', label: 'Платёжный календарь' },
-                    { key: '/company/accounting/counterparty-report', label: 'Долги и остатки' },
+                    { key: '/company/accounting/counterparty-report', label: 'Взаиморасчёты' },
                     { key: '/company/inventory/balances', label: 'Материалы' },
                     ...(isAdmin ? [{ key: '/company/payroll', label: 'Зарплата' }] : []),
                 ],

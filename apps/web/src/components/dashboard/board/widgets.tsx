@@ -72,7 +72,7 @@ const META: Record<WidgetId, (p: Period) => WidgetMeta> = {
     problems: () => ({ title: 'Проблемы', description: 'Рейсы с проблемой, которые требуют решения', icon: TriangleAlert, weight: 1 }),
     ordersMonth: (p) => ({ title: `Заявок за ${PERIOD_WORD[p]}`, description: 'Создано с начала периода, к тому же дню прошлого', icon: ClipboardList, weight: 1 }),
     revenue: () => ({ title: 'Выручка', description: 'Выручка с заявок за период и рост к прошлому', icon: TrendingUp, weight: 1 }),
-    receivables: () => ({ title: 'Дебиторка', description: 'Сколько вам должны и как давно', icon: Wallet, weight: 1 }),
+    receivables: () => ({ title: 'Дебиторка', description: 'Задолженность заказчиков по срокам', icon: Wallet, weight: 1 }),
     payroll: () => ({ title: 'Заработано за месяц', description: 'Оклад, процент и премии с начала месяца', icon: Banknote, weight: 1 }),
     tariff: () => ({ title: 'Тариф', description: 'До какого числа оплачена подписка и сколько осталось', icon: CreditCard, weight: 1 }),
     // ---------- блоки ----------
