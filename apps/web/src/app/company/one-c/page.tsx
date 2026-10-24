@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import dayjs from 'dayjs';
 import { AlertCircle, ArrowRight, Check, CheckCircle2, Copy, KeyRound, Loader2, Pause, Play, Plug, PlayCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -376,6 +377,13 @@ export default function OneCPage() {
                                 </div>
                             ))}
                         </div>
+                        {/* Остатки расчётов 1С при синхронизации не отдаёт — только отчётом. */}
+                        <p className="m-0 px-4 pb-4 text-[12px] text-muted-foreground">
+                            Долги на день начала работы обмен не переносит — загрузите их оборотно-сальдовой ведомостью из 1С:{' '}
+                            <Link href="/company/accounting/opening-balances" className="text-foreground underline underline-offset-2">
+                                «Ввод начальных остатков» → «Загрузить долги из 1С»
+                            </Link>
+                        </p>
                     </section>
 
                     <section className={styles.card}>

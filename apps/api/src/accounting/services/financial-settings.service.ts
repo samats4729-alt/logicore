@@ -506,6 +506,59 @@ export class FinancialSettingsService {
         });
     }
 
+    /**
+     * Начальные долги из оборотно-сальдовой ведомости 1С — разом, после того
+     * как человек сверил сопоставление на экране. Сторона, которой в
+     * ведомости нет (ноль), не затирается: ведомости по покупателям и по
+     * поставщикам загружают по очереди, и вторая не должна стереть первую.
+     */
+    async importCounterpartyOpenings(
+        companyId: string,
+        data: { openingDate?: string | null; note?: string | null; rows?: Array<{ counterpartyId?: string; receivable?: number; payable?: number }> },
+    ) {
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (!rows.length) throw new BadRequestException('Нет строк для записи');
+        if (rows.length > 2000) throw new BadRequestException('Слишком много строк за раз — не больше 2000');
+        const money = (v: unknown) => {
+            const n = Number(v ?? 0);
+            if (!Number.isFinite(n) || n < 0) throw new BadRequestException('Сумма долга должна быть числом не меньше нуля');
+            return Math.round(n * 100) / 100;
+        };
+        // Два названия из 1С могли сопоставить с одним контрагентом — суммы складываем.
+        const byCounterparty = new Map<string, { counterpartyId: string; receivable: number; payable: number }>();
+        for (const r of rows) {
+            if (!r.counterpartyId || typeof r.counterpartyId !== 'string') throw new BadRequestException('У строки не выбран контрагент');
+            if (r.counterpartyId === companyId) throw new BadRequestException('Нельзя ввести долг самому себе');
+            const prev = byCounterparty.get(r.counterpartyId) ?? { counterpartyId: r.counterpartyId, receivable: 0, payable: 0 };
+            prev.receivable = Math.round((prev.receivable + money(r.receivable)) * 100) / 100;
+            prev.payable = Math.round((prev.payable + money(r.payable)) * 100) / 100;
+            byCounterparty.set(r.counterpartyId, prev);
+        }
+        const clean = [...byCounterparty.values()];
+        const ids = [...new Set(clean.map((r) => r.counterpartyId))];
+        const known = await this.prisma.company.count({ where: { id: { in: ids } } });
+        if (known !== ids.length) throw new NotFoundException('Часть контрагентов не найдена — обновите страницу');
+
+        const openingDate = data.openingDate ? new Date(data.openingDate) : null;
+        const note = data.note ?? null;
+        const existing = new Map((await this.prisma.counterpartyOpeningBalance.findMany({
+            where: { companyId, counterpartyId: { in: ids } },
+            select: { counterpartyId: true, openingReceivable: true, openingPayable: true },
+        })).map((o) => [o.counterpartyId, o]));
+
+        await this.prisma.$transaction(clean.map((r) => {
+            const prev = existing.get(r.counterpartyId);
+            const receivable = r.receivable || (prev ? Number(prev.openingReceivable) : 0);
+            const payable = r.payable || (prev ? Number(prev.openingPayable) : 0);
+            return this.prisma.counterpartyOpeningBalance.upsert({
+                where: { companyId_counterpartyId: { companyId, counterpartyId: r.counterpartyId } },
+                create: { companyId, counterpartyId: r.counterpartyId, openingReceivable: receivable, openingPayable: payable, openingDate, note },
+                update: { openingReceivable: receivable, openingPayable: payable, openingDate, note },
+            });
+        }));
+        return { saved: clean.length };
+    }
+
     // ==================== СПРАВОЧНИК НАИМЕНОВАНИЙ УСЛУГ ====================
 
     private readonly DEFAULT_SERVICES = [

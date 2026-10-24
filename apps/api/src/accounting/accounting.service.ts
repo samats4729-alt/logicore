@@ -360,6 +360,13 @@ export class AccountingService {
         return this.settingsService.upsertCounterpartyOpening(companyId, counterpartyId, data);
     }
 
+    async importCounterpartyOpenings(
+        companyId: string,
+        data: { openingDate?: string | null; note?: string | null; rows?: Array<{ counterpartyId?: string; receivable?: number; payable?: number }> },
+    ) {
+        return this.settingsService.importCounterpartyOpenings(companyId, data);
+    }
+
     async getFinanceCategories(companyId: string) {
         return this.settingsService.getFinanceCategories(companyId);
     }

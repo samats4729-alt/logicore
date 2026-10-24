@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Tabs, Table, Button, Typography, Modal, Form, InputNumber, Input, Tag } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, BankOutlined, InboxOutlined, CarOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, BankOutlined, InboxOutlined, CarOutlined, UploadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { fetchCounterparties } from '@/lib/counterparties';
 import { formatMoneyInput, parseMoneyInput } from '@/lib/money-format';
@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { DateField } from '@/components/ui/DateField';
+import { OpeningsFrom1CDialog } from '@/components/accounting/OpeningsFrom1CDialog';
 
 const { Text } = Typography;
 
@@ -56,6 +57,8 @@ export default function OpeningBalancesPage() {
     // Модалка контрагента
     const [cpModal, setCpModal] = useState<{ partner: Partner; side: 'receivable' | 'payable' } | null>(null);
     const [cpForm] = Form.useForm();
+    // Загрузка долгов из оборотно-сальдовой ведомости 1С
+    const [from1c, setFrom1c] = useState(false);
 
     useEffect(() => { fetchAll(); }, []);
 
@@ -177,6 +180,7 @@ export default function OpeningBalancesPage() {
                         Один раз при старте учёта укажите, сколько денег было на счетах и кто кому был должен. Дальше система считает всё сама — эти цифры станут отправной точкой для взаиморасчётов и остатков.
                     </p>
                 </div>
+                <Button icon={<UploadOutlined />} onClick={() => setFrom1c(true)}>Загрузить долги из 1С</Button>
             </div>
 
             <div className="lc-card" style={{ padding: 16 }}>
@@ -210,6 +214,8 @@ export default function OpeningBalancesPage() {
                     ]}
                 />
             </div>
+
+            <OpeningsFrom1CDialog open={from1c} onOpenChange={setFrom1c} partners={partners} openings={openings} onSaved={fetchAll} />
 
             {/* Модалка счёта */}
             <Modal open={!!accModal} title={`Начальный остаток — ${accModal?.name || ''}`} onCancel={() => setAccModal(null)} onOk={() => accForm.submit()} okText="Сохранить" cancelText="Отмена" destroyOnClose>
