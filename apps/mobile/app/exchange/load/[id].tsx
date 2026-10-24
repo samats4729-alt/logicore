@@ -136,7 +136,7 @@ export default function OrderScreen() {
                             Пенсионные уже удержаны, остальные налоги платит парк — эта сумма ваша.
                         </Text>
                     )}
-                    {me.kind === 'PARK' && order.breakdown && <Breakdown b={order.breakdown} />}
+                    {me.kind === 'PARK' && order.split && <Breakdown b={order.split} />}
                 </Card>
 
                 <Card>
@@ -201,26 +201,19 @@ export default function OrderScreen() {
 }
 
 /**
- * Из чего сложилась сумма на руки (владелец, 15.10.2026: «комиссия и общая
- * сумма — чтобы было понятно, за что высчитывают»). Суммы — до тенге, и
- * сходятся до тенге: налоги считаются остатком от округлённых строк, иначе
- * при сложении «на глаз» вылезал бы лишний тенге.
+ * Из чего сложилась сумма на руки — как просит шеф (Q14, владелец 25.10.2026):
+ * сумма за рейс, топливо, пенсионные, на руки. Цену для компании, комиссию
+ * и налоги парка водитель не видит — сервер их и не присылает. Суммы — до
+ * тенге и сходятся до тенге: пенсионные считаются остатком от округлённых
+ * строк, иначе при сложении «на глаз» вылезал бы лишний тенге.
  */
-function Breakdown({ b }: { b: NonNullable<ExchangeOrder['breakdown']> }) {
+function Breakdown({ b }: { b: NonNullable<ExchangeOrder['split']> }) {
     const { colors } = useAppTheme();
-    const total = Math.round(b.customerPrice);
-    const platform = Math.round(b.platformFee);
-    const park = Math.round(b.parkFee);
-    const vat = Math.round(b.vat ?? 0);
-    const onHand = Math.round(b.driverTotal);
-    // Схема шефа (16.10.2026): комиссия одной строкой, топливо и ОПВ — отдельно.
-    const boss = b.opv != null && b.commission != null;
-    const commission = Math.round(b.commission ?? 0);
+    const total = Math.round(b.base);
     const fuel = Math.round(b.fuel);
-    const opv = Math.round(b.opv ?? 0);
-    const taxes = boss ? total - vat - commission - fuel - opv - onHand : total - platform - park - vat - onHand;
-    // Без процентов в подписях: комиссии считаются от стоимости работы без
-    // топлива, а не от всей цены рейса, — «5 % от 508 000» не сошлось бы.
+    const onHand = Math.round(b.driverTotal);
+    const opv = total - fuel - onHand;
+    const pct = b.opvPct.toLocaleString('ru-RU');
     const line = (label: string, value: string, strong = false) => (
         <View style={styles.bLine}>
             <Text style={[styles.bLabel, { color: strong ? colors.text : colors.textSecondary }, strong && { fontFamily: FONT.semibold }]}>{label}</Text>
@@ -230,24 +223,14 @@ function Breakdown({ b }: { b: NonNullable<ExchangeOrder['breakdown']> }) {
     return (
         <View style={[styles.breakdown, { borderTopColor: colors.border2 }]}>
             <Text style={[styles.priceLabel, { color: colors.textTertiary, marginBottom: 6 }]}>ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА</Text>
-            {line('Компания платит за рейс', деньги(total))}
-            {vat > 0 && line(`НДС${b.vatPct ? ` ${b.vatPct} %` : ''} — парк платит в бюджет`, `− ${деньги(vat)}`)}
-            {boss ? line('Комиссия парка и LogiCore', `− ${деньги(commission)}`) : (
-                <>
-                    {line('Комиссия LogiCore', `− ${деньги(platform)}`)}
-                    {line('Комиссия парка', `− ${деньги(park)}`)}
-                </>
-            )}
-            {line(boss ? 'Налоги за вас платит парк' : 'Налоги и взносы за вас', `− ${деньги(taxes)}`)}
-            {boss && line('Топливо — оплачивает парк', `− ${деньги(fuel)}`)}
-            {boss && line('Пенсионные (ОПВ) — на ваш счёт', `− ${деньги(opv)}`)}
+            {line('Сумма за рейс', деньги(total))}
+            {line('Топливо — оплачивает парк', `− ${деньги(fuel)}`)}
+            {line(`Пенсионные ${pct} % — на ваш счёт`, `− ${деньги(opv)}`)}
             <View style={[styles.bRule, { backgroundColor: colors.border2 }]} />
             {line('Вам на руки', деньги(onHand), true)}
             <Text style={[styles.bNote, { color: colors.textTertiary }]}>
-                {boss
-                    ? `Парк платит за вас медстраховку (ОСМС), социальные отчисления и подоходный налог (ИПН)${b.deductionApplied ? ' — с учётом базового вычета по вашему заявлению' : ''}. Пенсионные удерживаются из вашей оплаты и идут на ваш пенсионный счёт.`
-                    : `${b.fuel > 0 ? `В том числе топливо — около ${деньги(Math.round(b.fuel))}. ` : ''}Налоги и взносы — пенсионные (ОПВ), медстраховка (ВОСМС), подоходный налог (ИПН) и социальные отчисления. Их платит парк в бюджет, на ваш пенсионный счёт и медстраховку.`}
-                {b.preliminary ? ' Расчёт налогов предварительный: бухгалтер парка его ещё не подтвердил. Ваша сумма на руки от этого не меняется.' : ''}
+                {`${pct} % от оплаты за работу (сумма за рейс без топлива) отчисляем на ваш пенсионный счёт. Остальные налоги парк платит за вас сам — из вашей суммы они не вычитаются.`}
+                {b.preliminary ? ' Расчёт предварительный: бухгалтер парка его ещё не подтвердил. Ваша сумма на руки от этого не меняется.' : ''}
             </Text>
         </View>
     );

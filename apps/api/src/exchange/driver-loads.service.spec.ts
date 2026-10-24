@@ -81,15 +81,11 @@ describe('Биржа · водитель: лента', () => {
         // Схема шефа: 400 000 − топливо 126 000 (1 200 км × 30 л × 350 ₸) = 274 000 за работу,
         // минус ОПВ 27 400 — на руки 246 600. Без заявления на вычет ИПН со всего.
         expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 246600, fuelEstimate: 126000, orderNumber: '7A-0042' });
-        expect(feed[0].breakdown).toMatchObject({
-            base: 400000, gross: 274000, opv: 27400, vosms: 5480, so: 12330, ipn: 24660,
-            driverTotal: 246600, vat: 0, deductionApplied: false, preliminary: true,
-        });
-        // 400 000 + ОСМС + СО + ИПН = 442 470; +10 % = 486 717.
-        expect(feed[0].breakdown?.customerPrice).toBe(486717);
+        // Водителю — только сумма за рейс, топливо и ОПВ (Q14): 400 000 − 126 000 − 27 400 = 246 600.
+        expect(feed[0].split).toEqual({ base: 400000, fuel: 126000, opv: 27400, opvPct: 10, driverTotal: 246600, preliminary: true });
     });
 
-    it('парк плательщик НДС — НДС сверху виден водителю в разборе', async () => {
+    it('цена для компании, комиссия и налоги парка водителю не уходят (Q14)', async () => {
         const { service, prisma } = build();
         prisma.parkPayoutRates.findUnique.mockResolvedValue({ ...{
             commissionPct: 10, opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, fuelPerKm: 100,
@@ -97,8 +93,16 @@ describe('Биржа · водитель: лента', () => {
             fuelConsumption: 30, fuelPriceSummer: 350, fuelPriceWinter: null, fuelSeason: 'SUMMER', ipnHighPct: 15, ipnThresholdMrp: 8500,
         }, vatPayer: true });
         const [load] = await service.feed('u-1');
+        const card = await service.card('u-1', 'order-1');
         expect(load.price).toBe(246600);
-        expect(load.breakdown).toMatchObject({ vatPct: 16, vat: 77874.72, customerPrice: 564591.72 });
+        for (const v of [load, card]) {
+            expect(v).not.toHaveProperty('breakdown');
+            // 486 717 без НДС и 564 591,72 с НДС — цена для компании; её в ответе нет нигде.
+            const json = JSON.stringify(v);
+            for (const hidden of ['customerPrice', 'commission', 'parkFee', 'platformFee', 'vosms', 'ipn', '"so"', 'vat', '486717', '564591']) {
+                expect(json).not.toContain(hidden);
+            }
+        }
     });
 
     it('договорная цена — суммы на руки нет', async () => {
