@@ -76,21 +76,37 @@ const counterpartyFields = (c: CounterpartyKey) =>
     t('Ссылка', c.ref) + t('Наименование', c.name) + t('НаименованиеПолное', c.name) + t('ИНН', c.bin)
     + t('ЮридическоеФизическоеЛицо', c.legal ? 'ЮридическоеЛицо' : 'ФизическоеЛицо');
 
-const currencyKey = (name: string, c: CurrencyKey) => n(name, t('Код', c.code), t('Наименование', c.name));
+/**
+ * С версии формата 1.7 код и название валюты и единицы измерения лежат во
+ * вложенном «ДанныеКлассификатора», до неё — прямо в элементе. Перепутать
+ * нельзя: 1С проверяет объект по схеме и не принимает всё сообщение
+ * (учебная БП на 1.10 отказала 24.10.2026). Казахстанская облачная — 1.6.
+ */
+export function usesClassifierData(version: string | null | undefined): boolean {
+    const [major, minor] = (version ?? '').split('.').map(Number);
+    if (!major) return true;
+    return major > 1 || minor >= 7;
+}
+
+const classifier = (name: string, version: string | null | undefined, code: string, title: string) =>
+    usesClassifierData(version)
+        ? n(name, n('ДанныеКлассификатора', t('Код', code), t('Наименование', title)))
+        : n(name, t('Код', code), t('Наименование', title));
 
 /**
  * Услуга целиком — с типом «Услуга»: по одной ссылке в документе 1С завела
  * бы её товаром. Единица — «усл. ед» (ОКЕИ 876).
  */
-export function serviceObject(s: ServiceKey): string {
+export function serviceObject(s: ServiceKey, version?: string | null): string {
     return n('Справочник.Номенклатура',
         n('КлючевыеСвойства', t('Ссылка', s.ref), t('НаименованиеПолное', s.name), t('Наименование', s.name)),
         t('ТипНоменклатуры', 'Услуга'),
-        n('ЕдиницаИзмерения', n('ДанныеКлассификатора', t('Код', '876'), t('Наименование', 'усл. ед'))));
+        classifier('ЕдиницаИзмерения', version, '876', 'усл. ед'));
 }
 
 /** Акт выполненных работ LogiCore → «Реализация (акт, накладная)» с услугами. */
-export function salesObject(d: SalesDocument): string {
+export function salesObject(d: SalesDocument, version?: string | null): string {
+    const currencyKey = (name: string, c: CurrencyKey) => classifier(name, version, c.code, c.name);
     const lines = d.lines.map((l, i) => n('Строка',
         t('НомерСтрокиДокумента', i + 1),
         n('Номенклатура', t('Ссылка', l.service.ref), t('НаименованиеПолное', l.service.name), t('Наименование', l.service.name)),

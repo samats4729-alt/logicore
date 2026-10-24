@@ -157,7 +157,9 @@ export function readPayment(node: XmlNode): Payment1C | null {
         date: (text(child(keys, 'Дата')) ?? '').slice(0, 10),
         number: text(child(keys, 'Номер')) ?? '',
         amount,
-        currency: currencyLetter(text(child(child(common, 'Валюта'), 'Код'))),
+        // До версии формата 1.7 код прямо в «Валюта», с 1.7 — в «ДанныеКлассификатора».
+        currency: currencyLetter(text(child(child(common, 'Валюта'), 'Код'))
+            ?? text(child(child(child(common, 'Валюта'), 'ДанныеКлассификатора'), 'Код'))),
         customer: text(child(node, 'ВидРасчетов')) === 'СПокупателем',
         counterparty: cp ? readCounterparty(cp) : null,
         purpose: text(child(common, cash ? 'Основание' : 'НазначениеПлатежа')),
@@ -388,7 +390,7 @@ export class OneCImportService {
 
         let company = await this.findCounterparty(connectionId, companyId, pay.counterparty);
         if (!company && !mayCreateCounterparty) {
-            throw new Error(`контрагента «${pay.counterparty.name}» нет в LogiCore. Заведите его или включите «Получать из 1С контрагентов»`);
+            throw new Error(`контрагента «${pay.counterparty.name}» нет в LogiCore. Заведите его или включите в настройках обмена «Принимаем из 1С → Контрагенты»`);
         }
         if (!company) {
             const made = await this.counterparty(connectionId, companyId, pay.counterparty);

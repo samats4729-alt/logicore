@@ -51,7 +51,7 @@ export class OneCExportService {
         const conn = await this.prisma.oneCConnection.findUniqueOrThrow({
             where: { id: connectionId },
             select: {
-                companyId: true, setupAt: true, peerReceivedNo: true,
+                companyId: true, setupAt: true, peerReceivedNo: true, formatVersion: true,
                 company: { select: { name: true, bin: true } },
             },
         });
@@ -159,7 +159,7 @@ export class OneCExportService {
                     };
                 }),
             };
-            const xml = salesObject(doc);
+            const xml = salesObject(doc, conn.formatVersion);
             const hash = sha(xml);
             if (prev && prev.hash === hash && !unconfirmed(prev)) continue;
 
@@ -167,7 +167,7 @@ export class OneCExportService {
             for (const s of services) {
                 if (servicesInMessage.has(s.ref)) continue;
                 servicesInMessage.add(s.ref);
-                const objectXml = serviceObject(s);
+                const objectXml = serviceObject(s, conn.formatVersion);
                 const known = await this.prisma.oneCObjectMap.findUnique({
                     where: { connectionId_objectType_ref: { connectionId, objectType: SERVICE, ref: s.ref } },
                     select: { localId: true, sentNo: true, hash: true },

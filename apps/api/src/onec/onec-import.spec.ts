@@ -209,7 +209,7 @@ const PAYMENT_MESSAGE = `<Message xmlns:msg="http://www.1c.ru/SSL/Exchange/Messa
     </Документ.ПБДСРасчетыСКонтрагентами>
     <Документ.ПБДСРасчетыСКонтрагентами>
       <КлючевыеСвойства><Ссылка>pay-ref-2</Ссылка><Дата>2026-10-23T11:00:00</Дата><Номер>0000-000008</Номер></КлючевыеСвойства>
-      <ОбщиеДанные><Валюта><Код>398</Код></Валюта><Сумма>5000</Сумма></ОбщиеДанные>
+      <ОбщиеДанные><Валюта><ДанныеКлассификатора><Код>398</Код><Наименование>KZT</Наименование></ДанныеКлассификатора></Валюта><Сумма>5000</Сумма></ОбщиеДанные>
       <ВидРасчетов>СПоставщиком</ВидРасчетов>
     </Документ.ПБДСРасчетыСКонтрагентами>
   </Body></Message>`;
@@ -222,6 +222,11 @@ describe('Разнесение из 1С: оплаты покупателей', (
             ref: 'pay-ref-1', cash: false, date: '2026-10-23', number: '0000-000007', amount: 150000, currency: 'KZT', customer: true,
             purpose: 'Оплата по акту LC26-000001', lines: [{ amount: 150000, actRef: 'act-ref-1' }],
         });
+    });
+
+    it('валюта читается в обоих видах: прямо в «Валюта» (до 1.7) и в «ДанныеКлассификатора» (с 1.7)', () => {
+        expect(readPayment(objects[0])?.currency).toBe('KZT');
+        expect(readPayment(objects[1])?.currency).toBe('KZT');
     });
 
     it('оплата по нашему акту: сначала счёт по той же заявке, остаток — сам акт; не от покупателя — пропуск', async () => {
@@ -273,7 +278,7 @@ describe('Разнесение из 1С: что компания выбрала 
         const db = fakeDb('co-1');
         const { objects } = readMessage(PAYMENT_MESSAGE);
         const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', { counterparties: false, payments: true });
-        expect(s.errors[0]).toContain('Заведите его или включите «Получать из 1С контрагентов»');
+        expect(s.errors[0]).toContain('Заведите его или включите в настройках обмена «Принимаем из 1С → Контрагенты»');
         expect(db.external.createExternalCompany).not.toHaveBeenCalled();
         expect(db.accounting.createPayment).not.toHaveBeenCalled();
     });
