@@ -67,6 +67,18 @@ export function objectTypesFor(c: ExchangeChoices): ObjectType[] {
     ];
 }
 
+/**
+ * 1С в каждом своём сообщении подтверждает, до какого нашего всё загрузила.
+ * Меньше отправленного — последнее она скачала, но не приняла (24.10.2026
+ * учебная БП так отвергла акт из-за схемы валюты, а журнал писал «забрала
+ * актов — 1»). Пишем это в журнал прямо; данные уйдут повторно сами.
+ */
+export function notLoadedNotice(sentNo: number, peerReceivedNo: number | null): string | null {
+    if (peerReceivedNo === null || peerReceivedNo >= sentNo) return null;
+    return '1С скачала данные из LogiCore, но не смогла их загрузить. Они уйдут ещё раз при следующем обмене. '
+        + 'Если так повторяется — причина в 1С: «Администрирование» → «Журнал регистрации»';
+}
+
 /** УникальныйИдентификатор из параметра: 1С шлёт его то типом, то строкой. */
 const uuidOf = (v: V8Value): string => OneCFileStore.id(v instanceof V8Uuid ? v.value : String(v ?? ''));
 /** ДвоичныеДанные из параметра. */
@@ -314,7 +326,7 @@ export class OneCExchangeService {
         ].filter(Boolean).join(', ');
         await this.log(
             peer, 'UploadData', exported.skipped.length === 0,
-            [sent ? `1С забрала из LogiCore: ${sent}` : '1С забрала данные из LogiCore: нового для неё нет', ...exported.skipped].join('. '),
+            [sent ? `1С забрала из LogiCore: ${sent}` : '1С забрала данные из LogiCore: нового для неё нет', ...exported.skipped.map((s) => s.charAt(0).toUpperCase() + s.slice(1))].join('. '),
             { messageNo, receivedNo: conn.receivedNo, sales: exported.sales, deletions: exported.deletions, skipped: exported.skipped },
         );
         return { result: '', outs: { FileID: fileId, ContinuousOperation: false, Operation: '' } };
@@ -335,7 +347,11 @@ export class OneCExchangeService {
         }
         // До какого нашего сообщения 1С всё получила: отправленное позже уйдёт ещё раз.
         if (msg.receivedNo !== null) {
-            await this.prisma.oneCConnection.update({ where: { id: peer.id }, data: { peerReceivedNo: msg.receivedNo } });
+            const { sentNo } = await this.prisma.oneCConnection.update({
+                where: { id: peer.id }, data: { peerReceivedNo: msg.receivedNo }, select: { sentNo: true },
+            });
+            const notice = notLoadedNotice(sentNo, msg.receivedNo);
+            if (notice) await this.log(peer, 'DownloadData', false, notice, { sentNo, peerReceivedNo: msg.receivedNo });
         }
         if (!msg.hasBody) {
             await this.log(peer, 'DownloadData', true, '1С прислала свои настройки обмена', { versions: msg.versions });

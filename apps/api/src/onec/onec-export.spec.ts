@@ -1,7 +1,7 @@
 import { currencyLetter, currencyOf, salesDeletion, salesObject, serviceObject, shortNumber, vatRateOf } from './enterprise-data';
 import { OneCExportService, SALES, SERVICE } from './onec-export.service';
 import { ORG } from './onec-import.service';
-import { objectTypesFor } from './onec-exchange.service';
+import { notLoadedNotice, objectTypesFor } from './onec-exchange.service';
 
 /** Что LogiCore отправляет в 1С (этап 4): акты как «Реализация (акт, накладная)». */
 describe('Объекты для 1С', () => {
@@ -166,5 +166,14 @@ describe('Что LogiCore просит у 1С', () => {
             'Справочник.Организации:приём', 'Справочник.Номенклатура:отправка', 'Документ.РеализацияТоваровУслуг:отправка',
         ]);
         expect(names({ sendActs: true, receiveCounterparties: true, receivePayments: true })).toHaveLength(8);
+    });
+});
+
+describe('Журнал: 1С скачала, но не загрузила', () => {
+    it('подтверждено меньше отправленного — пишем об этом; всё дошло или 1С ещё ничего не брала — молчим', () => {
+        expect(notLoadedNotice(6, 5)).toContain('не смогла их загрузить');
+        expect(notLoadedNotice(6, 6)).toBeNull();
+        expect(notLoadedNotice(0, 0)).toBeNull();
+        expect(notLoadedNotice(6, null)).toBeNull();
     });
 });
