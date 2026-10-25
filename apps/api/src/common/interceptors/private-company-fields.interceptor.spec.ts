@@ -29,3 +29,11 @@ describe('Служебные поля компании — не наружу', (
         expect(strip({ inviteCode: 'PRK1' })).toEqual({ inviteCode: 'PRK1' });
     });
 });
+
+describe('Служебные поля пользователя — не наружу', () => {
+    it('хеш пароля и привязка к Google водителя в карточке заявки — убираются', () => {
+        const out = strip({ id: 'o1', driver: { id: 'u1', firstName: 'Иван', passwordHash: '$2a$10$x', googleId: 'g-1' }, customer: { passwordHash: '$2a$10$y' } }) as any;
+        expect(out.driver).toEqual({ id: 'u1', firstName: 'Иван' });
+        expect(out.customer).toEqual({});
+    });
+});

@@ -19,6 +19,19 @@ import { map } from 'rxjs/operators';
  */
 export const PRIVATE_COMPANY_FIELDS = ['parkInviteCode', 'stampImage', 'signatureImage'] as const;
 
+/**
+ * Служебные поля пользователя — тоже никогда наружу.
+ *
+ * Карточка заявки отдавала водителя, пользователя заказчика и получателя
+ * целиком (`include: { driver: true }`) — вместе с хешем пароля и привязкой
+ * к Google, и видел это любой участник рейса (найдено 26.10.2026). Хеш —
+ * не пароль, но по нему подбирают простые пароли без всяких ограничений
+ * по попыткам. Экранам ни то ни другое не нужно.
+ */
+export const PRIVATE_USER_FIELDS = ['passwordHash', 'googleId'] as const;
+
+const PRIVATE_FIELDS: readonly string[] = [...PRIVATE_COMPANY_FIELDS, ...PRIVATE_USER_FIELDS];
+
 @Injectable()
 export class PrivateCompanyFieldsInterceptor implements NestInterceptor {
     intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -40,7 +53,7 @@ export function strip(value: unknown, seen = new WeakSet<object>()): unknown {
 
     const result: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-        if ((PRIVATE_COMPANY_FIELDS as readonly string[]).includes(key)) continue;
+        if (PRIVATE_FIELDS.includes(key)) continue;
         result[key] = strip(item, seen);
     }
     return result;
