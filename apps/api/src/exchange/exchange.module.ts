@@ -17,6 +17,7 @@ import { ExchangeParkRegistryService } from './park-registry.service';
 import { ParkContractService } from './park-contract.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeFuelService } from './fuel.service';
+import { ExchangeParkEarningsService } from './park-earnings.service';
 import { StampImageService } from '../common/services/stamp-image.service';
 
 /** Биржа грузов. Выключена, пока на сервере нет `EXCHANGE_ENABLED=true`. */
@@ -27,6 +28,6 @@ import { StampImageService } from '../common/services/stamp-image.service';
         ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController, ExchangeAdminController,
         ExchangePublicController,
     ],
-    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService, ExchangeParkService, ExchangePayoutsService, ParkContractService, StampImageService, ExchangeSettlementService, ExchangeFuelService, ExchangeParkRegistryService],
+    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService, ExchangeParkService, ExchangePayoutsService, ParkContractService, StampImageService, ExchangeSettlementService, ExchangeFuelService, ExchangeParkRegistryService, ExchangeParkEarningsService],
 })
 export class ExchangeModule {}

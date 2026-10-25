@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ExchangeDriverDocumentKind, ExchangeDriverKind, ExchangeDriverStatus } from '@prisma/client';
 import {
-    IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength,
+    IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength,
 } from 'class-validator';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../../auth/password-policy';
 
@@ -288,3 +288,16 @@ export const PARK_FILTER_STATUSES: Record<ParkDriverFilter, ExchangeDriverStatus
     blocked: ['BLOCKED'],
     all: ['PENDING', 'APPROVED', 'REJECTED', 'BLOCKED'],
 };
+
+/** Заработок LogiCore по паркам — период «ГГГГ-ММ-ДД», оба края включительно. */
+export class ParkEarningsQueryDto {
+    @ApiProperty({ required: false, example: '2026-10-01' })
+    @IsOptional()
+    @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Дата периода — в виде ГГГГ-ММ-ДД' })
+    from?: string;
+
+    @ApiProperty({ required: false, example: '2026-10-31' })
+    @IsOptional()
+    @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Дата периода — в виде ГГГГ-ММ-ДД' })
+    to?: string;
+}

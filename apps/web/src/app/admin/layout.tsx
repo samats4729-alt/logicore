@@ -84,6 +84,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             count: pendingCompanies,
         },
         ...(exchangeOn ? [{ key: '/admin/parks', icon: <ShopOutlined />, label: 'Биржа: доступ и парки' }] : []),
+        // Сколько LogiCore заработала на каждом парке — счёт парку выставляется вручную (Q19).
+        ...(exchangeOn ? [{ key: '/admin/parks/earnings', icon: <DollarOutlined />, label: 'Заработок на парках' }] : []),
         { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
         { key: '/admin/orders', icon: <FileTextOutlined />, label: 'Заявки' },
         { key: '/admin/tracking', icon: <AimOutlined />, label: 'Мониторинг' },
