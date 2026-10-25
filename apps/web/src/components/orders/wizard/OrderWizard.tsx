@@ -225,6 +225,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
 
     // Data
     const [locations, setLocations] = useState<Location[]>([]);
+    /** Адреса из последних заявок компании — в окне выбора первой группой. */
+    const [recentLocationIds, setRecentLocationIds] = useState<string[]>([]);
     const [fetchedPartners, setFetchedPartners] = useState<Partner[]>([]);
     /**
      * Стороны загруженной заявки — отдельно от справочника.
@@ -767,6 +769,9 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
             const response = await api.get('/locations');
             setLocations(response.data);
         } catch (e: any) { reportLoadFailure('справочник адресов', e); }
+        // «Недавние» — удобство, а не данные заявки: не загрузились — окно
+        // просто без этой группы, отдельной ошибки человеку не нужно.
+        api.get('/locations/recent').then((r) => setRecentLocationIds(r.data || [])).catch(() => setRecentLocationIds([]));
     };
 
     const fetchCargoTypes = async () => {
@@ -852,6 +857,16 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
         const otherLocs = locations.filter(l => !categorizedIds.has(l.id));
 
         const groups: Array<{ label: string; options: Location[] }> = [];
+
+        // Частое — сверху (правило владельца от 27.07): адреса из последних
+        // заявок. Они же остаются в своих группах ниже — поиск и фильтр по
+        // контрагенту находят их и там.
+        const recentLocs = recentLocationIds
+            .map((id) => locations.find((l) => l.id === id))
+            .filter((l): l is Location => !!l);
+        if (recentLocs.length > 0) {
+            groups.push({ label: 'Недавние', options: recentLocs });
+        }
 
         if (customerLocs.length > 0) {
             const currentMyCompanyName = myCompanies.find(c => c.id === selectedMyCompanyId)?.name || myCompanyName;
