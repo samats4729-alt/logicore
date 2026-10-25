@@ -40,6 +40,8 @@ interface OrderFinanceModalsProps {
     expenseForm: FormInstance;
     expenseLoading: boolean;
     expenseCategories: Option[];
+    /** Рейс везёт свой штатный водитель — можно записать суточные (Q13). */
+    perDiem?: { driverName: string; days: number } | null;
     handleAddExpense: (values: any) => void;
 
     /** Платёж: приход или расход денег с контрагентом */
@@ -77,7 +79,7 @@ interface OrderFinanceModalsProps {
  */
 export default function OrderFinanceModals({
     incomeModalOpen, setIncomeModalOpen, incomeForm, incomeLoading, incomeCategories, handleAddIncome,
-    expenseModalOpen, setExpenseModalOpen, expenseForm, expenseLoading, expenseCategories, handleAddExpense,
+    expenseModalOpen, setExpenseModalOpen, expenseForm, expenseLoading, expenseCategories, perDiem, handleAddExpense,
     paymentModalOpen, setPaymentModalOpen, paymentForm, paymentLoading, editingPayment, handleSavePayment,
     accounts, categories, partners, allocations, setAllocations,
     orderShares, setOrderShares,
@@ -210,6 +212,7 @@ export default function OrderFinanceModals({
             <Form form={expenseForm} layout="vertical" onFinish={handleAddExpense}>
                 <Form.Item name="date" label="Дата" rules={[{ required: true }]}><DateField style={{ width: '100%' }} /></Form.Item>
                 <Form.Item name="category" label="Категория" rules={[{ required: true }]}><Select options={expenseCategories} /></Form.Item>
+                {perDiem && <PerDiemFields form={expenseForm} perDiem={perDiem} />}
                 <Form.Item name="description" label="Описание" rules={[{ required: true }]}><Input placeholder="Описание" /></Form.Item>
                 <Form.Item name="amount" label="Сумма ₸" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} placeholder="0" /></Form.Item>
                 <Form.Item name="note" label="Примечание"><TextArea rows={2} /></Form.Item>
@@ -345,3 +348,43 @@ export default function OrderFinanceModals({
         </>
     );
 }
+
+/**
+ * Суточные штатному водителю (Q13): дни в пути × сумма в день. Дни — по
+ * датам маршрута, их можно поправить. Сумма в день не придумывается
+ * системой — её вводит компания. Итог и описание подставляются сами, а
+ * сохраняется обычный расход рейса: налоговую сторону решает бухгалтер.
+ */
+function PerDiemFields({ form, perDiem }: { form: FormInstance; perDiem: { driverName: string; days: number } }) {
+    const category = Form.useWatch('category', form);
+    const [days, setDays] = useState<number>(perDiem.days);
+    const [rate, setRate] = useState<number | null>(null);
+    useEffect(() => { setDays(perDiem.days); }, [perDiem.days]);
+    useEffect(() => {
+        if (category !== 'per_diem' || !rate || !days) return;
+        form.setFieldsValue({
+            amount: Math.round(days * rate),
+            description: `Суточные водителю ${perDiem.driverName}: ${days} дн. × ${rate.toLocaleString('ru-RU')} ₸`,
+        });
+    }, [category, days, rate, perDiem.driverName, form]);
+    if (category !== 'per_diem') return null;
+    return (
+        <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Form.Item label="Дней в пути" extra="По датам маршрута, можно поправить">
+                    <InputNumber min={1} max={60} value={days} onChange={(v) => setDays(Number(v) || 1)} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label="Суточные в день, ₸">
+                    <InputNumber min={0} value={rate ?? undefined} onChange={(v) => setRate(v == null ? null : Number(v))} style={{ width: '100%' }} placeholder="Например: 10 000" />
+                </Form.Item>
+            </div>
+            <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="Это расход рейса. Сколько суточных не облагается налогом и как их отразить — уточните у бухгалтера: в расчётах налогов они не участвуют."
+            />
+        </>
+    );
+}
+

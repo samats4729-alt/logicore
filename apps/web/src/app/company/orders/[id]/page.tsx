@@ -62,6 +62,7 @@ import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 import { ORDER_STATUS_COLORS as statusColors, getNextStatuses } from '@/lib/order-status';
 import Loader from '@/components/ui/Loader';
+import { PER_DIEM_CATEGORY, perDiemFor } from '@/lib/per-diem';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -2367,7 +2368,9 @@ export default function OrderDetailPage() {
                 setExpenseModalOpen={setExpenseModalOpen}
                 expenseForm={expenseForm}
                 expenseLoading={expenseLoading}
-                expenseCategories={expenseCategories}
+                // Суточные — только когда рейс везёт свой штатный водитель (Q13).
+                expenseCategories={perDiemFor(order, user?.companyId) ? [...expenseCategories, PER_DIEM_CATEGORY] : expenseCategories}
+                perDiem={perDiemFor(order, user?.companyId)}
                 handleAddExpense={handleAddExpense}
                 paymentModalOpen={paymentModalOpen}
                 setPaymentModalOpen={setPaymentModalOpen}

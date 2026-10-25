@@ -124,6 +124,9 @@ export class FinancialReportsService {
                 driver: {
                     select: {
                         id: true,
+                        // Штатный водитель компании или нет — от этого суточные (Q13).
+                        role: true,
+                        companyId: true,
                         firstName: true,
                         lastName: true,
                         middleName: true,
