@@ -35,7 +35,7 @@ type ExecutorCostFields = {
     driverPaymentForm?: unknown;
 };
 
-type OrderSides = {
+export type OrderSides = {
     customerCompanyId?: string | null;
     forwarderId?: string | null;
     subForwarderId?: string | null;
@@ -83,6 +83,65 @@ type CustomerSideFields = {
     hasVat?: unknown;
     vatRate?: unknown;
 };
+
+/**
+ * Компания везёт рейс как перевозчик (`partnerId`), а ведёт его экспедитор:
+ * парк с биржи или фирма, которой рейс передали.
+ */
+export function isPartnerExecutor(order: OrderSides, companyId?: string | null): boolean {
+    return !!companyId && order.partnerId === companyId
+        && !!order.forwarderId && order.forwarderId !== companyId
+        && order.customerCompanyId !== companyId;
+}
+
+/**
+ * Заявка глазами перевозчика: его заказчик — экспедитор, выручка — его
+ * ставка (`driverCost`), НДС и отсрочка — его условия.
+ *
+ * Бухгалтерия считала перевозчика хозяином рейса (`partnerId` — «если нет
+ * экспедитора»), и парк в реестре, журнале доходов, на дашборде и даже в
+ * акте выполненных работ видел цену, которую экспедитору платит его
+ * заказчик, — чужую сделку, да ещё как свою выручку (владелец, 25.10.2026:
+ * парк видит свои расчёты по перевозке, а не сделку экспедитора).
+ *
+ * Возвращается копия: строку из базы дальше могут считать по-прежнему.
+ * Остальным компаниям заявка отдаётся как есть.
+ */
+export function asExecutorSees<T>(order: T, companyId?: string | null): T {
+    const o = order as any;
+    if (!isPartnerExecutor(o, companyId)) return order;
+    const view: any = { ...o };
+    const take = (to: string, from: string) => { if (from in o) view[to] = o[from]; };
+    take('customerPrice', 'driverCost');
+    take('customerPriceBase', 'driverCostBase');
+    take('currency', 'driverCostCurrency');
+    take('hasVat', 'executorHasVat');
+    take('vatRate', 'executorVatRate');
+    take('customerPaymentDays', 'carrierPaymentDays');
+    take('customerPaymentFrom', 'carrierPaymentFrom');
+    take('customerPaymentDate', 'driverPaymentDate');
+    take('customerPaymentCondition', 'driverPaymentCondition');
+    take('customerPaymentForm', 'driverPaymentForm');
+    take('isCustomerPaid', 'isDriverPaid');
+    take('customerPaidAt', 'driverPaidAt');
+    // Заказчик перевозчика — экспедитор; сам перевозчик — хозяин своей стороны.
+    view.customerCompanyId = o.forwarderId;
+    // Нет в выборке экспедитора — не оставляем на его месте заказчика
+    // экспедитора: это чужой клиент, а не контрагент перевозчика.
+    if ('customerCompany' in o || 'forwarder' in o) view.customerCompany = o.forwarder ?? null;
+    if ('partner' in o) view.forwarder = o.partner;
+    view.forwarderId = companyId;
+    view.partnerId = null;
+    if ('partner' in o) view.partner = null;
+    if ('customer' in o) view.customer = null;
+    if ('customerId' in o) view.customerId = null;
+    for (const key of ['driverCost', 'driverCostBase', 'executorVatRate', 'carrierPaymentDays', 'carrierPaymentFrom', 'driverPaymentDate', 'driverPaymentCondition', 'driverPaymentForm', 'driverPaidAt']) {
+        if (key in o) view[key] = null;
+    }
+    if ('executorHasVat' in o) view.executorHasVat = false;
+    if ('isDriverPaid' in o) view.isDriverPaid = false;
+    return view;
+}
 
 /** Убрать из заявки сделку экспедитора с заказчиком — для исполнителя. */
 export function hideCustomerSide<T extends CustomerSideFields>(order: T): T {
@@ -180,9 +239,60 @@ export function hideUnconfirmedSettlements<T extends SettlementFields>(order: T)
  * `forwarderId`, а если его нет — `partnerId`. Остальные участники видят
  * рейс со своей стороны и чужую кухню видеть не должны.
  */
-function isOrderOwner(order: OrderSides, companyId?: string | null): boolean {
+export function isOrderOwner(order: OrderSides, companyId?: string | null): boolean {
     if (!companyId) return false;
     return (order.forwarderId || order.partnerId) === companyId;
+}
+
+/**
+ * История заявки: записи, где названы деньги исполнителя или он сам.
+ *
+ * Карточку и выгрузку правило денег закрывало, а историю — нет. Выбирая
+ * исполнителя с биржи, система пишет «выбран перевозчик такой-то за
+ * столько-то», и эта строка уезжала заказчику вместе с карточкой — та же
+ * маржа экспедитора, только словами (владелец, 25.10.2026: заказчик видит
+ * стоимость перевозки, а не ставку исполнителя и не сумму водителю).
+ */
+const ON_HAND_NOTE = /\s*—\s*водителю на руки .*$/;
+const EXCHANGE_DRIVER = /^С биржи выбран водитель (.+?) \((?:через парк |свой ИП\))/;
+
+/** Запись без сумм и без названия исполнителя — для заказчика и водителя. */
+export function neutralHistoryComment(comment: string | null | undefined): string | null | undefined {
+    if (!comment) return comment;
+    // `\b` в JS — граница латинского слова, на кириллице он не срабатывает.
+    if (/^С биржи выбран перевозчик(?:\s|$)/.test(comment)) return 'С биржи выбран перевозчик';
+    const driver = comment.match(EXCHANGE_DRIVER);
+    if (driver) return `С биржи выбран водитель ${driver[1]}`;
+    if (/^Заявка переназначена на партнера(?:\s|$)/.test(comment)) return 'Заявка передана перевозчику';
+    return comment.replace(ON_HAND_NOTE, '');
+}
+
+/**
+ * Сколько водителю парка на руки, знает только парк: это его расчёт с
+ * водителем. Экспедитору, который выбирал водителя, — нет (владелец,
+ * 25.10.2026). Такие приписки писались в историю до этого правила.
+ */
+export function withoutOnHand(comment: string | null | undefined): string | null | undefined {
+    return comment ? comment.replace(ON_HAND_NOTE, '') : comment;
+}
+
+/** Комментарий записи истории глазами этой компании (или водителя). */
+export function historyCommentFor(
+    comment: string | null | undefined,
+    order: OrderSides,
+    viewer: { companyId?: string | null; driver?: boolean },
+): string | null | undefined {
+    if (viewer.driver || isCustomerOnly(order, viewer.companyId)) return neutralHistoryComment(comment);
+    if (!viewer.companyId || order.partnerId !== viewer.companyId) return withoutOnHand(comment);
+    return comment;
+}
+
+function maskStatusHistory(order: any, viewer: { companyId?: string | null; driver?: boolean }) {
+    if (!Array.isArray(order.statusHistory)) return;
+    order.statusHistory = order.statusHistory.map((entry: any) => ({
+        ...entry,
+        comment: historyCommentFor(entry.comment, order, viewer),
+    }));
 }
 
 /** Применить правила видимости к заявке, уезжающей контрагенту. */
@@ -190,6 +300,8 @@ export function maskForCustomer<T extends ExecutorCostFields & OrderSides & Sett
     order: T,
     companyId?: string | null,
 ): T {
+    // История — до того, как скроем стороны: правило смотрит, кто есть кто.
+    maskStatusHistory(order, { companyId });
     if (isCustomerOnly(order, companyId)) hideExecutorCost(order);
     if (isExecutorOnly(order, companyId)) hideCustomerSide(order as T & CustomerSideFields);
 
@@ -226,12 +338,27 @@ export function hideCustomerPrice<T extends { customerPrice?: unknown }>(order: 
  * наш водитель или водитель нанятой фирмы, — разница между этой ставкой и
  * его собственной оплатой есть чей-то заработок, и это не его сведения.
  * Своя оплата (`driverCost`) остаётся: за неё он и работает.
+ *
+ * Но только когда это и правда его оплата. Если рейс везёт перевозчик —
+ * парк или фирма (`partnerId`), — `driverCost` есть ставка этой фирмы у
+ * экспедитора, а водителю платит уже она. Водителю парка — только сумма на
+ * руки, и её он видит в своём расчёте (владелец, 25.10.2026).
  */
 export function maskForDriver<T extends ExecutorCostFields & { customerPrice?: unknown }>(
     order: T,
 ): T {
-    hideCustomerPrice(order as any);
     const masked = order as any;
+    maskStatusHistory(masked, { driver: true });
+    if (masked.partnerId) {
+        masked.driverCost = null;
+        masked.driverCostBase = null;
+        masked.isDriverPaid = false;
+        masked.driverPaidAt = null;
+        masked.driverPaymentDate = null;
+        masked.driverPaymentCondition = null;
+        masked.driverPaymentForm = null;
+    }
+    hideCustomerPrice(order as any);
     masked.subForwarderPrice = null;
     masked.subForwarderId = null;
     masked.subForwarder = null;

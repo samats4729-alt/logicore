@@ -1,6 +1,21 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * Что видно о компании, с которой ещё не работаешь: имя, БИН, кто она.
+ *
+ * Поиск и запросы на сотрудничество отдавали всю строку компании — с
+ * банковским счётом, путями к файлам печати и подписи и кодом приглашения
+ * парка, по которому водитель прикрепляется к парку. Её видела любая
+ * компания платформы, набравшая пару букв названия (владелец, 25.10.2026:
+ * сохранять разграничение прав между компаниями). Реквизиты открываются,
+ * когда сотрудничество принято, — там они нужны для счетов и договоров.
+ */
+const PUBLIC_COMPANY_SELECT = {
+    id: true, name: true, bin: true, type: true,
+    isCustomer: true, isCarrier: true, isPark: true,
+} as const;
+
 @Injectable()
 export class PartnersService {
     constructor(private prisma: PrismaService) { }
@@ -40,6 +55,7 @@ export class PartnersService {
         // Find companies
         const companies = await this.prisma.company.findMany({
             where,
+            select: PUBLIC_COMPANY_SELECT,
             skip,
             take: limit,
             orderBy: { name: 'asc' },
@@ -77,7 +93,7 @@ export class PartnersService {
                 status: 'PENDING',
             },
             include: {
-                requester: true,
+                requester: { select: PUBLIC_COMPANY_SELECT },
             },
         });
     }
@@ -90,7 +106,7 @@ export class PartnersService {
                 status: 'PENDING',
             },
             include: {
-                recipient: true,
+                recipient: { select: PUBLIC_COMPANY_SELECT },
             },
         });
     }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { managerOrdersFilter } from '../common/manager-orders';
+import { asExecutorSees } from '../orders/order-visibility';
 import { ZERO, toNum } from '../common/utils/money';
 import { KZ_UTC_OFFSET_MINUTES, kzStartOfMonth, kzStartOfToday, kzToday } from '../common/utils/business-date';
 import {
@@ -465,7 +466,9 @@ export class DashboardBoardService {
         let cur = { revenue: ZERO, margin: ZERO, cost: ZERO };
         let prev = { revenue: ZERO, margin: ZERO, cost: ZERO };
 
-        for (const o of orders) {
+        for (const raw of orders) {
+            // Перевозчик у экспедитора — по своей ставке (`asExecutorSees`).
+            const o = asExecutorSees(raw, companyId);
             const fin = this.financeCalculator.computeOrderFinance({
                 order: o as any,
                 payments: orderFinancePayments(o as any),

@@ -1,4 +1,4 @@
-import { hideCustomerPrice, hideExecutorCost, isCustomerOnly, maskForCustomer } from './order-visibility';
+import { asExecutorSees, hideCustomerPrice, hideExecutorCost, historyCommentFor, isCustomerOnly, maskForCustomer, maskForDriver, neutralHistoryComment } from './order-visibility';
 
 /**
  * Кто какие деньги по рейсу видит.
@@ -235,5 +235,73 @@ describe('Исполнитель не видит сделку экспедито
     it('парк сам и экспедитор этой заявки — видит всё: это его сделка', () => {
         const order = maskForCustomer({ ...рейс(), forwarderId: 'парк' } as any, 'парк');
         expect(order.customerPrice).toBe(520000);
+    });
+});
+
+describe('История заявки и рейс парка глазами каждой стороны (владелец, 25.10.2026)', () => {
+    const ВЫБОР = 'С биржи выбран водитель Рулев Нурлан (через парк ТОО «Парк (Проверка)») за 555 555 ₸ — водителю на руки 333 333 ₸ с топливом';
+    const рейс = (extra: any = {}) => ({
+        customerCompanyId: 'заказчик', forwarderId: 'экспедитор', partnerId: 'парк', subForwarderId: null,
+        customerPrice: 777777, driverCost: 555555, hasVat: true, vatRate: 16, executorHasVat: false, executorVatRate: 0,
+        isDriverPaid: true, isCustomerPaid: false, settlementsConfirmedAt: new Date(),
+        forwarder: { id: 'экспедитор', name: 'ТОО «ЛогиКор»' }, partner: { id: 'парк', name: 'ТОО «Парк»' },
+        customerCompany: { id: 'заказчик', name: 'ТОО «Магнум»' },
+        statusHistory: [{ comment: ВЫБОР }],
+        ...extra,
+    });
+
+    it('заказчик: в истории ни ставки, ни парка, ни суммы водителю', () => {
+        const order = maskForCustomer(рейс() as any, 'заказчик');
+        expect(order.statusHistory[0].comment).toBe('С биржи выбран водитель Рулев Нурлан');
+    });
+
+    it('экспедитор: своя ставка видна, сумма водителю на руки — нет', () => {
+        const comment = historyCommentFor(ВЫБОР, рейс(), { companyId: 'экспедитор' });
+        expect(comment).toBe('С биржи выбран водитель Рулев Нурлан (через парк ТОО «Парк (Проверка)») за 555 555 ₸');
+    });
+
+    it('парк: его расчёт с водителем — его сведения', () => {
+        expect(historyCommentFor(ВЫБОР, рейс(), { companyId: 'парк' })).toBe(ВЫБОР);
+    });
+
+    it('водитель: без сумм', () => {
+        expect(historyCommentFor(ВЫБОР, рейс(), { driver: true })).toBe('С биржи выбран водитель Рулев Нурлан');
+        expect(neutralHistoryComment('С биржи выбран перевозчик ТОО «Алтын» за 350 000 ₸')).toBe('С биржи выбран перевозчик');
+        expect(neutralHistoryComment('Заявка переназначена на партнера ИП Сериков')).toBe('Заявка передана перевозчику');
+    });
+
+    it('водитель парка не видит ставку парка: это не его оплата', () => {
+        const order = maskForDriver(рейс() as any);
+        expect(order.driverCost).toBeNull();
+        expect(order.customerPrice).toBeNull();
+    });
+
+    it('водитель без перевозчика видит свою оплату, как раньше', () => {
+        const order = maskForDriver(рейс({ partnerId: null }) as any);
+        expect(order.driverCost).toBe(555555);
+    });
+
+    it('парк в бухгалтерии: выручка — его ставка, заказчик — экспедитор', () => {
+        const seen = asExecutorSees(рейс(), 'парк');
+        expect(seen).toMatchObject({
+            customerPrice: 555555, customerCompanyId: 'экспедитор', forwarderId: 'парк', partnerId: null,
+            hasVat: false, isCustomerPaid: true, driverCost: null,
+        });
+        expect(seen.customerCompany).toEqual({ id: 'экспедитор', name: 'ТОО «ЛогиКор»' });
+        expect(JSON.stringify(seen)).not.toContain('777777');
+    });
+
+    it('экспедитору и заказчику заявка — как есть', () => {
+        const order = рейс();
+        expect(asExecutorSees(order, 'экспедитор')).toBe(order);
+        expect(asExecutorSees(order, 'заказчик')).toBe(order);
+        // Парк, который сам ведёт рейс без экспедитора, — хозяин, а не исполнитель.
+        const own = рейс({ forwarderId: null });
+        expect(asExecutorSees(own, 'парк')).toBe(own);
+    });
+
+    it('без экспедитора в выборке не подставляет на его место чужого заказчика', () => {
+        const { forwarder: _f, ...withoutForwarder } = рейс();
+        expect(asExecutorSees(withoutForwarder, 'парк').customerCompany).toBeNull();
     });
 });
