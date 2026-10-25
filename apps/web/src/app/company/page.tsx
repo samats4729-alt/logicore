@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import { видимыеБлоки } from '@/lib/dashboard-blocks';
+import { canViewPayroll } from '@/lib/section-access';
 import Board from '@/components/dashboard/board/Board';
 import { BoardDataProvider } from '@/components/dashboard/board/data';
 import FirstStepsCard from '@/components/dashboard/FirstStepsCard';
@@ -48,7 +49,7 @@ export default function CompanyDashboard() {
     const board = useBoardLayout(allowed);
 
     return (
-        <BoardDataProvider visible={board.visible} canPlanned={hasPerm('accounting')} payrollCompany={blocks.has('earnings')}>
+        <BoardDataProvider visible={board.visible} canPlanned={hasPerm('accounting')} payrollCompany={blocks.has('earnings') && canViewPayroll(user)}>
             <Board
                 board={board}
                 allowed={allowed}

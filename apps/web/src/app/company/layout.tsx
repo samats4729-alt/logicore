@@ -33,7 +33,7 @@ import GlobalSearch from '@/components/ui/GlobalSearch';
 import UserAvatar from '@/components/UserAvatar';
 import PaywallScreen from '@/components/PaywallScreen';
 import NoSectionAccess from '@/components/ui/NoSectionAccess';
-import { checkSectionAccess } from '@/lib/section-access';
+import { canViewPayroll, checkSectionAccess } from '@/lib/section-access';
 import { BetaClosed, BetaStrip } from '@/components/ui/BetaNotice';
 import { BETA_LABEL, betaStateOf, getBetaSection } from '@/lib/beta-sections';
 import Loader from '@/components/ui/Loader';
@@ -313,7 +313,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     { key: '/company/accounting/calendar', label: 'Платёжный календарь' },
                     { key: '/company/accounting/counterparty-report', label: 'Долги и остатки' },
                     { key: '/company/inventory/balances', label: 'Материалы' },
-                    ...(isAdmin ? [{ key: '/company/payroll', label: 'Зарплата' }] : []),
+                    ...(canViewPayroll(user) ? [{ key: '/company/payroll', label: 'Зарплата' }] : []),
                 ],
             });
         }

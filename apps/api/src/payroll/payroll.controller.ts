@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PAYROLL_VIEW_ROLES, PayrollViewGuard } from './payroll-access.guard';
 import { PayrollService, PendingTrip, bonusRuleView, responsibleOrdersWhere, schemeView } from './payroll.service';
 import { D, ZERO, sumOf, toNum } from '../common/utils/money';
 import { kzCurrentMonth, kzMonthBounds } from '../common/utils/business-date';
@@ -94,7 +95,8 @@ export class PayrollController {
     // ==================== ADMIN ENDPOINTS ====================
 
     @Get('schemes')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(...PAYROLL_VIEW_ROLES)
+    @UseGuards(PayrollViewGuard)
     async getSchemes(@Request() req: any) {
         const companyId = req.user.companyId;
         const schemes = await this.prisma.payrollScheme.findMany({
@@ -116,7 +118,7 @@ export class PayrollController {
     }
 
     @Put('schemes')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN)
     async upsertGeneralScheme(@Request() req: any, @Body() dto: any) {
         const companyId = req.user.companyId;
         const data = schemeData(dto);
@@ -136,7 +138,7 @@ export class PayrollController {
     }
 
     @Put('schemes/user/:userId')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN)
     async upsertPersonalScheme(@Param('userId') userId: string, @Request() req: any, @Body() dto: any) {
         const companyId = req.user.companyId;
         const user = await this.prisma.user.findFirst({
@@ -169,7 +171,7 @@ export class PayrollController {
     }
 
     @Delete('schemes/user/:userId')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN)
     async deletePersonalScheme(@Param('userId') userId: string, @Request() req: any) {
         const companyId = req.user.companyId;
         const existing = await this.prisma.payrollScheme.findFirst({
@@ -184,7 +186,8 @@ export class PayrollController {
     }
 
     @Get('kpi-rules')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(...PAYROLL_VIEW_ROLES)
+    @UseGuards(PayrollViewGuard)
     async getKpiRules(@Request() req: any) {
         const rules = await this.prisma.payrollKpiRule.findMany({
             where: { companyId: req.user.companyId },
@@ -205,7 +208,7 @@ export class PayrollController {
     }
 
     @Post('kpi-rules')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN)
     async createKpiRule(@Request() req: any, @Body() dto: any) {
         const companyId = req.user.companyId;
         if (dto.userId) {
@@ -254,7 +257,7 @@ export class PayrollController {
      * прошлые месяцы остаются как были.
      */
     @Put('kpi-rules/active')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN)
     async setKpiRulesActive(@Request() req: any, @Body() dto: { isActive?: unknown }) {
         if (typeof dto?.isActive !== 'boolean') {
             throw new BadRequestException('Не понял: включить бонусы или выключить');
@@ -272,7 +275,7 @@ export class PayrollController {
      * было несколько (заводили по одному в старом окне), остаётся первое.
      */
     @Put('kpi-rules/user/:userId')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN)
     async setPersonalKpiRule(@Param('userId') userId: string, @Request() req: any, @Body() dto: any) {
         const companyId = req.user.companyId;
         await this.findMember(companyId, userId);
@@ -305,7 +308,7 @@ export class PayrollController {
 
     /** Убрать свой бонус — сотрудник снова на общем. */
     @Delete('kpi-rules/user/:userId')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN)
     async deletePersonalKpiRule(@Param('userId') userId: string, @Request() req: any) {
         const companyId = req.user.companyId;
         await this.findMember(companyId, userId);
@@ -321,7 +324,8 @@ export class PayrollController {
      * приходилось складывать в уме общую схему, свою и бонусы.
      */
     @Get('employees')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(...PAYROLL_VIEW_ROLES)
+    @UseGuards(PayrollViewGuard)
     async getEmployees(@Request() req: any) {
         const companyId = req.user.companyId;
         // Общие условия, если ещё остались, раскладываем каждому как свои.
@@ -351,7 +355,8 @@ export class PayrollController {
      * сколько рейсов до бонуса и как ему платят.
      */
     @Get('employee/:userId')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(...PAYROLL_VIEW_ROLES)
+    @UseGuards(PayrollViewGuard)
     async getEmployeeMonth(@Param('userId') userId: string, @Query('month') month: string, @Request() req: any) {
         const companyId = req.user.companyId;
         const member = await this.findMember(companyId, userId);
@@ -366,7 +371,7 @@ export class PayrollController {
     }
 
     @Delete('kpi-rules/:id')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(UserRole.COMPANY_ADMIN)
     async deleteKpiRule(@Param('id') id: string, @Request() req: any) {
         const rule = await this.prisma.payrollKpiRule.findFirst({
             where: { id, companyId: req.user.companyId },
@@ -380,7 +385,8 @@ export class PayrollController {
     }
 
     @Get('report')
-    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @Roles(...PAYROLL_VIEW_ROLES)
+    @UseGuards(PayrollViewGuard)
     async getReport(
         @Query('from') from: string,
         @Query('to') to: string,

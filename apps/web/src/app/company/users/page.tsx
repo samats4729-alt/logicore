@@ -50,6 +50,8 @@ const MODULE_PERMISSIONS = [
     { label: 'Контрагенты', value: 'partners' },
     { label: 'Карта / Трекинг', value: 'tracking' },
     { label: 'Водители', value: 'drivers' },
+    // Зарплаты всех сотрудников — открывает администратор (владелец, 25.10.2026).
+    { label: 'Зарплата', value: 'payroll' },
 ];
 
 const { Title, Text } = Typography;
