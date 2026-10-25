@@ -475,7 +475,7 @@ export default function InvoicesRegistryPage() {
                   * Это остаток на сегодня, а не оборот за период, — от дат в
                   * фильтре он не зависит.
                   */}
-                <div className={`${nova.tiles} ${nova.tiles3}`} style={{ marginBottom: 0, minWidth: 480 }}>
+                <div className={`${nova.tiles} ${nova.tiles3}`} style={{ marginBottom: 0, minWidth: 'min(480px, 100%)' }}>
                     <div className={nova.tile}>
                         <div className={nova.tileLabel}>{сторонаДолга}</div>
                         <div className={nova.tileValue}>{money(долг.total)}</div>

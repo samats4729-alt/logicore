@@ -140,7 +140,9 @@ export default function PaymentCalendarPage() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* На телефоне итоги переносятся на вторую строку, а не
+                    распирают страницу вбок (M3). */}
+                <div className="flex flex-wrap items-center gap-2">
                     <Money label={SETTLEMENT_SIDES.receivableShort} value={money(totalIn)} tone="in" />
                     <Money label={SETTLEMENT_SIDES.payableShort} value={money(totalOut)} tone="out" />
                     {overdueTotal > 0 && <Money label="Просрочено" value={money(overdueTotal)} tone="out" alert />}
