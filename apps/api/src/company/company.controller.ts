@@ -229,6 +229,14 @@ export class CompanyController {
     // журнал (менеджеру «только свои» — свои). Деньги и водители — только
     // если блок открыт в «Сотрудниках», как у «Активности».
 
+    @Get('dashboard/first-steps')
+    // Начинать работу компании — руководителю: организация, контрагенты, люди.
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Дашборд: первые шаги новой компании — что уже сделано' })
+    async getDashboardFirstSteps(@Request() req: any) {
+        return this.dashboardBoard.firstSteps(req.user.companyId);
+    }
+
     @Get('dashboard/orders')
     @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT, UserRole.WAREHOUSE_MANAGER)
     @RequirePermissions('orders')

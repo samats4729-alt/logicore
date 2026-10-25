@@ -133,6 +133,43 @@ export class DashboardBoardService {
         return свои ? { AND: [участие, свои] } : участие;
     }
 
+    // ==================== Первые шаги ====================
+
+    /**
+     * С чего начать новой компании (J5, владелец: «дашборд не пустой при
+     * первом входе»). У новой компании все блоки дашборда — нули и «нет
+     * данных», и первое впечатление — пустота. Блок «Первые шаги» говорит,
+     * что сделать, чтобы данные появились, и отмечает сделанное.
+     *
+     * Только счёт: что уже есть, без самих записей.
+     */
+    async firstSteps(companyId: string) {
+        const [company, counterparties, partnerships, orders, employees] = await Promise.all([
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { verificationStatus: true } }),
+            this.prisma.company.count({ where: { createdByCompanyId: companyId, isExternal: true } }),
+            this.prisma.partnership.count({
+                where: { status: 'ACCEPTED', OR: [{ requesterId: companyId }, { recipientId: companyId }] },
+            }),
+            this.prisma.order.count({
+                where: {
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                    ],
+                },
+            }),
+            this.prisma.user.count({ where: { companyId, isActive: true, role: { not: UserRole.DRIVER } } }),
+        ]);
+        return {
+            organizationSent: company?.verificationStatus === 'PENDING' || company?.verificationStatus === 'VERIFIED',
+            counterparties: counterparties + partnerships,
+            orders,
+            employees,
+        };
+    }
+
     // ==================== Заявки ====================
 
     /**
