@@ -147,6 +147,17 @@ describe('Подписки компаний', () => {
             expect(Math.round((trialEndsAt.getTime() - Date.now()) / DAY)).toBe(14);
         });
 
+        it('отсчёт — с регистрации компании, а не с первого входа', async () => {
+            // Зарегистрировалась пять дней назад, зашла сегодня: осталось
+            // девять дней, а не четырнадцать (владелец, 25.10.2026).
+            const { service, prisma } = build({ enabled: true, subscription: null });
+            prisma.company.findUnique.mockResolvedValue({ createdAt: past(5) });
+            await service.isCompanyAllowed(COMPANY);
+
+            const { trialEndsAt } = prisma.companySubscription.create.mock.calls[0][0].data;
+            expect(Math.round((trialEndsAt.getTime() - Date.now()) / DAY)).toBe(9);
+        });
+
         it('срок пробного периода берётся из настроек', async () => {
             const { service, prisma } = build({ enabled: true, trialDays: '30', subscription: null });
             await service.isCompanyAllowed(COMPANY);

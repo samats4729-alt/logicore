@@ -207,12 +207,17 @@ export class BillingService {
         let sub = await this.prisma.companySubscription.findUnique({ where: { companyId } });
 
         if (!sub) {
-            // Новая компания — автоматический пробный период
+            // Новая компания — пробный период. Отсчёт — с регистрации, а не с
+            // первого входа (владелец, 25.10.2026: «14 календарных дней с
+            // момента регистрации»): компания, зашедшая через неделю после
+            // регистрации, получала бы лишнюю неделю.
+            const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { createdAt: true } });
+            const from = company?.createdAt ? new Date(company.createdAt) : new Date();
             sub = await this.prisma.companySubscription.create({
                 data: {
                     companyId,
                     status: SubscriptionStatus.TRIAL,
-                    trialEndsAt: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000),
+                    trialEndsAt: new Date(from.getTime() + trialDays * 24 * 60 * 60 * 1000),
                 },
             });
         }
