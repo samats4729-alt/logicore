@@ -93,8 +93,9 @@ const cellText = (v: unknown) => (v === null || v === undefined ? '' : String(v)
 const END = '(?![а-яёa-z0-9])';
 const NOT_COUNTERPARTY = [
     /^\d{2,4}(\.\d{1,3})*$/,
-    new RegExp(`^(итого|всего)${END}`, 'i'),
-    new RegExp(`^(основной договор|договор${END}|без договора|№)`, 'i'),
+    // Казахский интерфейс 1С: «Барлығы» / «Жиыны» — итог, «Шарт» — договор.
+    new RegExp(`^(итого|всего|барлығы|жиыны)${END}`, 'i'),
+    new RegExp(`^(основной договор|договор${END}|без договора|негізгі шарт|шарт${END}|№)`, 'i'),
     /^<.*>$/,
     new RegExp(`^(реализация|поступление|сч[её]т на оплату|сч[её]т-фактура|акт|списание|выдача|корректировка|возврат|приходный|расходный|платежное|ввод остатков|операция)${END}`, 'i'),
 ];
@@ -102,13 +103,17 @@ const NOT_COUNTERPARTY = [
 export function parseTurnoverSheet(file: Buffer): TurnoverSheet {
     let book: XLSX.WorkBook;
     try {
-        book = XLSX.read(file, { type: 'buffer' });
+        // cellStyles — ради уровней группировки строк: по ним видно группы контрагентов.
+        book = XLSX.read(file, { type: 'buffer', cellStyles: true });
     } catch {
         throw new TurnoverSheetError('Это не файл Excel. Сохраните ведомость в 1С кнопкой с дискетой → «Лист Microsoft Excel».');
     }
     const sheet = book.Sheets[book.SheetNames[0]];
     if (!sheet) throw new TurnoverSheetError('В файле нет листа с таблицей.');
-    const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null, blankrows: false });
+    // Пустые строки оставляем: номер строки таблицы = номер строки листа, а
+    // по нему берётся уровень группировки.
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null, blankrows: true });
+    const firstRow = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1').s.r;
 
     // Шапка: строка, где «Дебет» встречается чаще всего (три пары у ведомости).
     let headerRow = -1;
@@ -135,15 +140,50 @@ export function parseTurnoverSheet(file: Buffer): TurnoverSheet {
     const creditCol = creditCols[creditCols.length - 1];
     const firstAmountCol = Math.min(...debitCols, ...creditCols);
 
-    const head = grid.slice(0, headerRow).map((row) => row.map(cellText).filter(Boolean).join(' ')).join(' ');
-    const accountMatch = head.match(/по сч[её]ту (\d[\d.]*)/i);
+    const head = grid.slice(0, headerRow).map((row) => (row ?? []).map(cellText).filter(Boolean).join(' ')).join(' ');
+    const nameOf = (row: unknown[] | undefined) => (row ?? []).slice(0, firstAmountCol).map(cellText).find(Boolean);
+    const body = grid.slice(headerRow + 1);
+    // «по счету 62» — по-русски, «3310 шоты бойынша» — по-казахски; иначе —
+    // первая строка-счёт таблицы.
+    const account = head.match(/по сч[её]ту (\d[\d.]*)/i)?.[1]
+        ?? head.match(/(\d{2,4}(?:\.\d{1,3})*) шоты/i)?.[1]
+        ?? body.map((row) => nameOf(row) ?? '').find((name) => /^\d{2,4}(\.\d{1,3})*$/.test(name))
+        ?? null;
+
+    /**
+     * Группы контрагентов («Покупатели», «Прочие»). 1С выводит их строкой с
+     * суммой по группе — сложи её с контрагентами, и долг задвоится. Узнаём
+     * по уровням группировки строк, которые 1С сохраняет в Excel: у группы
+     * ниже по уровню идут другие контрагенты, а не договоры и документы.
+     * Если уровней в файле нет, группу по тексту от компании не отличить —
+     * она не сопоставится с контрагентом, и при сверке её пропустят.
+     */
+    const levels: number[] = ((sheet['!rows'] ?? []) as { level?: number }[]).map((r) => r?.level ?? 0);
+    const levelOf = (i: number) => levels[firstRow + headerRow + 1 + i] ?? 0;
+    const isGroup = (i: number): boolean => {
+        if (!levels.some(Boolean)) return false;
+        const here = levelOf(i);
+        for (let j = i + 1; j < body.length; j++) {
+            const next = nameOf(body[j]);
+            if (!next) continue;
+            if (levelOf(j) <= here) return false;
+            // Ниже договор или документ — это контрагент с раскрытыми расчётами.
+            return !NOT_COUNTERPARTY.some((re) => re.test(next));
+        }
+        return false;
+    };
 
     const totals = new Map<string, TurnoverRow>();
-    for (const row of grid.slice(headerRow + 1)) {
-        const name = row.slice(0, firstAmountCol).map(cellText).find(Boolean);
+    for (const [i, row] of body.entries()) {
+        const name = nameOf(row);
         if (!name || NOT_COUNTERPARTY.some((re) => re.test(name))) continue;
-        const debit = amount(row[debitCol]);
-        const credit = amount(row[creditCol]);
+        if (isGroup(i)) continue;
+        let debit = amount(row[debitCol]);
+        let credit = amount(row[creditCol]);
+        // Минус в столбце — это сальдо другой стороны (так 1С показывает
+        // «красное» сальдо): «−5 000» по дебету — кредит 5 000.
+        if (debit < 0) { credit -= debit; debit = 0; }
+        if (credit < 0) { debit -= credit; credit = 0; }
         if (!debit && !credit) continue;
         // Один контрагент бывает дважды — на субсчетах расчётов и авансов (62.01 и 62.02).
         const prev = totals.get(name) ?? { name, debit: 0, credit: 0 };
@@ -151,18 +191,20 @@ export function parseTurnoverSheet(file: Buffer): TurnoverSheet {
         prev.credit = Math.round((prev.credit + credit) * 100) / 100;
         totals.set(name, prev);
     }
-    return { account: accountMatch?.[1] ?? null, periodEnd: periodEndOf(head), rows: [...totals.values()] };
+    return { account, periodEnd: periodEndOf(head), rows: [...totals.values()] };
 }
 
-const LEGAL_FORMS = new Set(['тоо', 'ооо', 'ао', 'пао', 'зао', 'оао', 'ип', 'чп', 'кх', 'тов', 'llp', 'llc', 'ltd', 'too']);
+// ЖШС — ТОО, ЖК — ИП, АҚ — АО, ЖАҚ — ЗАО, ШҚ — КХ: так их пишет казахская 1С.
+const LEGAL_FORMS = new Set(['тоо', 'ооо', 'ао', 'пао', 'зао', 'оао', 'ип', 'чп', 'кх', 'тов', 'llp', 'llc', 'ltd', 'too', 'жшс', 'жк', 'ақ', 'жақ', 'шқ']);
 
 /** Название без кавычек, формы собственности и регистра — чтобы сопоставить «ТОО "Ромашка"» и «ТОО «Ромашка»». */
 export function normalizeCompanyName(name: string): string {
     return name
         .toLowerCase()
         .replace(/ё/g, 'е')
-        .replace(/индивидуальный предприниматель/g, ' ')
-        .replace(/[^a-zа-я0-9]+/g, ' ')
+        .replace(/индивидуальный предприниматель|жеке кәсіпкер/g, ' ')
+        // Казахские буквы — часть названия («Тұлпар»), их не выбрасываем.
+        .replace(/[^a-zа-яәғқңөұүһі0-9]+/g, ' ')
         .split(' ')
         .filter((w) => w && !LEGAL_FORMS.has(w))
         .join(' ');
