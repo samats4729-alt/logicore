@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { Input, Select, Button } from 'antd';
-import { LifeBuoy, Send } from 'lucide-react';
+import { Compass, LifeBuoy, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { loadOrReport } from '@/lib/load';
 import nova from '@/components/nova/nova.module.css';
 import styles from './support.module.css';
+import { Button as UiButton } from '@/components/ui/button';
+import { startWelcomeTour } from '@/components/onboarding/WelcomeTour';
 
 /**
  * Поддержка: письмо владельцу платформы и ответ на него.
@@ -109,6 +111,12 @@ export default function SupportPage() {
                     <p className={nova.subtitle}>
                         Напишите, что не работает или чего не хватает. Ответ придёт сюда же — и в уведомления.
                     </p>
+                </div>
+                <div className={nova.heroActions}>
+                    {/* То же знакомство, что при первом входе (J7). */}
+                    <UiButton variant="outline" onClick={startWelcomeTour}>
+                        <Compass className="h-4 w-4" /> Показать знакомство с кабинетом
+                    </UiButton>
                 </div>
             </div>
 
