@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "278404302831",
+    "project_id": "logicore-driver-96b4b",
+    "storage_bucket": "logicore-driver-96b4b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:278404302831:android:aa3b4cbc70960e8352981a",
+        "android_client_info": {
+          "package_name": "kz.logcomp.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAG6JNNzEeLbaBy_8c1k4JeTO0oR_6uYkQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Res, UseGuards, UseInterceptors, UploadedFile, Request, Query, ForbiddenException } from '@nestjs/common';
+import { DriverPushService } from '../notifications/driver-push.service';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -35,6 +36,7 @@ export class CompanyController {
         private billingService: BillingService,
         private auditService: AuditService,
         private dashboardBoard: DashboardBoardService,
+        private driverPush: DriverPushService,
     ) { }
 
     // ==================== Уведомления ====================
@@ -494,7 +496,8 @@ export class CompanyController {
         @Body() dto: AssignDriverDto,
         @Request() req: any,
     ) {
-        return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
+        const before = await this.driverPush.currentDriver(id);
+        const result = await this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
             assignedDriverName: dto.assignedDriverName,
             assignedDriverPhone: dto.assignedDriverPhone,
             assignedDriverPlate: dto.assignedDriverPlate,
@@ -506,6 +509,8 @@ export class CompanyController {
             trip: { plate: dto.tripPlate, trailer: dto.tripTrailer },
             userId: req.user.id,
         });
+        void this.driverPush.tripAssigned(id, before);
+        return result;
     }
 
     @Put('orders/:id/responsible')

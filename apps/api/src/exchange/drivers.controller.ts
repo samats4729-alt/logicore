@@ -30,6 +30,7 @@ import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
 import { PlatformFeeDto } from './dto/fuel.dto';
 import { FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
+import { DriverPushService } from '../notifications/driver-push.service';
 
 /**
  * Отдать PDF договора. В браузере телефона — открыть на месте, а не
@@ -370,6 +371,7 @@ export class ExchangeParkController {
         private readonly drivers: ExchangeDriversService,
         private readonly park: ExchangeParkService,
         private readonly payouts: ExchangePayoutsService,
+        private readonly driverPush: DriverPushService,
         private readonly s3: S3Service,
         private readonly audit: AuditService,
         private readonly contracts: ParkContractService,
@@ -416,7 +418,9 @@ export class ExchangeParkController {
     @ApiOperation({ summary: 'Чек водителя: принять (можно поправить сумму) или отклонить с причиной' })
     async decideFuelReceipt(@Request() req: any, @Param('id') id: string, @Body() dto: FuelDecisionDto) {
         await this.drivers.assertPark(req.user.companyId);
-        return this.fuel.decideReceipt(req.user.companyId, req.user.sub, id, dto);
+        const result = await this.fuel.decideReceipt(req.user.companyId, req.user.sub, id, dto);
+        void this.driverPush.fuelReceiptDecided(id);
+        return result;
     }
 
     @Get('fuel-receipts/:id/file')
@@ -483,6 +487,7 @@ export class ExchangeParkController {
     async markPaid(@Request() req: any, @Param('id') id: string, @Body() dto: PreliminaryAckDto) {
         const result = await this.payouts.markPaid(req.user.companyId, id, req.user.sub, !!dto?.preliminaryAck);
         await this.audit.log({ companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'driver_payout', entityId: id, entityLabel: 'Выплата водителю отмечена выплаченной' });
+        void this.driverPush.payoutDecided(id, true);
         return result;
     }
 
@@ -492,6 +497,7 @@ export class ExchangeParkController {
     async rejectPayout(@Request() req: any, @Param('id') id: string, @Body() dto: DriverReasonDto) {
         const result = await this.payouts.reject(req.user.companyId, id, req.user.sub, dto.reason);
         await this.audit.log({ companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'driver_payout', entityId: id, entityLabel: `Выплата водителю отклонена: ${dto.reason}` });
+        void this.driverPush.payoutDecided(id, false, dto.reason);
         return result;
     }
 
@@ -581,6 +587,7 @@ export class ExchangeParkController {
     async approve(@Request() req: any, @Param('id') id: string) {
         const driver = await this.drivers.approve(req.user.companyId, id, req.user.sub);
         await this.log(req, driver, 'допущен к грузам');
+        void this.driverPush.driverReviewed(id, true);
         return driver;
     }
 
@@ -589,6 +596,7 @@ export class ExchangeParkController {
     async reject(@Request() req: any, @Param('id') id: string, @Body() dto: DriverReasonDto) {
         const driver = await this.drivers.reject(req.user.companyId, id, req.user.sub, dto.reason);
         await this.log(req, driver, `отказ — ${dto.reason}`);
+        void this.driverPush.driverReviewed(id, false, dto.reason);
         return driver;
     }
 

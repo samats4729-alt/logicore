@@ -3,6 +3,7 @@ import * as SecureStore from '@/lib/secure';
 import Constants from 'expo-constants';
 import { GoogleSignin, isSuccessResponse } from '@/lib/google';
 import { api, setAuthToken, clearAuthToken, getDeviceId } from '@/lib/api';
+import { unregisterPush } from '@/lib/push';
 
 /** «Веб-клиент» Google из настроек сборки. Пусто — вход через Google не настроен. */
 export const GOOGLE_WEB_CLIENT_ID: string = (Constants.expoConfig?.extra?.googleWebClientId as string | undefined) || '';
@@ -132,6 +133,9 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     logout: async () => {
+        // Пока вход ещё действует — забыть телефон, чтобы уведомления
+        // не приходили тому, кто вышел.
+        await unregisterPush();
         try {
             await api.post('/auth/logout');
         } catch { }
