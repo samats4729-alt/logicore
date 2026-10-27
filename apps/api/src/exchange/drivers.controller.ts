@@ -25,6 +25,8 @@ import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import { ParkContractService } from './park-contract.service';
+import { VehicleOwnerContractService } from './vehicle-owner-contract.service';
+import { VehicleOwnerContractDto } from './dto/vehicle-owner-contract.dto';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
@@ -442,6 +444,7 @@ export class ExchangeParkController {
         private readonly s3: S3Service,
         private readonly audit: AuditService,
         private readonly contracts: ParkContractService,
+        private readonly ownerContracts: VehicleOwnerContractService,
         private readonly fuel: ExchangeFuelService,
         private readonly registry: ExchangeParkRegistryService,
         private readonly advances: ExchangeAdvanceRequestsService,
@@ -704,6 +707,62 @@ export class ExchangeParkController {
     @ApiOperation({ summary: 'PDF подписанного договора с водителем' })
     async contractPdf(@Request() req: any, @Param('id') id: string, @Res() res: Response) {
         sendContractPdf(res, await this.contracts.parkPdf(req.user.companyId, id), false);
+    }
+
+    // ==================== договор с владельцем машины (Q9) ====================
+    // Машина водителя записана на другого — парк арендует её у владельца.
+
+    @Get('drivers/:id/owner-contracts')
+    @ApiOperation({ summary: 'Договоры с владельцами машины водителя' })
+    ownerContractsList(@Request() req: any, @Param('id') id: string) {
+        return this.ownerContracts.list(req.user.companyId, id);
+    }
+
+    @Post('drivers/:id/owner-contracts')
+    @ApiOperation({ summary: 'Оформить договор аренды машины с её владельцем' })
+    async createOwnerContract(@Request() req: any, @Param('id') id: string, @Body() dto: VehicleOwnerContractDto) {
+        const created = await this.ownerContracts.create(req.user.companyId, req.user.sub ?? null, id, dto);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'vehicle_owner_contract', entityId: created.id,
+            entityLabel: `Договор аренды машины ${created.vehiclePlate} с владельцем «${created.ownerName}» № ${created.number}: оформлен`,
+        });
+        return created;
+    }
+
+    @Put('owner-contracts/:contractId')
+    @ApiOperation({ summary: 'Поправить договор с владельцем машины — пока он не подписан' })
+    async updateOwnerContract(@Request() req: any, @Param('contractId') contractId: string, @Body() dto: VehicleOwnerContractDto) {
+        const updated = await this.ownerContracts.update(req.user.companyId, contractId, dto);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'vehicle_owner_contract', entityId: updated.id,
+            entityLabel: `Договор аренды машины ${updated.vehiclePlate} № ${updated.number}: изменён до подписи`,
+        });
+        return updated;
+    }
+
+    @Get('owner-contracts/:contractId/pdf')
+    @ApiOperation({ summary: 'PDF договора с владельцем машины — для подписи на бумаге' })
+    async ownerContractPdf(@Request() req: any, @Param('contractId') contractId: string, @Res() res: Response) {
+        sendContractPdf(res, await this.ownerContracts.pdf(req.user.companyId, contractId), false);
+    }
+
+    @Post('owner-contracts/:contractId/signed-file')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE } }))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Приложить подписанный договор с владельцем машины' })
+    async attachOwnerContract(@Request() req: any, @Param('contractId') contractId: string, @UploadedFile() file: Express.Multer.File) {
+        const signed = await this.ownerContracts.attachSigned(req.user.companyId, contractId, file);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'STATUS', entity: 'vehicle_owner_contract', entityId: signed.id,
+            entityLabel: `Договор аренды машины ${signed.vehiclePlate} № ${signed.number}: приложен подписанный экземпляр`,
+        });
+        return signed;
+    }
+
+    @Get('owner-contracts/:contractId/signed-file')
+    @ApiOperation({ summary: 'Подписанный договор с владельцем машины' })
+    async ownerContractSigned(@Request() req: any, @Param('contractId') contractId: string, @Res() res: Response) {
+        return sendExchangeFile(this.s3, res, await this.ownerContracts.signedFile(req.user.companyId, contractId));
     }
 
     private async log(req: any, driver: { id: string; lastName: string | null; firstName: string | null }, what: string) {

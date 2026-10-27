@@ -3255,6 +3255,8 @@ model ExchangeDriver {
 
   documents ExchangeDriverDocument[]
   offers    ExchangeOffer[]
+  /// Договоры парка с владельцами машины, если она не водителя (Q9).
+  vehicleOwnerContracts ExchangeVehicleOwnerContract[]
   payouts   DriverPayout[]
   contracts ExchangeDriverContract[]
   settlements   ExchangeTripSettlement[]
@@ -3417,6 +3419,63 @@ model ExchangeFuelReceipt {
 
   @@index([orderId])
   @@index([parkCompanyId, status])
+  @@index([driverId])
+}
+
+/// Договор парка с владельцем машины, на которой ездит водитель парка:
+/// аренда транспортного средства без экипажа (задачи шефа, Q9, решение
+/// владельца 25.10.2026). Владелец в LogiCore не работает — подписывают на
+/// бумаге, скан прикладывается сюда. До подписи текст пересобирается при
+/// каждой правке; после — `content` не меняется: в нём то, что подписали.
+model ExchangeVehicleOwnerContract {
+  id            String         @id @default(cuid())
+  parkCompanyId String
+  driverId      String
+  driver        ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// «АТ-ГГММДД-XXXXXX».
+  number        String
+  /// Версия шаблона текста (`VEHICLE_OWNER_CONTRACT_VERSION`).
+  version       String
+  /// DRAFT — оформлен, ждёт подписи; SIGNED — приложен подписанный скан.
+  status        String         @default("DRAFT")
+
+  /// PERSON — человек, COMPANY — ТОО или ИП.
+  ownerKind       String
+  ownerName       String
+  ownerIinBin     String?
+  ownerIdNumber   String?
+  ownerIdIssuedBy String?
+  ownerIdIssuedAt DateTime? @db.Date
+  ownerAddress    String?
+  ownerPhone      String?
+  ownerIban       String?
+  ownerBank       String?
+  ownerBankBic    String?
+  /// Кто подписывает за организацию-владельца.
+  ownerSigner     String?
+
+  vehicleModel     String?
+  vehiclePlate     String
+  vehicleRegNumber String?
+
+  rentAmount Decimal @db.Decimal(14, 2)
+  /// TRIP — за рейс, MONTH — за месяц.
+  rentBasis  String
+
+  /// Текст договора: разделы, пункты, реквизиты сторон.
+  content Json
+
+  signedFileUrl  String?
+  signedFileName String?
+  signedFileMime String?
+  signedFileSize Int?
+  signedAt       DateTime?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([parkCompanyId, driverId])
   @@index([driverId])
 }
 
