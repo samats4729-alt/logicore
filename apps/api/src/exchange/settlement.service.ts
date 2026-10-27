@@ -100,7 +100,8 @@ export class ExchangeSettlementService {
             ipnHighPct: p.ipnHighPct, ipnThresholdMrp: p.ipnThresholdMrp,
         };
         const fuelPerKm = fuelPerKmOf(p.fuelConsumption, p.fuelPriceSummer, p.fuelPriceWinter, p.fuelSeason);
-        return { rates, fuelPerKm, applyDeduction: p.applyDeduction, preliminary: !row?.ratesConfirmedAt };
+        // Расход на 100 км — чтобы показать водителю лимит топлива и в литрах.
+        return { rates, fuelPerKm, fuelConsumption: p.fuelConsumption, applyDeduction: p.applyDeduction, preliminary: !row?.ratesConfirmedAt };
     }
 
     /**

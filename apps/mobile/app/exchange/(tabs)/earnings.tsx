@@ -110,6 +110,8 @@ export default function EarningsScreen() {
     const onHand = data.trips.length > 0 && data.trips.every((t) => t.driverTotal != null);
     const agreedSum = data.trips.reduce((s, t) => s + (t.driverTotal ?? 0), 0);
     const fuelSum = data.trips.reduce((s, t) => s + (t.fuelIssued ?? 0), 0);
+    // Чеки на топливо засчитываются обратно — без этой строки итог не сходится с «Начислено».
+    const receiptsSum = data.trips.reduce((s, t) => s + (t.fuelReceipts ?? 0), 0);
 
     return (
         <ScrollView
@@ -142,7 +144,8 @@ export default function EarningsScreen() {
                 {onHand && (
                     <View>
                         <Line label="Договорились, на руки" value={деньги(agreedSum)} colors={colors} />
-                        <Line label="Парк дал на топливо" value={`− ${деньги(fuelSum)}`} colors={colors} />
+                        <Line label="Парк дал заранее (топливо, предоплата)" value={`− ${деньги(fuelSum)}`} colors={colors} />
+                        {receiptsSum > 0 && <Line label="Чеки на топливо" value={`+ ${деньги(receiptsSum)}`} colors={colors} />}
                         <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6, lineHeight: 17 }}>
                             Налоги и взносы за вас парк платит сверху — из вашей суммы они не вычитаются и идут в ваш пенсионный счёт и медстраховку.
                         </Text>
@@ -214,7 +217,7 @@ export default function EarningsScreen() {
                             <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>
                                 Заявка {t.orderNumber}{t.completedAt ? ` · довёз ${date(t.completedAt)}` : ''}
                                 {t.driverTotal != null
-                                    ? ` · договорились ${деньги(t.driverTotal)}${t.fuelIssued ? `, на топливо ${деньги(t.fuelIssued)}` : ''}`
+                                    ? ` · договорились ${деньги(t.driverTotal)}${t.fuelIssued ? `, дали заранее ${деньги(t.fuelIssued)}` : ''}`
                                     : ` · начислено ${деньги(t.gross)}`}
                             </Text>
                         </Card>
@@ -237,7 +240,7 @@ export default function EarningsScreen() {
                             {p.status !== 'REJECTED' && (
                                 <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
                                     {p.fuelIssued != null
-                                        ? `На топливо парк дал ${деньги(p.fuelIssued)} · налоги за вас платит парк`
+                                        ? `Парк дал заранее ${деньги(p.fuelIssued)} · налоги за вас платит парк`
                                         : `Начислено ${деньги(p.gross)} · удержано ${деньги(p.gross - p.net)} — комиссия и налоги`}
                                 </Text>
                             )}

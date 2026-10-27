@@ -2,8 +2,16 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ExchangeAdvanceRequestsService } from './advance-requests.service';
 
 /** Запросы водителя парка на топливо и аванс (Q17). */
-describe('водитель просит на топливо или аванс', () => {
-    function setup(opts: { pct?: number | null; issued?: number; pending?: number; status?: string; payoutItem?: boolean; request?: any } = {}) {
+describe('водитель просит на топливо или предоплату', () => {
+    /**
+     * Рейс: на руки 246 600, топливо по километражу 126 000. Парк уже дал на
+     * топливо `fuelIssued`, предоплатой — `advanceIssued`; ждут решения —
+     * `pendingFuel` и `pendingAdvance`.
+     */
+    function setup(opts: {
+        pct?: number | null; fuelIssued?: number; advanceIssued?: number; pendingFuel?: number; pendingAdvance?: number;
+        fuelEstimate?: number; status?: string; payoutItem?: boolean; request?: any;
+    } = {}) {
         const request = {
             id: 'a1', status: 'REQUESTED', kind: 'FUEL', amount: 60000, orderId: 'o1',
             order: { id: 'o1', partnerId: 'park', driverPayoutItem: opts.payoutItem ? { id: 'p' } : null },
@@ -13,6 +21,14 @@ describe('водитель просит на топливо или аванс', 
             ...request, comment: null, parkNote: null, issuedAmount: null, decidedAt: null, createdAt: new Date(), updatedAt: new Date(),
             order: { orderNumber: '000000023' }, driver: { id: 'd1', lastName: 'Водителев', firstName: 'Тест', phone: '+77019990001' },
         };
+        const issues = [
+            ...(opts.fuelIssued ? [{ id: 'fuel-1', amount: opts.fuelIssued }] : []),
+            ...(opts.advanceIssued ? [{ id: 'adv-1', amount: opts.advanceIssued }] : []),
+        ];
+        const open = [
+            ...(opts.pendingFuel ? [{ id: 'p-fuel', kind: 'FUEL', amount: opts.pendingFuel }] : []),
+            ...(opts.pendingAdvance ? [{ id: 'p-adv', kind: 'ADVANCE', amount: opts.pendingAdvance }] : []),
+        ];
         const tx: any = {
             exchangeFuelIssue: { create: jest.fn().mockResolvedValue({ id: 'issue-1' }) },
             driverAdvanceRequest: { update: jest.fn() },
@@ -24,14 +40,18 @@ describe('водитель просит на топливо или аванс', 
                     id: 'o1', partnerId: 'park', status: opts.status ?? 'IN_TRANSIT', driverPayoutItem: opts.payoutItem ? { id: 'p' } : null,
                 }),
             },
-            exchangeTripSettlement: { findUnique: jest.fn().mockResolvedValue({ driverTotal: 400000 }) },
+            exchangeTripSettlement: { findUnique: jest.fn().mockResolvedValue({ driverTotal: 246600, fuelEstimate: opts.fuelEstimate ?? 126000 }) },
             parkPayoutRates: { findUnique: jest.fn().mockResolvedValue(opts.pct === null ? null : { advanceLimitPct: opts.pct ?? 50 }) },
-            exchangeFuelIssue: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: opts.issued ?? 0 } }) },
+            exchangeFuelIssue: { findMany: jest.fn().mockResolvedValue(issues) },
             driverAdvanceRequest: {
-                aggregate: jest.fn().mockResolvedValue({ _sum: { amount: opts.pending ?? 0 } }),
-                count: jest.fn().mockResolvedValue(opts.pending ? 1 : 0),
+                count: jest.fn(async ({ where }: any) => open.filter((r) => r.kind === where.kind).length),
                 create: jest.fn().mockResolvedValue({ id: 'a-new' }),
-                findMany: jest.fn().mockResolvedValue([]),
+                findMany: jest.fn(async ({ where }: any) => {
+                    // Выданная предоплата — по ней узнаём, какая запись выдачи — предоплата.
+                    if (where.status === 'APPROVED') return opts.advanceIssued ? [{ fuelIssueId: 'adv-1' }] : [];
+                    if (where.status?.in) return open.filter((r) => !where.id || r.id !== where.id.not);
+                    return [];
+                }),
                 findFirst: jest.fn().mockResolvedValue(request),
                 findUniqueOrThrow: jest.fn().mockResolvedValue(row),
                 update: jest.fn(),
@@ -41,32 +61,55 @@ describe('водитель просит на топливо или аванс', 
         return { service: new ExchangeAdvanceRequestsService(prisma), prisma, tx };
     }
 
-    it('по умолчанию — не больше 50 % суммы за рейс за вычетом выданного и ждущего', async () => {
-        const { service } = setup({ pct: null, issued: 100000, pending: 30000 });
+    it('топливо и предоплата — раздельные лимиты: топливо по километражу, предоплата — доля суммы на руки', async () => {
+        const { service } = setup({ pct: null, fuelIssued: 50000, advanceIssued: 20000, pendingFuel: 30000 });
         const { limit } = await service.forDriver('u1', 'o1');
-        // 50 % от 400 000 = 200 000; уже дали 100 000 и ждут 30 000 → 70 000.
-        expect(limit).toEqual(expect.objectContaining({ pct: 50, cap: 200000, available: 70000 }));
+        // Топливо: лимит 126 000, дали 50 000, ждёт 30 000 → 46 000. Предоплата —
+        // не в счёт топлива: 50 % от 246 600 = 123 300, выдано 20 000 → 103 300.
+        expect(limit).toEqual({
+            pct: 50, onHand: 246600,
+            fuel: { cap: 126000, issued: 50000, pending: 30000, available: 46000 },
+            advance: { cap: 123300, issued: 20000, pending: 0, available: 103300 },
+        });
     });
 
-    it('в пределах — запрос уходит парку; больше — понятный отказ с суммой', async () => {
-        const { service, prisma } = setup({ issued: 100000 });
-        await service.request('u1', 'o1', { kind: 'FUEL', amount: '100 000' });
+    it('в пределах — запрос уходит парку; больше — понятный отказ: какой лимит и почему', async () => {
+        const { service, prisma } = setup({ fuelIssued: 100000 });
+        await service.request('u1', 'o1', { kind: 'FUEL', amount: '26 000' });
         expect(prisma.driverAdvanceRequest.create.mock.calls[0][0].data).toEqual(expect.objectContaining({
-            parkCompanyId: 'park', driverId: 'd1', orderId: 'o1', kind: 'FUEL', amount: 100000,
+            parkCompanyId: 'park', driverId: 'd1', orderId: 'o1', kind: 'FUEL', amount: 26000,
         }));
-        await expect(service.request('u1', 'o1', { kind: 'ADVANCE', amount: 100001 })).rejects.toThrow(/не больше 100\s000 ₸: это 50 %/);
+        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 26001 })).rejects.toThrow(/на топливо можно не больше 26\s000 ₸: лимит по километражу — 126\s000 ₸/);
+        // Топливо, выданное парком, предоплату не уменьшает.
+        await service.request('u1', 'o1', { kind: 'ADVANCE', amount: 123300 });
+        await expect(service.request('u1', 'o1', { kind: 'ADVANCE', amount: 123301 })).rejects.toThrow(/предоплату можно не больше 123\s300 ₸: это 50 % от суммы на руки/);
     });
 
-    it('пока парк решает прошлый запрос — новый не уходит', async () => {
-        const { service, prisma } = setup({ pending: 30000 });
-        await expect(service.request('u1', 'o1', { kind: 'ADVANCE', amount: 1000 })).rejects.toThrow(/решает прошлый запрос/);
+    it('топливо по рейсу не посчитано — на топливо не попросить, предоплату можно', async () => {
+        const { service } = setup({ fuelEstimate: 0 });
+        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 1000 })).rejects.toThrow(/не посчитано/);
+        await expect(service.request('u1', 'o1', { kind: 'ADVANCE', amount: 1000 })).resolves.toBeDefined();
+    });
+
+    it('пока парк решает прошлый запрос того же вида — новый не уходит; другого вида — уходит', async () => {
+        const { service, prisma } = setup({ pendingFuel: 30000 });
+        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 1000 })).rejects.toThrow(/решает прошлый запрос на топливо/);
         expect(prisma.driverAdvanceRequest.create).not.toHaveBeenCalled();
+        await service.request('u1', 'o1', { kind: 'ADVANCE', amount: 1000 });
+        expect(prisma.driverAdvanceRequest.create).toHaveBeenCalledTimes(1);
     });
 
-    it('парк задал свою долю — считается по ней', async () => {
+    it('парк задал свою долю предоплаты — считается по ней', async () => {
         const { service } = setup({ pct: 30 });
         const { limit } = await service.forDriver('u1', 'o1');
-        expect(limit?.available).toBe(120000);
+        expect(limit?.advance.available).toBe(73980);
+        expect(limit?.fuel.available).toBe(126000);
+    });
+
+    it('парк не выдаст больше лимита своего вида: предоплату — сверх доли от суммы на руки', async () => {
+        const { service, tx } = setup({ advanceIssued: 100000, request: { kind: 'ADVANCE', amount: 30000 } });
+        await expect(service.decide('park', 'acc', 'a1', { action: 'APPROVE' })).rejects.toThrow(/Выдать предоплату можно не больше 23\s300 ₸/);
+        expect(tx.exchangeFuelIssue.create).not.toHaveBeenCalled();
     });
 
     it('после рейса или после запроса выплаты — уже не аванс', async () => {

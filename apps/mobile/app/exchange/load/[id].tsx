@@ -3,10 +3,11 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 're
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { DriverProfile, ExchangeOrder, OfferInput, exchangeApi, груз, деньги, загрузкаСловами, когда, ответ } from '@/lib/exchange';
+import { DriverProfile, ExchangeOrder, OfferInput, exchangeApi, груз, деньги, загрузкаСловами, когда, ответ, суммаЗаРейс } from '@/lib/exchange';
 import { BRAND, FONT } from '@/lib/theme';
 import { Button, Card, Empty, Row } from '@/components/kit';
 import { OfferSheet } from '@/components/OfferSheet';
+import { TripMoneyLines } from '@/components/TripMoney';
 
 const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
     PICKUP: 'Погрузка',
@@ -18,8 +19,9 @@ const POINT_TITLE: Record<ExchangeOrder['points'][number]['type'], string> = {
  * Заявка с биржи.
  *
  * Всё, чтобы решить «повезу или нет»: маршрут по точкам с датами, груз,
- * сколько получите на руки и что ещё важно компании. Сумма на руки — чистыми:
- * налоги и топливо уже вычтены, расшифровки водитель не видит (Q14, 25.10.2026). Точные адреса компания откроет тому, кого
+ * сумма за рейс с расшифровкой — на руки, топливо (лимит на заправку) и
+ * пенсионные (шеф, 27.10.2026) — и что ещё важно компании. Налоги, которые
+ * парк платит сверху, и цену компании водитель не видит (Q14). Точные адреса компания откроет тому, кого
  * выберет. Внизу — отклик: «согласен за цену компании» одной кнопкой или
  * своя цена. Решает компания; пока не решила, отклик можно отозвать.
  */
@@ -62,11 +64,20 @@ export default function OrderScreen() {
 
     const agree = () => {
         if (!order || order.price == null) return;
+        const t = order.trip;
         Alert.alert(
-            `Согласны за ${деньги(order.price)} на руки?`,
-            'Компания увидит ваш отклик и решит, кто повезёт. Пока не решила — отклик можно отозвать.',
+            t ? `Согласны на рейс за ${деньги(t.total)}?` : `Согласны за ${деньги(order.price)} на руки?`,
+            (t ? `На руки — ${деньги(t.onHand)}, топливо — ${деньги(t.fuel)}, пенсионные — ${деньги(t.opv)}.\n\n` : '')
+                + 'Компания увидит ваш отклик и решит, кто повезёт. Пока не решила — отклик можно отозвать.',
             [{ text: 'Отмена', style: 'cancel' }, { text: 'Откликнуться', onPress: () => send({ agree: true }) }],
         );
+    };
+
+    /** Свой отклик — тоже суммой за рейс, если сервер прислал топливо и долю ОПВ. */
+    const mineTotal = (onHand: number, agreed: boolean) => {
+        if (agreed && order?.trip) return order.trip.total;
+        if (order?.opvPct == null) return null;
+        return суммаЗаРейс(onHand, order.fuel?.amount ?? 0, order.opvPct).total;
     };
 
     const withdraw = () => {
@@ -126,14 +137,21 @@ export default function OrderScreen() {
                 </Card>
 
                 <Card>
-                    <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>ВЫ ПОЛУЧИТЕ НА РУКИ</Text>
-                    <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'Цена договорная'}</Text>
-                    {/* Водителю парка — только сумма чистыми на руки, без расшифровки
-                        (Q14, владелец 25.10.2026): налоги и топливо уже вычтены. */}
-                    {me.kind === 'PARK' && order.price != null && (
-                        <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
-                            Чистыми, на руки — эта сумма ваша.
-                        </Text>
+                    {/* Сумма за рейс и из чего она (шеф, 27.10.2026): видя только
+                        «на руки», водитель не понимал, что топливо и пенсионные —
+                        тоже его, и не брал рейс. Старый сервер расшифровку не
+                        присылает — тогда как раньше, одна сумма на руки. */}
+                    {order.trip ? (
+                        <>
+                            <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>СУММА ЗА РЕЙС</Text>
+                            <Text style={[styles.price, { color: colors.text }]}>{деньги(order.trip.total)}</Text>
+                            <TripMoneyLines money={order.trip} opvPct={order.opvPct} distanceKm={order.distanceKm} liters={order.fuel?.liters} />
+                        </>
+                    ) : (
+                        <>
+                            <Text style={[styles.priceLabel, { color: colors.textTertiary }]}>ВЫ ПОЛУЧИТЕ НА РУКИ</Text>
+                            <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'Цена договорная'}</Text>
+                        </>
                     )}
                 </Card>
 
@@ -159,7 +177,12 @@ export default function OrderScreen() {
                 {mine && mine.status === 'ACTIVE' ? (
                     <>
                         <Text style={[styles.footerStatus, { color: colors.text }]}>
-                            Вы откликнулись: {деньги(mine.price)} на руки{mine.agreed ? ' — по цене компании' : ''}
+                            {(() => {
+                                const total = mineTotal(mine.price, mine.agreed);
+                                return total != null
+                                    ? `Вы откликнулись: ${деньги(total)} за рейс, на руки ${деньги(mine.price)}`
+                                    : `Вы откликнулись: ${деньги(mine.price)} на руки`;
+                            })()}{mine.agreed ? ' — по цене компании' : ''}
                         </Text>
                         <Text style={[styles.footerNote, { color: colors.textSecondary }]}>
                             Ждём решения компании. Если выберут вас — рейс появится во вкладке «Мой рейс».
@@ -181,7 +204,12 @@ export default function OrderScreen() {
                 ) : (
                     <>
                         {order.price != null && (
-                            <Button title={`Согласен за ${деньги(order.price)} на руки`} icon="checkmark" loading={busy} onPress={agree} />
+                            <Button
+                                title={order.trip ? `Согласен за ${деньги(order.trip.total)}` : `Согласен за ${деньги(order.price)} на руки`}
+                                icon="checkmark"
+                                loading={busy}
+                                onPress={agree}
+                            />
                         )}
                         <Button
                             title={order.price != null ? 'Предложить свою сумму' : 'Предложить сумму'}
@@ -193,7 +221,7 @@ export default function OrderScreen() {
                 )}
             </View>
 
-            <OfferSheet visible={sheet} mine={mine} busy={busy} onSubmit={send} onClose={() => setSheet(false)} />
+            <OfferSheet visible={sheet} mine={mine} busy={busy} fuel={order.fuel?.amount ?? 0} opvPct={order.opvPct} onSubmit={send} onClose={() => setSheet(false)} />
         </View>
     );
 }

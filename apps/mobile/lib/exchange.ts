@@ -122,12 +122,21 @@ export interface ExchangeOrder {
     /**
      * Сколько водитель парка получит на руки — без топлива (его оплачивает
      * парк): сумма компании минус топливо минус ОПВ (схема шефа, 16.10.2026);
-     * нет — договорная. Расшифровки (сумма за рейс, топливо, налоги) водитель
-     * не видит — сервер её не присылает (Q14, 25.10.2026).
+     * нет — договорная.
      */
     price: number | null;
     /** Расстояние маршрута, км — оценка. */
     distanceKm?: number | null;
+    /**
+     * Сумма за рейс и из чего она (шеф, 27.10.2026): на руки + топливо + ОПВ.
+     * Налоги, которые парк платит сверху, и цена компании сюда не входят.
+     * Нет — договорная цена; старый сервер не присылает.
+     */
+    trip?: TripMoney | null;
+    /** Топливо по километражу — лимит на заправку по рейсу; литры — по расходу парка. */
+    fuel?: { amount: number; liters: number | null } | null;
+    /** Доля ОПВ, % — чтобы расшифровать свою сумму отклика. */
+    opvPct?: number;
     note: string | null;
     publishedAt: string | null;
     /** Свой отклик: в ленте — только статус, в карточке — целиком. */
@@ -136,6 +145,35 @@ export interface ExchangeOrder {
 }
 
 export type OfferStatus = 'ACTIVE' | 'WITHDRAWN' | 'ACCEPTED' | 'REJECTED';
+
+/** Сумма за рейс водителя парка: на руки + топливо + пенсионные (ОПВ). */
+export interface TripMoney {
+    total: number;
+    onHand: number;
+    fuel: number;
+    opv: number;
+}
+
+/**
+ * Своя сумма на руки → сумма за рейс, как её посчитает сервер (схема шефа):
+ * оплата за работу такая, чтобы после ОПВ осталось ровно на руки, плюс
+ * топливо. Считается в тиынах, с тем же округлением, что на сервере.
+ */
+export function суммаЗаРейс(onHand: number, fuel: number, opvPct: number): TripMoney {
+    const toT = (v: number) => Math.round((v + Number.EPSILON) * 100);
+    const bp = Math.round(opvPct * 100);
+    const share = (t: number) => Math.round((t * bp) / 10000);
+    const net = toT(onHand);
+    const guess = Math.floor(net / (1 - opvPct / 100));
+    let found = -1;
+    for (let g = Math.max(0, guess - 50); g <= guess + 50; g++) {
+        const got = g - share(g);
+        if (got === net) { found = g; break; }
+        if (got > net && found < 0) found = g;
+    }
+    const gross = found >= 0 ? found : Math.ceil(net / (1 - opvPct / 100));
+    return { total: (gross + toT(fuel)) / 100, onHand: net / 100, fuel: toT(fuel) / 100, opv: share(gross) / 100 };
+}
 
 /** Свой отклик на заявку. Цена — сумма на руки вместе с топливом. */
 export interface OwnOffer {
@@ -198,6 +236,10 @@ export interface TripFuel {
     scheme?: number | null;
     /** Заправлялся за свои (чеков больше, чем дали) — парк вернёт. */
     ownMoney?: number;
+    /** Лимит на топливо в литрах — по расходу парка на 100 км. Старый сервер не присылает. */
+    fuelLiters?: number | null;
+    /** Предоплата из суммы на руки: вычтут из выплаты, чек на неё не нужен. */
+    advances?: { total: number; items: { id: string; amount: number; createdAt: string }[] };
     locked: boolean;
 }
 
@@ -215,12 +257,17 @@ export interface DriverVehicles {
     trailers: DriverVehicle[];
 }
 
-/** Деньги заранее по рейсу: на топливо или аванс (Q17). */
+/** Деньги заранее по рейсу: на топливо или предоплата (Q17; раздельно — шеф, 27.10.2026). */
 export type AdvanceKind = 'FUEL' | 'ADVANCE';
 export type AdvanceStatus = 'REQUESTED' | 'CHECK' | 'REUPLOAD' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+/** Лимит одного вида: всего, выдано, ждёт решения, можно ещё попросить. */
+export interface AdvanceLimit { cap: number; issued: number; pending: number; available: number }
 export interface TripAdvances {
-    /** Нет — у рейса нет расчёта суммы водителю, просить не из чего. */
-    limit: { pct: number; tripTotal: number; cap: number; issued: number; pending: number; available: number } | null;
+    /**
+     * Нет — у рейса нет расчёта суммы водителю, просить не из чего. Топливо —
+     * в пределах топлива по километражу; предоплата — `pct` % суммы на руки.
+     */
+    limit: { pct: number; onHand: number; fuel: AdvanceLimit; advance: AdvanceLimit } | null;
     requests: {
         id: string; kind: AdvanceKind; amount: number; comment: string | null; status: AdvanceStatus;
         parkNote: string | null; issuedAmount: number | null; createdAt: string;

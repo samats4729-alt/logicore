@@ -22,7 +22,7 @@ export interface AdvanceRequest {
 
 export const ADVANCE_KIND: Record<AdvanceKind, string> = {
     FUEL: 'На топливо',
-    ADVANCE: 'Аванс',
+    ADVANCE: 'Предоплата',
 };
 
 export const ADVANCE_STATUS: Record<AdvanceStatus, { label: string; tone: 'muted' | 'warn' | 'neg' | 'ok' }> = {

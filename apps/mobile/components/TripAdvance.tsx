@@ -6,7 +6,7 @@ import { AdvanceKind, AdvanceStatus, TripAdvances, exchangeApi, деньги, о
 import { Badge, Button, Chip, Field, Section } from '@/components/kit';
 import { FONT } from '@/lib/theme';
 
-const KIND: Record<AdvanceKind, string> = { FUEL: 'На топливо', ADVANCE: 'Аванс' };
+const KIND: Record<AdvanceKind, string> = { FUEL: 'На топливо', ADVANCE: 'Предоплата' };
 const STATUS: Record<AdvanceStatus, { label: string; tone: 'orange' | 'green' | 'red' | 'gray' }> = {
     REQUESTED: { label: 'Ждёт парка', tone: 'orange' },
     CHECK: { label: 'На доп. проверке', tone: 'orange' },
@@ -20,13 +20,15 @@ const OPEN: AdvanceStatus[] = ['REQUESTED', 'CHECK', 'REUPLOAD'];
 const date = (d: string) => new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 /**
- * Деньги заранее: на топливо или аванс по рейсу (задачи шефа, Q17).
+ * Деньги заранее: на топливо или предоплата по рейсу (задачи шефа, Q17).
  *
  * Раньше попросить можно было только всё «на руки» и только после рейса.
- * Теперь в рейсе — часть заранее, не больше доли от суммы за рейс, что
- * задал парк (обычно 50 %). Запрос уходит в кабинет парка; выданное
- * вычтется из выплаты в конце. Если парк просит перезагрузить документы —
- * причина видна здесь, а после загрузки запрос отправляется снова.
+ * Теперь в рейсе — заранее, и два вида отдельно (шеф, 27.10.2026): на
+ * топливо — в пределах лимита по километражу, предоплату — из суммы на
+ * руки, не больше доли, что задал парк (обычно 50 %). Запрос уходит в
+ * кабинет парка; выданное вычтется из выплаты в конце, топливо — с учётом
+ * чеков. Если парк просит перезагрузить документы — причина видна здесь, а
+ * после загрузки запрос отправляется снова.
  */
 export function TripAdvance({ orderId }: { orderId: string }) {
     const { colors } = useAppTheme();
@@ -45,7 +47,10 @@ export function TripAdvance({ orderId }: { orderId: string }) {
     // Рейс без расчёта суммы водителю (прежняя схема) — блока нет.
     if (!data?.limit) return null;
     const limit = data.limit;
-    const pending = data.requests.some((r) => OPEN.includes(r.status));
+    const of = (k: AdvanceKind) => (k === 'FUEL' ? limit.fuel : limit.advance);
+    // По одному запросу каждого вида: пока парк решает прошлый, такой же не отправить.
+    const pending = data.requests.some((r) => r.kind === kind && OPEN.includes(r.status));
+    const current = of(kind);
 
     const send = async () => {
         const sum = Number(amount.replace(/\D/g, ''));
@@ -76,24 +81,27 @@ export function TripAdvance({ orderId }: { orderId: string }) {
 
     return (
         <Section title="Деньги заранее" icon="wallet-outline">
+            <View style={styles.limits}>
+                <LimitLine label="На топливо" value={limit.fuel.available} hint={limit.fuel.cap ? `лимит по километражу ${деньги(limit.fuel.cap)}` : 'топливо по рейсу не посчитано'} />
+                <LimitLine label="Предоплата" value={limit.advance.available} hint={`${limit.pct} % от суммы на руки ${деньги(limit.onHand)}`} />
+            </View>
             <Text style={[styles.note, { color: colors.textSecondary }]}>
-                Можно попросить до <Text style={{ color: colors.text, fontFamily: FONT.bold }}>{деньги(limit.available)}</Text> — это {limit.pct} % от
-                суммы за рейс ({деньги(limit.tripTotal)}) за вычетом того, что парк уже дал. Выданное вычтут из выплаты в конце.
+                Столько ещё можно попросить — уже выданное и ждущее решения вычтено. Выданное вычтут из выплаты в конце; на топливо — с учётом чеков.
             </Text>
 
-            {limit.available > 0 && !pending && (
-                <View style={{ marginTop: 10 }}>
-                    <View style={styles.chips}>
-                        {(['FUEL', 'ADVANCE'] as const).map((k) => (
-                            <Chip key={k} label={KIND[k]} active={kind === k} onPress={() => setKind(k)} />
-                        ))}
-                    </View>
+            <View style={[styles.chips, { marginTop: 12 }]}>
+                {(['FUEL', 'ADVANCE'] as const).map((k) => (
+                    <Chip key={k} label={KIND[k]} active={kind === k} onPress={() => { setKind(k); setAmount(''); }} />
+                ))}
+            </View>
+            {current.available > 0 && !pending && (
+                <View>
                     <Field
                         label="Сколько нужно, ₸"
                         value={pretty}
                         onChangeText={(v: string) => setAmount(v.replace(/\D/g, '').slice(0, 9))}
                         keyboardType="number-pad"
-                        placeholder={`до ${деньги(limit.available)}`}
+                        placeholder={`до ${деньги(current.available)}`}
                     />
                     <Field
                         label="Комментарий"
@@ -105,9 +113,15 @@ export function TripAdvance({ orderId }: { orderId: string }) {
                     <Button title="Попросить" icon="paper-plane-outline" loading={busy} onPress={send} />
                 </View>
             )}
-            {pending && (
-                <Text style={[styles.note, { color: colors.textSecondary, marginTop: 8 }]}>
-                    Пока парк решает прошлый запрос, новый не отправить.
+            {pending ? (
+                <Text style={[styles.note, { color: colors.textSecondary }]}>
+                    Пока парк решает прошлый запрос {kind === 'FUEL' ? 'на топливо' : 'на предоплату'}, такой же новый не отправить.
+                </Text>
+            ) : current.available <= 0 && (
+                <Text style={[styles.note, { color: colors.textSecondary }]}>
+                    {kind === 'FUEL'
+                        ? current.cap ? 'Лимит на топливо по рейсу уже выдан или ждёт решения парка.' : 'Топливо по рейсу не посчитано — о деньгах на топливо договоритесь с парком по телефону.'
+                        : 'Предоплата по рейсу уже выдана или ждёт решения парка.'}
                 </Text>
             )}
 
@@ -157,7 +171,23 @@ export function TripAdvance({ orderId }: { orderId: string }) {
     );
 }
 
+/** Сколько ещё можно попросить этого вида — и откуда лимит. */
+function LimitLine({ label, value, hint }: { label: string; value: number; hint: string }) {
+    const { colors } = useAppTheme();
+    return (
+        <View style={styles.limitLine}>
+            <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontSize: 14.5, fontFamily: FONT.semibold }}>{label}</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>{hint}</Text>
+            </View>
+            <Text style={{ color: colors.text, fontSize: 16, fontFamily: FONT.bold, fontVariant: ['tabular-nums'] }}>до {деньги(value)}</Text>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
+    limits: { gap: 10, marginBottom: 8 },
+    limitLine: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     note: { fontSize: 13, lineHeight: 18 },
     chips: { flexDirection: 'row', gap: 8, marginBottom: 12 },
     item: { paddingVertical: 10, borderTopWidth: 1, marginTop: 10 },

@@ -5,16 +5,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { assertAllowedUpload } from '../documents/allowed-files';
 import { removeExchangeFile, safeExtension, storeExchangeFile } from './exchange-files';
-import { money, payoutOf } from './settlement-calc';
+import { litersFor, money, payoutOf } from './settlement-calc';
+import { PARK_DEFAULTS } from './settlement.service';
 import { FuelDecisionDto, FuelIssueDto } from './dto/fuel.dto';
 
 const num = (v: Prisma.Decimal | number | null | undefined) => (v == null ? 0 : Number(v));
 
 const ORDER_FUEL_SELECT = {
     id: true, orderNumber: true, driverId: true, partnerId: true, status: true,
-    partner: { select: { name: true, bin: true, phone: true } },
+    partner: { select: { name: true, bin: true, phone: true, parkPayoutRates: { select: { fuelConsumption: true } } } },
     exchangeSettlement: { select: { scheme: true, driverTotal: true, workNet: true, fuelEstimate: true, distanceKm: true, driverId: true } },
     exchangeFuelIssues: { select: { id: true, amount: true, method: true, note: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
+    // Выданная предоплата лежит среди выданного по рейсу — узнаём её по запросу водителя.
+    advanceRequests: { where: { kind: 'ADVANCE', status: 'APPROVED' }, select: { fuelIssueId: true } },
     exchangeFuelReceipts: {
         select: { id: true, amount: true, status: true, rejectReason: true, createdAt: true, decidedAt: true },
         orderBy: { createdAt: 'asc' as const },
@@ -30,6 +33,20 @@ export function parseAmount(raw: string | number | undefined | null): number {
     if (!Number.isFinite(value) || value <= 0) throw new BadRequestException('Впишите сумму из чека числом, больше нуля');
     if (value > 10_000_000) throw new BadRequestException('Сумма слишком большая — проверьте, нет ли лишних цифр');
     return money(value);
+}
+
+/**
+ * Выданное по рейсу — на топливо и предоплата (шеф, 27.10.2026). Обе суммы
+ * вычитаются из выплаты, но топливо сводится чеками, а предоплата — часть
+ * суммы на руки, чека на неё не бывает. `advanceIssueIds` — записи, которыми
+ * парк выдал предоплату по запросу водителя.
+ */
+export function splitIssues<T extends { id: string; amount: Prisma.Decimal | number }>(issues: T[], advanceIssueIds: (string | null)[]) {
+    const advance = new Set(advanceIssueIds.filter((id): id is string => !!id));
+    const fuel = issues.filter((i) => !advance.has(i.id));
+    const advances = issues.filter((i) => advance.has(i.id));
+    const total = (list: T[]) => money(list.reduce((sum, i) => sum + num(i.amount), 0));
+    return { fuel, advances, fuelTotal: total(fuel), advanceTotal: total(advances) };
 }
 
 /**
@@ -52,21 +69,28 @@ export class ExchangeFuelService {
     /** Сводка — одна для водителя и для парка; парку — с отметками, кто что внёс. */
     private view(row: FuelRow) {
         const s = row.exchangeSettlement;
-        const issued = money(row.exchangeFuelIssues.reduce((sum, i) => sum + num(i.amount), 0));
+        const given = splitIssues(row.exchangeFuelIssues, row.advanceRequests.map((a) => a.fuelIssueId));
+        // В выплату идёт всё выданное заранее; «без чека» и «за свои» — только по топливу.
+        const issuedAll = money(given.fuelTotal + given.advanceTotal);
+        const issued = given.fuelTotal;
         const accepted = money(row.exchangeFuelReceipts.filter((r) => r.status === 'ACCEPTED').reduce((sum, r) => sum + num(r.amount), 0));
         const pending = money(row.exchangeFuelReceipts.filter((r) => r.status === 'PENDING').reduce((sum, r) => sum + num(r.amount), 0));
         const driverTotal = s ? num(s.driverTotal) : null;
+        const item = (i: FuelRow['exchangeFuelIssues'][number]) => ({ id: i.id, amount: num(i.amount), method: i.method, note: i.note, createdAt: i.createdAt });
+        const consumption = row.partner?.parkPayoutRates ? num(row.partner.parkPayoutRates.fuelConsumption) : PARK_DEFAULTS.fuelConsumption;
         return {
             orderId: row.id,
             orderNumber: row.orderNumber,
             park: row.partner ? { name: row.partner.name, bin: row.partner.bin, phone: row.partner.phone } : null,
             driverTotal,
+            /** Топливо по километражу — лимит на заправку по рейсу (шеф, 27.10.2026). */
             fuelEstimate: s ? num(s.fuelEstimate) : null,
+            /** Тот же лимит в литрах — по расходу парка на 100 км. */
+            fuelLiters: s ? litersFor(s.distanceKm, consumption) : null,
             distanceKm: s?.distanceKm ?? null,
-            issued: {
-                total: issued,
-                items: row.exchangeFuelIssues.map((i) => ({ id: i.id, amount: num(i.amount), method: i.method, note: i.note, createdAt: i.createdAt })),
-            },
+            issued: { total: issued, items: given.fuel.map(item) },
+            /** Предоплата из суммы на руки: вычитается из выплаты, чека на неё нет. */
+            advances: { total: given.advanceTotal, items: given.advances.map(item) },
             receipts: {
                 accepted,
                 pending,
@@ -81,7 +105,7 @@ export class ExchangeFuelService {
              */
             scheme: s?.scheme ?? null,
             /** Перечислить водителю в конце. */
-            toPay: s == null ? null : s.scheme === 2 ? payoutOf(num(s.workNet), issued, accepted).toPay : money(num(s.driverTotal) - issued),
+            toPay: s == null ? null : s.scheme === 2 ? payoutOf(num(s.workNet), issuedAll, accepted).toPay : money(num(s.driverTotal) - issuedAll),
             /** Дали на топливо, а чека нет: по схеме шефа — вычитается из выплаты, по прежней — облагается. */
             withoutReceipt: money(Math.max(0, issued - accepted)),
             /** Чеков больше, чем дали: водитель заправлялся за свои — парк возвращает (схема шефа). */

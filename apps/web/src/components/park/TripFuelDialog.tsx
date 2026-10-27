@@ -146,7 +146,11 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
                     <div className="space-y-4 text-[13px]">
                         <div className="grid gap-2 sm:grid-cols-4">
                             <Stat label={fuel.scheme === 2 ? 'На руки (без топлива)' : 'Договорились, на руки'} value={fuel.driverTotal != null ? moneyShort(fuel.driverTotal) : '—'} />
-                            <Stat label="Топливо по расчёту" value={fuel.fuelEstimate ? moneyShort(fuel.fuelEstimate) : '—'} hint={fuel.distanceKm ? `≈ ${Math.round(fuel.distanceKm).toLocaleString('ru-RU')} км` : undefined} />
+                            <Stat
+                                label="Лимит на топливо"
+                                value={fuel.fuelEstimate ? moneyShort(fuel.fuelEstimate) : '—'}
+                                hint={fuel.distanceKm ? `≈ ${Math.round(fuel.distanceKm).toLocaleString('ru-RU')} км${fuel.fuelLiters ? ` · ≈ ${fuel.fuelLiters.toLocaleString('ru-RU')} л` : ''}` : undefined}
+                            />
                             <Stat label="Дали на топливо" value={moneyShort(fuel.issued.total)} hint={`чеков принято на ${moneyShort(fuel.receipts.accepted)}`} />
                             <Stat label="Перечислить в конце" value={fuel.toPay != null ? moneyShort(fuel.toPay) : '—'} strong />
                         </div>
@@ -167,6 +171,17 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
                                 Чеков на {moneyShort(fuel.ownMoney ?? 0)} больше, чем дали: водитель заправлялся за свои — эта сумма вернётся ему в выплате.
                             </div>
                         )}
+                        {/* Лимит — топливо по километражу: расход сверх него налоговая сверяет с пробегом. */}
+                        {!!fuel.fuelEstimate && fuel.receipts.accepted + fuel.receipts.pending > fuel.fuelEstimate && (
+                            <div className="rounded-lg border border-solid border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                                Чеков на {moneyShort(fuel.receipts.accepted + fuel.receipts.pending - fuel.fuelEstimate)} больше лимита на топливо по километражу — сверьте с водителем, почему.
+                            </div>
+                        )}
+                        {(fuel.advances?.total ?? 0) > 0 && (
+                            <div className="rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">
+                                Предоплата водителю — {moneyShort(fuel.advances?.total ?? 0)}: вычтется из выплаты, чек на неё не нужен.
+                            </div>
+                        )}
                         {fuel.locked && (
                             <div className="rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">Водитель запросил выплату — топливо по рейсу закрыто, суммы вошли в выплату.</div>
                         )}
@@ -174,7 +189,11 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
                         <section className="space-y-2">
                             <h3 className="m-0 text-[13px] font-semibold">Дали на топливо</h3>
                             {fuel.issued.items.length === 0 && <p className="m-0 text-[12.5px] text-muted-foreground">Пока ничего не отмечено.</p>}
-                            {fuel.issued.items.map((i) => (
+                            {/* Предоплата — тем же списком, но подписана: чек на неё не нужен. */}
+                            {[...fuel.issued.items, ...(fuel.advances?.items ?? []).map((i) => ({
+                                ...i,
+                                note: i.note?.startsWith('Предоплата') ? `${i.note} — из суммы на руки` : ['Предоплата из суммы на руки', i.note].filter(Boolean).join(' · '),
+                            }))].map((i) => (
                                 <div key={i.id} className="flex items-center gap-3 rounded-lg border border-solid border-border px-3 py-2">
                                     <div className="flex-1">
                                         <div className="font-semibold tabular-nums">{moneyShort(i.amount)}</div>

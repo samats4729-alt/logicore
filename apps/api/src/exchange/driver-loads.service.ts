@@ -6,6 +6,7 @@ import { removeExchangeFile } from './exchange-files';
 import { EXCHANGE_ORDER_SELECT, ExchangeOrderRow, ON_EXCHANGE, byLoadingDate, exchangeView, matches, notPast } from './exchange-orders';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { ExchangeSettlementService } from './settlement.service';
+import { litersFor } from './settlement-calc';
 
 /** Рейс идёт: водитель назначен и ещё не довёз. */
 const ACTIVE_ORDER: OrderStatus[] = [
@@ -60,16 +61,24 @@ export class ExchangeDriverLoadsService {
         const calc = view.price != null ? this.settlement.tryBase(ctx, view.price) : null;
         return {
             ...view,
-            /**
-             * Водителю — только сумма чистыми на руки: налоги и топливо уже
-             * вычтены (Q14, владелец 25.10.2026: «только чистыми на руки видит
-             * сумму и всё»). Сумму за рейс, топливо, налоги, комиссию и цену
-             * для компании сервер водителю не отдаёт вовсе. Меняет решение
-             * 15.10, когда водителю показывали расшифровку (`breakdown`):
-             * старое приложение без неё просто ничего не рисует.
-             */
+            /** На руки — как и раньше: старое приложение показывает только её. */
             price: calc ? calc.driverTotal : null,
             distanceKm: ctx.distanceKm,
+            /**
+             * Сумма за рейс и из чего она (шеф, 27.10.2026): на руки + топливо
+             * + ОПВ. Видя только «на руки», водитель не понимал, что топливо и
+             * пенсионные тоже его, и не соглашался на рейс. Налоги, которые
+             * платит парк (ВОСМС, СО, ИПН), комиссия и цена для компании
+             * водителю по-прежнему не отдаются (Q14).
+             */
+            trip: calc ? { total: calc.base, onHand: calc.driverTotal, fuel: calc.fuel, opv: calc.opv } : null,
+            /**
+             * Топливо по километражу — лимит на заправку: на эту сумму водитель
+             * заправляется по рейсу. Литры — по расходу парка на 100 км.
+             * Вместе с долей ОПВ — чтобы расшифровать и свою сумму отклика.
+             */
+            fuel: ctx.fuel > 0 ? { amount: ctx.fuel, liters: litersFor(ctx.distanceKm, base.fuelConsumption) } : null,
+            opvPct: ctx.rates.opvPct,
         };
     }
 

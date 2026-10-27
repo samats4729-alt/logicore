@@ -216,6 +216,12 @@ export function fuelEstimate(distanceKm: number | null | undefined, fuelPerKm: n
     return Math.round(distanceKm * fuelPerKm);
 }
 
+/** Литры на маршрут по расходу на 100 км, целыми; нет расстояния — нет и литров. */
+export function litersFor(distanceKm: number | null | undefined, consumptionPer100: number): number | null {
+    if (!distanceKm || distanceKm <= 0 || !(consumptionPer100 > 0)) return null;
+    return Math.round((distanceKm * consumptionPer100) / 100);
+}
+
 /** Топливо на 1 км, ₸: расход на 100 км × цена литра сезона. */
 export function fuelPerKmOf(consumptionPer100: number, priceSummer: number, priceWinter: number | null, season: string): number {
     const price = season === 'WINTER' && priceWinter ? priceWinter : priceSummer;
