@@ -25,11 +25,17 @@ import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import { ParkContractService } from './park-contract.service';
+import { VehicleOwnerContractService } from './vehicle-owner-contract.service';
+import { VehicleOwnerContractDto } from './dto/vehicle-owner-contract.dto';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
+import { fuelChangeText, fuelView } from './fuel-history';
+import { ExchangeParkEarningsService } from './park-earnings.service';
 import { PlatformFeeDto } from './dto/fuel.dto';
-import { FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
+import { AdvanceDecisionDto, AdvanceRequestDto, FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
+import { ExchangeAdvanceRequestsService } from './advance-requests.service';
+import { ExchangeDriverVehiclesService } from './driver-vehicles.service';
 import { DriverPushService } from '../notifications/driver-push.service';
 
 /**
@@ -48,8 +54,8 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
     res.send(file.pdf);
 }
 import {
-    AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
-    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
+    AddParkDriverDto, AdminCompaniesQueryDto, ParkEarningsQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
+    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, DriverContactsDto, DriverVehicleDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -114,7 +120,64 @@ export class ExchangeDriverController {
         private readonly s3: S3Service,
         private readonly contracts: ParkContractService,
         private readonly fuel: ExchangeFuelService,
+        private readonly advances: ExchangeAdvanceRequestsService,
+        private readonly vehicles: ExchangeDriverVehiclesService,
     ) {}
+
+    // ==================== транспорт: тягачи и прицепы (R4) ====================
+
+    @Get('me/vehicles')
+    @ApiOperation({ summary: 'Тягачи и прицепы водителя' })
+    myVehicles(@Request() req: any) {
+        return this.vehicles.list(req.user.sub);
+    }
+
+    @Post('me/vehicles')
+    @ApiOperation({ summary: 'Добавить тягач или прицеп' })
+    addVehicle(@Request() req: any, @Body() dto: DriverVehicleDto) {
+        return this.vehicles.add(req.user.sub, dto);
+    }
+
+    @Delete('me/vehicles/:id')
+    @ApiOperation({ summary: 'Убрать тягач или прицеп' })
+    removeVehicle(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.remove(req.user.sub, id);
+    }
+
+    @Post('me/vehicles/:id/main')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Сделать основным' })
+    mainVehicle(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.makeMain(req.user.sub, id);
+    }
+
+    // ==================== топливо и аванс заранее (Q17) ====================
+
+    @Get('trips/:orderId/advances')
+    @ApiOperation({ summary: 'Сколько можно попросить по рейсу и прежние запросы' })
+    tripAdvances(@Request() req: any, @Param('orderId') orderId: string) {
+        return this.advances.forDriver(req.user.sub, orderId);
+    }
+
+    @Post('trips/:orderId/advances')
+    @ApiOperation({ summary: 'Попросить на топливо или аванс по рейсу' })
+    requestAdvance(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: AdvanceRequestDto) {
+        return this.advances.request(req.user.sub, orderId, dto);
+    }
+
+    @Post('advances/:id/resubmit')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Перезагрузил документы — отправить запрос снова' })
+    resubmitAdvance(@Request() req: any, @Param('id') id: string) {
+        return this.advances.resubmit(req.user.sub, id);
+    }
+
+    @Post('advances/:id/cancel')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Отозвать свой запрос, пока парк не решил' })
+    cancelAdvance(@Request() req: any, @Param('id') id: string) {
+        return this.advances.cancel(req.user.sub, id);
+    }
 
     // ==================== топливо рейса ====================
     // Водитель доезжает до заправки, звонит в парк, чек пробивают на БИН парка —
@@ -231,6 +294,12 @@ export class ExchangeDriverController {
         return this.payouts.earnings(req.user.sub);
     }
 
+    @Get('me/pension')
+    @ApiOperation({ summary: 'Пенсионные (ОПВ) по всем рейсам: итог и прибавка с каждого рейса' })
+    pension(@Request() req: any) {
+        return this.payouts.pension(req.user.sub);
+    }
+
     @Put('me/payout-account')
     @ApiOperation({ summary: 'Счёт для выплат (IBAN)' })
     setPayoutAccount(@Request() req: any, @Body() dto: PayoutAccountDto) {
@@ -263,6 +332,12 @@ export class ExchangeDriverController {
     @ApiOperation({ summary: 'Отозвать просьбу удалить аккаунт' })
     cancelDeletion(@Request() req: any) {
         return this.drivers.cancelDeletion(req.user.sub);
+    }
+
+    @Put('me/contacts')
+    @ApiOperation({ summary: 'Ещё номера и почта для бухгалтерских документов' })
+    setContacts(@Request() req: any, @Body() dto: DriverContactsDto) {
+        return this.drivers.setContacts(req.user.sub, dto);
     }
 
     @Put('me/deduction')
@@ -375,9 +450,40 @@ export class ExchangeParkController {
         private readonly s3: S3Service,
         private readonly audit: AuditService,
         private readonly contracts: ParkContractService,
+        private readonly ownerContracts: VehicleOwnerContractService,
         private readonly fuel: ExchangeFuelService,
         private readonly registry: ExchangeParkRegistryService,
+        private readonly advances: ExchangeAdvanceRequestsService,
+        private readonly vehicles: ExchangeDriverVehiclesService,
     ) {}
+
+    // ==================== запросы водителей на топливо и аванс (Q17) ====================
+    // Решает бухгалтер парка: он смотрит рейс, накладную и подтверждение
+    // получателя — поэтому здесь и бухгалтер, и право «Бухгалтерия».
+
+    @Get('advances')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @RequirePermissions('orders', 'accounting')
+    @ApiOperation({ summary: 'Запросы водителей на топливо и аванс' })
+    advanceRequests(@Request() req: any, @Query('scope') scope?: string) {
+        return this.advances.forPark(req.user.companyId, scope === 'all' ? 'all' : 'open');
+    }
+
+    @Post('advances/:id/decide')
+    @HttpCode(HttpStatus.OK)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @RequirePermissions('orders', 'accounting')
+    @ApiOperation({ summary: 'Решение по запросу: выдать, доп. проверка, перезагрузить документы, отказ' })
+    async decideAdvance(@Request() req: any, @Param('id') id: string, @Body() dto: AdvanceDecisionDto) {
+        const result = await this.advances.decide(req.user.companyId, req.user.sub, id, dto);
+        const what = { APPROVE: 'выдано', CHECK: 'на доп. проверку', REUPLOAD: 'перезагрузить документы', REJECT: 'отказ' }[dto.action];
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'STATUS', entity: 'driver_advance', entityId: id, orderId: result.orderId,
+            entityLabel: `${result.kind === 'FUEL' ? 'Топливо' : 'Предоплата'} водителю ${result.driver.name}, ${result.amount.toLocaleString('ru-RU')} ₸: ${what}${result.parkNote ? ` — ${result.parkNote}` : ''}`,
+        });
+        if (dto.action === 'APPROVE') void this.driverPush.moneyIssued(result.orderId, result.kind, result.issuedAmount ?? result.amount, dto.method ?? 'TO_DRIVER');
+        return result;
+    }
 
     @Get('overview')
     @ApiOperation({ summary: 'Кабинет парка: водители, рейсы, заработок за месяц, код приглашения' })
@@ -401,10 +507,17 @@ export class ExchangeParkController {
     }
 
     @Post('trips/:orderId/fuel/issues')
-    @ApiOperation({ summary: 'Дали на топливо: оплатили на заправке или перевели водителю' })
+    @ApiOperation({ summary: 'Выдали по рейсу без запроса водителя: топливо (на заправке или переводом) или предоплату' })
     async addFuelIssue(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: FuelIssueDto) {
         await this.drivers.assertPark(req.user.companyId);
-        return this.fuel.addIssue(req.user.companyId, req.user.sub, orderId, dto);
+        const result = await this.fuel.addIssue(req.user.companyId, req.user.sub, orderId, dto);
+        const advance = dto.kind === 'ADVANCE';
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'driver_advance', entityId: orderId, orderId,
+            entityLabel: `${advance ? 'Предоплата' : 'Топливо'} водителю по рейсу ${result.orderNumber}, ${Number(dto.amount).toLocaleString('ru-RU')} ₸: выдано без запроса${dto.note?.trim() ? ` — ${dto.note.trim()}` : ''}`,
+        });
+        void this.driverPush.moneyIssued(orderId, advance ? 'ADVANCE' : 'FUEL', dto.amount, advance ? 'TO_DRIVER' : dto.method);
+        return result;
     }
 
     @Delete('fuel-issues/:id')
@@ -412,6 +525,15 @@ export class ExchangeParkController {
     async removeFuelIssue(@Request() req: any, @Param('id') id: string) {
         await this.drivers.assertPark(req.user.companyId);
         return this.fuel.removeIssue(req.user.companyId, id);
+    }
+
+    @Post('trips/:orderId/fuel/receipts')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE } }))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Парк сам прикрепил чек на топливо к рейсу — сразу принят' })
+    async addParkFuelReceipt(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: FuelReceiptDto, @UploadedFile() file: Express.Multer.File) {
+        await this.drivers.assertPark(req.user.companyId);
+        return this.fuel.addParkReceipt(req.user.companyId, req.user.sub, orderId, dto.amount, file);
     }
 
     @Put('fuel-receipts/:id/decision')
@@ -510,7 +632,17 @@ export class ExchangeParkController {
     @Put('rates')
     @ApiOperation({ summary: 'Изменить ставки удержаний' })
     async setRates(@Request() req: any, @Body() dto: PayoutRatesDto) {
+        const before = await this.payouts.parkRates(req.user.companyId);
         const result = await this.payouts.setRates(req.user.companyId, req.user.sub, dto);
+        // История цен на топливо (задачи шефа, Q15) — в журнале действий, отдельной записью.
+        const fuelChange = fuelChangeText(before, result);
+        if (fuelChange) {
+            await this.audit.log({
+                companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_fuel',
+                entityLabel: `Топливо: ${fuelChange}`,
+                details: { before: fuelView(before), after: fuelView(result) },
+            });
+        }
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
             entityLabel: `Ставки выплат: комиссия ${dto.commissionPct}%, ОПВ ${dto.opvPct}%, ВОСМС ${dto.vosmsPct}%, ИПН ${dto.ipnPct}%, СО ${dto.soPct}%${dto.vatPayer ? `, НДС ${dto.vatPct ?? 16}%` : ''}`,
@@ -523,10 +655,17 @@ export class ExchangeParkController {
     async setSeason(@Request() req: any, @Body() dto: FuelSeasonDto) {
         const result = await this.payouts.setFuelSeason(req.user.companyId, req.user.sub, dto.season);
         await this.audit.log({
-            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
-            entityLabel: `Топливо: ${dto.season === 'WINTER' ? 'зимняя' : 'летняя'} цена`,
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_fuel',
+            entityLabel: `Топливо: ${dto.season === 'WINTER' ? 'зимняя' : 'летняя'} цена — ${result.fuelPerKm.toLocaleString('ru-RU')} ₸ за км`,
+            details: { after: fuelView(result) },
         });
         return result;
+    }
+
+    @Get('rates/fuel-history')
+    @ApiOperation({ summary: 'История цен на топливо: кто, когда и что поменял' })
+    fuelHistory(@Request() req: any) {
+        return this.payouts.fuelHistory(req.user.companyId);
     }
 
     @Put('rates/confirm')
@@ -553,10 +692,32 @@ export class ExchangeParkController {
         return this.drivers.parkDrivers(req.user.companyId, query.status);
     }
 
+    @Post('drivers')
+    @ApiOperation({ summary: 'Добавить водителя самому: имя и номер, пароль придумает система' })
+    async add(@Request() req: any, @Body() dto: AddParkDriverDto) {
+        const added = await this.drivers.addByPark(req.user.companyId, dto);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'exchange_driver',
+            entityId: added.id,
+            // Пароля в журнале нет: его видит только тот, кто добавил, и один раз.
+            entityLabel: `${added.lastName} ${added.firstName}: добавлен парком, ${added.phone}`,
+        });
+        return added;
+    }
+
     @Get('drivers/:id')
     @ApiOperation({ summary: 'Анкета водителя' })
     card(@Request() req: any, @Param('id') id: string) {
         return this.drivers.parkDriverCard(req.user.companyId, id);
+    }
+
+    @Get('drivers/:id/vehicles')
+    @ApiOperation({ summary: 'Тягачи и прицепы водителя (R4)' })
+    driverVehicles(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.forPark(req.user.companyId, id);
     }
 
     @Get('documents/:id')
@@ -569,6 +730,62 @@ export class ExchangeParkController {
     @ApiOperation({ summary: 'PDF подписанного договора с водителем' })
     async contractPdf(@Request() req: any, @Param('id') id: string, @Res() res: Response) {
         sendContractPdf(res, await this.contracts.parkPdf(req.user.companyId, id), false);
+    }
+
+    // ==================== договор с владельцем машины (Q9) ====================
+    // Машина водителя записана на другого — парк арендует её у владельца.
+
+    @Get('drivers/:id/owner-contracts')
+    @ApiOperation({ summary: 'Договоры с владельцами машины водителя' })
+    ownerContractsList(@Request() req: any, @Param('id') id: string) {
+        return this.ownerContracts.list(req.user.companyId, id);
+    }
+
+    @Post('drivers/:id/owner-contracts')
+    @ApiOperation({ summary: 'Оформить договор аренды машины с её владельцем' })
+    async createOwnerContract(@Request() req: any, @Param('id') id: string, @Body() dto: VehicleOwnerContractDto) {
+        const created = await this.ownerContracts.create(req.user.companyId, req.user.sub ?? null, id, dto);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'vehicle_owner_contract', entityId: created.id,
+            entityLabel: `Договор аренды машины ${created.vehiclePlate} с владельцем «${created.ownerName}» № ${created.number}: оформлен`,
+        });
+        return created;
+    }
+
+    @Put('owner-contracts/:contractId')
+    @ApiOperation({ summary: 'Поправить договор с владельцем машины — пока он не подписан' })
+    async updateOwnerContract(@Request() req: any, @Param('contractId') contractId: string, @Body() dto: VehicleOwnerContractDto) {
+        const updated = await this.ownerContracts.update(req.user.companyId, contractId, dto);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'vehicle_owner_contract', entityId: updated.id,
+            entityLabel: `Договор аренды машины ${updated.vehiclePlate} № ${updated.number}: изменён до подписи`,
+        });
+        return updated;
+    }
+
+    @Get('owner-contracts/:contractId/pdf')
+    @ApiOperation({ summary: 'PDF договора с владельцем машины — для подписи на бумаге' })
+    async ownerContractPdf(@Request() req: any, @Param('contractId') contractId: string, @Res() res: Response) {
+        sendContractPdf(res, await this.ownerContracts.pdf(req.user.companyId, contractId), false);
+    }
+
+    @Post('owner-contracts/:contractId/signed-file')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE } }))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Приложить подписанный договор с владельцем машины' })
+    async attachOwnerContract(@Request() req: any, @Param('contractId') contractId: string, @UploadedFile() file: Express.Multer.File) {
+        const signed = await this.ownerContracts.attachSigned(req.user.companyId, contractId, file);
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'STATUS', entity: 'vehicle_owner_contract', entityId: signed.id,
+            entityLabel: `Договор аренды машины ${signed.vehiclePlate} № ${signed.number}: приложен подписанный экземпляр`,
+        });
+        return signed;
+    }
+
+    @Get('owner-contracts/:contractId/signed-file')
+    @ApiOperation({ summary: 'Подписанный договор с владельцем машины' })
+    async ownerContractSigned(@Request() req: any, @Param('contractId') contractId: string, @Res() res: Response) {
+        return sendExchangeFile(this.s3, res, await this.ownerContracts.signedFile(req.user.companyId, contractId));
     }
 
     private async log(req: any, driver: { id: string; lastName: string | null; firstName: string | null }, what: string) {
@@ -620,7 +837,20 @@ export class ExchangeAdminController {
         private readonly drivers: ExchangeDriversService,
         private readonly settlement: ExchangeSettlementService,
         private readonly loads: ExchangeDriverLoadsService,
+        private readonly earnings: ExchangeParkEarningsService,
     ) {}
+
+    @Get('park-earnings')
+    @ApiOperation({ summary: 'Заработок LogiCore по паркам: рейсы, сумма перевозок, доля LogiCore, подписка' })
+    parkEarnings(@Query() query: ParkEarningsQueryDto) {
+        return this.earnings.summary(query);
+    }
+
+    @Get('park-earnings/:parkId')
+    @ApiOperation({ summary: 'История начислений по парку: рейсы с долей LogiCore и оплаты подписки' })
+    parkEarningsHistory(@Param('parkId') parkId: string, @Query() query: ParkEarningsQueryDto) {
+        return this.earnings.history(parkId, query);
+    }
 
     @Get('deletion-requests')
     @ApiOperation({ summary: 'Водители, которые просят удалить аккаунт' })

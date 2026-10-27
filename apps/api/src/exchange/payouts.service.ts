@@ -7,6 +7,8 @@ import { PayoutAmounts, PayoutRates, calcPayout, normalizeIban, sumPayouts } fro
 import { SettlementRates, actualPayout, money, payoutOf } from './settlement-calc';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService, PARK_DEFAULTS } from './settlement.service';
+import { DEFAULT_ADVANCE_LIMIT_PCT } from './advance-requests.service';
+import { ACTIVE_ORDER } from './driver-loads.service';
 
 /** Настройки парка: ставки и расчёт «на руки» (топливо на км, вычет, НДС). */
 type ParkRatesInput = PayoutRates & {
@@ -14,6 +16,8 @@ type ParkRatesInput = PayoutRates & {
     vatPayer?: boolean; vatPct?: number;
     fuelConsumption?: number; fuelPriceSummer?: number; fuelPriceWinter?: number | null; fuelSeason?: string;
     ipnHighPct?: number; ipnThresholdMrp?: number;
+    /** Сколько от суммы за рейс можно попросить заранее, % (Q17). */
+    advanceLimitPct?: number;
 };
 
 /** Поля налоговой схемы: их правка снимает подтверждение бухгалтера. Топливо — нет. */
@@ -176,6 +180,7 @@ export class ExchangePayoutsService {
             fuelPerKm: (await this.settlement.parkSettings(parkId)).fuelPerKm,
             ipnHighPct: row ? num(row.ipnHighPct) : PARK_DEFAULTS.ipnHighPct,
             ipnThresholdMrp: row ? row.ipnThresholdMrp : PARK_DEFAULTS.ipnThresholdMrp,
+            advanceLimitPct: row ? row.advanceLimitPct : DEFAULT_ADVANCE_LIMIT_PCT,
             applyDeduction: row ? row.applyDeduction : PARK_DEFAULTS.applyDeduction,
             deductionMrp: row ? row.deductionMrp : PARK_DEFAULTS.deductionMrp,
             mrp: row ? row.mrp : PARK_DEFAULTS.mrp,
@@ -198,8 +203,11 @@ export class ExchangePayoutsService {
         await this.drivers.assertPark(parkId);
         const {
             fuelPerKm, applyDeduction, deductionMrp, mrp, vatPayer, vatPct,
-            fuelConsumption, fuelPriceSummer, fuelPriceWinter, fuelSeason, ipnHighPct, ipnThresholdMrp, ...percents
+            fuelConsumption, fuelPriceSummer, fuelPriceWinter, fuelSeason, ipnHighPct, ipnThresholdMrp, advanceLimitPct, ...percents
         } = dto;
+        if (advanceLimitPct != null && (!Number.isInteger(advanceLimitPct) || advanceLimitPct < 0 || advanceLimitPct > 100)) {
+            throw new BadRequestException('Доля, которую можно попросить заранее, — целое число от 0 до 100 %');
+        }
         for (const [k, v] of Object.entries({ ...percents, ...(vatPct != null ? { vatPct } : {}), ...(ipnHighPct != null ? { ipnHighPct } : {}) })) {
             if (typeof v !== 'number' || v < 0 || v > 100) throw new BadRequestException(`Ставка ${k} — от 0 до 100 %`);
         }
@@ -217,6 +225,7 @@ export class ExchangePayoutsService {
             ...(fuelSeason != null ? { fuelSeason } : {}),
             ...(ipnHighPct != null ? { ipnHighPct } : {}),
             ...(ipnThresholdMrp != null ? { ipnThresholdMrp } : {}),
+            ...(advanceLimitPct != null ? { advanceLimitPct } : {}),
         };
         const before = await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId } });
         const next: Record<string, number | boolean | string | null> = { ...percents, ...extra };
@@ -233,6 +242,22 @@ export class ExchangePayoutsService {
             update: { ...percents, ...extra, ...unconfirm, updatedById: userId },
         });
         return this.parkRates(parkId);
+    }
+
+    /**
+     * История цен на топливо (задачи шефа, Q15): записи журнала действий
+     * парка о топливе — свежие сверху. Отдельной таблицы не заводим: журнал
+     * и так пишет, кто и когда поменял.
+     */
+    async fuelHistory(parkId: string) {
+        await this.drivers.assertPark(parkId);
+        const rows = await this.prisma.auditLog.findMany({
+            where: { companyId: parkId, entity: 'park_fuel' },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+            select: { id: true, createdAt: true, userName: true, entityLabel: true },
+        });
+        return rows.map((r) => ({ id: r.id, at: r.createdAt, who: r.userName, text: (r.entityLabel ?? '').replace(/^Топливо: /, '') }));
     }
 
     /** Лето или зима: цена литра для расчёта топлива — переключает парк одной кнопкой. */
@@ -327,6 +352,7 @@ export class ExchangePayoutsService {
         return {
             parkName: driver.park?.name ?? null,
             rates,
+            opvSaved: await this.opvSaved(driver.id),
             iban: driver.payoutIban,
             bank: driver.payoutBank,
             available: (() => { const t = sumLines(lines); return { ...t, workNet: t.net, net: t.toPay }; })(),
@@ -336,6 +362,77 @@ export class ExchangePayoutsService {
                 requestedAt: p.requestedAt, exportedAt: p.exportedAt, paidAt: p.paidAt, rejectReason: p.rejectReason,
             })),
         };
+    }
+
+    /**
+     * Пенсионные (ОПВ) по всем рейсам водителя (шеф, 27.10.2026): итог в
+     * отдельной ячейке профиля и прибавка с каждого рейса — чтобы водитель
+     * видел, как сумма растёт, как пассивный доход.
+     *
+     * Рейс попадает сюда, когда довезён. По каждому — состояние: выплата
+     * проведена — взнос перечислен на пенсионный счёт; ещё нет — уйдёт с
+     * выплатой. Рейс в пути — отдельной строкой «прибавится после рейса».
+     * ОПВ берётся из строки выплаты (там фактически удержанное), без
+     * выплаты — из расчёта, как в «Заработке».
+     */
+    async pension(userId: string) {
+        const driver = await this.parkDriver(userId);
+        const rates = await this.rates(driver.parkCompanyId);
+        const [items, unpaid, active] = await Promise.all([
+            this.prisma.driverPayoutItem.findMany({
+                where: { payout: { driverId: driver.id } },
+                select: { opv: true, payout: { select: { status: true } }, order: { select: TRIP_SELECT } },
+            }),
+            this.unpaidTrips(driver),
+            this.prisma.order.findMany({
+                where: { driverId: driver.userId, partnerId: driver.parkCompanyId, status: { in: ACTIVE_ORDER }, exchangeSettlement: { isNot: null } },
+                select: { exchangeSettlement: { select: { opv: true } } },
+            }),
+        ]);
+        const unpaidLines = await this.linesOf(unpaid, rates);
+        const done = [
+            ...items.map((i) => ({ order: i.order, opv: num(i.opv), paid: i.payout.status === 'PAID' })),
+            ...unpaid.map((t, k) => ({ order: t, opv: unpaidLines[k].opv, paid: false })),
+        ]
+            .filter((t) => t.opv > 0)
+            .sort((a, b) => (a.order.completedAt?.getTime() ?? 0) - (b.order.completedAt?.getTime() ?? 0));
+        let running = 0;
+        const trips = done.map((t) => {
+            running = money(running + t.opv);
+            return {
+                orderId: t.order.id, orderNumber: t.order.orderNumber, route: route(t.order), completedAt: t.order.completedAt,
+                opv: t.opv, paid: t.paid, total: running,
+            };
+        });
+        const sum = (list: typeof trips) => money(list.reduce((s, t) => s + t.opv, 0));
+        return {
+            opvPct: rates.opvPct,
+            total: running,
+            /** Уже на пенсионном счёте: выплата по рейсу проведена. */
+            paid: sum(trips.filter((t) => t.paid)),
+            /** Перечислят вместе с выплатой. */
+            waiting: sum(trips.filter((t) => !t.paid)),
+            /** Прибавится, когда довезёт рейсы, которые сейчас в пути. */
+            upcoming: money(active.reduce((s, o) => s + num(o.exchangeSettlement?.opv), 0)),
+            /** Новые сверху; `total` — сколько стало после этого рейса. */
+            trips: trips.reverse(),
+        };
+    }
+
+    /**
+     * Сколько ОПВ парк уже удержал и перечислил на пенсионный счёт водителя
+     * (задачи шефа, Q14: «ОПВ копится и видно водителю»). Считается по
+     * выплаченным выплатам: ОПВ удерживается при выплате, и пока деньги не
+     * ушли водителю, взнос тоже не перечислен.
+     */
+    private async opvSaved(driverId: string) {
+        const year = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Almaty', year: 'numeric' });
+        const yearStart = new Date(`${year}-01-01T00:00:00+05:00`);
+        const [total, thisYear] = await Promise.all([
+            this.prisma.driverPayout.aggregate({ where: { driverId, status: 'PAID' }, _sum: { opv: true } }),
+            this.prisma.driverPayout.aggregate({ where: { driverId, status: 'PAID', paidAt: { gte: yearStart } }, _sum: { opv: true } }),
+        ]);
+        return { total: num(total._sum.opv), year: Number(year), thisYear: num(thisYear._sum.opv) };
     }
 
     async setAccount(userId: string, dto: { iban: string; bank?: string }) {

@@ -12,6 +12,7 @@ import {
     anchorLabel,
     invoiceTimingLabel,
     paymentTermsLabel,
+    DAY_KINDS,
     vatLabel,
     type OrderSettlements,
     type SettlementSide,
@@ -38,7 +39,7 @@ const dateLabel = (iso?: string | null) => (iso ? dayjs(iso).format('DD.MM.YYYY'
 
 /** Одна сторона: кто, с НДС или без, когда платит. */
 function SideRow({ title, side, payVerb }: { title: string; side: SettlementSide; payVerb: string }) {
-    const terms = paymentTermsLabel(side.days, side.from);
+    const terms = paymentTermsLabel(side.days, side.from, side.banking);
     const due = dateLabel(side.dueDate);
     return (
         <div className={nova.item}>
@@ -89,6 +90,8 @@ export default function OrderSettlementsCard({
             customerPaymentFrom: customer.from,
             carrierPaymentDays: carrier.days,
             carrierPaymentFrom: carrier.from,
+            customerPaymentBanking: !!customer.banking,
+            carrierPaymentBanking: !!carrier.banking,
         });
         setEditing(true);
     };
@@ -227,6 +230,13 @@ export default function OrderSettlementsCard({
                                     addonAfter="дн."
                                 />
                                 <Select
+                                    style={{ width: 150 }}
+                                    aria-label="Какие дни"
+                                    value={!!draft.customerPaymentBanking}
+                                    onChange={(v) => setDraft({ ...draft, customerPaymentBanking: v })}
+                                    options={DAY_KINDS}
+                                />
+                                <Select
                                     style={{ width: 230 }}
                                     allowClear
                                     placeholder="от какого дня считать"
@@ -262,6 +272,13 @@ export default function OrderSettlementsCard({
                                     value={draft.carrierPaymentDays}
                                     onChange={(v) => setDraft({ ...draft, carrierPaymentDays: v })}
                                     addonAfter="дн."
+                                />
+                                <Select
+                                    style={{ width: 150 }}
+                                    aria-label="Какие дни"
+                                    value={!!draft.carrierPaymentBanking}
+                                    onChange={(v) => setDraft({ ...draft, carrierPaymentBanking: v })}
+                                    options={DAY_KINDS}
                                 />
                                 <Select
                                     style={{ width: 230 }}

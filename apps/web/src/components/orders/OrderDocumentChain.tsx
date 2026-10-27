@@ -8,6 +8,7 @@ import {
     OrderChainDocumentType,
     accountingDocumentHref,
     fetchAccountingDocuments,
+    fetchIncomingDelivered,
 } from '@/lib/accounting-documents';
 import { Route } from 'lucide-react';
 import StatusPill from '@/components/ui/StatusPill';
@@ -53,13 +54,33 @@ export default function OrderDocumentChain({
 }: OrderDocumentChainProps) {
     const router = useRouter();
     const [documents, setDocuments] = useState<AccountingDocumentListItem[]>([]);
+    /**
+     * Счета и акты от перевозчика по этому рейсу (задачи шефа, H8): те, что
+     * мы завели сами, и те, что он прислал нам через платформу.
+     */
+    const [fromCarrier, setFromCarrier] = useState<CarrierDocument[]>([]);
     const [loading, setLoading] = useState(true);
 
     const load = useCallback(async () => {
         try {
             setLoading(true);
-            const res = await fetchAccountingDocuments({ orderId, limit: 50 });
+            const [res, delivered] = await Promise.all([
+                fetchAccountingDocuments({ orderId, limit: 50 }),
+                fetchIncomingDelivered(undefined, orderId).catch(() => []),
+            ]);
             setDocuments(res.data);
+            setFromCarrier([
+                ...res.data
+                    .filter((d) => d.direction === 'INCOMING' && d.status !== 'CANCELLED')
+                    .map((d) => ({
+                        id: d.id, number: d.externalNumber || d.number, type: d.type, total: d.total,
+                        from: d.counterparty?.name ?? null, note: d.balanceDue > 0 ? `к оплате ${money(d.balanceDue)}` : 'оплачен',
+                    })),
+                ...delivered.map((d) => ({
+                    id: d.id, number: d.number, type: d.type, total: d.total, from: d.company?.name ?? null,
+                    note: d.receiptStatus === 'ACCEPTED' ? 'принят' : d.receiptStatus === 'REJECTED' ? 'отклонён' : 'ждёт решения',
+                })),
+            ]);
         } catch {
             toast.error('Не удалось загрузить документы по рейсу');
         } finally {
@@ -72,8 +93,12 @@ export default function OrderDocumentChain({
     }, [load, reloadKey]);
 
     // Отменённый документ основанием не считается — так же, как при создании.
+    // Цепочка — про наш счёт заказчику: счёт перевозчика сюда не попадает,
+    // иначе он вставал на место нашего и кнопка «Создать» пропадала.
     const active = (type: OrderChainDocumentType) =>
-        documents.find((document) => document.type === type && document.status !== 'CANCELLED');
+        documents.find((document) => document.type === type
+            && document.direction === 'OUTGOING'
+            && document.status !== 'CANCELLED');
 
     const invoice = active('PAYMENT_INVOICE');
     const act = active('SERVICE_ACT');
@@ -165,6 +190,25 @@ export default function OrderDocumentChain({
                     )}
                 </div>
             </div>
+            {fromCarrier.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                    <div className={nova.tileLabel} style={{ marginBottom: 6 }}>От перевозчика</div>
+                    {fromCarrier.map((d) => (
+                        <div key={d.id} style={carrierRowStyle}>
+                            <button
+                                type="button"
+                                className={styles.docLink}
+                                onClick={() => router.push(`/company/accounting/invoices/${d.id}`)}
+                            >
+                                {d.type === 'SERVICE_ACT' ? 'Акт' : 'Счёт'} № {d.number}
+                            </button>
+                            <span className={nova.tileSub} style={{ flex: 1 }}>{d.from}</span>
+                            <span className={nova.tileSub}>{d.note}</span>
+                            <span className={styles.amount} style={{ fontSize: 14 }}>{money(d.total)}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
             {(invoice?.status === 'DRAFT' || act?.status === 'DRAFT') && (
                 <div className={nova.itemDesc} style={{ marginTop: 10, whiteSpace: 'normal' }}>
                     Черновик не проведён — контрагенту такой документ не отдан.
@@ -174,6 +218,24 @@ export default function OrderDocumentChain({
         </section>
     );
 }
+
+/** Строка «от перевозчика»: свой входящий документ или присланный с платформы. */
+interface CarrierDocument {
+    id: string;
+    number: string;
+    type: string;
+    total: number;
+    from: string | null;
+    note: string;
+}
+
+const carrierRowStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 12,
+    padding: '6px 0',
+    borderTop: '1px solid var(--nova-border)',
+};
 
 const chainStyle: React.CSSProperties = {
     display: 'flex',

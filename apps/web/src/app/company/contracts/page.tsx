@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { DateField, DateRangeField } from '@/components/ui/DateField';
+import { SignedContractFile } from '@/components/contracts/SignedContractFile';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -57,6 +58,9 @@ interface Contract {
     customerCompany: { id: string; name: string; bin?: string };
     forwarderCompany: { id: string; name: string; bin?: string };
     agreements: Agreement[];
+    /** Подписанный экземпляр (G5). */
+    signedFileName?: string | null;
+    signedUploadedAt?: string | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -90,7 +94,12 @@ export default function CompanyContractsPage() {
 
     // Создание договора
     const [contractModalOpen, setContractModalOpen] = useState(false);
-    const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
+    const [partners, setPartners] = useState<{ id: string; name: string; isCustomer: boolean; isCarrier: boolean }[]>([]);
+    /**
+     * Договор из карточки контрагента (задачи шефа, G4): вторая сторона и роль
+     * уже выбраны — приходят адресом `?create=1&partner=…&role=…`.
+     */
+    const [prefill, setPrefill] = useState<{ partner: string; role: 'CUSTOMER' | 'FORWARDER' } | null>(null);
     const [contractForm] = Form.useForm();
     const [contractMyRole, setContractMyRole] = useState<'CUSTOMER' | 'FORWARDER'>('CUSTOMER');
     /**
@@ -145,14 +154,11 @@ export default function CompanyContractsPage() {
                 api.get('/partners'),
                 api.get('/external-companies'),
             ]);
-            const partnersList = partnersRes.data.filter((p: any) => p.isCarrier);
-            const externalList = externalRes.data
-                .filter((e: any) => e.isCarrier)
-                .map((e: any) => ({
-                    id: e.id,
-                    name: e.name,
-                    isExternal: true,
-                }));
+            // И перевозчики, и заказчики: раньше в список попадали только
+            // перевозчики, и договор с заказчиком было не заключить вовсе.
+            const flags = (p: any) => ({ id: p.id, name: p.name, isCustomer: p.isCustomer !== false, isCarrier: p.isCarrier !== false });
+            const partnersList = (partnersRes.data || []).map(flags);
+            const externalList = (externalRes.data || []).map((e: any) => ({ ...flags(e), isExternal: true }));
             setPartners([...partnersList, ...externalList]);
         } catch (error) {
             console.error('Failed to fetch partners:', error);
@@ -195,6 +201,16 @@ export default function CompanyContractsPage() {
         api.get('/contracts/my-companies')
             .then(res => setМойСписокОрганизаций(res.data || []))
             .catch(() => { /* Одна организация — выбирать нечего. */ });
+        // Пришли из карточки контрагента — сразу открываем «Новый договор» с ним.
+        const params = new URLSearchParams(window.location.search);
+        const partner = params.get('partner');
+        const role = params.get('role') === 'FORWARDER' ? 'FORWARDER' : 'CUSTOMER';
+        if (params.get('create') === '1' && partner) {
+            setPrefill({ partner, role });
+            setContractMyRole(role);
+            setContractModalOpen(true);
+            window.history.replaceState(null, '', window.location.pathname);
+        }
     }, []);
 
     // === Создание договора ===
@@ -437,6 +453,8 @@ export default function CompanyContractsPage() {
                         type="primary"
                         icon={<PlusOutlined />}
                         onClick={() => {
+                            setPrefill(null);
+                            setContractMyRole('CUSTOMER');
                             contractForm.resetFields();
                             setContractModalOpen(true);
                         }}
@@ -605,6 +623,13 @@ export default function CompanyContractsPage() {
                                                         >
                                                             <DownloadOutlined /> Скачать PDF
                                                         </Dropdown.Button>
+                                                        <SignedContractFile
+                                                            contractId={contract.id}
+                                                            contractNumber={contract.contractNumber}
+                                                            fileName={contract.signedFileName}
+                                                            uploadedAt={contract.signedUploadedAt}
+                                                            onChanged={fetchContracts}
+                                                        />
                                                         <Button
                                                             size="small"
                                                             icon={<PlusOutlined />}
@@ -752,7 +777,7 @@ export default function CompanyContractsPage() {
                 cancelText="Отмена"
                 destroyOnClose
             >
-                <Form form={contractForm} layout="vertical" onFinish={handleCreateContract} initialValues={{ myRole: 'CUSTOMER' }}>
+                <Form form={contractForm} layout="vertical" onFinish={handleCreateContract} initialValues={{ myRole: prefill?.role ?? 'CUSTOMER', partnerCompanyId: prefill?.partner }}>
                     {/*
                       * От какой организации заключается договор. Показываем
                       * только в холдинге: где организация одна, поле с одним
@@ -776,7 +801,11 @@ export default function CompanyContractsPage() {
                         rules={[{ required: true }]}
                     >
                         <Select
-                            onChange={(v) => setContractMyRole(v)}
+                            onChange={(v) => {
+                                setContractMyRole(v);
+                                // Вторая сторона — из другого списка: прежний выбор к новой роли не подходит.
+                                contractForm.setFieldValue('partnerCompanyId', undefined);
+                            }}
                             options={[
                                 { label: 'Я — Заказчик (заказываю перевозку)', value: 'CUSTOMER' },
                                 { label: 'Я — Экспедитор (выполняю перевозку)', value: 'FORWARDER' },
@@ -792,7 +821,9 @@ export default function CompanyContractsPage() {
                             showSearch
                             placeholder="Выберите компанию"
                             filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-                            options={partners.map(p => ({ label: p.name, value: p.id }))}
+                            options={partners
+                                .filter(p => (contractMyRole === 'CUSTOMER' ? p.isCarrier : p.isCustomer))
+                                .map(p => ({ label: p.name, value: p.id }))}
                         />
                     </Form.Item>
                     <Form.Item

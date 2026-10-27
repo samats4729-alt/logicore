@@ -57,6 +57,13 @@ export default function EmployeeMonthDetails({ data, showTotal = true, who = 'em
                             <Clock className="h-3.5 w-3.5" /> ещё придёт {тенге(data.pendingTotal)} с рейсов ниже
                         </div>
                     )}
+                    {/* Прогноз по календарю: дата счёта или выгрузки плюс отсрочка
+                        заказчика (K1). Просроченные рейсы в него не входят. */}
+                    {(data.forecastMonthEnd ?? 0) > 0 && (
+                        <div className="mt-1 text-muted-foreground">
+                            до конца месяца — ещё {тенге(data.forecastMonthEnd ?? 0)}, если заказчики заплатят в срок
+                        </div>
+                    )}
                 </section>
             )}
 
@@ -85,14 +92,28 @@ export default function EmployeeMonthDetails({ data, showTotal = true, who = 'em
                             </div>
                         ))}
                         {data.pending.map(p => (
-                            <div key={p.orderId} className="flex items-start justify-between gap-3 bg-muted/40 px-3 py-2">
+                            <div key={p.orderId} className={`flex items-start justify-between gap-3 bg-muted/40 px-3 py-2${p.reason === 'overdue_lost' ? ' opacity-70' : ''}`}>
                                 <div className="min-w-0">
                                     <Link href={`/company/orders/${p.orderId}`} className="lc-ordernum" style={{ fontSize: 13 }}>{p.orderNumber}</Link>
                                     <div className="text-[12px] text-muted-foreground">
                                         {p.percentBase === 'ORDER_AMOUNT' ? 'сумма рейса' : 'маржа'} {сумма(p.baseAmount)} · {p.percentValue}% · {причинаОжидания(p.reason)}
                                     </div>
+                                    {p.expectedAt && p.reason !== 'overdue_lost' && (
+                                        <div className={`text-[12px] ${p.overdue ? 'font-medium text-red-600' : 'text-muted-foreground'}`}>
+                                            {p.overdue ? 'заказчик просрочил оплату: должен был до ' : 'заказчик должен заплатить до '}
+                                            {new Date(p.expectedAt).toLocaleDateString('ru-RU', { timeZone: 'UTC' })}
+                                        </div>
+                                    )}
+                                    {p.customerTermsMissing && (
+                                        <div className="mt-0.5 text-[12px] font-medium text-amber-700 dark:text-amber-400">
+                                            Укажите отсрочку платежа у заказчика — без неё не посчитать, когда он заплатит и когда придёт бонус
+                                        </div>
+                                    )}
                                 </div>
-                                <span className="flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground" title="Оценка по сегодняшней цене — начислится после события">
+                                <span
+                                    className={`flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground${p.reason === 'overdue_lost' ? ' line-through' : ''}`}
+                                    title={p.reason === 'overdue_lost' ? 'Бонус не начислится: заказчик не оплатил в срок' : 'Оценка по сегодняшней цене — начислится после события'}
+                                >
                                     <Clock className="h-3.5 w-3.5" /> {тенге(p.amount)}
                                 </span>
                             </div>

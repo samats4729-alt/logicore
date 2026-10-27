@@ -72,11 +72,11 @@ const META: Record<WidgetId, (p: Period) => WidgetMeta> = {
     problems: () => ({ title: 'Проблемы', description: 'Рейсы с проблемой, которые требуют решения', icon: TriangleAlert, weight: 1 }),
     ordersMonth: (p) => ({ title: `Заявок за ${PERIOD_WORD[p]}`, description: 'Создано с начала периода, к тому же дню прошлого', icon: ClipboardList, weight: 1 }),
     revenue: () => ({ title: 'Выручка', description: 'Выручка с заявок за период и рост к прошлому', icon: TrendingUp, weight: 1 }),
-    receivables: () => ({ title: 'Дебиторка', description: 'Сколько вам должны и как давно', icon: Wallet, weight: 1 }),
+    receivables: () => ({ title: 'Дебиторка', description: 'Задолженность заказчиков по срокам', icon: Wallet, weight: 1 }),
     payroll: () => ({ title: 'Заработано за месяц', description: 'Оклад, процент и премии с начала месяца', icon: Banknote, weight: 1 }),
     tariff: () => ({ title: 'Тариф', description: 'До какого числа оплачена подписка и сколько осталось', icon: CreditCard, weight: 1 }),
     // ---------- блоки ----------
-    chart: () => ({ title: 'Выручка и маржа по неделям', short: 'Выручка и маржа', description: 'Последние 12 недель, ₸', icon: ChartColumn, weight: 3 }),
+    chart: () => ({ title: 'Выручка и маржа по неделям', short: 'Выручка и маржа', description: 'Последние 12 недель, ₸', icon: ChartColumn, weight: 3, action: { label: 'По менеджерам', href: '/company/accounting/manager-profit' } }),
     calendar: () => ({ title: 'Календарь погрузок', short: 'Календарь', description: 'Сколько погрузок в какой день', icon: CalendarDays, weight: 1 }),
     upcoming: () => ({ title: 'Ближайшие погрузки', description: 'Назначенные и ждущие исполнителя', icon: ListChecks, weight: 2, action: { label: 'Все заявки', href: '/company/orders' } }),
     attention: () => ({ title: 'Требуют внимания', description: 'Сначала — то, что стоит денег', icon: TriangleAlert, weight: 1 }),

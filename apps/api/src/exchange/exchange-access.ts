@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { isValidIin } from './driver-identity';
 
 /**
  * Доступ к бирже по компаниям.
@@ -14,6 +15,35 @@ import { PrismaService } from '../prisma/prisma.service';
  * ленты у остальных: смотреть их и откликаться больше некому.
  */
 export const COMPANY_NO_ACCESS = 'Биржа пока открыта не всем компаниям — доступ включает администратор платформы';
+
+/**
+ * ИП на бирже — только через парк или приложение водителя (задачи шефа, P7).
+ *
+ * Шеф: «перевозчики-ИП могут регистрироваться, но не выставляют заказы на
+ * биржу и не участвуют в исполнении на бирже». Водитель со своим ИП
+ * откликается из приложения, как и раньше, — это правило про кабинет
+ * компании. Парк ограничение не касается, даже если он оформлен на ИП:
+ * именно через парк ИП и работают.
+ *
+ * Отдельного поля «форма собственности» у организации нет. ИП в Казахстане
+ * работает по ИИН, а не по БИН: номер, который проходит проверку ИИН, — это
+ * ИП. Запасной признак — название, начинающееся с «ИП».
+ */
+export const SOLE_TRADER_BLOCKED = 'Индивидуальный предприниматель работает на бирже через парк или приложение водителя: '
+    + 'выставлять заявки на биржу и откликаться на них от ИП нельзя.';
+
+export function isSoleTrader(company: { bin?: string | null; name?: string | null }): boolean {
+    if (isValidIin(company.bin)) return true;
+    return /^\s*ИП[\s«"']/u.test(company.name ?? '');
+}
+
+/** Причина, по которой компании нельзя на биржу как ИП; null — можно. */
+export async function soleTraderBlock(prisma: PrismaService, companyId: string | null | undefined): Promise<string | null> {
+    if (!companyId) return null;
+    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { bin: true, name: true, isPark: true } });
+    if (!company || company.isPark) return null;
+    return isSoleTrader(company) ? SOLE_TRADER_BLOCKED : null;
+}
 
 export async function companyHasExchange(prisma: PrismaService, companyId: string | null | undefined): Promise<boolean> {
     if (!companyId) return false;

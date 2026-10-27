@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { API_URL } from '@/lib/api';
 import { ContractContent, exchangeApi, ответ } from '@/lib/exchange';
-import { Card } from '@/components/kit';
+import { Card } from '@/components/kit';
+
 import { FONT } from '@/lib/theme';
 
 /**
@@ -21,7 +22,8 @@ export function ContractText({ content }: { content: ContractContent }) {
     return (
         <Card>
             <Text style={{ color: colors.text, fontSize: 16, fontFamily: FONT.bold, textAlign: 'center' }}>
-                Договор аренды транспортного средства с экипажем
+                {/* Машина не водителя — договор услуг, а не аренды (Q9): вид берём из текста. */}
+                Договор {content.subtitle ?? 'аренды транспортного средства с экипажем'}
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 4 }}>
                 № {content.number} · {date}

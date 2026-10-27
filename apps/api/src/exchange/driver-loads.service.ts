@@ -6,9 +6,10 @@ import { removeExchangeFile } from './exchange-files';
 import { EXCHANGE_ORDER_SELECT, ExchangeOrderRow, ON_EXCHANGE, byLoadingDate, exchangeView, matches, notPast } from './exchange-orders';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { ExchangeSettlementService } from './settlement.service';
+import { litersFor } from './settlement-calc';
 
 /** Рейс идёт: водитель назначен и ещё не довёз. */
-const ACTIVE_ORDER: OrderStatus[] = [
+export const ACTIVE_ORDER: OrderStatus[] = [
     OrderStatus.ASSIGNED, OrderStatus.EN_ROUTE_PICKUP, OrderStatus.AT_PICKUP, OrderStatus.LOADING,
     OrderStatus.IN_TRANSIT, OrderStatus.AT_DELIVERY, OrderStatus.UNLOADING, OrderStatus.PROBLEM,
 ];
@@ -60,45 +61,24 @@ export class ExchangeDriverLoadsService {
         const calc = view.price != null ? this.settlement.tryBase(ctx, view.price) : null;
         return {
             ...view,
-            /** Водителю на руки — без топлива: топливо оплачивает парк. */
+            /** На руки — как и раньше: старое приложение показывает только её. */
             price: calc ? calc.driverTotal : null,
-            /** Топливо по расчёту — оплачивает парк; чеки на БИН парка. */
-            fuelEstimate: ctx.fuel || null,
             distanceKm: ctx.distanceKm,
             /**
-             * Из чего сложилась сумма на руки (владелец, 15.10.2026: «комиссия и
-             * общая сумма — чтобы было понятно, за что высчитывают»). Это
-             * меняет решение от 12.10, когда цену компании водителю не
-             * показывали: теперь он видит её и всё, что из неё уходит.
+             * Сумма за рейс и из чего она (шеф, 27.10.2026): на руки + топливо
+             * + ОПВ. Видя только «на руки», водитель не понимал, что топливо и
+             * пенсионные тоже его, и не соглашался на рейс. Налоги, которые
+             * платит парк (ВОСМС, СО, ИПН), комиссия и цена для компании
+             * водителю по-прежнему не отдаются (Q14).
              */
-            breakdown: calc ? {
-                /** Сумма заказчика на бирже (до налогов и комиссии). */
-                base: calc.base,
-                customerPrice: calc.customerPrice,
-                platformPct: calc.rates.platformPct,
-                platformFee: calc.platformFee,
-                parkPct: calc.rates.parkPct,
-                parkFee: calc.parkFee,
-                /** Комиссия 10 % со всей суммы: доля парка и LogiCore. */
-                commission: calc.commission,
-                /** Оплата за работу (доход по договору) и ОПВ, удержанное из неё. */
-                gross: calc.gross,
-                opv: calc.opv,
-                /** За счёт парка: ОСМС, СО, ИПН. */
-                taxes: (Math.round(calc.vosms * 100) + Math.round(calc.so * 100) + Math.round(calc.ipn * 100)) / 100,
-                vosms: calc.vosms,
-                ipn: calc.ipn,
-                so: calc.so,
-                /** Применён ли базовый вычет (водитель написал заявление). */
-                deductionApplied: calc.deductionApplied,
-                /** НДС сверху — только если парк плательщик НДС; иначе 0. */
-                vat: calc.vat,
-                vatPct: calc.rates.vatPct ?? 0,
-                driverTotal: calc.driverTotal,
-                fuel: calc.fuel,
-                /** Бухгалтер парка ещё не подтвердил расчёт — суммы предварительные. */
-                preliminary: calc.preliminary,
-            } : null,
+            trip: calc ? { total: calc.base, onHand: calc.driverTotal, fuel: calc.fuel, opv: calc.opv } : null,
+            /**
+             * Топливо по километражу — лимит на заправку: на эту сумму водитель
+             * заправляется по рейсу. Литры — по расходу парка на 100 км.
+             * Вместе с долей ОПВ — чтобы расшифровать и свою сумму отклика.
+             */
+            fuel: ctx.fuel > 0 ? { amount: ctx.fuel, liters: litersFor(ctx.distanceKm, base.fuelConsumption) } : null,
+            opvPct: ctx.rates.opvPct,
         };
     }
 

@@ -241,6 +241,39 @@ export class LocationsService {
         };
     }
 
+    /**
+     * Адреса из последних заявок компании — свежие первыми.
+     *
+     * Правило владельца от 27.07 для выбора из большого списка: частые
+     * варианты сверху, чтобы обычный случай закрывался без поиска. Логист
+     * чаще всего грузит там же, где на прошлой неделе. Только идентификаторы:
+     * сами адреса окно уже получило общим списком, и видно из них ровно то,
+     * что компании и так открыто.
+     */
+    async recentIds(companyId: string, limit = 8): Promise<string[]> {
+        const points = await this.prisma.orderRoutePoint.findMany({
+            where: {
+                order: {
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                    ],
+                },
+            },
+            orderBy: { order: { createdAt: 'desc' } },
+            select: { locationId: true },
+            take: 200,
+        });
+        const ids: string[] = [];
+        for (const p of points) {
+            if (p.locationId && !ids.includes(p.locationId)) ids.push(p.locationId);
+            if (ids.length >= limit) break;
+        }
+        return ids;
+    }
+
     async findAll(search?: string, companyId?: string) {
         const cacheKey = companyId ? `locations:${companyId}` : 'locations:all';
         if (!search) {

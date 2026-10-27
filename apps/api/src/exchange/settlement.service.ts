@@ -80,8 +80,9 @@ export class ExchangeSettlementService {
     }
 
     /** Ставки парка вместе с долей LogiCore; топливо на км — из расхода и цены литра сезона. */
-    async parkSettings(parkId: string) {
-        const row = await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId } });
+    /** Ставки и топливо парка; без парка (`null`) — стандартные, как у нового парка. */
+    async parkSettings(parkId: string | null) {
+        const row = parkId ? await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId } }) : null;
         const p = row ? {
             commissionPct: num(row.commissionPct), opvPct: num(row.opvPct), vosmsPct: num(row.vosmsPct),
             ipnPct: num(row.ipnPct), soPct: num(row.soPct),
@@ -99,7 +100,8 @@ export class ExchangeSettlementService {
             ipnHighPct: p.ipnHighPct, ipnThresholdMrp: p.ipnThresholdMrp,
         };
         const fuelPerKm = fuelPerKmOf(p.fuelConsumption, p.fuelPriceSummer, p.fuelPriceWinter, p.fuelSeason);
-        return { rates, fuelPerKm, applyDeduction: p.applyDeduction, preliminary: !row?.ratesConfirmedAt };
+        // Расход на 100 км — чтобы показать водителю лимит топлива и в литрах.
+        return { rates, fuelPerKm, fuelConsumption: p.fuelConsumption, applyDeduction: p.applyDeduction, preliminary: !row?.ratesConfirmedAt };
     }
 
     /**

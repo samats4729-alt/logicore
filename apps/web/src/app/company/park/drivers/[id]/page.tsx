@@ -11,8 +11,10 @@ import { ExchangeDriver, ответСервера, иинКрасиво, фио�
 import { Button } from '@/components/ui/button';
 import StatusPill from '@/components/ui/StatusPill';
 import { DriverDocuments } from '@/components/exchange/DriverDocuments';
+import { DriverVehicles } from '@/components/exchange/DriverVehicles';
 import { DriverDecisionDialog } from '@/components/exchange/DriverDecisionDialog';
 import styles from '@/components/nova/nova.module.css';
+import { VehicleOwnerContracts } from '@/components/exchange/VehicleOwnerContracts';
 
 /**
  * Анкета водителя — для проверки парком.
@@ -154,6 +156,18 @@ export default function ParkDriverPage() {
                         )}
                         <Row label="Адрес прописки" value={driver.registrationAddress || '—'} />
                         <Row label="Телефон" value={driver.phone ? <a className="lc-link" href={`tel:${driver.phone}`}>{телефонКрасиво(driver.phone)}</a> : '—'} />
+                        {/* Второй, третий, зарубежный — водитель добавляет сам, без проверки (Q6). */}
+                        {!!driver.extraPhones?.length && (
+                            <Row
+                                label="Ещё номера"
+                                value={driver.extraPhones.map((p, i) => (
+                                    <span key={p}>{i > 0 && ', '}<a className="lc-link" href={`tel:${p}`}>{телефонКрасиво(p)}</a></span>
+                                ))}
+                            />
+                        )}
+                        {(driver.docsEmail || driver.docsContact) && (
+                            <Row label="Для документов" value={[driver.docsEmail, driver.docsContact].filter(Boolean).join(' · ')} />
+                        )}
                         <Row label="Почта Google" value={driver.email || '—'} />
                         <Row label="Рейсов довёз" value={String(driver.tripsCompleted)} />
                         {/* Без согласия анкету не отправить (с 09.10.2026); у поданных
@@ -173,7 +187,8 @@ export default function ParkDriverPage() {
                         <Row label="Техпаспорт" value={driver.vehicleRegNumber ? `№ ${driver.vehicleRegNumber}` : '—'} />
                         <Row label="Кузов" value={driver.vehicleBodyType || '—'} />
                         <Row label="Грузоподъёмность" value={driver.vehicleCapacityKg ? `${driver.vehicleCapacityKg / 1000} т` : '—'} />
-                        <Row label="Владелец" value={driver.vehicleIsOwn ? 'сам водитель' : 'другой человек — нужна доверенность'} />
+                        <Row label="Владелец" value={driver.vehicleIsOwn ? 'сам водитель' : 'другой человек — нужен договор с владельцем (ниже)'} />
+                        <DriverVehicles driverId={driver.id} />
                     </div>
                 </section>
             </div>
@@ -209,6 +224,17 @@ export default function ParkDriverPage() {
                             Скачать договор (PDF)
                         </Button>
                     )}
+                </div>
+            </section>
+
+            {/* Машина не водителя — парк арендует её у владельца отдельным договором (Q9). */}
+            <section className={styles.card}>
+                <div className={styles.cardHead}>
+                    <Truck size={14} />
+                    <h2 className={styles.cardTitle}>Договор с владельцем машины</h2>
+                </div>
+                <div className={styles.cardBody}>
+                    <VehicleOwnerContracts driverId={driver.id} />
                 </div>
             </section>
 

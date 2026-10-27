@@ -159,7 +159,7 @@ export default function InvoicesRegistryPage() {
         [plannedTotals, withoutInvoice, direction],
     );
     const сторонаДолга = direction === 'OUTGOING' ? 'Дебиторка' : 'Кредиторка';
-    const чейДолг = direction === 'OUTGOING' ? 'должны нам' : 'должны мы';
+    const чейДолг = direction === 'OUTGOING' ? 'сальдо по дебету' : 'сальдо по кредиту';
 
     useEffect(() => {
         api.get('/company/my-companies')
@@ -475,11 +475,11 @@ export default function InvoicesRegistryPage() {
                   * Это остаток на сегодня, а не оборот за период, — от дат в
                   * фильтре он не зависит.
                   */}
-                <div className={`${nova.tiles} ${nova.tiles3}`} style={{ marginBottom: 0, minWidth: 480 }}>
+                <div className={`${nova.tiles} ${nova.tiles3}`} style={{ marginBottom: 0, minWidth: 'min(480px, 100%)' }}>
                     <div className={nova.tile}>
                         <div className={nova.tileLabel}>{сторонаДолга}</div>
                         <div className={nova.tileValue}>{money(долг.total)}</div>
-                        <div className={nova.tileSub}>всего {чейДолг} на сегодня</div>
+                        <div className={nova.tileSub}>{чейДолг} на сегодня</div>
                     </div>
                     <div className={nova.tile}>
                         <div className={nova.tileLabel}>Выставлено счетами</div>

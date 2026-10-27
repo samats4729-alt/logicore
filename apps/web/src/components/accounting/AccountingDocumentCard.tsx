@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, Dropdown, Input, InputNumber, Modal, Select, Space, Switch, Table, Tooltip, theme } from 'antd';
+import { Alert, Button, Checkbox, Dropdown, Input, InputNumber, Modal, Select, Space, Switch, Table, Tooltip, theme } from 'antd';
 import {
     ArrowLeftOutlined,
     CheckOutlined,
@@ -11,6 +11,7 @@ import {
     DollarOutlined,
     FileTextOutlined,
     LinkOutlined,
+    MailOutlined,
     SendOutlined,
     MoreOutlined,
     PlusOutlined,
@@ -38,6 +39,7 @@ import {
     fetchDocumentDelivery,
     sendAccountingDocument,
     applyAllocations,
+    notifyInvoicePaid,
     fetchCompanyBankAccounts,
     openAccountingDocumentPdf,
     orderRouteLabel,
@@ -332,6 +334,11 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
     const [payAccountId, setPayAccountId] = useState<string | undefined>();
     const [payNote, setPayNote] = useState('');
     const [paying, setPaying] = useState(false);
+    /** Сообщить контрагенту об оплате (H7/O3): галочка в окне оплаты и отдельное окно. */
+    const [payNotify, setPayNotify] = useState(false);
+    const [noticeEmail, setNoticeEmail] = useState('');
+    const [noticeOpen, setNoticeOpen] = useState(false);
+    const [noticeSending, setNoticeSending] = useState(false);
 
     const canChange = useMemo(
         () => ['ACCOUNTANT', 'COMPANY_ADMIN', 'ADMIN'].includes(user?.role || ''),
@@ -431,7 +438,31 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
         setPayDate(dayjs());
         setPayAccountId(bankAccounts.find((a) => a.isDefault)?.id ?? bankAccounts[0]?.id);
         setPayNote('');
+        // Перевозчику, которому заплатили, весть нужнее, чем заказчику,
+        // который заплатил сам: по входящему счёту галочка стоит сразу.
+        setPayNotify(document?.direction === 'INCOMING');
+        setNoticeEmail(document?.counterparty?.email ?? '');
         setPayOpen(true);
+    };
+
+    /** Отправить весть «счёт оплачен». Ошибку показывает сама. */
+    const sendPaidNotice = async (): Promise<boolean> => {
+        try {
+            const result = await notifyInvoicePaid(document!.id, noticeEmail.trim() || undefined);
+            toast.success(result.sentTo
+                ? `Контрагенту сообщено об оплате: ${result.sentTo}`
+                : 'Контрагент увидит оплату в своём кабинете');
+            return true;
+        } catch (e: any) {
+            toast.warning(e.response?.data?.message || 'Не удалось сообщить контрагенту об оплате');
+            return false;
+        }
+    };
+
+    const sendNoticeOnly = async () => {
+        setNoticeSending(true);
+        if (await sendPaidNotice()) setNoticeOpen(false);
+        setNoticeSending(false);
     };
 
     /**
@@ -465,6 +496,7 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                     { documentId: document.id, amount: payAmount.toFixed(2) },
                 ]);
                 toast.success('Оплата внесена и разнесена на счёт');
+                if (payNotify) await sendPaidNotice();
             } catch (e: any) {
                 toast.warning(e.response?.data?.message || 'Платёж записан, но не разнесён на счёт');
             }
@@ -1076,6 +1108,18 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                                         onClick: openPayment,
                                     },
                                     {
+                                        key: 'notify-paid',
+                                        icon: <MailOutlined />,
+                                        label: 'Сообщить контрагенту об оплате',
+                                        disabled: !canChange
+                                            || document.status !== 'POSTED'
+                                            || Number(document.amountPaid) <= 0,
+                                        onClick: () => {
+                                            setNoticeEmail(document.counterparty?.email ?? '');
+                                            setNoticeOpen(true);
+                                        },
+                                    },
+                                    {
                                         key: 'act',
                                         icon: <FileTextOutlined />,
                                         label: 'Создать акт на основании',
@@ -1672,6 +1716,55 @@ export default function AccountingDocumentCard({ documentId: id, type }: Account
                             maxLength={2000}
                         />
                     </div>
+                    <div>
+                        <Checkbox checked={payNotify} onChange={(e) => setPayNotify(e.target.checked)}>
+                            {document.direction === 'INCOMING'
+                                ? 'Сообщить контрагенту, что счёт оплачен'
+                                : 'Сообщить заказчику, что оплата получена'}
+                        </Checkbox>
+                        {payNotify && (
+                            <>
+                                <Input
+                                    style={{ marginTop: 8 }}
+                                    value={noticeEmail}
+                                    onChange={(e) => setNoticeEmail(e.target.value)}
+                                    placeholder="Почта контрагента"
+                                    maxLength={200}
+                                />
+                                <div style={{ fontSize: 11.5, color: token.colorTextTertiary, marginTop: 4 }}>
+                                    Письмо уйдёт на эту почту. Если контрагент работает на платформе,
+                                    он увидит оплату ещё и в своём кабинете.
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal
+                title={`Сообщить об оплате счёта № ${document.number}`}
+                open={noticeOpen}
+                onCancel={() => setNoticeOpen(false)}
+                onOk={sendNoticeOnly}
+                confirmLoading={noticeSending}
+                okText="Сообщить"
+                cancelText="Отмена"
+                width={440}
+            >
+                <div style={{ fontSize: 13, color: token.colorTextSecondary, marginBottom: 10 }}>
+                    Оплачено {money(document.amountPaid, document.currency)} из {money(document.total, document.currency)}.
+                    {Number(document.balanceDue) > 0 ? ' В письме будет сказано, что счёт оплачен частично, и указан остаток.' : ''}
+                </div>
+                <Input
+                    autoFocus
+                    value={noticeEmail}
+                    onChange={(e) => setNoticeEmail(e.target.value)}
+                    placeholder="Почта контрагента"
+                    maxLength={200}
+                />
+                <div style={{ fontSize: 11.5, color: token.colorTextTertiary, marginTop: 4 }}>
+                    Если контрагент работает на платформе, он увидит оплату и в своём кабинете —
+                    тогда почту можно не вписывать.
                 </div>
             </Modal>
 

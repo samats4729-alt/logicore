@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { OfferInput, OwnOffer, деньги } from '@/lib/exchange';
-import { Button, Chip } from '@/components/kit';
+import { OfferInput, OwnOffer, деньги, суммаЗаРейс } from '@/lib/exchange';
+import { Button, Chip } from '@/components/kit';
 import { FONT } from '@/lib/theme';
 
 /** Дата YYYY-MM-DD через n дней от сегодня — по часам телефона. */
@@ -23,15 +23,19 @@ const READY = [
 /**
  * Своя сумма — панелью снизу: сколько хотите на руки, когда подадите машину,
  * комментарий. Цифры — крупно и числовой клавиатурой: водитель набирает одной
- * рукой. Сумма — без топлива: топливо оплачивает парк, перерасход — на нём;
- * пенсионные удержаны, остальные налоги парк платит сверху (схема шефа, 16.10.2026).
+ * рукой. Сумма — чистыми на руки: топливо и пенсионные парк добавляет сверху,
+ * налоги и комиссию — тоже, и компании уходит цена уже с ними (схема шефа,
+ * 16.10.2026). Пока водитель набирает, под суммой видно, сколько выйдет за
+ * рейс: на руки + топливо + ОПВ (шеф, 27.10.2026); налоги парка и цену
+ * компании водитель не видит (Q14).
  */
-export function OfferSheet({ visible, mine, busy, fuelEstimate, onSubmit, onClose }: {
+export function OfferSheet({ visible, mine, busy, fuel, opvPct, onSubmit, onClose }: {
     visible: boolean;
     mine: OwnOffer | null | undefined;
     busy: boolean;
-    /** Топливо по оценке, ₸: сумма должна быть больше. */
-    fuelEstimate?: number | null;
+    /** Топливо по километражу рейса, ₸; доля ОПВ, %. Нет доли — расшифровки нет (старый сервер). */
+    fuel?: number;
+    opvPct?: number;
     onSubmit: (input: OfferInput) => void;
     onClose: () => void;
 }) {
@@ -51,14 +55,11 @@ export function OfferSheet({ visible, mine, busy, fuelEstimate, onSubmit, onClos
     }, [visible, mine]);
 
     const pretty = price ? Number(price).toLocaleString('ru-RU').replace(/,/g, ' ') : '';
+    const trip = Number(price) > 0 && opvPct != null ? суммаЗаРейс(Number(price), fuel ?? 0, opvPct) : null;
 
     const submit = () => {
         const amount = Number(price);
         if (!(amount > 0)) { setError('Впишите сумму в тенге'); return; }
-        if (fuelEstimate && amount <= fuelEstimate) {
-            setError(`Сумма должна быть больше топлива — по расчёту ${деньги(fuelEstimate)}`);
-            return;
-        }
         onSubmit({ price: amount, readyDate: ready ?? undefined, comment: comment.trim() || undefined });
     };
 
@@ -80,10 +81,21 @@ export function OfferSheet({ visible, mine, busy, fuelEstimate, onSubmit, onClos
                         style={[styles.price, { color: colors.text, borderColor: error ? colors.danger : colors.border, backgroundColor: colors.background }]}
                     />
                     {!!error && <Text style={{ color: colors.danger, fontSize: 12.5, marginTop: 4 }}>{error}</Text>}
-                    <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
-                        Сколько хотите получить сами — без топлива: {fuelEstimate ? `его (около ${деньги(fuelEstimate)}) ` : 'его '}
-                        оплачивает парк. С этой суммы пенсионные уже удержаны; остальные налоги парк платит сверху.
-                    </Text>
+                    {trip ? (
+                        <View style={[styles.trip, { backgroundColor: colors.surface2 }]}>
+                            <View style={styles.tripLine}>
+                                <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 13.5 }}>Сумма за рейс</Text>
+                                <Text style={{ color: colors.text, fontSize: 16, fontFamily: FONT.bold, fontVariant: ['tabular-nums'] }}>{деньги(trip.total)}</Text>
+                            </View>
+                            <Text style={{ color: colors.textTertiary, fontSize: 12.5, lineHeight: 17, marginTop: 2 }}>
+                                на руки {деньги(trip.onHand)} + топливо {деньги(trip.fuel)} + пенсионные {деньги(trip.opv)}
+                            </Text>
+                        </View>
+                    ) : (
+                        <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
+                            Топливо и пенсионные добавятся сверху.
+                        </Text>
+                    )}
 
                     <Text style={[styles.label, { color: colors.textSecondary, marginTop: 14 }]}>Когда подадите машину</Text>
                     <View style={styles.chips}>
@@ -121,6 +133,8 @@ const styles = StyleSheet.create({
     label: { fontSize: 12.5, fontFamily: FONT.semibold, marginBottom: 6 },
     price: { height: 56, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 24, fontFamily: FONT.bold },
     chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    trip: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 },
+    tripLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
     comment: { minHeight: 64, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, textAlignVertical: 'top' },
     cancel: { height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
 });

@@ -155,6 +155,8 @@ export class OrderContractService {
                 // дней», если его не заполнили.
                 carrierPaymentDays: order.carrierPaymentDays,
                 carrierPaymentFrom: order.carrierPaymentFrom,
+                // В банковских днях (F3) — так и печатается: «банковских дней».
+                carrierPaymentBanking: order.carrierPaymentBanking,
                 assignedDriverName: order.assignedDriverName,
                 assignedDriverPhone: order.assignedDriverPhone,
                 assignedDriverPlate: order.assignedDriverPlate,
@@ -328,7 +330,7 @@ export class OrderContractService {
         // печатью, и спорить с ним потом было нечем. Нет договорённости —
         // строки нет: пустое место в договоре человек заметит, а неверный
         // срок под печатью — нет.
-        const condition = paymentConditionText(order.carrierPaymentDays, order.carrierPaymentFrom)
+        const condition = paymentConditionText(order.carrierPaymentDays, order.carrierPaymentFrom, !!order.carrierPaymentBanking)
             || order.driverPaymentCondition
             || null;
         const terms = [

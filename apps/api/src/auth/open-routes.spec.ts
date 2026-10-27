@@ -67,6 +67,12 @@ const PUBLIC_ROUTES: Record<string, string> = {
     'FreedomPayController.result':
         'результат оплаты картой от серверов FreedomPay — логина у них нет; вместо него '
         + 'подпись секретным ключом магазина, без неё «оплачено» никого не продлевает',
+    'OneCSoapController.wsdl':
+        'описание служб обмена для 1С — общее для всех, без данных компании; облачная 1С '
+        + 'скачивает его без логина. Ключ подключения не проверяется, чтобы адреса нельзя было подбирать',
+    'OneCSoapController.call':
+        'вызовы обмена от 1С компании — замок тот же: логин и пароль подключения 1С, '
+        + 'без них ни одна операция не выполняется',
     'TelegramWebhookController.webhook':
         'обновления от серверов Telegram — логина у них нет; вместо него пароль '
         + 'в заголовке (TELEGRAM_WEBHOOK_SECRET) и белый список чатов внутри',
@@ -113,6 +119,7 @@ const ANY_LOGGED_IN_ROUTES: Record<string, string> = {
     'LocationsController.findAll': 'адреса и склады своей компании — отбор по компании внутри',
     'LocationsController.findOne': 'адрес своей компании — отбор по компании внутри',
     'LocationsController.missingCoordinates': 'свои адреса без координат — отбор по компании внутри',
+    'LocationsController.recent': 'адреса из своих последних заявок — отбор по компании внутри',
 
     // Вместо роли спрашивается право раздела: @RequirePermissions на классе.
     'DocumentsController.uploadFile': 'права раздела «Документы»',

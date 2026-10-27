@@ -22,6 +22,8 @@ export interface AccountingDocumentParty {
     id: string;
     name: string | null;
     bin: string | null;
+    /** Почта из карточки — в карточке документа, в журнале её нет. */
+    email?: string | null;
 }
 
 export interface AccountingDocumentRoutePoint {
@@ -77,6 +79,8 @@ export interface AccountingDocumentListItem {
     direction: AccountingDocumentDirection;
     status: AccountingDocumentStatus;
     number: string;
+    /** Номер у контрагента — у входящего документа он главный для людей. */
+    externalNumber?: string | null;
     documentDate: string;
     dueDate: string | null;
     currency: string;
@@ -271,7 +275,7 @@ export async function createAccountingDocument(
 /** Срок оплаты по рейсам счёта — вместе с причиной, если посчитать нельзя. */
 export interface InvoiceDueDatePreview {
     dueDate: string | null;
-    /** «ждём оригиналы накладных», «в рейсе не задана отсрочка». */
+    /** «ждём оригиналы накладных», «не задана отсрочка — ни в рейсе, ни в карточке контрагента». */
     dependsOn: string | null;
 }
 
@@ -675,6 +679,18 @@ export async function fetchOpenOrdersForPayment(params: {
     return res.data;
 }
 
+/**
+ * Сообщить контрагенту, что счёт оплачен (задачи шефа, H7/O3): письмом, а
+ * если он работает на платформе — ещё и в его кабинете.
+ */
+export async function notifyInvoicePaid(
+    id: string,
+    email?: string,
+): Promise<{ sentTo: string | null; platform: boolean }> {
+    const res = await api.post(`/accounting-documents/${id}/notify-paid`, email ? { email } : {});
+    return res.data;
+}
+
 export async function applyAllocations(
     paymentId: string,
     allocations: { documentId: string; amount: string }[],
@@ -730,8 +746,8 @@ export interface IncomingDeliveredDocument {
     company: { id: string; name: string; bin: string | null };
 }
 
-export async function fetchIncomingDelivered(status?: string): Promise<IncomingDeliveredDocument[]> {
-    const res = await api.get('/accounting-documents/incoming-delivered', { params: { status } });
+export async function fetchIncomingDelivered(status?: string, orderId?: string): Promise<IncomingDeliveredDocument[]> {
+    const res = await api.get('/accounting-documents/incoming-delivered', { params: { status, orderId } });
     return res.data;
 }
 

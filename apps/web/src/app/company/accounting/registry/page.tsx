@@ -584,7 +584,7 @@ export default function FinancialRegistryPage() {
                         Доход, себестоимость, маржа и статус оплат по каждой заявке.
                     </p>
                 </div>
-                <div className={`${nova.tiles} ${nova.tiles5}`} style={{ marginBottom: 0, minWidth: 560 }}>
+                <div className={`${nova.tiles} ${nova.tiles5}`} style={{ marginBottom: 0, minWidth: 'min(560px, 100%)' }}>
                     {metricsData.map((m, i) => (
                         <div key={i} className={nova.tile}>
                             <div className={nova.tileLabel}>{m.label}</div>

@@ -119,6 +119,8 @@ export default function HomePage() {
     const { theme, setTheme } = useTheme();
     const [hydrated, setHydrated] = useState(false);
     const [tariff, setTariff] = useState<Tariff | null>(null);
+    /** Калькулятор тарифа: сколько сотрудников — столько и платят (задачи шефа, N3). */
+    const [seats, setSeats] = useState(5);
 
     useEffect(() => {
         setHydrated(true);
@@ -321,6 +323,31 @@ export default function HomePage() {
                         <div className={styles.tariffPer}>
                             {tariff?.paid ? 'за сотрудника в месяц' : 'на время тестирования'}
                         </div>
+
+                        {/* Калькулятор: платят за каждого сотрудника, и
+                            сумму за свою команду человек хочет увидеть
+                            сразу, а не умножать в уме (задачи шефа, N3). */}
+                        {tariff?.paid && tariff.pricePerUser > 0 && (
+                            <div className={styles.tariffCalc}>
+                                <span className={styles.tariffCalcLabel}>Сотрудников</span>
+                                <div className={styles.tariffStepper}>
+                                    <button type="button" aria-label="Меньше сотрудников" onClick={() => setSeats((n) => Math.max(1, n - 1))}>−</button>
+                                    <input
+                                        aria-label="Сколько сотрудников"
+                                        inputMode="numeric"
+                                        value={seats}
+                                        onChange={(e) => {
+                                            const n = parseInt(e.target.value.replace(/\D/g, ''), 10);
+                                            setSeats(Number.isFinite(n) ? Math.min(Math.max(n, 1), 999) : 1);
+                                        }}
+                                    />
+                                    <button type="button" aria-label="Больше сотрудников" onClick={() => setSeats((n) => Math.min(999, n + 1))}>+</button>
+                                </div>
+                                <span className={styles.tariffCalcTotal}>
+                                    {(seats * tariff.pricePerUser).toLocaleString('ru-RU')} ₸ в месяц
+                                </span>
+                            </div>
+                        )}
 
                         <ul className={styles.tariffList}>
                             {(tariff?.features?.length ? tariff.features : TARIFF_FEATURES).map((f) => (

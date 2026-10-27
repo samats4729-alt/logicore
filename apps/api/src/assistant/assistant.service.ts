@@ -37,6 +37,7 @@ export const ROUTES = `
 - /company — Дашборд из блоков: показатели, выручка по неделям, календарь погрузок, ближайшие погрузки, что требует внимания, деньги. Набор блоков меняется кнопкой «Блоки» над дашбордом
 - /company/orders — Заявки: журнал всех рейсов
 - /company/orders/create — Создание заявки (мастер по шагам)
+- /company/orders/attorneys — Доверенности: журнал отправленных доверенностей за период (кому, когда, по какой заявке, с какими файлами)
 - /company/requests — Запросы: хаб, куда приходят запросы на расчёт от заказчиков
 - /company/tracking — Карта и GPS: где сейчас транспорт
 - /company/warehouse — Очередь на погрузку
@@ -56,7 +57,7 @@ export const ROUTES = `
 - /company/accounting/operations — Все операции: вся история движения денег
 - /company/accounting/calendar — Платёжный календарь: что и когда движется по деньгам
 - /company/accounting/planned — Планируемые платежи: что предстоит заплатить и получить
-- /company/accounting/counterparty-report — Взаиморасчёты: кто кому должен, просрочка, сверка
+- /company/accounting/counterparty-report — Взаиморасчёты: дебиторская и кредиторская задолженность по контрагентам, просрочка, сверка
 - /company/accounting/reconciliation-act — Акт сверки с контрагентом
 - /company/accounting/balances — Остатки по кассам и счетам
 - /company/accounting/opening-balances — Ввод начальных остатков при запуске учёта
@@ -72,10 +73,12 @@ export const ROUTES = `
 - /company/accounting/cashflow — Движение денежных средств
 - /company/accounting/registry — Реестр заявок
 - /company/accounting/carrier-profit — Прибыль по перевозчикам
+- /company/accounting/manager-profit — Маржа по менеджерам: выручка, оплата перевозчикам и маржа каждого менеджера; строка раскрывается его сделками
 - /company/accounting/expenses-by-category — Расходы по статьям
 
 Хаб «Запросы» (/company/requests) — оттуда открывается:
 - /company/calculator — Калькулятор стоимости перевозки
+- /company/driver-calculator — Расчёт водителя без ИП: сколько водитель через парк получит на руки и во что рейс обойдётся заказчику
 
 Хаб «Кабинет» (/company/cabinet) — оттуда открывается:
 - /company/partners — Контрагенты
@@ -84,6 +87,8 @@ export const ROUTES = `
 - /company/vehicles — Автопарк
 - /company/users — Сотрудники (там же права доступа и водители)
 - /company/documents — Документы компании
+- /company/blocklist — Чёрный список: мошенники по БИН/ИИН, телефону и госномеру — их нельзя завести в справочники, и их отклик на биржевую заявку не пройдёт
+- /company/one-c — Обмен с 1С: подключение своей 1С, что передавать и принимать, журнал обмена
 - /company/audit — Журнал действий
 - /company/profile — Мой профиль и смена пароля
 - /company/settings — Организации и реквизиты

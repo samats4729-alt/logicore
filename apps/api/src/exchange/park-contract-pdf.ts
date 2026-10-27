@@ -15,24 +15,29 @@ const LEFT = 56;
 const WIDTH = 483;
 
 /**
- * Договор водителя с парком в PDF — из замороженного текста подписи.
+ * Договор парка в PDF — из замороженного текста подписи.
  *
  * Шрифты — те же, что у договоров с заказчиками (`contracts/fonts`), чтобы
  * документы платформы печатались одним почерком. Печать и подпись парка —
  * из его кабинета («Печать и подпись»), если загружены; за водителя —
  * отметка о подписи в приложении: когда, с какого устройства и адреса.
+ *
+ * Договор с владельцем машины (Q9) подписывают на бумаге: `signature` нет,
+ * и за вторую сторону остаётся строка для подписи от руки.
  */
 export function renderParkContractPdf(
     content: ParkContractContent,
-    signature: DriverSignature,
+    signature: DriverSignature | null,
     park: { stamp: Buffer | null; signature: Buffer | null },
 ): Promise<Buffer> {
+    // В договорах, подписанных до 26.10.2026, вида нет: там всегда аренда с экипажем.
+    const subtitle = content.subtitle ?? 'аренды транспортного средства с экипажем';
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument({
             size: 'A4',
             margins: { top: 48, bottom: 48, left: LEFT, right: 56 },
             bufferPages: true,
-            info: { Title: content.title, Author: content.lessee.name, Subject: 'Договор аренды транспортного средства с экипажем' },
+            info: { Title: content.title, Author: content.lessee.name, Subject: `Договор ${subtitle}` },
         });
         const fontsDir = path.join(__dirname, '..', 'contracts', 'fonts');
         doc.registerFont('Roboto', path.join(fontsDir, 'Roboto-Regular.ttf'));
@@ -50,7 +55,7 @@ export function renderParkContractPdf(
         // Шапка: название, номер, дата.
         doc.fillColor(INK).font('Roboto-Bold').fontSize(13);
         doc.text('ДОГОВОР', { align: 'center' });
-        doc.fontSize(11).text('аренды транспортного средства с экипажем', { align: 'center' });
+        doc.fontSize(11).text(subtitle, { align: 'center' });
         doc.moveDown(0.3);
         doc.font('Roboto').fontSize(10);
         doc.text(`№ ${content.number}`, LEFT, doc.y, { width: WIDTH / 2, continued: false });
@@ -75,7 +80,7 @@ export function renderParkContractPdf(
         // Реквизиты — две колонки, слева парк, справа водитель.
         ensure(200);
         doc.moveDown(0.8);
-        doc.font('Roboto-Bold').fontSize(10.5).text('9. Реквизиты и подписи сторон', LEFT, doc.y, { width: WIDTH, align: 'center' });
+        doc.font('Roboto-Bold').fontSize(10.5).text(`${content.sections.length + 1}. Реквизиты и подписи сторон`, LEFT, doc.y, { width: WIDTH, align: 'center' });
         doc.moveDown(0.4);
         const colW = WIDTH / 2 - 8;
         const top = doc.y;
@@ -87,7 +92,7 @@ export function renderParkContractPdf(
         if (doc.y + 120 > doc.page.height - doc.page.margins.bottom) doc.addPage();
         const signY = doc.y;
         doc.font('Roboto').fontSize(9.5).fillColor(INK);
-        doc.text(`За Арендатора: ${content.lesseeSigner || ''}`, LEFT, signY, { width: colW });
+        doc.text(`${content.lesseeSignLabel ?? 'За Арендатора'}: ${content.lesseeSigner || ''}`, LEFT, signY, { width: colW });
         doc.text('_______________________', LEFT, signY + 40, { width: colW });
         if (park.signature) {
             try { doc.image(park.signature, LEFT + 10, signY + 14, { fit: [110, 40] }); } catch { /* битая картинка — подпись линией */ }
@@ -97,13 +102,21 @@ export function renderParkContractPdf(
         }
 
         const rx = LEFT + WIDTH / 2 + 8;
-        doc.text(`Арендодатель: ${content.lessor.name}`, rx, signY, { width: colW });
-        doc.font('Roboto-Bold').fontSize(9).text('Подписано в приложении LogiCore', rx, signY + 18, { width: colW });
-        doc.font('Roboto').fontSize(8.5).fillColor(MUTED);
-        const when = signature.signedAt.toLocaleString('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        doc.text(`${when} (время Алматы)`, rx, doc.y, { width: colW });
-        if (signature.device) doc.text(`устройство: ${signature.device}`, rx, doc.y, { width: colW });
-        if (signature.ip) doc.text(`адрес: ${signature.ip}`, rx, doc.y, { width: colW });
+        if (signature) {
+            doc.text(`${content.lessor.role}: ${content.lessor.name}`, rx, signY, { width: colW });
+            doc.font('Roboto-Bold').fontSize(9).text('Подписано в приложении LogiCore', rx, signY + 18, { width: colW });
+            doc.font('Roboto').fontSize(8.5).fillColor(MUTED);
+            const when = signature.signedAt.toLocaleString('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            doc.text(`${when} (время Алматы)`, rx, doc.y, { width: colW });
+            if (signature.device) doc.text(`устройство: ${signature.device}`, rx, doc.y, { width: colW });
+            if (signature.ip) doc.text(`адрес: ${signature.ip}`, rx, doc.y, { width: colW });
+        } else {
+            // Подпись от руки: за организацию — с именем подписанта, за человека — своё ФИО.
+            const who = content.lessorSigner ? `За ${content.lessor.role === 'Арендодатель' ? 'Арендодателя' : content.lessor.role}: ${content.lessorSigner}` : `${content.lessor.role}: ${content.lessor.name}`;
+            doc.text(who, rx, signY, { width: colW });
+            doc.text('_______________________', rx, signY + 40, { width: colW });
+            doc.font('Roboto').fontSize(8).fillColor(MUTED).text('подпись', rx, signY + 54, { width: colW });
+        }
 
         // Внизу каждой страницы — номер договора и страница: распечатку не перепутать.
         const range = doc.bufferedPageRange();

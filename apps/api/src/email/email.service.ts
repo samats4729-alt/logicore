@@ -191,11 +191,16 @@ export class EmailService {
         pdfBuffer: Buffer,
         driverInfo?: {
             fullName?: string;
+            /** Документ водителя одной строкой: вид, номер, кем и когда выдан, срок. */
+            document?: string;
             vehicleModel?: string;
             vehiclePlate?: string;
+            trailer?: string;
             phone?: string;
             route?: string;
         },
+        /** Дополнительные файлы к письму: документы водителя и др. (D3). */
+        extraAttachments: { filename: string; content: Buffer }[] = [],
     ): Promise<void> {
         const subject = `Доверенность к заявке № ${orderNumber} — LogiCore`;
 
@@ -208,12 +213,28 @@ export class EmailService {
                     <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.fullName}</td>
                 </tr>`);
         }
+        // Документ водителя, тягач и прицеп — отдельными строками: так требует
+        // заказчик (задачи шефа, D5), охрана склада сверяет их по одному.
+        if (driverInfo?.document) {
+            driverRows.push(`
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🪪 Документ</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.document}</td>
+                </tr>`);
+        }
         if (driverInfo?.vehicleModel || driverInfo?.vehiclePlate) {
             const vehicleText = [driverInfo.vehicleModel, driverInfo.vehiclePlate].filter(Boolean).join(' · ');
             driverRows.push(`
                 <tr>
-                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚛 Транспорт</td>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚛 Тягач</td>
                     <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${vehicleText}</td>
+                </tr>`);
+        }
+        if (driverInfo?.trailer) {
+            driverRows.push(`
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚚 Прицеп</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.trailer}</td>
                 </tr>`);
         }
         if (driverInfo?.phone) {
@@ -262,7 +283,7 @@ export class EmailService {
                 Здравствуйте!
             </p>
             <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-                Вам направлена доверенность на водителя от компании <strong>${senderCompanyName}</strong> по заявке <strong>№ ${orderNumber}</strong>. Документ прикреплен к этому письму в формате PDF.
+                Вам направлена доверенность на водителя от компании <strong>${senderCompanyName}</strong> по заявке <strong>№ ${orderNumber}</strong>. Документ прикреплен к этому письму в формате PDF${extraAttachments.length ? `, вместе с ним — ${extraAttachments.length} ${extraAttachments.length === 1 ? 'файл' : 'файла'}: ${extraAttachments.map((a) => a.filename).join(', ')}` : ''}.
             </p>
             
             <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 24px 0;">
@@ -286,7 +307,7 @@ export class EmailService {
                 to,
                 subject,
                 html,
-                attachments: [{ filename: `doverennost_order_${orderNumber}.pdf`, content: pdfBuffer }],
+                attachments: [{ filename: `doverennost_order_${orderNumber}.pdf`, content: pdfBuffer }, ...extraAttachments],
             });
             this.logger.log(`📧 Power of Attorney email sent to ${to}, id: ${(result as any)?.data?.id}`);
         } catch (error: any) {
@@ -430,6 +451,91 @@ export class EmailService {
             this.logger.log(`📧 ${document.title} отправлен на ${to}, id: ${(result as any)?.data?.id}`);
         } catch (error: any) {
             this.logger.error(`Не удалось отправить документ на ${to}: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * «Счёт оплачен» — контрагенту после оплаты (задачи шефа, H7/O3).
+     *
+     * Два случая: мы оплатили счёт перевозчика — «ваш счёт оплачен»; заказчик
+     * оплатил наш счёт — «оплата получена». Частичная оплата называется
+     * частичной, с остатком: иначе письмо прочтут как оплату целиком.
+     */
+    async sendInvoicePaidEmail(
+        to: string,
+        info: {
+            incoming: boolean;
+            number: string;
+            documentDate: Date | string | null;
+            currency: string;
+            total: number;
+            paid: number;
+            balance: number;
+            senderName: string;
+        },
+    ): Promise<void> {
+        const sum = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${info.currency === 'KZT' ? '₸' : info.currency}`;
+        const date = info.documentDate
+            ? new Date(info.documentDate).toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty' })
+            : null;
+        const invoice = `№ ${info.number}${date ? ` от ${date}` : ''}`;
+        const full = info.balance <= 0;
+        const subject = info.incoming
+            ? `Счёт ${invoice} ${full ? 'оплачен' : 'оплачен частично'} — ${info.senderName}`
+            : `Оплата по счёту ${invoice} получена — ${info.senderName}`;
+        const lead = info.incoming
+            ? `Компания <strong>${info.senderName}</strong> ${full ? 'оплатила' : 'частично оплатила'} ваш счёт ${invoice}.`
+            : `Компания <strong>${info.senderName}</strong> получила оплату по счёту ${invoice}. Спасибо!`;
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
+    <div style="max-width: 480px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+        <div style="background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%); padding: 32px 24px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">LogiCore</h1>
+            <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 14px;">Система управления логистикой</p>
+        </div>
+        <div style="padding: 32px 24px;">
+            <h2 style="margin: 0 0 16px; font-size: 20px; color: #1a1a1a;">${info.incoming ? (full ? 'Счёт оплачен' : 'Счёт оплачен частично') : 'Оплата получена'}</h2>
+            <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 8px;">Здравствуйте!</p>
+            <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 20px;">${lead}</p>
+            <table style="width: 100%; border-collapse: collapse; background: #f6ffed; border-radius: 8px;">
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px;">Сумма счёта</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600; text-align: right;">${sum(info.total)}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px;">Оплачено</td>
+                    <td style="padding: 8px 12px; color: #16a34a; font-size: 14px; font-weight: 700; text-align: right;">${sum(info.paid)}</td>
+                </tr>${full ? '' : `
+                <tr>
+                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px;">Остаток</td>
+                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600; text-align: right;">${sum(info.balance)}</td>
+                </tr>`}
+            </table>
+            <p style="color: #8c8c8c; font-size: 13px; line-height: 1.5; margin: 20px 0 0;">
+                Деньги зачисляются по правилам вашего банка — обычно в течение одного банковского дня.
+            </p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+        if (!this.resend) {
+            this.logger.log(`📧 [DEV] Invoice paid email for ${to}: ${subject}`);
+            return;
+        }
+
+        try {
+            const result = await this.отправить({ to, subject, html });
+            this.logger.log(`📧 Invoice paid email sent to ${to}, id: ${(result as any)?.data?.id}`);
+        } catch (error: any) {
+            this.logger.error(`Failed to send invoice paid email to ${to}: ${error.message}`);
             throw error;
         }
     }

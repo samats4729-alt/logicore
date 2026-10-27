@@ -404,8 +404,17 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
     const [extra, setExtra] = useState({
         applyDeduction: true, deductionMrp: '', mrp: '', vatPayer: false, vatPct: '',
         fuelConsumption: '', fuelPriceSummer: '', fuelPriceWinter: '', ipnHighPct: '', ipnThresholdMrp: '',
+        advanceLimitPct: '',
     });
     const [seasonSaving, setSeasonSaving] = useState(false);
+    /** История цен на топливо (задачи шефа, Q15): кто, когда и что поменял. */
+    const [fuelHistory, setFuelHistory] = useState<{ id: string; at: string; who: string | null; text: string }[]>([]);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    // После каждого сохранения (rates меняется) — свежая история.
+    useEffect(() => {
+        if (!rates) return;
+        api.get('/exchange/park/rates/fuel-history').then((r) => setFuelHistory(r.data)).catch(() => undefined);
+    }, [rates]);
 
     useEffect(() => {
         api.get('/exchange/park/rates').then((r) => {
@@ -422,6 +431,7 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                 fuelPriceWinter: r.data.fuelPriceWinter != null ? String(r.data.fuelPriceWinter) : '',
                 ipnHighPct: String(r.data.ipnHighPct ?? 15),
                 ipnThresholdMrp: String(r.data.ipnThresholdMrp ?? 8500),
+                advanceLimitPct: String(r.data.advanceLimitPct ?? 50),
             });
         }).catch(() => setRates(null));
     }, []);
@@ -481,11 +491,13 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
         const ipnThresholdMrp = Number(extra.ipnThresholdMrp);
         if (!Number.isFinite(ipnHighPct) || ipnHighPct < 0 || ipnHighPct > 100) { toast.error('Повышенный ИПН — число от 0 до 100'); return; }
         if (!Number.isInteger(ipnThresholdMrp) || ipnThresholdMrp < 0) { toast.error('Порог — целым числом МРП'); return; }
+        const advanceLimitPct = Number(extra.advanceLimitPct);
+        if (!Number.isInteger(advanceLimitPct) || advanceLimitPct < 0 || advanceLimitPct > 100) { toast.error('Доля предоплаты — целое число от 0 до 100'); return; }
         setSaving(true);
         try {
             const { data } = await api.put('/exchange/park/rates', {
                 ...body, applyDeduction: extra.applyDeduction, deductionMrp, mrp, vatPayer: extra.vatPayer, vatPct,
-                fuelConsumption, fuelPriceSummer, fuelPriceWinter, ipnHighPct, ipnThresholdMrp,
+                fuelConsumption, fuelPriceSummer, fuelPriceWinter, ipnHighPct, ipnThresholdMrp, advanceLimitPct,
             });
             const wasConfirmed = !!rates?.confirmedAt;
             setRates(data);
@@ -590,6 +602,25 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                             {rates.fuelSeason === 'WINTER' && rates.fuelPriceWinter == null ? ' — зимняя цена не задана, считается по летней' : ''}
                         </span>
                     </div>
+                    {fuelHistory.length > 0 && (
+                        <div className="border-0 border-b border-solid border-border pb-3 text-[12px]">
+                            <div className="mb-1 font-medium text-muted-foreground">История цен на топливо</div>
+                            <ul className="m-0 list-none space-y-0.5 p-0">
+                                {(historyOpen ? fuelHistory : fuelHistory.slice(0, 3)).map((h) => (
+                                    <li key={h.id} className="flex flex-wrap gap-x-2">
+                                        <span className="tabular-nums text-muted-foreground">{dayjs(h.at).format('DD.MM.YYYY HH:mm')}</span>
+                                        <span>{h.text}</span>
+                                        {h.who && <span className="text-muted-foreground">· {h.who}</span>}
+                                    </li>
+                                ))}
+                            </ul>
+                            {fuelHistory.length > 3 && (
+                                <button type="button" className="mt-1 cursor-pointer border-0 bg-transparent p-0 text-[12px] text-primary [font-family:inherit]" onClick={() => setHistoryOpen((v) => !v)}>
+                                    {historyOpen ? 'Свернуть' : `Показать всю — ${fuelHistory.length}`}
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <div className="grid gap-3 sm:grid-cols-4">
                         <label className="flex flex-col gap-1">
                             <span className="text-[12px] font-medium text-muted-foreground">Вычет по ИПН, МРП</span>
@@ -628,6 +659,14 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                             </label>
                         )}
                     </div>
+                    {/* Сколько водитель может попросить предоплатой до конца рейса (Q17; топливо — отдельно, шеф 27.10.2026). */}
+                    <label className="flex w-full max-w-md flex-col gap-1 border-0 border-t border-solid border-border pt-2">
+                        <span className="text-[12px] font-medium text-muted-foreground">Предоплата водителю, % от суммы на руки</span>
+                        <Input value={extra.advanceLimitPct} onChange={(e) => setExtra((x) => ({ ...x, advanceLimitPct: e.target.value }))} inputMode="numeric" className="h-9 w-32 text-[13px] tabular-nums" />
+                        <span className="text-[11px] text-muted-foreground">
+                            сколько водитель может получить до конца рейса; 0 — нельзя. Топливо — отдельно, по километражу
+                        </span>
+                    </label>
                 </div>
                 <Button onClick={save} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Сохранить ставки</Button>
             </div>

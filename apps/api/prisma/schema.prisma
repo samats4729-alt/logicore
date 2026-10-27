@@ -420,6 +420,11 @@ model Company {
   /// пока финотдел не разберёт завал, которого вчера не было.
   invoiceApprovalSince    DateTime?
 
+  /// Договор-заявка перевозчику — сама по каждой сделке (задачи шефа, A14):
+  /// формируется, проводится без бухгалтера и уходит перевозчику, как только
+  /// у рейса есть перевозчик и ставка. Выключено по умолчанию.
+  autoContractRequest     Boolean   @default(false)
+
   managersSeeOwnOrdersOnly   Boolean @default(true) // менеджер видит только свои заявки
   managersSeeOwnPartnersOnly Boolean @default(false) // менеджер видит только своих контрагентов
 
@@ -552,6 +557,11 @@ model Company {
   carrierPaymentDays Int?
   carrierPaymentFrom String?
 
+  /// Отсрочка считается в банковских днях (без выходных и праздников РК),
+  /// а не в календарных. Отдельно по сторонам — как и сами отсрочки (F3).
+  customerPaymentBanking Boolean @default(false)
+  carrierPaymentBanking  Boolean @default(false)
+
   /// Грузы компании на бирже.
 
   /// Парк — компания-посредник на бирже: арендует машину с экипажем у
@@ -567,9 +577,14 @@ model Company {
   parkPayoutRates ParkPayoutRates?
   /// Выплаты водителям парка.
   driverPayouts   DriverPayout[]
+  driverAdvanceRequests DriverAdvanceRequest[]
+  /// Прямой обмен с 1С компании.
+  oneCConnections OneCConnection[]
   exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
   /// Отклики компании-перевозчика на заявки других компаний с биржи.
   exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")
+  /// Свой чёрный список (задачи шефа, F5/S2).
+  blocklist       CompanyBlocklist[]
 }
 
 // ... existing models ...
@@ -925,6 +940,9 @@ model Order {
   customerPaymentFrom String?
   carrierPaymentDays  Int?
   carrierPaymentFrom  String?
+  /// Отсрочка в банковских днях — снимок из карточки, как и сами дни (F3).
+  customerPaymentBanking Boolean @default(false)
+  carrierPaymentBanking  Boolean @default(false)
 
   /// Когда оригиналы накладных дошли до того, кто их ждёт.
   ///
@@ -1021,6 +1039,8 @@ model Order {
   /// Топливо рейса: что парк оплатил или перевёл и чеки водителя.
   exchangeFuelIssues    ExchangeFuelIssue[]
   exchangeFuelReceipts  ExchangeFuelReceipt[]
+  /// Запросы водителя на топливо и аванс по рейсу (Q17).
+  advanceRequests       DriverAdvanceRequest[]
 
   // Relations
   routePoints               OrderRoutePoint[]
@@ -1238,15 +1258,87 @@ model Contract {
   notes     String?
   content   Json? // Содержимое: массив статей [{title, paragraphs: [{number, text}]}]
 
+  // Подписанный экземпляр (задачи шефа, G5): скан или PDF с подписями сторон.
+  signedFileUrl    String?
+  signedFileName   String?
+  signedFileMime   String?
+  signedFileSize   Int?
+  signedUploadedAt DateTime?
+
+  /// Номер текущей версии текста (G6). 0 — текст ещё ни разу не меняли.
+  contentVersion Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   agreements SupplementaryAgreement[]
+  revisions  ContractRevision[]
+  proposals  ContractProposal[]
 
   @@unique([customerCompanyId, forwarderCompanyId, contractNumber])
   @@index([customerCompanyId])
   @@index([forwarderCompanyId])
   @@index([status])
+}
+
+/// Версия текста договора (G6, владелец 25.10.2026): каждое изменение —
+/// снимок текста целиком, кто и когда. Версии не правятся и не удаляются:
+/// это и есть история договора.
+model ContractRevision {
+  id              String   @id @default(cuid())
+  contractId      String
+  contract        Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  version         Int
+  content         Json
+  /// Откуда версия: INITIAL — текст до начала истории, SAVE — сохранила
+  /// сторона, PROPOSAL — принятое предложение, RESET — сброс к шаблону.
+  source          String
+  authorCompanyId String?
+  authorUserId    String?
+  /// Снимок «Фамилия Имя · компания» — человек может уйти, история остаётся.
+  authorName      String?
+  note            String?
+  proposalId      String?
+  createdAt       DateTime @default(now())
+
+  @@unique([contractId, version])
+  @@index([contractId])
+}
+
+enum ContractProposalStatus {
+  PENDING // Ждёт решения второй стороны
+  ACCEPTED // Принято — стало новой версией
+  REJECTED // Отклонено второй стороной
+  WITHDRAWN // Отозвано тем, кто предложил
+  OUTDATED // Текст изменился после предложения — принять уже нельзя
+}
+
+/// Предложение правок текста договора одной стороной другой (G6). Хранит
+/// предлагаемый текст целиком и версию, на которой он основан: если текст
+/// с тех пор изменился, предложение устаревает, а не перетирает чужие правки.
+model ContractProposal {
+  id          String                 @id @default(cuid())
+  contractId  String
+  contract    Contract               @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  baseVersion Int
+  content     Json
+  /// Что меняется — словами того, кто предложил.
+  summary     String?
+  status      ContractProposalStatus @default(PENDING)
+
+  proposedByCompanyId String
+  proposedByUserId    String?
+  proposedByName      String?
+  createdAt           DateTime @default(now())
+
+  decidedByCompanyId String?
+  decidedByUserId    String?
+  decidedByName      String?
+  decidedAt          DateTime?
+  /// Причина отказа или комментарий при принятии.
+  decisionNote       String?
+
+  @@index([contractId, status])
 }
 
 model SupplementaryAgreement {
@@ -2058,6 +2150,9 @@ model Vehicle {
   plate         String // license plate
   model         String // model details
   trailerNumber String? // optional trailer plate
+  // Сроки документов машины (задачи шефа, R5): напоминание в «Требуют внимания».
+  insuranceUntil  DateTime? @db.Date // страховка (ОГПО ВТС) действует до
+  inspectionUntil DateTime? @db.Date // техосмотр действует до
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -3160,14 +3255,27 @@ model ExchangeDriver {
 
   documents ExchangeDriverDocument[]
   offers    ExchangeOffer[]
+  /// Договоры парка с владельцами машины, если она не водителя (Q9).
+  vehicleOwnerContracts ExchangeVehicleOwnerContract[]
   payouts   DriverPayout[]
   contracts ExchangeDriverContract[]
   settlements   ExchangeTripSettlement[]
   fuelReceipts  ExchangeFuelReceipt[]
+  /// Тягачи и прицепы водителя (R4); основной тягач — машина из анкеты.
+  vehicles      ExchangeDriverVehicle[]
+  advanceRequests DriverAdvanceRequest[]
 
   /// Счёт для выплат через парк: IBAN и банк. Без счёта выплату не запросить.
   payoutIban String?
   payoutBank String?
+
+  /// Ещё номера (задачи шефа, Q6): второй, третий, зарубежный — до трёх.
+  /// Меняются без повторной проверки: вход и личность держит основной номер.
+  extraPhones String[] @default([])
+  /// Куда слать бухгалтерские документы (акты, счета) — видит заказчик.
+  docsEmail   String?
+  /// Кто по документам: имя и телефон бухгалтера, если не сам водитель.
+  docsContact String?
 
   /// Заявление водителя на базовый вычет по ИПН (30 МРП): «у другого работодателя
   /// не получаю». Без заявления вычета нет — так сказали налоговики (16.10.2026).
@@ -3314,6 +3422,63 @@ model ExchangeFuelReceipt {
   @@index([driverId])
 }
 
+/// Договор парка с владельцем машины, на которой ездит водитель парка:
+/// аренда транспортного средства без экипажа (задачи шефа, Q9, решение
+/// владельца 25.10.2026). Владелец в LogiCore не работает — подписывают на
+/// бумаге, скан прикладывается сюда. До подписи текст пересобирается при
+/// каждой правке; после — `content` не меняется: в нём то, что подписали.
+model ExchangeVehicleOwnerContract {
+  id            String         @id @default(cuid())
+  parkCompanyId String
+  driverId      String
+  driver        ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// «АТ-ГГММДД-XXXXXX».
+  number        String
+  /// Версия шаблона текста (`VEHICLE_OWNER_CONTRACT_VERSION`).
+  version       String
+  /// DRAFT — оформлен, ждёт подписи; SIGNED — приложен подписанный скан.
+  status        String         @default("DRAFT")
+
+  /// PERSON — человек, COMPANY — ТОО или ИП.
+  ownerKind       String
+  ownerName       String
+  ownerIinBin     String?
+  ownerIdNumber   String?
+  ownerIdIssuedBy String?
+  ownerIdIssuedAt DateTime? @db.Date
+  ownerAddress    String?
+  ownerPhone      String?
+  ownerIban       String?
+  ownerBank       String?
+  ownerBankBic    String?
+  /// Кто подписывает за организацию-владельца.
+  ownerSigner     String?
+
+  vehicleModel     String?
+  vehiclePlate     String
+  vehicleRegNumber String?
+
+  rentAmount Decimal @db.Decimal(14, 2)
+  /// TRIP — за рейс, MONTH — за месяц.
+  rentBasis  String
+
+  /// Текст договора: разделы, пункты, реквизиты сторон.
+  content Json
+
+  signedFileUrl  String?
+  signedFileName String?
+  signedFileMime String?
+  signedFileSize Int?
+  signedAt       DateTime?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([parkCompanyId, driverId])
+  @@index([driverId])
+}
+
 model ExchangeDriverContract {
   id            String         @id @default(cuid())
   driverId      String
@@ -3333,6 +3498,188 @@ model ExchangeDriverContract {
 
   @@index([driverId, signedAt])
   @@index([parkCompanyId])
+}
+
+/// Чёрный список компании (задачи шефа, F5/S2): мошенники по БИН/ИИН,
+/// телефону и госномеру. Записанное здесь компания не может завести в свой
+/// справочник контрагентов, водителей и машин, и с ним не пройдёт отклик
+/// на её биржевую заявку. Список у каждой компании свой: чужое мнение о
+/// контрагенте на других не распространяется.
+model CompanyBlocklist {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// BIN_IIN, PHONE или PLATE.
+  kind        String
+  /// Приведённое значение: цифры у БИН/ИИН, +7… у телефона, госномер заглавными без пробелов.
+  value       String
+  /// Кто это — название фирмы или ФИО, как записал сотрудник.
+  name        String?
+  reason      String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([companyId, kind, value])
+}
+
+/// Запрос водителя парка на топливо или аванс по рейсу (задачи шефа, Q17).
+///
+/// Водитель в рейсе просит часть денег заранее — не больше доли от суммы за
+/// рейс, которую задал парк (по умолчанию 50 %). Запрос приходит в кабинет
+/// парка; бухгалтер выдаёт, отправляет на доп. проверку, просит перезагрузить
+/// документы или отказывает. Выданное записывается как «дали на топливо» по
+/// рейсу и вычитается из выплаты в конце — так же, как деньги на заправке.
+model DriverAdvanceRequest {
+  id            String         @id @default(cuid())
+  parkCompanyId String
+  park          Company        @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
+  driverId      String
+  driver        ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  orderId       String
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// FUEL — на топливо, ADVANCE — аванс (предоплата).
+  kind          String
+  amount        Decimal        @db.Decimal(18, 2)
+  comment       String?
+  /// REQUESTED — ждёт парка; CHECK — на доп. проверке; REUPLOAD — перезагрузить
+  /// документы; APPROVED — выдано; REJECTED — отказ; CANCELLED — водитель отозвал.
+  status        String         @default("REQUESTED")
+  /// Что сказал парк: что проверяют, что перезагрузить, почему отказ.
+  parkNote      String?
+  decidedById   String?
+  decidedAt     DateTime?
+  /// Сколько выдали и запись «дали на топливо», которой выдали.
+  issuedAmount  Decimal?       @db.Decimal(18, 2)
+  fuelIssueId   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([parkCompanyId, status])
+  @@index([driverId])
+  @@index([orderId])
+}
+
+/// Транспорт водителя биржи (задачи шефа, R4): несколько тягачей и прицепов.
+///
+/// Основной тягач — это машина из анкеты (её проверяет парк и называет
+/// договор с парком); запись здесь держится с анкетой заодно. Основной
+/// прицеп уходит в рейс, когда компания выбирает водителя.
+model ExchangeDriverVehicle {
+  id         String         @id @default(cuid())
+  driverId   String
+  driver     ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// TRACTOR — тягач (или грузовик), TRAILER — прицеп или полуприцеп.
+  kind       String
+  /// Госномер — заглавными, без пробелов.
+  plate      String
+  model      String?
+  bodyType   String?
+  capacityKg Int?
+  /// Номер техпаспорта.
+  regNumber  String?
+  /// Записана на водителя; нет — нужна доверенность от владельца.
+  isOwn      Boolean        @default(true)
+  isMain     Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([driverId, kind, plate])
+  @@index([driverId])
+}
+
+/// Прямой обмен с 1С компании (решение владельца 22–23.10.2026).
+///
+/// 1С подключается к LogiCore как к «другой программе» через Интернет:
+/// «Администрирование» → «Настройки синхронизации данных» → «Другая
+/// программа». Компания вписывает в свою 1С адрес, логин и пароль отсюда —
+/// программист не нужен. LogiCore отвечает 1С так, как ответила бы другая
+/// база 1С (веб-сервисы InterfaceVersion и Exchange_3_0_1_1).
+model OneCConnection {
+  id                String    @id @default(cuid())
+  companyId         String
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Логин для 1С. Пароль хранится только хешем и показывается один раз.
+  login             String    @unique
+  passwordHash      String
+  enabled           Boolean   @default(true)
+  /// Код узла LogiCore в этом обмене — 1С видит его как код корреспондента.
+  nodeCode          String
+  /// Что прислала 1С при настройке: план обмена, её код узла, название,
+  /// версия программы и формата, строка настроек подключения целиком.
+  exchangePlanName  String?
+  peerNodeCode      String?
+  peerName          String?
+  peerConfigVersion String?
+  formatVersion     String?
+  settingsXml       String?
+  setupAt           DateTime?
+  lastSeenAt        DateTime?
+  /// Номера сообщений обмена — по ним 1С и LogiCore подтверждают получение.
+  sentNo            Int       @default(0)
+  receivedNo        Int       @default(0)
+  /// Последнее наше сообщение, которое 1С подтвердила. Что отправлено позже
+  /// и не подтверждено, уходит ещё раз.
+  peerReceivedNo    Int       @default(0)
+  /// Что компания решила передавать (кабинет → «Обмен с 1С»). По умолчанию —
+  /// только акты в 1С: контрагентов и оплаты из 1С компания включает сама.
+  sendActs              Boolean @default(true)
+  receiveCounterparties Boolean @default(false)
+  receivePayments       Boolean @default(false)
+  /// Акты перевозчиков (входящие) → «Поступление услуг» в 1С; договоры — чтобы
+  /// документы ложились в 1С на свой договор, а не на «Основной»; оплаты
+  /// перевозчикам из 1С (решение владельца 24.10: «делай всё, что сможешь»).
+  sendCarrierActs        Boolean @default(false)
+  sendContracts          Boolean @default(false)
+  receiveCarrierPayments Boolean @default(false)
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  log       OneCExchangeLog[]
+  objectMap OneCObjectMap[]
+
+  @@index([companyId])
+}
+
+/// Что из 1С с чем у нас связано: ссылка 1С (её УникальныйИдентификатор) →
+/// наша запись. По ней повторная синхронизация обновляет ту же карточку, а
+/// не заводит вторую, и по ней же потом отправляем в 1С счета и акты.
+model OneCObjectMap {
+  id           String         @id @default(cuid())
+  connectionId String
+  connection   OneCConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// Вид объекта 1С: «Справочник.Контрагенты», «Справочник.Организации»…
+  objectType   String
+  /// Ссылка объекта в 1С.
+  ref          String
+  /// id нашей записи (для контрагентов и организации — Company, для
+  /// документов — AccountingDocument, для оплат — Payment, для услуги —
+  /// «service:<название>»).
+  localId      String
+  /// Для того, что LogiCore отправляет в 1С: в каком сообщении ушло и
+  /// отпечаток содержимого. Изменилось после отправки — уйдёт ещё раз.
+  sentNo       Int?
+  hash         String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([connectionId, objectType, ref])
+  @@index([connectionId, objectType, localId])
+}
+
+/// Журнал обмена с 1С: что 1С спрашивала и чем кончилось — для экрана
+/// «Обмен с 1С» и для разбора, если что-то не легло.
+model OneCExchangeLog {
+  id           String         @id @default(cuid())
+  connectionId String
+  connection   OneCConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  operation    String
+  ok           Boolean
+  message      String?
+  details      Json?
+  createdAt    DateTime       @default(now())
+
+  @@index([connectionId, createdAt])
 }
 
 /// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с
@@ -3443,6 +3790,9 @@ model ParkPayoutRates {
   vatPayer       Boolean @default(false)
   /// Ставка НДС, % (2026: 16).
   vatPct         Decimal @default(16) @db.Decimal(5, 2)
+  /// Сколько от суммы за рейс водитель может попросить до конца рейса — на
+  /// топливо или авансом, % (задачи шефа, Q17: «50 %, если не задано иначе»).
+  advanceLimitPct Int    @default(50)
   /// Бухгалтер парка подтвердил ставки и порядок расчёта. Пока пусто — расчёт
   /// «предварительный»: выгрузка в 1С и «выплачено» — только с явным согласием.
   /// Любая правка ставок снимает подтверждение.

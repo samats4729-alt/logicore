@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { Earnings, PayoutStatus, exchangeApi, деньги, ответ, вКавычках } from '@/lib/exchange';
 import { BRAND, FONT } from '@/lib/theme';
@@ -110,6 +111,8 @@ export default function EarningsScreen() {
     const onHand = data.trips.length > 0 && data.trips.every((t) => t.driverTotal != null);
     const agreedSum = data.trips.reduce((s, t) => s + (t.driverTotal ?? 0), 0);
     const fuelSum = data.trips.reduce((s, t) => s + (t.fuelIssued ?? 0), 0);
+    // Чеки на топливо засчитываются обратно — без этой строки итог не сходится с «Начислено».
+    const receiptsSum = data.trips.reduce((s, t) => s + (t.fuelReceipts ?? 0), 0);
 
     return (
         <ScrollView
@@ -142,7 +145,8 @@ export default function EarningsScreen() {
                 {onHand && (
                     <View>
                         <Line label="Договорились, на руки" value={деньги(agreedSum)} colors={colors} />
-                        <Line label="Парк дал на топливо" value={`− ${деньги(fuelSum)}`} colors={colors} />
+                        {fuelSum > 0 && <Line label="Выдано: топливо и предоплата" value={`− ${деньги(fuelSum)}`} colors={colors} />}
+                        {receiptsSum > 0 && <Line label="Чеки на топливо" value={`+ ${деньги(receiptsSum)}`} colors={colors} />}
                         <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6, lineHeight: 17 }}>
                             Налоги и взносы за вас парк платит сверху — из вашей суммы они не вычитаются и идут в ваш пенсионный счёт и медстраховку.
                         </Text>
@@ -165,6 +169,15 @@ export default function EarningsScreen() {
                 <View style={[styles.states, data.trips.length > 0 && { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border2 }]}>
                     <StateLine label="Ожидает выплаты" value={деньги(waitingSum)} hint={open ? `запрошено выплат: ${waiting.length}` : 'запросов нет'} colors={colors} />
                     <StateLine label="Выплачено" value={деньги(paidSum)} hint="за всё время" colors={colors} />
+                    {/* ОПВ копится — водитель видит, сколько уже на пенсионном счёте (задачи шефа, Q14). */}
+                    {data.opvSaved && (
+                        <StateLine
+                            label="На ваш пенсионный счёт (ОПВ)"
+                            value={деньги(data.opvSaved.total)}
+                            hint={`${data.rates.opvPct}% с оплаты за работу · в ${data.opvSaved.year} году — ${деньги(data.opvSaved.thisYear)}`}
+                            colors={colors}
+                        />
+                    )}
                 </View>
             </Section>
 
@@ -205,9 +218,18 @@ export default function EarningsScreen() {
                             <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>
                                 Заявка {t.orderNumber}{t.completedAt ? ` · довёз ${date(t.completedAt)}` : ''}
                                 {t.driverTotal != null
-                                    ? ` · договорились ${деньги(t.driverTotal)}${t.fuelIssued ? `, на топливо ${деньги(t.fuelIssued)}` : ''}`
+                                    ? ` · договорились ${деньги(t.driverTotal)}${t.fuelIssued ? `, выдано ${деньги(t.fuelIssued)}` : ''}`
                                     : ` · начислено ${деньги(t.gross)}`}
                             </Text>
+                            {/* Заправился после рейса — чек прикрепляют здесь, до запроса выплаты (шеф, 27.10.2026). */}
+                            {t.driverTotal != null && (
+                                <Pressable onPress={() => router.push(`/exchange/fuel/${t.orderId}`)} accessibilityRole="button" style={styles.fuelLink}>
+                                    <Ionicons name="receipt-outline" size={16} color={colors.accent} />
+                                    <Text style={{ color: colors.accent, fontFamily: FONT.semibold, fontSize: 14 }}>
+                                        {t.fuelReceipts ? `Чеки на топливо: ${деньги(t.fuelReceipts)}` : 'Прикрепить чек на топливо'}
+                                    </Text>
+                                </Pressable>
+                            )}
                         </Card>
                     ))}
                 </>
@@ -228,7 +250,7 @@ export default function EarningsScreen() {
                             {p.status !== 'REJECTED' && (
                                 <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
                                     {p.fuelIssued != null
-                                        ? `На топливо парк дал ${деньги(p.fuelIssued)} · налоги за вас платит парк`
+                                        ? `${p.fuelIssued > 0 ? `Выдано ${деньги(p.fuelIssued)} · ` : ''}Налоги за вас платит парк`
                                         : `Начислено ${деньги(p.gross)} · удержано ${деньги(p.gross - p.net)} — комиссия и налоги`}
                                 </Text>
                             )}
@@ -268,6 +290,7 @@ function Line({ label, value, colors }: { label: string; value: string; colors: 
 }
 
 const styles = StyleSheet.create({
+    fuelLink: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, marginTop: 4 },
     eyebrow: { fontFamily: FONT.regular, fontSize: 13.5, opacity: 0.65 },
     big: { fontFamily: FONT.display, fontSize: 34, letterSpacing: -1.4, marginTop: 8, fontVariant: ['tabular-nums'] },
     heroSub: { fontFamily: FONT.regular, fontSize: 13, opacity: 0.6, marginTop: 4 },

@@ -29,12 +29,15 @@ import { prepareCompanyOptions, resolveCompanyName } from '@/lib/company-helper'
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
+import { заменаНаРейсе, type ЗаменаНаРейсе } from '@/lib/driver-pool';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
 import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
 import PillTabs from '@/components/ui/PillTabs';
 import OrderDetails, { OrderSideCards } from '@/components/orders/OrderDetails';
 import { OrderStageBar } from '@/components/orders/OrderStageBar';
+import DeleteOrderDialog from '@/components/orders/DeleteOrderDialog';
+import { NO_ATTACHMENTS, type PoaAttachments } from '@/components/orders/PoaAttachmentsPicker';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
@@ -61,6 +64,7 @@ import { toast } from 'sonner';
 import { lookupCompanyByBin, companyFieldsFromLookup } from '@/lib/company-lookup';
 import { ORDER_STATUS_COLORS as statusColors, getNextStatuses } from '@/lib/order-status';
 import Loader from '@/components/ui/Loader';
+import { PER_DIEM_CATEGORY, perDiemFor } from '@/lib/per-diem';
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -135,6 +139,8 @@ export default function OrderDetailPage() {
     const [actLoading, setActLoading] = useState(false);
     /** «Отменить заявку?» — отмена из меню «Действия» переспрашивает, как и раньше. */
     const [cancelAsk, setCancelAsk] = useState(false);
+    /** «Удалить заявку» (A12) — окно само скажет, если удалить нельзя. */
+    const [deleteAsk, setDeleteAsk] = useState(false);
     const [invoiceLoading, setInvoiceLoading] = useState(false);
     /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
     const [documentChainKey, setDocumentChainKey] = useState(0);
@@ -311,9 +317,13 @@ export default function OrderDetailPage() {
 
     // Share PoA modal
     const [sharePoAModalOpen, setSharePoAModalOpen] = useState(false);
+    const [poaAttachments, setPoaAttachments] = useState<PoaAttachments>(NO_ATTACHMENTS);
     const [sharePoALoading, setSharePoALoading] = useState(false);
     const [shareEmailsList, setShareEmailsList] = useState<{ email: string; checked: boolean; label: string }[]>([]);
     const [customEmailInput, setCustomEmailInput] = useState('');
+    // Окно открылось само, сразу после замены водителя или машины: кого на
+    // кого сменили. Обычное «На почту» — null.
+    const [заменаДоверенности, setЗаменаДоверенности] = useState<ЗаменаНаРейсе | null>(null);
 
     // Передача заявки другому менеджеру (админ компании)
     const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -1148,7 +1158,9 @@ export default function OrderDetailPage() {
     const [activeTab, setActiveTab] = useState('details');
     // Из колокольчика и с биржи ведут прямо на отклики: ?tab=offers.
     useEffect(() => {
-        if (new URLSearchParams(window.location.search).get('tab') === 'offers') setActiveTab('offers');
+        // Из вести о ТТН — на документы, о деньгах — на финансы.
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        if (tab === 'offers' || tab === 'documents' || tab === 'finances') setActiveTab(tab);
     }, []);
     const [contracts, setContracts] = useState<any[]>([]);
     const [poaDocuments, setPoaDocuments] = useState<any[]>([]);
@@ -1263,7 +1275,11 @@ export default function OrderDetailPage() {
         } catch { toast.error('Ошибка скачивания доверенности'); }
     };
 
-    const openSharePoAModal = () => {
+    // Кнопка «На почту» передаёт сюда событие клика — поэтому отдельная
+    // обёртка без параметров.
+    const openSharePoAModal = () => { void показатьОтправкуДоверенности(null); };
+
+    const показатьОтправкуДоверенности = async (замена: ЗаменаНаРейсе | null) => {
         const order = data?.order;
         if (!order) return;
         const list: { email: string; checked: boolean; label: string }[] = [];
@@ -1292,8 +1308,35 @@ export default function OrderDetailPage() {
             const key = `${item.email}||${item.label}`;
             if (!seen.has(key)) { seen.add(key); uniqueList.push(item); }
         }
+
+        // Кому ушла прежняя доверенность по этому рейсу. Раньше адреса,
+        // вписанные вручную, не запоминались вовсе, и в следующий раз их
+        // набирали заново. Теперь они в списке и отмечены сверху.
+        let прежние: string[] = [];
+        try {
+            const res = await api.get(`/orders/${orderId}/power-of-attorney/recipients`);
+            прежние = res.data?.emails || [];
+        } catch { /* не узнали — окно откроется с обычным списком */ }
+        const получали = (email: string) => прежние.some((п) => п.toLowerCase() === email.toLowerCase());
+        for (const item of uniqueList) {
+            if (получали(item.email)) item.label = `${item.label} · получали прежнюю`;
+        }
+        for (const email of прежние) {
+            if (!uniqueList.some((item) => item.email.toLowerCase() === email.toLowerCase())) {
+                uniqueList.push({ email, checked: true, label: 'Получали прежнюю доверенность' });
+            }
+        }
+        uniqueList.sort((а, б) => Number(получали(б.email)) - Number(получали(а.email)));
+        // После замены водителя — туда же, куда ушла прежняя, и только туда:
+        // у них на руках бумага на другого человека, остальным она не нужна.
+        if (замена && прежние.length) {
+            for (const item of uniqueList) item.checked = получали(item.email);
+        }
+
         setShareEmailsList(uniqueList);
         setCustomEmailInput('');
+        setPoaAttachments(NO_ATTACHMENTS);
+        setЗаменаДоверенности(замена);
         setSharePoAModalOpen(true);
     };
 
@@ -1303,7 +1346,16 @@ export default function OrderDetailPage() {
         const uniqueEmails = Array.from(new Set(selectedEmails));
         setSharePoALoading(true);
         try {
-            await api.post(`/orders/${orderId}/share-power-of-attorney`, { emails: uniqueEmails });
+            // С вложениями — формой с файлами, без них — как раньше.
+            if (poaAttachments.files.length || poaAttachments.documentIds.length) {
+                const form = new FormData();
+                form.append('emails', JSON.stringify(uniqueEmails));
+                form.append('documentIds', JSON.stringify(poaAttachments.documentIds));
+                poaAttachments.files.forEach((f) => form.append('files', f));
+                await api.post(`/orders/${orderId}/share-power-of-attorney`, form);
+            } else {
+                await api.post(`/orders/${orderId}/share-power-of-attorney`, { emails: uniqueEmails });
+            }
             toast.success('Доверенность отправлена');
             setSharePoAModalOpen(false);
         } catch (error: any) {
@@ -1643,6 +1695,14 @@ export default function OrderDetailPage() {
                                         </DropdownMenuItem>
                                     </>
                                 )}
+                                {['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN'].includes(user?.role || '') && (
+                                    <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onSelect={() => setDeleteAsk(true)}
+                                    >
+                                        <Trash2 className="h-4 w-4" /> Удалить заявку
+                                    </DropdownMenuItem>
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                         {canChangeStatus && (
@@ -1661,6 +1721,8 @@ export default function OrderDetailPage() {
 
             {/* Где рейс сейчас — полосой этапов, как в макете. */}
             <OrderStageBar status={order.status} />
+
+            <DeleteOrderDialog orderId={orderId} orderNumber={order.orderNumber} open={deleteAsk} onOpenChange={setDeleteAsk} />
 
             <Dialog open={cancelAsk} onOpenChange={setCancelAsk}>
                 <DialogContent className="max-w-sm">
@@ -2125,6 +2187,10 @@ export default function OrderDetailPage() {
                                             </button>
                                         )}
                                     </div>
+                                    {/* Чем блоки отличаются (задачи шефа, A7): их принимали за дубль. */}
+                                    <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                        Деньги по банку и кассе: оплата от заказчика и оплата перевозчику. Только эти платежи закрывают долги и счета.
+                                    </p>
                                     <Table columns={paymentColumns} dataSource={payments} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет зарегистрированных платежей' }} scroll={{ x: true }} />
                                 </section>
 
@@ -2144,6 +2210,9 @@ export default function OrderDetailPage() {
                                                 </button>
                                             )}
                                         </div>
+                                        <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                            Прочие доходы рейса — возврат, компенсация. Прибавляются к марже, долг заказчика не закрывают: его оплату вносите в «Платежи».
+                                        </p>
                                         <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
                                     </section>
                                     <section className={nova.card} style={{ marginBottom: 0 }}>
@@ -2163,6 +2232,9 @@ export default function OrderDetailPage() {
                                                 </button>
                                             )}
                                         </div>
+                                        <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                            Затраты рейса кроме оплаты перевозчику — топливо, ремонт, штрафы. Уменьшают маржу; оплату перевозчику вносите в «Платежи».
+                                        </p>
                                         <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
                                     </section>
                                 </div>
@@ -2251,7 +2323,16 @@ export default function OrderDetailPage() {
                     open={assignModalOpen}
                     onCancel={() => setAssignModalOpen(false)}
                     orderId={orderId as string}
-                    onSuccess={() => fetchData()}
+                    onSuccess={async (сохранённая) => {
+                        // Сменили водителя или машину — прежняя доверенность,
+                        // уже отправленная складу, называет не тех. Новую
+                        // предлагаем отправить сразу, а не ждём, пока о ней
+                        // вспомнят на воротах. Открываем после обновления
+                        // карточки: окно ссылки берёт телефон нового водителя.
+                        const замена = заменаНаРейсе(data.order, сохранённая);
+                        await fetchData();
+                        if (замена) await показатьОтправкуДоверенности(замена);
+                    }}
                     initialValues={{
                         driverId: data.order.driverId || undefined,
                         partnerId: data.order.partnerId || undefined,
@@ -2303,6 +2384,10 @@ export default function OrderDetailPage() {
                 customEmailInput={customEmailInput}
                 setCustomEmailInput={setCustomEmailInput}
                 handleAddCustomEmail={handleAddCustomEmail}
+                poaAttachments={poaAttachments}
+                setPoaAttachments={setPoaAttachments}
+                заменаДоверенности={заменаДоверенности}
+                openDriverLink={openDriverLink}
                 driverLinkModalOpen={driverLinkModalOpen}
                 setDriverLinkModalOpen={setDriverLinkModalOpen}
                 driverLinkUrl={driverLinkUrl}
@@ -2322,7 +2407,9 @@ export default function OrderDetailPage() {
                 setExpenseModalOpen={setExpenseModalOpen}
                 expenseForm={expenseForm}
                 expenseLoading={expenseLoading}
-                expenseCategories={expenseCategories}
+                // Суточные — только когда рейс везёт свой штатный водитель (Q13).
+                expenseCategories={perDiemFor(order, user?.companyId) ? [...expenseCategories, PER_DIEM_CATEGORY] : expenseCategories}
+                perDiem={perDiemFor(order, user?.companyId)}
                 handleAddExpense={handleAddExpense}
                 paymentModalOpen={paymentModalOpen}
                 setPaymentModalOpen={setPaymentModalOpen}

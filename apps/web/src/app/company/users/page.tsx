@@ -50,6 +50,8 @@ const MODULE_PERMISSIONS = [
     { label: 'Контрагенты', value: 'partners' },
     { label: 'Карта / Трекинг', value: 'tracking' },
     { label: 'Водители', value: 'drivers' },
+    // Зарплаты всех сотрудников — открывает администратор (владелец, 25.10.2026).
+    { label: 'Зарплата', value: 'payroll' },
 ];
 
 const { Title, Text } = Typography;
@@ -2265,41 +2267,7 @@ export default function CompanyUsersPage() {
                                 <Form.Item name="middleName" label="Отчество">
                                     <Input placeholder="Иванович" />
                                 </Form.Item>
-                                <Row gutter={12}>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            name="phone"
-                                            label="Телефон"
-                                            rules={[
-                                                { required: true, message: 'Обязательное поле' },
-                                                { pattern: /^(\+7|8)\d{10}$/, message: 'Формат: +7XXXXXXXXXX' }
-                                            ]}
-                                        >
-                                            <Input placeholder="+77001234567" disabled={!!editingRecord} />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item
-                                            name="iin"
-                                            label="ИИН"
-                                            rules={[
-                                                { required: true, message: 'Введите ИИН' },
-                                                { pattern: /^\d{12}$/, message: 'ИИН должен содержать 12 цифр' }
-                                            ]}
-                                        >
-                                            <Input placeholder="123456789012" maxLength={12} />
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                                <Form.Item
-                                    name="password"
-                                    label="Пароль для мобильного приложения"
-                                    extra={editingRecord ? 'Оставьте пустым, чтобы не менять пароль' : 'Водитель входит в приложение по телефону и этому паролю'}
-                                    rules={[{ min: 8, message: 'Минимум 8 символов' }]}
-                                >
-                                    <Input.Password placeholder="Минимум 8 символов" autoComplete="new-password" />
-                                </Form.Item>
-
+                                {/* Порядок, как просил шеф (E1): ФИО → удостоверение → телефон → транспорт. */}
                                 <Divider><IdcardOutlined style={{ marginRight: 6 }} />Документ, удостоверяющий личность</Divider>
                                 <Row gutter={12}>
                                     <Col span={12}>
@@ -2335,18 +2303,53 @@ export default function CompanyUsersPage() {
                                     </Col>
                                     <Col span={12}>
                                         <Form.Item
-                                            name="docExpiresAt"
-                                            label="Действителен до"
+                                            name="docIssuedBy"
+                                            label="Кем выдан"
                                         >
-                                            <DateField style={{ width: '100%' }} />
+                                            <Input placeholder="МВД РК / РОВД г. Алматы" />
                                         </Form.Item>
                                     </Col>
                                 </Row>
                                 <Form.Item
-                                    name="docIssuedBy"
-                                    label="Кем выдан"
+                                    name="docExpiresAt"
+                                    label="Действителен до"
                                 >
-                                    <Input placeholder="МВД РК / РОВД г. Алматы" />
+                                    <DateField style={{ width: '100%' }} />
+                                </Form.Item>
+                                <Divider>Связь и вход в приложение</Divider>
+                                <Row gutter={12}>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="phone"
+                                            label="Телефон"
+                                            rules={[
+                                                { required: true, message: 'Обязательное поле' },
+                                                { pattern: /^(\+7|8)\d{10}$/, message: 'Формат: +7XXXXXXXXXX' }
+                                            ]}
+                                        >
+                                            <Input placeholder="+77001234567" disabled={!!editingRecord} />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item
+                                            name="iin"
+                                            label="ИИН"
+                                            rules={[
+                                                { required: true, message: 'Введите ИИН' },
+                                                { pattern: /^\d{12}$/, message: 'ИИН должен содержать 12 цифр' }
+                                            ]}
+                                        >
+                                            <Input placeholder="123456789012" maxLength={12} />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                                <Form.Item
+                                    name="password"
+                                    label="Пароль для мобильного приложения"
+                                    extra={editingRecord ? 'Оставьте пустым, чтобы не менять пароль' : 'Водитель входит в приложение по телефону и этому паролю'}
+                                    rules={[{ min: 8, message: 'Минимум 8 символов' }]}
+                                >
+                                    <Input.Password placeholder="Минимум 8 символов" autoComplete="new-password" />
                                 </Form.Item>
                                 <Divider><CarOutlined style={{ marginRight: 6 }} />Транспорт</Divider>
                                 <Row gutter={12}>

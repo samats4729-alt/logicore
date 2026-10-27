@@ -24,6 +24,8 @@ export interface OrderPaymentTerms {
     days: number | null;
     /** От какого события: UNLOAD | INVOICE | ORIGINALS. */
     from: string | null;
+    /** Отсрочка в банковских днях (F3). */
+    banking?: boolean;
     /** День выгрузки по маршруту. */
     unloadAt?: Date | string | null;
     /** День, когда оригиналы накладных дошли до этой стороны. */
@@ -78,7 +80,7 @@ export function invoiceDueDate(
             // Условий нет вовсе — старые рейсы, заведённые до того, как
             // отсрочку стали хранить числом. Ждать тут нечего, заполнять
             // придётся руками.
-            return { dueDate: null, dependsOn: 'в рейсе не задана отсрочка' };
+            return { dueDate: null, dependsOn: 'не задана отсрочка — ни в рейсе, ни в карточке контрагента' };
         }
 
         const anchor = order.from === 'INVOICE'
@@ -87,7 +89,7 @@ export function invoiceDueDate(
                 ? asCalendarDay(order.unloadAt)
                 : asCalendarDay(order.originalsAt);
 
-        const due = dueDateFrom(anchor, order.days);
+        const due = dueDateFrom(anchor, order.days, !!order.banking);
         if (!due) return { dueDate: null, dependsOn: WAITING_FOR[order.from] };
 
         if (!latest || due.getTime() > latest.getTime()) latest = due;

@@ -7,6 +7,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { TripFuel as Fuel, exchangeApi, деньги, ответ } from '@/lib/exchange';
 import { Badge, Button, Section } from '@/components/kit';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
+import { откудаТопливо } from '@/components/TripMoney';
 import { FONT } from '@/lib/theme';
 
 const STATUS: Record<Fuel['receipts']['items'][number]['status'], { label: string; tone: 'orange' | 'green' | 'red' }> = {
@@ -24,6 +25,8 @@ const date = (d: string) => new Date(d).toLocaleString('ru-RU', { day: '2-digit'
  * переводит деньги. Кассир пробивает чек на БИН парка — он здесь крупно,
  * чтобы показать на кассе. Водитель фотографирует чек и вписывает сумму.
  * Сразу видно, сколько парк уже дал на топливо и сколько останется в конце.
+ * Сверху — лимит на топливо по километражу (шеф, 27.10.2026) и сколько из
+ * него уже заправлено по чекам: налоговая сверяет расход с пробегом.
  *
  * Рейс по прежнему расчёту (до 12.10.2026) — раздела нет: сервер отвечает
  * отказом, и мы молча ничего не рисуем.
@@ -72,15 +75,45 @@ export function TripFuel({ orderId }: { orderId: string }) {
     const bin = fuel.park?.bin;
     const phone = fuel.park?.phone;
     const noReceipt = Math.max(0, fuel.issued.total - fuel.receipts.accepted - fuel.receipts.pending);
+    // Лимит — топливо по километражу (шеф, 27.10.2026): заправляться в его
+    // пределах — налоговая сверяет расход с пробегом. Ждущие проверки чеки — в счёт.
+    const limit = fuel.fuelEstimate ?? 0;
+    const fueled = fuel.receipts.accepted + fuel.receipts.pending;
+    const left = limit - fueled;
+    const fuelFrom = откудаТопливо(fuel.distanceKm, fuel.fuelLiters);
+    const advance = fuel.advances?.total ?? 0;
+    const scheme2 = fuel.scheme === 2;
+    const fuelDiff = scheme2 ? fuel.receipts.accepted - fuel.issued.total : -fuel.issued.total;
 
     return (
-        <Section title="Топливо" icon="speedometer-outline" right={fuel.fuelEstimate ? `≈ ${деньги(fuel.fuelEstimate)}` : undefined}>
+        <Section title="Топливо" icon="speedometer-outline">
+            {limit > 0 && (
+                <View style={styles.limit}>
+                    <View style={styles.line}>
+                        <Text style={[styles.binLabel, { color: colors.textTertiary }]}>ЛИМИТ НА ТОПЛИВО</Text>
+                        {!!fuelFrom && <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>{fuelFrom}</Text>}
+                    </View>
+                    <Text style={[styles.limitSum, { color: colors.text }]}>{деньги(limit)}</Text>
+                    <View style={[styles.bar, { backgroundColor: colors.surface2 }]}>
+                        <View style={{ width: `${Math.min(100, (fueled / limit) * 100)}%`, height: '100%', borderRadius: 4, backgroundColor: left < 0 ? colors.danger : colors.accent }} />
+                    </View>
+                    <Text style={[styles.note, { color: colors.textSecondary }]}>
+                        {fueled > 0
+                            ? `По чекам ${деньги(fueled)}${left >= 0 ? ` · осталось ${деньги(left)}` : ''}`
+                            : 'Заправляйтесь в пределах лимита'}
+                    </Text>
+                    {left < 0 && (
+                        <Text style={[styles.warn, { color: colors.danger }]}>Сверх лимита {деньги(-left)} — согласуйте с парком.</Text>
+                    )}
+                </View>
+            )}
+
             {/* БИН — крупно: водитель показывает его кассиру. */}
             <View style={[styles.binBox, { backgroundColor: colors.surface2, borderColor: colors.border2 }]}>
                 <Text style={[styles.binLabel, { color: colors.textTertiary }]}>ЧЕК — НА БИН ПАРКА</Text>
                 <Text selectable style={[styles.bin, { color: colors.text }]}>{bin || 'БИН не указан'}</Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                    {fuel.park?.name ? `${fuel.park.name}. ` : ''}Покажите кассиру — он пробьёт чек на парк. {fuel.scheme === 2 ? 'Без чека деньги на топливо вычтут из вашей выплаты.' : 'Без этого с денег на топливо будет налог.'}
+                    {fuel.park?.name ? `${fuel.park.name}. ` : ''}Покажите кассиру.
                 </Text>
             </View>
 
@@ -94,9 +127,15 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 )}
             </View>
 
+            {/* Итог — сумма строк над ним: на руки, минус предоплата, топливо —
+                разница между выданным и принятыми чеками (по прежнему расчёту —
+                всё выданное). */}
             <View style={[styles.sums, { borderTopColor: colors.border2 }]}>
                 {fuel.driverTotal != null && <Line label="Договорились, на руки" value={деньги(fuel.driverTotal)} />}
-                <Line label="Парк дал на топливо" value={fuel.issued.total ? деньги(fuel.issued.total) : '—'} />
+                {/* Предоплата — из суммы на руки: вычтут из выплаты, чек не нужен. */}
+                {advance > 0 && <Line label="Предоплата" value={`− ${деньги(advance)}`} />}
+                {fuelDiff < 0 && <Line label={scheme2 ? 'Топливо без принятого чека' : 'Парк дал на топливо'} value={`− ${деньги(-fuelDiff)}`} />}
+                {fuelDiff > 0 && <Line label="Заправились за свои — вернут" value={`+ ${деньги(fuelDiff)}`} />}
                 {fuel.toPay != null && <Line label="Вам останется" value={деньги(fuel.toPay)} strong />}
                 {fuel.receipts.pending > 0 && (
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
@@ -106,7 +145,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 {/* Тревожно — только то, на что чека нет вовсе: ждущие проверки — не в счёт. */}
                 {noReceipt > 0 && (
                     <Text style={[styles.warn, { color: colors.danger }]}>
-                        Нет чека на {деньги(noReceipt)} — {fuel.scheme === 2 ? 'эту сумму вычтут из выплаты' : 'с этой суммы будет налог'}. Отправьте чек.
+                        Нет чека на {деньги(noReceipt)} — {fuel.scheme === 2 ? 'удержат из выплаты' : 'будет налог'}.
                     </Text>
                 )}
                 {fuel.locked && (
@@ -121,7 +160,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
                             <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
                             <View style={{ flex: 1 }}>
                                 <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 14.5 }}>{деньги(r.amount)}</Text>
-                                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{date(r.createdAt)}</Text>
+                                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{date(r.createdAt)}{r.byPark ? ' · прикрепил парк' : ''}</Text>
                                 {r.status === 'REJECTED' && !!r.rejectReason && (
                                     <Text style={{ color: colors.danger, fontSize: 12.5, marginTop: 2 }}>{r.rejectReason}</Text>
                                 )}
@@ -199,6 +238,9 @@ function AmountSheet({ visible, busy, onSubmit, onClose }: { visible: boolean; b
 }
 
 const styles = StyleSheet.create({
+    limit: { marginBottom: 12 },
+    limitSum: { fontSize: 24, fontFamily: FONT.bold, letterSpacing: -0.5, marginTop: 2, fontVariant: ['tabular-nums'] },
+    bar: { height: 8, borderRadius: 4, overflow: 'hidden', marginTop: 8 },
     binBox: { borderRadius: 14, borderWidth: 1, padding: 12 },
     binLabel: { fontSize: 11, fontFamily: FONT.bold, letterSpacing: 1.1 },
     bin: { fontSize: 26, fontFamily: FONT.bold, letterSpacing: 1.5, marginTop: 2, fontVariant: ['tabular-nums'] },

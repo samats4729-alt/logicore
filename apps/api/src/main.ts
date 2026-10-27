@@ -1,10 +1,12 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { DecimalToNumberInterceptor } from './common/interceptors/decimal-to-number.interceptor';
+import { PrivateCompanyFieldsInterceptor } from './common/interceptors/private-company-fields.interceptor';
 import { initSentry } from './common/sentry';
 import * as bcrypt from 'bcryptjs';
 import * as compression from 'compression';
@@ -14,7 +16,11 @@ async function bootstrap() {
 
     initSentry();
 
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+    // Обмен с 1С идёт по SOAP: тело — XML, а не JSON. Без этого Nest отдаёт
+    // контроллеру пустое тело, и 1С получает «пустой запрос».
+    app.useBodyParser('text', { type: ['text/xml', 'application/soap+xml', 'application/xml'], limit: '64mb' });
 
     // Включение сжатия ответов (gzip/brotli) для ускорения загрузки данных
     app.use(compression());
@@ -44,7 +50,9 @@ async function bootstrap() {
     // Денежные поля хранятся как DECIMAL и приходят из Prisma объектами
     // Decimal, чей toJSON отдаёт строку. Перехватчик приводит их к числам на
     // границе HTTP, чтобы контракт с вебом остался прежним.
-    app.useGlobalInterceptors(new DecimalToNumberInterceptor());
+    // Код приглашения парка и пути к печати и подписи не уходят наружу ни в
+    // одном ответе — правило одно на выходе (`PRIVATE_COMPANY_FIELDS`).
+    app.useGlobalInterceptors(new DecimalToNumberInterceptor(), new PrivateCompanyFieldsInterceptor());
 
     // Swagger API documentation — в проде закрыт (включается только через SWAGGER_ENABLED=true)
     const swaggerEnabled = process.env.NODE_ENV !== 'production' || process.env.SWAGGER_ENABLED === 'true';

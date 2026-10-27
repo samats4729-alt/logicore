@@ -38,6 +38,15 @@ export class LocationsController {
         return this.locationsService.findAll(search, companyId);
     }
 
+    /* Объявлено до `:id`, иначе адрес «recent» уедет в поиск точки с таким
+       идентификатором и вернёт «не найдено». */
+    @Get('recent')
+    @ApiOperation({ summary: 'Адреса из последних заявок компании — для «Недавних» в выборе адреса' })
+    async recent(@Request() req: any) {
+        if (!req.user.companyId) return [];
+        return this.locationsService.recentIds(req.user.companyId);
+    }
+
     /* Объявлено до `:id`, иначе адрес «missing-coordinates» уедет в поиск
        точки с таким идентификатором и вернёт «не найдено». */
     @Get('missing-coordinates')

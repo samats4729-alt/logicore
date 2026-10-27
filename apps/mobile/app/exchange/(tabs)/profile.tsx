@@ -9,6 +9,7 @@ import { DriverProfile, exchangeApi, телефонКрасиво, ответ } 
 import { BRAND, FONT } from '@/lib/theme';
 import { Badge, Button, Card, Row } from '@/components/kit';
 import { testPush } from '@/lib/push';
+import { PensionCard } from '@/components/PensionCard';
 
 /** Адрес сайта платформы — для политики конфиденциальности. */
 const SITE_URL: string = (Constants.expoConfig?.extra?.siteUrl as string | undefined) || '';
@@ -144,9 +145,14 @@ export default function ExchangeProfile() {
                 {me.kind === 'PARK' && <Row icon="business-outline" label="Парк" value={me.park?.name ?? '—'} />}
                 {me.kind === 'IP' && <Row icon="briefcase-outline" label="ИП" value={me.ipName ?? '—'} />}
                 <Row icon="call-outline" label="Телефон" value={телефонКрасиво(me.phone)} />
+                {!!me.extraPhones?.length && <Row icon="call-outline" label="Ещё номера" value={me.extraPhones.map(телефонКрасиво).join(', ')} />}
+                {!!me.docsEmail && <Row icon="mail-outline" label="Для документов" value={me.docsEmail} />}
                 <Row icon="bus-outline" label="Машина" value={[me.vehiclePlate, me.vehicleBodyType, me.vehicleCapacityKg ? `${me.vehicleCapacityKg / 1000} т` : null].filter(Boolean).join(' · ') || '—'} />
                 <Row icon="trophy-outline" label="Рейсов" value={String(me.tripsCompleted)} />
             </Card>
+
+            {/* Пенсионные по всем рейсам — растут с каждым рейсом (шеф, 27.10.2026). */}
+            {me.kind === 'PARK' && <PensionCard />}
 
             {/* Убедиться, что рейсы и выплаты будут приходить уведомлением. */}
             <Card onPress={async () => { const r = await testPush(); Alert.alert(r.ok ? 'Отправлено' : 'Не получилось', r.message); }} style={styles.menuItem}>
@@ -164,6 +170,28 @@ export default function ExchangeProfile() {
                     <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>Мои документы</Text>
                     <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
                         {me.kind === 'PARK' ? 'Удостоверение, права, техпаспорт, договор с парком' : 'Что загружено и проверено'}
+                    </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </Card>
+
+            <Card onPress={() => router.push('/exchange/vehicles')} style={styles.menuItem}>
+                <Ionicons name="bus-outline" size={20} color={colors.text} />
+                <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>Транспорт</Text>
+                    <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
+                        Тягачи и прицепы, какой из них основной
+                    </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </Card>
+
+            <Card onPress={() => router.push('/exchange/contacts')} style={styles.menuItem}>
+                <Ionicons name="call-outline" size={20} color={colors.text} />
+                <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>Номера и почта для документов</Text>
+                    <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
+                        Второй, третий, зарубежный номер; куда слать акты и счета. Без проверки
                     </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />

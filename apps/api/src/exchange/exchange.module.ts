@@ -15,18 +15,24 @@ import { ExchangeParkService } from './park.service';
 import { ExchangePayoutsService } from './payouts.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
 import { ParkContractService } from './park-contract.service';
+import { VehicleOwnerContractService } from './vehicle-owner-contract.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeFuelService } from './fuel.service';
+import { ExchangeParkEarningsService } from './park-earnings.service';
 import { StampImageService } from '../common/services/stamp-image.service';
+import { DriverCalculatorController } from './driver-calculator.controller';
+import { OrdersModule } from '../orders/orders.module';
+import { ExchangeAdvanceRequestsService } from './advance-requests.service';
+import { ExchangeDriverVehiclesService } from './driver-vehicles.service';
 
 /** Биржа грузов. Выключена, пока на сервере нет `EXCHANGE_ENABLED=true`. */
 @Module({
-    imports: [PrismaModule, AuditModule, AuthModule],
+    imports: [PrismaModule, AuditModule, AuthModule, OrdersModule],
     controllers: [
         ExchangeStatusController, ExchangeController,
         ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController, ExchangeAdminController,
-        ExchangePublicController,
+        ExchangePublicController, DriverCalculatorController,
     ],
-    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService, ExchangeParkService, ExchangePayoutsService, ParkContractService, StampImageService, ExchangeSettlementService, ExchangeFuelService, ExchangeParkRegistryService],
+    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService, ExchangeParkService, ExchangePayoutsService, ParkContractService, VehicleOwnerContractService, StampImageService, ExchangeSettlementService, ExchangeFuelService, ExchangeParkRegistryService, ExchangeAdvanceRequestsService, ExchangeDriverVehiclesService, ExchangeParkEarningsService],
 })
 export class ExchangeModule {}

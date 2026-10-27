@@ -33,6 +33,8 @@ export interface SettlementSide {
     vatRate: number | null;
     days: number | null;
     from: string | null;
+    /** Отсрочка в банковских днях (F3). */
+    banking: boolean;
     /** Плановая дата платежа, если день отсчёта уже известен. */
     dueDate: Date | null;
     /** Чего ждём, чтобы посчитать дату: «выгрузки», «счёта», «оригиналов». */
@@ -143,6 +145,7 @@ export class OrderSettlementsService {
                     invoiceTiming: true,
                     customerPaymentDays: true, customerPaymentFrom: true,
                     carrierPaymentDays: true, carrierPaymentFrom: true,
+                    customerPaymentBanking: true, carrierPaymentBanking: true,
                     // Наша ли это карточка справочника. У компании, которая
                     // сама работает на платформе, условий не спросишь: они
                     // задаются по рейсу.
@@ -169,6 +172,8 @@ export class OrderSettlementsService {
                 customerPaymentFrom: customerCard?.customerPaymentFrom ?? null,
                 carrierPaymentDays: carrierCard?.carrierPaymentDays ?? null,
                 carrierPaymentFrom: carrierCard?.carrierPaymentFrom ?? null,
+                customerPaymentBanking: customerCard?.customerPaymentBanking ?? false,
+                carrierPaymentBanking: carrierCard?.carrierPaymentBanking ?? false,
             },
         };
     }
@@ -206,10 +211,10 @@ export class OrderSettlementsService {
         return {
             ...patch,
             customerPaymentDate: patch.customerPaymentFrom === 'UNLOAD'
-                ? dueDateFrom(input.unloadAt ?? null, patch.customerPaymentDays)
+                ? dueDateFrom(input.unloadAt ?? null, patch.customerPaymentDays, patch.customerPaymentBanking)
                 : null,
             driverPaymentDate: patch.carrierPaymentFrom === 'UNLOAD'
-                ? dueDateFrom(input.unloadAt ?? null, patch.carrierPaymentDays)
+                ? dueDateFrom(input.unloadAt ?? null, patch.carrierPaymentDays, patch.carrierPaymentBanking)
                 : null,
             settlementsConfirmedAt: complete ? new Date() : null,
         };
@@ -293,9 +298,10 @@ export class OrderSettlementsService {
         days: number | null | undefined,
         anchor: string | null | undefined,
         anchorDate: Date | null,
+        banking = false,
     ): Date | null | undefined {
         if (days === null || days === undefined || !anchor) return undefined;
-        return dueDateFrom(anchorDate, days);
+        return dueDateFrom(anchorDate, days, banking);
     }
 
     /**
@@ -334,8 +340,8 @@ export class OrderSettlementsService {
             where: { id: orderId },
             data: {
                 ...patch,
-                customerPaymentDate: dueDateFrom(anchors.customer, patch.customerPaymentDays),
-                driverPaymentDate: dueDateFrom(anchors.carrier, patch.carrierPaymentDays),
+                customerPaymentDate: dueDateFrom(anchors.customer, patch.customerPaymentDays, patch.customerPaymentBanking),
+                driverPaymentDate: dueDateFrom(anchors.carrier, patch.carrierPaymentDays, patch.carrierPaymentBanking),
                 settlementsConfirmedAt: complete ? new Date() : null,
                 settlementsConfirmedById: null,
             },
@@ -360,6 +366,7 @@ export class OrderSettlementsService {
                 subForwarderId: true,
                 customerPaymentDays: true, customerPaymentFrom: true,
                 carrierPaymentDays: true, carrierPaymentFrom: true,
+                customerPaymentBanking: true, carrierPaymentBanking: true,
                 carrierOriginalsAt: true, customerOriginalsAt: true,
                 routePoints: { select: { pointType: true, expectedDate: true }, orderBy: { sequence: 'asc' } },
             },
@@ -371,10 +378,10 @@ export class OrderSettlementsService {
             where: { id: orderId },
             data: {
                 customerPaymentDate: this.derivedDueDate(
-                    order.customerPaymentDays, order.customerPaymentFrom, anchors.customer,
+                    order.customerPaymentDays, order.customerPaymentFrom, anchors.customer, order.customerPaymentBanking,
                 ),
                 driverPaymentDate: this.derivedDueDate(
-                    order.carrierPaymentDays, order.carrierPaymentFrom, anchors.carrier,
+                    order.carrierPaymentDays, order.carrierPaymentFrom, anchors.carrier, order.carrierPaymentBanking,
                 ),
             },
             select: { id: true },
@@ -484,6 +491,7 @@ export class OrderSettlementsService {
                 hasVat: true, vatRate: true, executorHasVat: true, executorVatRate: true,
                 customerPaymentDays: true, customerPaymentFrom: true,
                 carrierPaymentDays: true, carrierPaymentFrom: true,
+                customerPaymentBanking: true, carrierPaymentBanking: true,
                 customerPaymentDate: true, driverPaymentDate: true,
                 carrierOriginalsAt: true, customerOriginalsAt: true,
                 settlementsConfirmedAt: true, settlementsConfirmedById: true,
@@ -558,6 +566,7 @@ export class OrderSettlementsService {
             vatRate: number | null;
             days: number | null;
             from: string | null;
+            banking: boolean;
             dueDate: Date | null;
             originalsAt: Date | null;
         }): SettlementSide => ({
@@ -585,6 +594,7 @@ export class OrderSettlementsService {
                 vatRate: num(order.vatRate),
                 days: order.customerPaymentDays,
                 from: order.customerPaymentFrom,
+                banking: order.customerPaymentBanking,
                 dueDate: order.customerPaymentDate,
                 originalsAt: order.customerOriginalsAt,
             }),
@@ -595,6 +605,7 @@ export class OrderSettlementsService {
                 vatRate: num(order.executorVatRate),
                 days: order.carrierPaymentDays,
                 from: order.carrierPaymentFrom,
+                banking: order.carrierPaymentBanking,
                 dueDate: order.driverPaymentDate,
                 originalsAt: order.carrierOriginalsAt,
             }),
@@ -618,6 +629,8 @@ export class OrderSettlementsService {
         customerPaymentFrom?: string | null;
         carrierPaymentDays?: number | null;
         carrierPaymentFrom?: string | null;
+        customerPaymentBanking?: boolean;
+        carrierPaymentBanking?: boolean;
     }) {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
@@ -625,6 +638,7 @@ export class OrderSettlementsService {
                 id: true, forwarderId: true, partnerId: true, customerCompanyId: true,
                 subForwarderId: true,
                 carrierOriginalsAt: true, customerOriginalsAt: true,
+                customerPaymentBanking: true, carrierPaymentBanking: true,
                 routePoints: { select: { pointType: true, expectedDate: true }, orderBy: { sequence: 'asc' } },
             },
         });
@@ -678,6 +692,12 @@ export class OrderSettlementsService {
             patch.carrierPaymentFrom = a;
         }
 
+        // Банковские дни — вместе с отсрочкой той же стороны (F3).
+        if (dto.customerPaymentBanking !== undefined) patch.customerPaymentBanking = !!dto.customerPaymentBanking;
+        if (dto.carrierPaymentBanking !== undefined) patch.carrierPaymentBanking = !!dto.carrierPaymentBanking;
+        const customerBanking = (patch.customerPaymentBanking as boolean | undefined) ?? order.customerPaymentBanking;
+        const carrierBanking = (patch.carrierPaymentBanking as boolean | undefined) ?? order.carrierPaymentBanking;
+
         // Плановые даты — от новых условий: бухгалтер поменял отсрочку, и день
         // платежа обязан переехать вместе с ней. Если по новой точке отсчёта
         // события ещё не было (оригиналы не пришли, счёт не выставлен), дата
@@ -691,10 +711,10 @@ export class OrderSettlementsService {
             companyId,
         );
         if (patch.customerPaymentFrom !== undefined) {
-            patch.customerPaymentDate = dueDateFrom(anchors.customer, patch.customerPaymentDays as number | null);
+            patch.customerPaymentDate = dueDateFrom(anchors.customer, patch.customerPaymentDays as number | null, customerBanking);
         }
         if (patch.carrierPaymentFrom !== undefined) {
-            patch.driverPaymentDate = dueDateFrom(anchors.carrier, patch.carrierPaymentDays as number | null);
+            patch.driverPaymentDate = dueDateFrom(anchors.carrier, patch.carrierPaymentDays as number | null, carrierBanking);
         }
 
         // Правка бухгалтера и есть проверка: второй кнопки для этого не нужно.

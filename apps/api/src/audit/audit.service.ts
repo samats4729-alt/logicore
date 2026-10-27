@@ -1,8 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { historyCommentFor, isOrderOwner } from '../orders/order-visibility';
+import type { OrderSides } from '../orders/order-visibility';
 
 const SETTING_COMPANIES_ENABLED = 'audit_companies_enabled';
 const SETTINGS_CACHE_TTL_MS = 30_000;
+
+/** Записи журнала о деньгах водителя парка — в истории рейса только самому парку. */
+export const PARK_PRIVATE_ENTITIES = new Set(['driver_advance']);
 
 export interface AuditEntry {
     companyId?: string | null;
@@ -83,6 +88,31 @@ export class AuditService {
     }
 
     /**
+     * Журнал отправленных доверенностей компании за период (задачи шефа, D4):
+     * кому, когда, по какой заявке, на какого водителя и машину, с какими
+     * вложениями. Пишется с 21.10.2026 — раньше отправки не записывались.
+     */
+    async attorneysSent(companyId: string, from?: string, to?: string) {
+        const range: { gte?: Date; lte?: Date } = {};
+        if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) range.gte = new Date(`${from}T00:00:00+05:00`);
+        if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) range.lte = new Date(`${to}T23:59:59.999+05:00`);
+        const rows = await this.prisma.auditLog.findMany({
+            where: { companyId, entity: 'power_of_attorney_sent', ...(range.gte || range.lte ? { createdAt: range } : {}) },
+            orderBy: { createdAt: 'desc' },
+            take: 1000,
+            select: { id: true, createdAt: true, userName: true, orderId: true, details: true },
+        });
+        return rows.map((r) => {
+            const d = (r.details ?? {}) as { orderNumber?: string; emails?: string[]; driver?: string | null; vehicle?: string | null; attachments?: string[] };
+            return {
+                id: r.id, sentAt: r.createdAt, sentBy: r.userName, orderId: r.orderId,
+                orderNumber: d.orderNumber ?? null, emails: d.emails ?? [], driver: d.driver ?? null,
+                vehicle: d.vehicle ?? null, attachments: d.attachments ?? [],
+            };
+        });
+    }
+
+    /**
      * История одного рейса одной лентой: смены статуса и действия людей.
      *
      * Статусы и журнал действий лежат в разных таблицах и заполнялись
@@ -91,8 +121,16 @@ export class AuditService {
      *
      * Ленту собираем здесь, а не на экране: сортировка по времени поверх
      * двух источников и подстановка имён — это работа сервера.
+     *
+     * `viewer` — кто смотрит. Записи о выборе исполнителя он видит по правилу
+     * денег (`historyCommentFor`), а действия людей — только своей компании,
+     * если рейс ведёт не он: в журнале действий хозяина рейса его ставки и
+     * правки цен (владелец, 25.10.2026).
      */
-    async getOrderHistory(orderId: string) {
+    async getOrderHistory(
+        orderId: string,
+        viewer?: { companyId?: string | null; driver?: boolean; order: OrderSides },
+    ) {
         const [statuses, actions] = await Promise.all([
             this.prisma.orderStatusHistory.findMany({
                 where: { orderId },
@@ -118,16 +156,24 @@ export class AuditService {
             users.map(u => [u.id, `${u.lastName || ''} ${u.firstName || ''}`.trim() || null]),
         );
 
+        const ownActionsOnly = !!viewer && (!!viewer.driver || !isOrderOwner(viewer.order, viewer.companyId));
+        // Выдачи водителю парка (топливо, предоплата) — его деньги на руки:
+        // их видит только парк, даже хозяину рейса не показываем (27.10.2026).
+        const visibleActions = (ownActionsOnly
+            ? actions.filter(a => !viewer!.driver && !!viewer!.companyId && a.companyId === viewer!.companyId)
+            : actions
+        ).filter(a => !viewer || !PARK_PRIVATE_ENTITIES.has(a.entity) || a.companyId === viewer.companyId);
+
         const feed = [
             ...statuses.map(s => ({
                 kind: 'STATUS' as const,
                 at: s.changedAt,
                 status: s.status,
-                comment: s.comment,
+                comment: viewer ? historyCommentFor(s.comment, viewer.order, viewer) ?? null : s.comment,
                 userName: s.changedById ? nameById.get(s.changedById) ?? null : null,
                 userRole: null as string | null,
             })),
-            ...actions.map(a => ({
+            ...visibleActions.map(a => ({
                 kind: 'ACTION' as const,
                 at: a.createdAt,
                 action: a.action,

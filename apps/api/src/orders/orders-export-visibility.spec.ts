@@ -154,6 +154,27 @@ describe('Выгрузка журнала заявок и правило вид�
 
         expect(строка['Счёт']).toBe('СЧ-ЗАКАЗЧИКУ');
     });
+
+    describe('колонка «Организация» — какая из своих организаций в сделке (19.10.2026)', () => {
+        it('рейс записан на активную организацию — она и названа', async () => {
+            const prisma: any = { order: { findMany: jest.fn().mockResolvedValue([рейс()]) } };
+            const service = new OrdersExportService(prisma, new FinanceCalculatorService());
+            const book = XLSX.read(await service.exportOrders(МЫ, ['р-1'], ['Организация']), { type: 'buffer' });
+            const row = XLSX.utils.sheet_to_json<any>(book.Sheets[book.SheetNames[0]])[0];
+            expect(row['Организация']).toBe('ТОО «ЛогиКор»');
+        });
+
+        it('у человека несколько организаций — названа та своя, что участвует в рейсе', async () => {
+            const prisma: any = {
+                order: { findMany: jest.fn().mockResolvedValue([{ ...рейс(), forwarderId: 'нагима', forwarder: { name: 'ТОО «Нагима»' } }]) },
+                userCompanyRelation: { findMany: jest.fn().mockResolvedValue([{ companyId: МЫ }, { companyId: 'нагима' }]) },
+            };
+            const service = new OrdersExportService(prisma, new FinanceCalculatorService());
+            const book = XLSX.read(await service.exportOrders(МЫ, ['р-1'], ['Организация', '№ заявки'], 'u-1'), { type: 'buffer' });
+            const row = XLSX.utils.sheet_to_json<any>(book.Sheets[book.SheetNames[0]])[0];
+            expect(row).toEqual({ 'Организация': 'ТОО «Нагима»', '№ заявки': 'ЗК-2607' });
+        });
+    });
 });
 
 /**

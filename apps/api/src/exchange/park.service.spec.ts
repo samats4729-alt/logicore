@@ -39,6 +39,20 @@ describe('Кабинет парка', () => {
         expect(JSON.stringify(args.select)).not.toMatch(/customerPrice/);
     });
 
+    it('по каждому рейсу видно, были ли чеки на топливо и сколько ждут решения', async () => {
+        const { service, prisma } = build();
+        const trip = (id: string, receipts: { status: string }[]) => ({
+            id, orderNumber: id, status: 'COMPLETED', driverCost: 400000, createdAt: new Date(), completedAt: new Date(),
+            assignedDriverName: 'Рулев', assignedDriverPlate: null, exchangeSettlement: null,
+            exchangeFuelReceipts: receipts, forwarder: null, subForwarder: null, customerCompany: null, routePoints: [],
+        });
+        prisma.order.findMany.mockResolvedValue([trip('o-none', []), trip('o-two', [{ status: 'ACCEPTED' }, { status: 'PENDING' }])]);
+        const rows = await service.trips('park-1', 'done');
+        expect(rows.map((r) => [r.id, r.fuelReceipts, r.fuelReceiptsPending])).toEqual([['o-none', 0, 0], ['o-two', 2, 1]]);
+        // Отклонённые чеки — не в счёт: их и не выбираем.
+        expect(prisma.order.findMany.mock.calls[0][0].select.exchangeFuelReceipts.where).toEqual({ status: { not: 'REJECTED' } });
+    });
+
     it('не парк — кабинета парка нет', async () => {
         const { service } = build(false);
         await expect(service.overview('company-1')).rejects.toBeInstanceOf(ForbiddenException);

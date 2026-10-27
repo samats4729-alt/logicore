@@ -38,6 +38,15 @@ export default function RequestsPage() {
                         <Calculator size={15} />
                         Калькулятор
                     </button>
+                    {/* Расчёт водителя без ИП — чтобы звать водителей в парк (Q20). */}
+                    <button
+                        type="button"
+                        className={styles.action}
+                        onClick={() => router.push('/company/driver-calculator')}
+                    >
+                        <Calculator size={15} />
+                        Водитель без ИП
+                    </button>
                 </div>
             </div>
 

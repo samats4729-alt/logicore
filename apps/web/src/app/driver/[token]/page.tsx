@@ -74,6 +74,10 @@ export default function DriverPage() {
     const [mobile, setMobile] = useState(true);
     const [geo, setGeo] = useState<'idle' | 'on' | 'denied'>('idle');
     const [ttnBusy, setTtnBusy] = useState(false);
+    /** Панель «Что случилось?»: комментарий и фото (задачи шефа, M2). */
+    const [problemOpen, setProblemOpen] = useState(false);
+    const [problemText, setProblemText] = useState('');
+    const [problemPhoto, setProblemPhoto] = useState<File | null>(null);
 
     useEffect(() => { setMobile(isMobile()); }, []);
 
@@ -126,12 +130,18 @@ export default function DriverPage() {
         } finally { setBusy(false); }
     };
 
+    /** Проблема в пути: что случилось и фото — фото по желанию (поломка, закрытая дорога). */
     const reportProblem = async () => {
-        const comment = window.prompt('Что случилось? (можно оставить пустым)') ?? undefined;
         setBusy(true);
         try {
-            const res = await axios.post(`${API_URL}/public/driver/${token}/problem`, { comment });
+            const fd = new FormData();
+            if (problemText.trim()) fd.append('comment', problemText.trim());
+            if (problemPhoto) fd.append('file', problemPhoto);
+            const res = await axios.post(`${API_URL}/public/driver/${token}/problem`, fd);
             setOrder(res.data);
+            setProblemOpen(false);
+            setProblemText('');
+            setProblemPhoto(null);
         } catch {
             alert('Не удалось отправить. Попробуйте ещё раз.');
         } finally { setBusy(false); }
@@ -189,8 +199,6 @@ export default function DriverPage() {
 
     const step = stepIndex(order.status);
     const statusTint = order.isProblem ? RED : order.isFinished ? GREEN : BLUE;
-    // ТТН водитель отправляет только доехав до выгрузки (и после завершения — если забыл)
-    const canSendTtn = ['AT_DELIVERY', 'UNLOADING', 'COMPLETED'].includes(order.status);
 
     return (
         <div style={wrap}>
@@ -204,6 +212,18 @@ export default function DriverPage() {
                     </span>
                 </div>
                 {order.driverName && <div style={{ marginTop: 8, fontSize: 14, color: 'var(--lc-text-sec)' }}>{order.driverName}{order.vehiclePlate ? ` · ${order.vehiclePlate}` : ''}</div>}
+            </div>
+
+            {/* ТТН — наверху и в любой момент рейса (задачи шефа, M1): накладную
+                выдают на погрузке, и ждать с фото до выгрузки незачем. */}
+            <div style={card}>
+                <div style={eyebrow}>Накладная (ТТН){order.ttnCount > 0 ? ` · отправлено ${order.ttnCount}` : ''}</div>
+                <label style={{ ...outlineBtn, display: 'block', textAlign: 'center', cursor: 'pointer', opacity: ttnBusy ? 0.6 : 1, boxSizing: 'border-box' }}>
+                    {ttnBusy ? 'Отправка…' : order.ttnCount > 0 ? 'Отправить ещё фото' : 'Сфотографировать и отправить'}
+                    <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={ttnBusy}
+                        onChange={(e) => { uploadTtn(e.target.files); e.currentTarget.value = ''; }} />
+                </label>
+                {order.ttnCount > 0 && <div style={{ marginTop: 10, fontSize: 14, color: GREEN, textAlign: 'center', fontWeight: 600 }}>Диспетчер получил накладную</div>}
             </div>
 
             {/* Прогресс рейса */}
@@ -293,19 +313,6 @@ export default function DriverPage() {
                 {order.requirements && <div style={{ fontSize: 14, color: 'var(--lc-text-sec)', marginTop: 10 }}>Требования: {order.requirements}</div>}
             </div>
 
-            {/* ТТН — только после прибытия на выгрузку */}
-            {canSendTtn && (
-                <div style={card}>
-                    <div style={eyebrow}>Накладная (ТТН){order.ttnCount > 0 ? ` · отправлено ${order.ttnCount}` : ''}</div>
-                    <label style={{ ...outlineBtn, display: 'block', textAlign: 'center', cursor: 'pointer', opacity: ttnBusy ? 0.6 : 1 }}>
-                        {ttnBusy ? 'Отправка…' : order.ttnCount > 0 ? 'Отправить ещё фото' : 'Сфотографировать и отправить'}
-                        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={ttnBusy}
-                            onChange={(e) => { uploadTtn(e.target.files); e.currentTarget.value = ''; }} />
-                    </label>
-                    {order.ttnCount > 0 && <div style={{ marginTop: 10, fontSize: 14, color: GREEN, textAlign: 'center', fontWeight: 600 }}>Диспетчер получил накладную</div>}
-                </div>
-            )}
-
             {/* Действия */}
             <div style={{ position: 'sticky', bottom: 0, padding: '10px 0 22px', background: 'linear-gradient(transparent, var(--lc-bg) 28px)' }}>
                 {order.isFinished ? (
@@ -326,8 +333,31 @@ export default function DriverPage() {
                                 <div style={{ color: RED, fontSize: 15, fontWeight: 600 }}>Диспетчер уведомлён о проблеме</div>
                                 {order.dispatcherPhone && <a href={`tel:${order.dispatcherPhone}`} style={{ display: 'inline-block', marginTop: 8, fontSize: 16, color: BLUE, fontWeight: 700 }}>Позвонить диспетчеру</a>}
                             </div>
+                        ) : problemOpen ? (
+                            <div style={{ ...card, marginTop: 10, marginBottom: 0 }}>
+                                <div style={{ ...eyebrow, color: RED }}>Что случилось?</div>
+                                <textarea
+                                    aria-label="Что случилось"
+                                    value={problemText}
+                                    onChange={(e) => setProblemText(e.target.value)}
+                                    placeholder="Например: пробил колесо, стою на трассе"
+                                    rows={3}
+                                    style={{ width: '100%', boxSizing: 'border-box', padding: 12, fontSize: 16, borderRadius: 12, border: '1px solid var(--lc-border)', background: 'var(--lc-card-2)', color: 'var(--lc-text)', fontFamily: 'inherit', resize: 'vertical' }}
+                                />
+                                <label style={{ ...outlineBtn, display: 'block', textAlign: 'center', cursor: 'pointer', marginTop: 10, boxSizing: 'border-box' }}>
+                                    {problemPhoto ? `Фото добавлено · заменить` : 'Добавить фото'}
+                                    <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                                        onChange={(e) => { setProblemPhoto(e.target.files?.[0] ?? null); e.currentTarget.value = ''; }} />
+                                </label>
+                                <button onClick={reportProblem} disabled={busy} style={{ ...bigBtn, background: RED, marginTop: 10, fontSize: 16 }}>
+                                    {busy ? 'Отправка…' : 'Отправить диспетчеру'}
+                                </button>
+                                <button onClick={() => setProblemOpen(false)} disabled={busy} style={{ ...bigBtn, background: 'transparent', color: 'var(--lc-text-sec)', fontSize: 15, fontWeight: 600, padding: 12 }}>
+                                    Отмена
+                                </button>
+                            </div>
                         ) : (
-                            <button onClick={reportProblem} disabled={busy} style={{ ...bigBtn, background: 'var(--lc-card)', color: RED, border: '1.5px solid #fecaca', marginTop: 10, fontSize: 16, fontWeight: 700, boxShadow: 'none' }}>
+                            <button onClick={() => setProblemOpen(true)} disabled={busy} style={{ ...bigBtn, background: 'var(--lc-card)', color: RED, border: '1.5px solid #fecaca', marginTop: 10, fontSize: 16, fontWeight: 700, boxShadow: 'none' }}>
                                 Сообщить о проблеме
                             </button>
                         )}

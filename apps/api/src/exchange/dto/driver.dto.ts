@@ -1,9 +1,36 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ExchangeDriverDocumentKind, ExchangeDriverKind, ExchangeDriverStatus } from '@prisma/client';
 import {
-    IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength,
+    ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength,
 } from 'class-validator';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../../auth/password-policy';
+
+/** Парк сам заводит водителя: имя и номер, пароль придумает система (Q3/R1). */
+export class AddParkDriverDto {
+    @ApiProperty({ example: '+77011234567' })
+    @IsString()
+    @IsNotEmpty({ message: 'Укажите телефон водителя' })
+    @MaxLength(30)
+    phone: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty({ message: 'Укажите фамилию' })
+    @MaxLength(100)
+    lastName: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty({ message: 'Укажите имя' })
+    @MaxLength(100)
+    firstName: string;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsString()
+    @MaxLength(100)
+    middleName?: string;
+}
 
 /**
  * Регистрация водителя биржи по номеру и паролю. Пока без СМС — см.
@@ -195,6 +222,9 @@ export class PayoutRatesDto {
 
     @ApiProperty({ required: false, description: 'Порог годового дохода для повышенной ставки, МРП' })
     @IsOptional() @IsInt({ message: 'Порог — целым числом МРП' }) @Min(0) @Max(1000000) ipnThresholdMrp?: number;
+    /** Сколько от суммы за рейс водитель может попросить заранее, % (Q17). */
+    @ApiProperty({ required: false })
+    @IsOptional() @IsInt({ message: 'Доля — целым числом процентов' }) @Min(0) @Max(100) advanceLimitPct?: number;
 }
 
 export class FuelSeasonDto {
@@ -205,6 +235,40 @@ export class FuelSeasonDto {
 export class DeductionRequestDto {
     @ApiProperty({ description: 'true — прошу применять базовый вычет; у другого работодателя не получаю' })
     @IsBoolean() requested: boolean;
+}
+
+/** Тягач или прицеп в «Транспорт» водителя (R4). */
+export class DriverVehicleDto {
+    @ApiProperty({ enum: ['TRACTOR', 'TRAILER'] })
+    @IsIn(['TRACTOR', 'TRAILER'], { message: 'Выберите: тягач или прицеп' })
+    kind: 'TRACTOR' | 'TRAILER';
+
+    @ApiProperty({ example: '123ABC02' })
+    @IsString() @IsNotEmpty({ message: 'Впишите госномер' }) @MaxLength(20)
+    plate: string;
+
+    @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(100) model?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(50) bodyType?: string;
+    @ApiProperty({ required: false, description: 'Грузоподъёмность, кг' })
+    @IsOptional() @IsInt({ message: 'Грузоподъёмность — целым числом, кг' }) @Min(1) @Max(100000) capacityKg?: number;
+    @ApiProperty({ required: false, description: 'Номер техпаспорта' }) @IsOptional() @IsString() @MaxLength(30) regNumber?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsBoolean() isOwn?: boolean;
+}
+
+/** Ещё номера и контакты для документов (Q6) — меняются без повторной проверки. */
+export class DriverContactsDto {
+    @ApiProperty({ type: [String], required: false, description: 'До трёх номеров: второй, третий, зарубежный' })
+    @IsOptional() @IsArray() @ArrayMaxSize(3, { message: 'Дополнительных номеров — не больше трёх' })
+    @IsString({ each: true }) @MaxLength(30, { each: true })
+    extraPhones?: string[];
+
+    @ApiProperty({ required: false, description: 'Почта для бухгалтерских документов' })
+    @IsOptional() @IsString() @MaxLength(120)
+    docsEmail?: string | null;
+
+    @ApiProperty({ required: false, description: 'Кто по документам: имя и телефон' })
+    @IsOptional() @IsString() @MaxLength(200)
+    docsContact?: string | null;
 }
 
 export class DeletionRequestDto {
@@ -251,7 +315,8 @@ export class ParkTripsQueryDto {
     status?: typeof PARK_TRIP_FILTERS[number];
 }
 
-export const PARK_DRIVER_FILTERS = ['pending', 'approved', 'rejected', 'blocked', 'all'] as const;
+/** `draft` — анкета ещё не отправлена: водитель вошёл по коду или его добавил сам парк (Q3). */
+export const PARK_DRIVER_FILTERS = ['pending', 'approved', 'rejected', 'blocked', 'all', 'draft'] as const;
 export type ParkDriverFilter = typeof PARK_DRIVER_FILTERS[number];
 
 export class ParkDriversQueryDto {
@@ -287,4 +352,18 @@ export const PARK_FILTER_STATUSES: Record<ParkDriverFilter, ExchangeDriverStatus
     rejected: ['REJECTED'],
     blocked: ['BLOCKED'],
     all: ['PENDING', 'APPROVED', 'REJECTED', 'BLOCKED'],
+    draft: ['DRAFT'],
 };
+
+/** Заработок LogiCore по паркам — период «ГГГГ-ММ-ДД», оба края включительно. */
+export class ParkEarningsQueryDto {
+    @ApiProperty({ required: false, example: '2026-10-01' })
+    @IsOptional()
+    @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Дата периода — в виде ГГГГ-ММ-ДД' })
+    from?: string;
+
+    @ApiProperty({ required: false, example: '2026-10-31' })
+    @IsOptional()
+    @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Дата периода — в виде ГГГГ-ММ-ДД' })
+    to?: string;
+}

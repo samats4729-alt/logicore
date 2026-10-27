@@ -16,6 +16,7 @@ import {
     Table2,
     TrendingUp,
     Truck,
+    Users,
     Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -79,10 +80,11 @@ const PRESETS: {
 const MORE_REPORTS: { title: string; hint: string; href: string; icon: LucideIcon }[] = [
     { title: 'Отчёт по прибыли', hint: 'доход − себестоимость − расходы', href: '/company/accounting/pnl', icon: ChartColumn },
     { title: 'Прибыль по перевозчику', hint: 'заработок на каждом перевозчике', href: '/company/accounting/carrier-profit', icon: Truck },
+    { title: 'Маржа по менеджерам', hint: 'объём → менеджеры → сделки', href: '/company/accounting/manager-profit', icon: Users },
     { title: 'Реестр заявок', hint: 'деньги по каждой заявке', href: '/company/accounting/registry', icon: Table2 },
     { title: 'Движение денежных средств', hint: 'куда пришли и ушли живые деньги', href: '/company/accounting/cashflow', icon: TrendingUp },
     { title: 'Расходы по статьям', hint: 'структура затрат за период', href: '/company/accounting/expenses-by-category', icon: ChartPie },
-    { title: 'Взаиморасчёты', hint: 'кто кому должен и с какой просрочкой', href: '/company/accounting/counterparty-report', icon: Scale },
+    { title: 'Взаиморасчёты', hint: 'дебет и кредит по контрагентам, просрочка', href: '/company/accounting/counterparty-report', icon: Scale },
 ];
 
 /**
@@ -442,7 +444,7 @@ export default function ReportsPage() {
                     <div className={styles.eyebrow}>Отчёты · Итоги</div>
                     <h1 className={styles.title}>Отчёты компании</h1>
                     <p className={styles.subtitle}>
-                        Сколько заработали, кто кому должен и куда ушли деньги — за любой период.
+                        Прибыль, дебиторская и кредиторская задолженность, движение денег — за любой период.
                     </p>
                 </div>
                 <div className={styles.heroActions}>

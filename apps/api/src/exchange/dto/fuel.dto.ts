@@ -13,8 +13,50 @@ export class FuelReceiptDto {
     amount: string;
 }
 
-/** Парк дал денег на топливо: оплатил на заправке сам или перевёл водителю. */
+/** Водитель просит на топливо или предоплату по рейсу (Q17). */
+export class AdvanceRequestDto {
+    @ApiProperty({ enum: ['FUEL', 'ADVANCE'] })
+    @IsIn(['FUEL', 'ADVANCE'], { message: 'Выберите: топливо или предоплата' })
+    kind: 'FUEL' | 'ADVANCE';
+
+    @ApiProperty({ description: 'Сумма, ₸' })
+    @IsNotEmpty({ message: 'Впишите сумму' })
+    amount: string | number;
+
+    @ApiProperty({ required: false })
+    @IsOptional() @IsString() @MaxLength(300)
+    comment?: string;
+}
+
+/** Решение парка по запросу водителя (Q17). */
+export class AdvanceDecisionDto {
+    @ApiProperty({ enum: ['APPROVE', 'CHECK', 'REUPLOAD', 'REJECT'] })
+    @IsIn(['APPROVE', 'CHECK', 'REUPLOAD', 'REJECT'], { message: 'Неизвестное решение' })
+    action: 'APPROVE' | 'CHECK' | 'REUPLOAD' | 'REJECT';
+
+    @ApiProperty({ required: false, description: 'Что проверяют, что перезагрузить, почему отказ' })
+    @IsOptional() @IsString() @MaxLength(500)
+    note?: string;
+
+    @ApiProperty({ required: false, description: 'Сколько выдать, если не столько, сколько просили' })
+    @IsOptional()
+    amount?: string | number;
+
+    @ApiProperty({ required: false, enum: ['STATION', 'TO_DRIVER'] })
+    @IsOptional() @IsIn(['STATION', 'TO_DRIVER'])
+    method?: 'STATION' | 'TO_DRIVER';
+}
+
+/**
+ * Парк выдал по рейсу сам: топливо (оплатил на заправке или перевёл) или
+ * предоплату водителю (шеф, 27.10.2026). Без вида — топливо, как раньше.
+ */
 export class FuelIssueDto {
+    @ApiProperty({ required: false, enum: ['FUEL', 'ADVANCE'] })
+    @IsOptional()
+    @IsIn(['FUEL', 'ADVANCE'], { message: 'Выберите: топливо или предоплата' })
+    kind?: 'FUEL' | 'ADVANCE';
+
     @ApiProperty({ description: 'Сумма, ₸' })
     @IsNumber({}, { message: 'Сумма — числом' })
     @Min(1, { message: 'Сумма должна быть больше нуля' })

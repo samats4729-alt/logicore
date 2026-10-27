@@ -83,6 +83,12 @@ export interface ExchangeOffer {
         vehicleCapacityKg: number | null;
         tripsCompleted: number;
         since: string;
+        /** Ещё номера и куда слать акты и счета (Q6). Старый сервер не присылает. */
+        extraPhones?: string[];
+        docsEmail?: string | null;
+        docsContact?: string | null;
+        /** Основной прицеп водителя (R4). Старый сервер не присылает. */
+        trailerPlate?: string | null;
     } | null;
     company: { name: string; bin: string | null } | null;
 }
@@ -123,6 +129,8 @@ export interface ExchangeOrderState {
     offersCount: number;
     /** Подсказка: сколько в заявке заложено перевозчику. */
     suggestedPrice: number | null;
+    /** Компания — ИП: на биржу только через парк или приложение водителя (P7). */
+    soleTrader?: boolean;
 }
 
 /** Прошлая перевозка по направлению — биржа или свой рейс. */
@@ -195,6 +203,8 @@ export interface ExchangeStatus {
     enabled: boolean;
     /** Компания — парк: у неё есть раздел «Водители биржи». */
     isPark: boolean;
+    /** Компания — ИП: смотреть биржу можно, выставлять и откликаться — нет (P7). */
+    soleTrader?: boolean;
 }
 
 /**
@@ -215,7 +225,7 @@ export function exchangeStatus(): Promise<ExchangeStatus> {
     if (!statusRequest || statusFor !== who) {
         statusFor = who;
         statusRequest = api.get('/exchange/status')
-            .then((r) => ({ enabled: !!r.data?.enabled, isPark: !!r.data?.isPark }))
+            .then((r) => ({ enabled: !!r.data?.enabled, isPark: !!r.data?.isPark, soleTrader: !!r.data?.soleTrader }))
             .catch(() => {
                 statusRequest = null;
                 return { enabled: false, isPark: false };
@@ -244,6 +254,20 @@ export const DRIVER_DOCUMENT_TITLES: Record<DriverDocumentKind, string> = {
     IP_CERTIFICATE: 'Документ о регистрации ИП',
 };
 
+/** Тягач или прицеп водителя биржи (R4). */
+export interface DriverVehicle {
+    id: string;
+    kind: 'TRACTOR' | 'TRAILER';
+    plate: string;
+    model: string | null;
+    bodyType: string | null;
+    capacityKg: number | null;
+    regNumber: string | null;
+    isOwn: boolean;
+    isMain: boolean;
+    createdAt: string;
+}
+
 export interface ExchangeDriver {
     id: string;
     kind: 'IP' | 'PARK' | null;
@@ -254,6 +278,10 @@ export interface ExchangeDriver {
     middleName: string | null;
     iin: string | null;
     phone: string | null;
+    /** Ещё номера и контакты для документов (Q6). Старый сервер не присылает. */
+    extraPhones?: string[];
+    docsEmail?: string | null;
+    docsContact?: string | null;
     /** Из ИИН — сервер считает сам. */
     birthDate: string | null;
     idNumber: string | null;
@@ -288,7 +316,7 @@ export interface ExchangeDriver {
     missing: string[];
 }
 
-export type ParkDriverFilter = 'pending' | 'approved' | 'rejected' | 'blocked' | 'all';
+export type ParkDriverFilter = 'pending' | 'approved' | 'rejected' | 'blocked' | 'all' | 'draft';
 
 export interface ParkDriverList {
     drivers: ExchangeDriver[];
@@ -354,6 +382,8 @@ export interface ParkTrip {
     } | null;
     /** Чеков на топливо ждут решения парка. */
     fuelReceiptsPending?: number;
+    /** Чеков на топливо по рейсу (принятых и ждущих); 0 — чеков пока не было. Старый сервер не присылает. */
+    fuelReceipts?: number;
     createdAt: string;
     completedAt: string | null;
 }
@@ -366,11 +396,15 @@ export interface ParkTripFuel {
     driverTotal: number | null;
     fuelEstimate: number | null;
     distanceKm: number | null;
-    issued: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string }[] };
+    /** Лимит на топливо в литрах — по расходу парка на 100 км. */
+    fuelLiters?: number | null;
+    issued: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string; byRequest?: boolean }[] };
+    /** Предоплата водителю из суммы на руки: вычитается из выплаты, чек не нужен. */
+    advances?: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string; byRequest?: boolean }[] };
     receipts: {
         accepted: number;
         pending: number;
-        items: { id: string; amount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rejectReason: string | null; createdAt: string }[];
+        items: { id: string; amount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rejectReason: string | null; createdAt: string; byPark?: boolean }[];
     };
     toPay: number | null;
     withoutReceipt: number;
@@ -446,6 +480,8 @@ export interface PayoutRates {
     /** Прогрессивный ИПН: повышенная ставка выше порога годового дохода, МРП. */
     ipnHighPct?: number;
     ipnThresholdMrp?: number;
+    /** Сколько от суммы за рейс водитель может попросить заранее, % (Q17). */
+    advanceLimitPct?: number;
     /** Бухгалтер парка подтвердил ставки и порядок расчёта; пока нет — расчёт «предварительный». */
     confirmedAt?: string | null;
     preliminary?: boolean;
@@ -488,11 +524,15 @@ export interface ParkRegistryLine {
     vat: number;
     parkFee: number;
     platformFee: number;
+    /** Топливо против расчёта по довезённому рейсу: «+» экономия, «−» перерасход (K8). */
+    fuelDiff?: number;
+    /** Прибыль парка по рейсу: комиссия плюс разница по топливу. */
+    parkProfit?: number;
 }
 
 type RegistryTotals = Pick<ParkRegistryLine,
     'driverTotal' | 'fuelIssued' | 'fuelReceipts' | 'gross' | 'opv' | 'vosms' | 'ipn' | 'withheld' | 'so' | 'toBudget'
-    | 'deductionAmount' | 'toPay' | 'paid' | 'customerPrice' | 'vat' | 'parkFee' | 'platformFee'>;
+    | 'deductionAmount' | 'toPay' | 'paid' | 'customerPrice' | 'vat' | 'parkFee' | 'platformFee' | 'fuelDiff' | 'parkProfit'>;
 
 export interface ParkRegistry {
     month: string;

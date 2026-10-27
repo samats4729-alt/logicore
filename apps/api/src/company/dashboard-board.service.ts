@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { managerOrdersFilter } from '../common/manager-orders';
+import { asExecutorSees } from '../orders/order-visibility';
 import { ZERO, toNum } from '../common/utils/money';
 import { KZ_UTC_OFFSET_MINUTES, kzStartOfMonth, kzStartOfToday, kzToday } from '../common/utils/business-date';
 import {
@@ -10,6 +11,7 @@ import {
     ORDER_FINANCE_SELECT,
     orderFinancePayments,
 } from '../accounting/services/finance-calculator.service';
+import { expiringDocuments } from './document-expiry';
 
 /**
  * Расчёты для блоков дашборда-конструктора (макет «LogiCore на shadcn Nova»,
@@ -131,6 +133,43 @@ export class DashboardBoardService {
         };
         const свои = await managerOrdersFilter(this.prisma, { companyId, role: req.role, userId: req.userId });
         return свои ? { AND: [участие, свои] } : участие;
+    }
+
+    // ==================== Первые шаги ====================
+
+    /**
+     * С чего начать новой компании (J5, владелец: «дашборд не пустой при
+     * первом входе»). У новой компании все блоки дашборда — нули и «нет
+     * данных», и первое впечатление — пустота. Блок «Первые шаги» говорит,
+     * что сделать, чтобы данные появились, и отмечает сделанное.
+     *
+     * Только счёт: что уже есть, без самих записей.
+     */
+    async firstSteps(companyId: string) {
+        const [company, counterparties, partnerships, orders, employees] = await Promise.all([
+            this.prisma.company.findUnique({ where: { id: companyId }, select: { verificationStatus: true } }),
+            this.prisma.company.count({ where: { createdByCompanyId: companyId, isExternal: true } }),
+            this.prisma.partnership.count({
+                where: { status: 'ACCEPTED', OR: [{ requesterId: companyId }, { recipientId: companyId }] },
+            }),
+            this.prisma.order.count({
+                where: {
+                    OR: [
+                        { customerCompanyId: companyId },
+                        { forwarderId: companyId },
+                        { partnerId: companyId },
+                        { subForwarderId: companyId },
+                    ],
+                },
+            }),
+            this.prisma.user.count({ where: { companyId, isActive: true, role: { not: UserRole.DRIVER } } }),
+        ]);
+        return {
+            organizationSent: company?.verificationStatus === 'PENDING' || company?.verificationStatus === 'VERIFIED',
+            counterparties: counterparties + partnerships,
+            orders,
+            employees,
+        };
     }
 
     // ==================== Заявки ====================
@@ -421,6 +460,8 @@ export class DashboardBoardService {
                 })),
                 pendingSoon: pendingSoon.map((o) => ({ id: o.id, orderNumber: o.orderNumber, ...route(o), loadingDate: pickupDate(o) })),
                 noTtn: completedNoTtn.map((o) => ({ id: o.id, orderNumber: o.orderNumber, completedAt: o.completedAt })),
+                // Удостоверения водителей, у которых кончается срок (задачи шефа, R5).
+                docsExpiring: await expiringDocuments(this.prisma, req.companyId, now),
             },
         };
     }
@@ -465,7 +506,9 @@ export class DashboardBoardService {
         let cur = { revenue: ZERO, margin: ZERO, cost: ZERO };
         let prev = { revenue: ZERO, margin: ZERO, cost: ZERO };
 
-        for (const o of orders) {
+        for (const raw of orders) {
+            // Перевозчик у экспедитора — по своей ставке (`asExecutorSees`).
+            const o = asExecutorSees(raw, companyId);
             const fin = this.financeCalculator.computeOrderFinance({
                 order: o as any,
                 payments: orderFinancePayments(o as any),

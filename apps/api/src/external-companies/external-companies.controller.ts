@@ -83,6 +83,8 @@ export class ExternalCompaniesController {
         customerPaymentFrom?: string | null;
         carrierPaymentDays?: number | null;
         carrierPaymentFrom?: string | null;
+        customerPaymentBanking?: boolean;
+        carrierPaymentBanking?: boolean;
     }) {
         const result = await this.service.updateSettlementTerms(req.user.companyId, id, dto);
         await this.auditService.log({

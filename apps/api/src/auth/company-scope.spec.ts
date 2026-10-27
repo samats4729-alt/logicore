@@ -29,6 +29,15 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     // Всё ниже отбирается по самому водителю (своя анкета, свои фото).
     'ExchangeStatusController.status': 'включена ли биржа — одно да/нет',
     'ExchangeDriverController.me': 'своя анкета водителя биржи',
+    'ExchangeDriverController.myVehicles': 'свои тягачи и прицепы (R4)',
+    'ExchangeDriverController.addVehicle': 'свои тягачи и прицепы (R4)',
+    'ExchangeDriverController.removeVehicle': 'свои тягачи и прицепы (R4)',
+    'ExchangeDriverController.mainVehicle': 'свои тягачи и прицепы (R4)',
+    'ExchangeDriverController.tripAdvances': 'свои запросы на топливо и аванс по рейсу (Q17)',
+    'ExchangeDriverController.requestAdvance': 'свои запросы на топливо и аванс по рейсу (Q17)',
+    'ExchangeDriverController.cancelAdvance': 'свои запросы на топливо и аванс по рейсу (Q17)',
+    'ExchangeDriverController.resubmitAdvance': 'свои запросы на топливо и аванс по рейсу (Q17)',
+    'ExchangeDriverController.setContacts': 'свои дополнительные номера и почта для документов (Q6)',
     // Push-уведомления (вопрос 26): телефон записывает водитель, в том числе
     // водитель биржи без компании. Только свой — пользователь берётся из входа.
     'NotificationsController.register': 'свой телефон для push-уведомлений',
@@ -52,6 +61,7 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     'ExchangeDriverController.myOffers': 'свои отклики',
     'ExchangeDriverController.joinPark': 'вступить в парк по коду приглашения (своя анкета)',
     'ExchangeDriverController.earnings': 'свой заработок через парк',
+    'ExchangeDriverController.pension': 'свои пенсионные (ОПВ) по рейсам через парк',
     'ExchangeDriverController.setPayoutAccount': 'свой счёт для выплат',
     'ExchangeDriverController.requestPayout': 'запросить свою выплату',
     'ExchangeDriverController.contract': 'свой договор с парком — текст и подписанный экземпляр',

@@ -320,6 +320,8 @@ export default function Board(props: {
     allowed: Set<WidgetId>;
     /** Кнопки справа в шапке («Создать заявку»). */
     actions?: React.ReactNode;
+    /** Над блоками — «С чего начать» у новой компании. */
+    intro?: React.ReactNode;
 }) {
     // Настройки блоков (цвета, вид графиков, свои названия) — на весь дашборд.
     return (
@@ -329,10 +331,11 @@ export default function Board(props: {
     );
 }
 
-function BoardInner({ board, allowed, actions }: {
+function BoardInner({ board, allowed, actions, intro }: {
     board: BoardApi;
     allowed: Set<WidgetId>;
     actions?: React.ReactNode;
+    intro?: React.ReactNode;
 }) {
     const { period, setPeriod, billing, reloadBilling } = useBoardData();
     const meta = useMeta();
@@ -423,6 +426,8 @@ function BoardInner({ board, allowed, actions }: {
                         {actions}
                     </div>
                 </div>
+
+                {intro}
 
                 <div ref={fieldRef} style={{ marginInline: -SLOT_PAD }} data-dashboard-field>
                     <DropGap index={0} height={12} />

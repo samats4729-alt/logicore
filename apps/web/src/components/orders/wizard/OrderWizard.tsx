@@ -40,6 +40,9 @@ interface Partner {
     customerPaymentFrom?: string | null;
     carrierPaymentDays?: number | null;
     carrierPaymentFrom?: string | null;
+    /** Отсрочка в банковских днях (F3). */
+    customerPaymentBanking?: boolean;
+    carrierPaymentBanking?: boolean;
 }
 
 import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEmails';
@@ -58,6 +61,16 @@ import { DriverPicker } from '@/components/orders/DriverPicker';
 import { PartnerPicker } from './PartnerPicker';
 import { ExchangeCarrierCheckbox, ExchangeCarrierSlot, ExchangeOnBoardNote, publishNewOrder, useExchangeForNewOrder, useOrderExchangeState } from './ExchangeOption';
 import { ChoiceField } from './ChoiceField';
+
+/** Частые кузова — сверху окна выбора; остальные — поиском (M4). */
+const FREQUENT_BODY = ['тент', 'рефрижератор', 'изотерм', 'бортовая'];
+const BODY_TYPE_GROUPS = [
+    { label: 'Частые', items: FREQUENT_BODY.map((t) => ({ id: t, title: t })) },
+    {
+        label: 'Все кузова',
+        items: VEHICLE_TYPES.filter((t) => t !== 'не указан' && !FREQUENT_BODY.includes(t)).map((t) => ({ id: t, title: t })),
+    },
+];
 import { DRIVER_CARD_FIELDS, alreadyExistsMessage, fetchDriverPool, tripVehicle, type PoolDriver } from '@/lib/driver-pool';
 
 interface LocationState {
@@ -225,6 +238,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
 
     // Data
     const [locations, setLocations] = useState<Location[]>([]);
+    /** Адреса из последних заявок компании — в окне выбора первой группой. */
+    const [recentLocationIds, setRecentLocationIds] = useState<string[]>([]);
     const [fetchedPartners, setFetchedPartners] = useState<Partner[]>([]);
     /**
      * Стороны загруженной заявки — отдельно от справочника.
@@ -409,6 +424,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     const exchangeAvailable = exchangeEnabled && selectedMyCompanyId === user?.companyId
         && (!editIdProp || (!!editExchange && !editExchange.onExchange && editExchange.canPublish));
     const exchangeChecked = Form.useWatch('onExchange', { form, preserve: true }) === true;
+    /** «Без цены» на бирже (задачи шефа, P4): исполнители предложат свою. */
+    const [exchangeNoPrice, setExchangeNoPrice] = useState(false);
     /** Выставить на биржу при сохранении: в заявке перевозчиком записана наша компания, водителя нет. */
     const exchangeActive = exchangeAvailable && exchangeChecked && isMeCarrier;
     /**
@@ -767,6 +784,9 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
             const response = await api.get('/locations');
             setLocations(response.data);
         } catch (e: any) { reportLoadFailure('справочник адресов', e); }
+        // «Недавние» — удобство, а не данные заявки: не загрузились — окно
+        // просто без этой группы, отдельной ошибки человеку не нужно.
+        api.get('/locations/recent').then((r) => setRecentLocationIds(r.data || [])).catch(() => setRecentLocationIds([]));
     };
 
     const fetchCargoTypes = async () => {
@@ -817,6 +837,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 customerPaymentFrom: e.customerPaymentFrom ?? null,
                 carrierPaymentDays: e.carrierPaymentDays ?? null,
                 carrierPaymentFrom: e.carrierPaymentFrom ?? null,
+                customerPaymentBanking: !!e.customerPaymentBanking,
+                carrierPaymentBanking: !!e.carrierPaymentBanking,
             }));
             const combined = [...partnersList, ...externalList];
             setFetchedPartners(combined);
@@ -852,6 +874,16 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
         const otherLocs = locations.filter(l => !categorizedIds.has(l.id));
 
         const groups: Array<{ label: string; options: Location[] }> = [];
+
+        // Частое — сверху (правило владельца от 27.07): адреса из последних
+        // заявок. Они же остаются в своих группах ниже — поиск и фильтр по
+        // контрагенту находят их и там.
+        const recentLocs = recentLocationIds
+            .map((id) => locations.find((l) => l.id === id))
+            .filter((l): l is Location => !!l);
+        if (recentLocs.length > 0) {
+            groups.push({ label: 'Недавние', options: recentLocs });
+        }
 
         if (customerLocs.length > 0) {
             const currentMyCompanyName = myCompanies.find(c => c.id === selectedMyCompanyId)?.name || myCompanyName;
@@ -959,6 +991,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 return false;
             }
             if (exchangeActive) {
+                if (exchangeNoPrice) return true;
                 try {
                     await form.validateFields(['exchangePrice']);
                     return true;
@@ -1220,7 +1253,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 // форма — один состав заявки.
                 await api.put(`/orders/${editingId}`, orderData);
                 if (exchangeActive) {
-                    await publishNewOrder({ id: editingId, orderNumber: editingNumber }, Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`), 'сохранена');
+                    await publishNewOrder({ id: editingId, orderNumber: editingNumber }, exchangeNoPrice ? null : Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`), 'сохранена');
                 } else {
                     toast.success('Заявка сохранена');
                 }
@@ -1232,7 +1265,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 черновикЗакрыт.current = true;
                 if (черновикКлюч) clearDraft(черновикКлюч);
                 if (exchangeActive) {
-                    await publishNewOrder(created, Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`));
+                    await publishNewOrder(created, exchangeNoPrice ? null : Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`));
                 } else {
                     toast.success('Заявка создана!');
                 }
@@ -1414,17 +1447,27 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     {exchangeActive && (
                         <div className="min-w-[200px] flex-1">
                             {/* Та же цена, что спрашивает кнопка «Выставить на биржу» в карточке. */}
-                            <Form.Item
-                                name="exchangePrice"
-                                label="Цена для исполнителя на бирже"
-                                rules={[{
-                                    validator: (_, v) => (Number(v) > 0
-                                        ? Promise.resolve()
-                                        : Promise.reject(new Error('Укажите цену — исполнители согласятся на неё или предложат свою'))),
-                                }]}
-                            >
-                                <MoneyInput addonAfter="KZT" aria-label="Цена для исполнителя на бирже" />
-                            </Form.Item>
+                            {!exchangeNoPrice && (
+                                <Form.Item
+                                    name="exchangePrice"
+                                    label="Цена для исполнителя на бирже"
+                                    // Экспедитору две цены рядом путались (P4): говорим, чем они разные.
+                                    extra={showCustomerPriceField
+                                        ? 'Сколько получит исполнитель. «Ставка от заказчика» — сколько заказчик платит вам; на бирже её не видно.'
+                                        : undefined}
+                                    rules={[{
+                                        validator: (_, v) => (Number(v) > 0
+                                            ? Promise.resolve()
+                                            : Promise.reject(new Error('Укажите цену — исполнители согласятся на неё или предложат свою'))),
+                                    }]}
+                                >
+                                    <MoneyInput addonAfter="KZT" aria-label="Цена для исполнителя на бирже" />
+                                </Form.Item>
+                            )}
+                            <label className="-mt-2 mb-3 flex cursor-pointer items-center gap-2 text-[12.5px] text-muted-foreground">
+                                <Checkbox checked={exchangeNoPrice} onCheckedChange={(c) => setExchangeNoPrice(c === true)} />
+                                Без цены — пусть исполнители предложат свою
+                            </label>
                         </div>
                     )}
                     {showDriverCostField && (
@@ -1466,12 +1509,12 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                         <div className="min-w-0 flex-1 text-muted-foreground">
                             {[
                                 customerTerms && `заказчик — ${vatLabel(customerTerms.vatPayer, customerTerms.vatRate)}`
-                                    + (paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom)
-                                        ? `, оплата ${paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom)}`
+                                    + (paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom, customerTerms.customerPaymentBanking)
+                                        ? `, оплата ${paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom, customerTerms.customerPaymentBanking)}`
                                         : ', срок оплаты не указан'),
                                 carrierTerms && `перевозчик — ${vatLabel(carrierTerms.vatPayer, carrierTerms.vatRate)}`
-                                    + (paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom)
-                                        ? `, платим ${paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom)}`
+                                    + (paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom, carrierTerms.carrierPaymentBanking)
+                                        ? `, платим ${paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom, carrierTerms.carrierPaymentBanking)}`
                                         : ', срок оплаты не указан'),
                             ].filter(Boolean).join(' · ')}
                         </div>
@@ -1576,14 +1619,6 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                     <UiInput className={FIELD} placeholder="Иванович" />
                                 </Form.Item>
                             </div>
-                            <div className="grid gap-x-3 sm:grid-cols-2">
-                                <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите телефон' }]}>
-                                    <UiInput className={FIELD} placeholder="+77001234567" />
-                                </Form.Item>
-                                <Form.Item name="iin" label="ИИН">
-                                    <UiInput className={FIELD} placeholder="123456789012" maxLength={12} />
-                                </Form.Item>
-                            </div>
 
                             <SubTitle>Документ</SubTitle>
                             <div className="grid gap-x-3 sm:grid-cols-2">
@@ -1604,20 +1639,36 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                 <Form.Item name="docIssuedAt" label="Дата выдачи">
                                     <DateField style={{ width: '100%' }} />
                                 </Form.Item>
+                                <Form.Item name="docIssuedBy" label="Кем выдан">
+                                    <UiInput className={FIELD} placeholder="МВД РК" />
+                                </Form.Item>
                                 <Form.Item name="docExpiresAt" label="Срок действия">
                                     <DateField style={{ width: '100%' }} />
                                 </Form.Item>
-                                <Form.Item name="docIssuedBy" label="Кем выдан">
-                                    <UiInput className={FIELD} placeholder="МВД РК" />
+                            </div>
+
+                            {/* Порядок, как просил шеф (E1): ФИО → удостоверение → телефон → машина. */}
+                            <SubTitle>Связь</SubTitle>
+                            <div className="grid gap-x-3 sm:grid-cols-2">
+                                <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите телефон' }]}>
+                                    <UiInput className={FIELD} placeholder="+77001234567" />
+                                </Form.Item>
+                                <Form.Item name="iin" label="ИИН">
+                                    <UiInput className={FIELD} placeholder="123456789012" maxLength={12} />
                                 </Form.Item>
                             </div>
 
                             <SubTitle>Машина</SubTitle>
                             <div className="grid gap-x-3 sm:grid-cols-2">
                                 <Form.Item name="vehicleType" label="Тип транспорта">
-                                    <FormSelect
+                                    <ChoiceField
+                                        aria-label="Тип транспорта"
+                                        title="Тип кузова"
                                         placeholder="Выберите тип кузова"
-                                        options={VEHICLE_TYPES.map(t => ({ value: t, label: t }))}
+                                        searchPlaceholder="Например: тент, реф, борт"
+                                        recentKey="body-type"
+                                        onChange={() => undefined}
+                                                    groups={BODY_TYPE_GROUPS}
                                     />
                                 </Form.Item>
                                 <Form.Item name="vehicleModel" label="Модель автомобиля">
@@ -1815,10 +1866,17 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                         />
                     </Form.Item>
                     <Form.Item name="cargoType" label="Тип кузова">
-                        <FormSelect
+                        {/* Кузовов полсотни — окно с поиском и частыми сверху (задачи шефа, M4). */}
+                        <ChoiceField
+                            aria-label="Тип кузова"
+                            title="Тип кузова"
                             placeholder="Тент, реф…"
+                            searchPlaceholder="Например: тент, реф, борт"
                             allowClear
-                            options={VEHICLE_TYPES.map(t => ({ value: t, label: t }))}
+                            clearLabel="Не указан"
+                            recentKey="body-type"
+                            onChange={() => undefined}
+                            groups={BODY_TYPE_GROUPS}
                         />
                     </Form.Item>
                 </div>
@@ -1985,6 +2043,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 {/* Сбросить — забыть набранное и начать с пустой формы. Только у
                     новой заявки: у правки источник — сама заявка. */}
                 {!editingId && <ResetButton onConfirm={начатьЗаново} />}
+                {/* Подсказка про клавиши (задачи шефа, E3). */}
+                <span className="hidden text-[12px] text-muted-foreground md:inline">Enter или Tab — к следующему полю</span>
                 <div className="ml-auto flex items-center gap-2">
                     <Button variant="outline" size="sm" className="h-8 rounded-lg px-3 text-[13px] font-normal" onClick={onClose}>
                         Отмена

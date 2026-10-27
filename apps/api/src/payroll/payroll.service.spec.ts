@@ -521,6 +521,26 @@ describe('PayrollService.pendingPercent — проценты, которые е�
         expect(pending[0]).toMatchObject({ orderNumber: '001', reason: 'in_progress', amount: 25000 });
     });
 
+    it('процент придёт после оплаты, а отсрочка у рейса не задана — подсказка «укажите отсрочку» (K3)', async () => {
+        const service = build({ accrualStatus: 'CUSTOMER_PAID', percentBase: 'MARGIN', percentValue: 10 }, [
+            order({ id: 'o1', orderNumber: '001', status: 'COMPLETED', isCustomerPaid: false, customerPaymentDays: null }),
+            order({ id: 'o2', orderNumber: '002', status: 'COMPLETED', isCustomerPaid: false, customerPaymentDays: 15 }),
+        ]);
+
+        const pending = (await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)!;
+
+        expect(pending.find((p) => p.orderNumber === '001')?.customerTermsMissing).toBe(true);
+        expect(pending.find((p) => p.orderNumber === '002')?.customerTermsMissing).toBe(false);
+    });
+
+    it('процент после завершения рейса — отсрочка заказчика ему не нужна, подсказки нет', async () => {
+        const service = build({ accrualStatus: 'COMPLETED', percentBase: 'ORDER_AMOUNT', percentValue: 5 }, [
+            order({ id: 'o1', orderNumber: '001', status: 'IN_TRANSIT', customerPaymentDays: null }),
+        ]);
+
+        expect((await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)![0].customerTermsMissing).toBe(false);
+    });
+
     it('уже начисленный процент в ожидании не числится', async () => {
         const service = build({ accrualStatus: 'CUSTOMER_PAID' }, [
             order({ id: 'o1', orderNumber: '001', status: 'COMPLETED', isCustomerPaid: false }),
@@ -829,5 +849,111 @@ describe('PayrollService.planTrips — за какие рейсы бонус з�
         expect(prisma.order.findMany.mock.calls[0][0].where).toEqual(prisma.order.count.mock.calls[0][0].where);
         // Только завершённые рейсы этого человека в этом месяце.
         expect(JSON.stringify(prisma.order.findMany.mock.calls[0][0].where)).toContain('"status":"COMPLETED"');
+    });
+});
+
+describe('схема «процент, когда заказчик оплатил в срок» (K1)', () => {
+    function build(lastPaymentDay: string | null, extra: Record<string, any> = {}) {
+        const prisma: any = makePrismaMock();
+        prisma.order.findUnique.mockResolvedValue(makeOrder({
+            responsibles: [{ companyId: COMPANY, userId: MANAGER }],
+            isCustomerPaid: true,
+            customerPaymentDate: new Date('2026-10-20T00:00:00Z'),
+            customerPaidAt: new Date('2026-10-30T10:00:00Z'),
+            ...extra,
+        }));
+        prisma.payrollScheme.findFirst.mockResolvedValue(percentScheme({ accrualStatus: 'CUSTOMER_PAID_ON_TIME' }));
+        prisma.payrollAccrual.findUnique.mockResolvedValue(null);
+        prisma.closedPeriod.findUnique.mockResolvedValue(null);
+        prisma.payment.findFirst = jest.fn().mockResolvedValue(lastPaymentDay ? { date: new Date(`${lastPaymentDay}T00:00:00Z`) } : null);
+        prisma.paymentOrderShare.findFirst = jest.fn().mockResolvedValue(null);
+        return { prisma, service: new PayrollService(prisma, new FinanceCalculatorService()) };
+    }
+
+    it('заплатил в срок — процент начисляется', async () => {
+        const { prisma, service } = build('2026-10-20');
+
+        await service.processOrderTrigger(ORDER, 'CUSTOMER_PAID');
+
+        expect(prisma.payrollAccrual.create).toHaveBeenCalled();
+    });
+
+    it('заплатил позже срока — бонус не начисляется', async () => {
+        const { prisma, service } = build('2026-10-21');
+
+        await service.processOrderTrigger(ORDER, 'CUSTOMER_PAID');
+
+        expect(prisma.payrollAccrual.create).not.toHaveBeenCalled();
+        expect(prisma.payrollAccrual.update).not.toHaveBeenCalled();
+    });
+
+    it('день оплаты — по платежу, а не по дню, когда его внесли', async () => {
+        // Внесли 30-го, но платёж датирован 19-м: заплатили в срок.
+        const { prisma, service } = build('2026-10-19');
+
+        await service.processOrderTrigger(ORDER, 'CUSTOMER_PAID');
+
+        expect(prisma.payrollAccrual.create).toHaveBeenCalled();
+    });
+
+    it('срока оплаты у рейса нет — опоздать нельзя, процент начисляется', async () => {
+        const { prisma, service } = build('2026-12-01', { customerPaymentDate: null });
+
+        await service.processOrderTrigger(ORDER, 'CUSTOMER_PAID');
+
+        expect(prisma.payrollAccrual.create).toHaveBeenCalled();
+    });
+
+    it('схема «просто оплатил» на просрочку не смотрит', async () => {
+        const { prisma, service } = build('2026-10-25');
+        prisma.payrollScheme.findFirst.mockResolvedValue(percentScheme({ accrualStatus: 'CUSTOMER_PAID' }));
+
+        await service.processOrderTrigger(ORDER, 'CUSTOMER_PAID');
+
+        expect(prisma.payrollAccrual.create).toHaveBeenCalled();
+        expect(prisma.payment.findFirst).not.toHaveBeenCalled();
+    });
+});
+
+describe('прогноз бонуса по сроку оплаты (K1)', () => {
+    function build(accrualStatus: string, orders: any[]) {
+        const prisma: any = makePrismaMock();
+        prisma.order.findMany = jest.fn().mockResolvedValue(orders);
+        prisma.payrollScheme.findFirst.mockResolvedValue(percentScheme({ accrualStatus, percentBase: 'ORDER_AMOUNT', percentValue: 5 }));
+        prisma.payment.findMany.mockResolvedValue([]);
+        prisma.income.findMany.mockResolvedValue([]);
+        prisma.expense.findMany.mockResolvedValue([]);
+        return new PayrollService(prisma, new FinanceCalculatorService());
+    }
+    const order = (o: Record<string, any>) => makeOrder({
+        responsibles: [{ companyId: COMPANY, userId: MANAGER }], status: 'COMPLETED', isCustomerPaid: false, ...o,
+    });
+    const past = new Date(Date.now() - 3 * 864e5);
+    const future = new Date(Date.now() + 3 * 864e5);
+
+    it('у рейса видна дата, когда заказчик должен заплатить', async () => {
+        const service = build('CUSTOMER_PAID', [order({ id: 'o1', orderNumber: '001', customerPaymentDate: future })]);
+
+        const [trip] = (await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)!;
+
+        expect(trip.expectedAt).toBe(future.toISOString().slice(0, 10));
+        expect(trip.overdue).toBe(false);
+        expect(trip.reason).toBe('unpaid');
+    });
+
+    it('«в срок»: срок прошёл без оплаты — бонуса уже не будет', async () => {
+        const service = build('CUSTOMER_PAID_ON_TIME', [order({ id: 'o1', orderNumber: '001', customerPaymentDate: past })]);
+
+        const [trip] = (await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)!;
+
+        expect(trip).toMatchObject({ overdue: true, reason: 'overdue_lost' });
+    });
+
+    it('«просто оплатил»: просрочка — ещё ждём, бонус не пропадает', async () => {
+        const service = build('CUSTOMER_PAID', [order({ id: 'o1', orderNumber: '001', customerPaymentDate: past })]);
+
+        const [trip] = (await service.pendingPercent(COMPANY, [MANAGER])).get(MANAGER)!;
+
+        expect(trip).toMatchObject({ overdue: true, reason: 'unpaid' });
     });
 });

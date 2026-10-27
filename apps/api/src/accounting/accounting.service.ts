@@ -360,6 +360,13 @@ export class AccountingService {
         return this.settingsService.upsertCounterpartyOpening(companyId, counterpartyId, data);
     }
 
+    async importCounterpartyOpenings(
+        companyId: string,
+        data: { openingDate?: string | null; note?: string | null; rows?: Array<{ counterpartyId?: string; receivable?: number; payable?: number }> },
+    ) {
+        return this.settingsService.importCounterpartyOpenings(companyId, data);
+    }
+
     async getFinanceCategories(companyId: string) {
         return this.settingsService.getFinanceCategories(companyId);
     }
@@ -430,6 +437,14 @@ export class AccountingService {
 
     async getCarrierProfitReport(companyId: string, query: { startDate?: string; endDate?: string }) {
         return this.reportsService.getCarrierProfitReport(companyId, query);
+    }
+
+    async getManagerProfitReport(
+        companyId: string,
+        query: { startDate?: string; endDate?: string },
+        viewer: { role?: string | null; userId?: string | null },
+    ) {
+        return this.reportsService.getManagerProfitReport(companyId, query, viewer);
     }
 
     async getExpensesByCategoryReport(companyId: string, query: { startDate?: string; endDate?: string }) {

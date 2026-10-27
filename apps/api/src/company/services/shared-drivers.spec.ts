@@ -46,6 +46,8 @@ const водитель = (сверху: any = {}) => ({
 
 function makeService(водители: any[], рейсы: any[] = []) {
     const prisma: any = {
+        // Чёрный список компании пуст (F5/S2).
+        companyBlocklist: { findFirst: jest.fn().mockResolvedValue(null) },
         company: {
             findMany: jest.fn().mockResolvedValue(БАЗА),
             // Перевозчик, под которым заводят, — наш внешний контрагент.

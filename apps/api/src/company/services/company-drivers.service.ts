@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { компанииБазы, телефонДляСравнения } from '../../common/driver-pool';
+import { assertNotBlocked } from '../../blocklist/blocklist';
 
 @Injectable()
 export class CompanyDriversService {
@@ -236,6 +237,11 @@ export class CompanyDriversService {
             }
         }
 
+        // Мошенника из своего чёрного списка заново не заведёшь (S2).
+        await assertNotBlocked(this.prisma, requesterCompanyId ?? companyId, {
+            binIin: [data.iin], phones: [data.phone], plates: [data.vehiclePlate],
+        });
+
         // Пароль для мобильного приложения хранится только в виде хеша
         const { password, ...driverData } = data;
         const passwordHash = password ? await bcrypt.hash(password, 12) : undefined;
@@ -326,6 +332,9 @@ export class CompanyDriversService {
         docExpiresAt?: Date;
         docIssuedBy?: string;
     }) {
+        await assertNotBlocked(this.prisma, requesterCompanyId, {
+            binIin: [data.iin], phones: [data.phone], plates: [data.vehiclePlate],
+        });
         const { password, ...driverData } = data;
         const passwordHash = password ? await bcrypt.hash(password, 12) : undefined;
 
@@ -534,6 +543,13 @@ export class CompanyDriversService {
         if (!(await this.водительВБазе(driver, companyId))) {
             throw new ForbiddenException('У вас нет доступа к этому водителю');
         }
+
+        // Чёрный список — только для того, что меняют сейчас (S2).
+        await assertNotBlocked(this.prisma, companyId, {
+            binIin: [data.iin && data.iin !== driver.iin ? data.iin : null],
+            phones: [data.phone && data.phone !== driver.phone ? data.phone : null],
+            plates: [data.vehiclePlate && data.vehiclePlate !== driver.vehiclePlate ? data.vehiclePlate : null],
+        });
 
         // Телефон водителя — это его вход в мобильное приложение. Два водителя
         // с одинаковым номером сделали бы вход неоднозначным, поэтому меняем

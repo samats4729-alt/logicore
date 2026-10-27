@@ -65,7 +65,8 @@ test.describe('Журнал счетов: долг целиком', () => {
 
         await page.getByRole('tab', { name: 'Входящие' }).click();
         await expect(page.getByText('Кредиторка', { exact: true })).toBeVisible();
-        await expect(page.getByText('всего должны мы на сегодня')).toBeVisible();
+        // Слова — бухгалтерские (владелец, 25.10.2026): сальдо, а не «должны мы».
+        await expect(page.getByText('сальдо по кредиту на сегодня')).toBeVisible();
     });
 
     test('календарь не молчит о долге, для которого счёт не выставлен', async ({ page }) => {

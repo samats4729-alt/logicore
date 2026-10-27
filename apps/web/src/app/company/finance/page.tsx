@@ -28,6 +28,7 @@ import type { LucideIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { BETA_LABEL, betaStateOf } from '@/lib/beta-sections';
+import { canViewPayroll } from '@/lib/section-access';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { toast } from 'sonner';
@@ -188,12 +189,12 @@ export default function FinanceHubPage() {
             ],
         },
         {
-            title: 'Долги и остатки',
+            title: 'Взаиморасчёты и остатки',
             icon: Scale,
             links: [
-                { label: 'Взаиморасчёты', href: '/company/accounting/counterparty-report', show: acc, icon: Scale, desc: 'Кто кому должен, просрочка, сверка', full: 'Кто кому должен — по каждому контрагенту, с просрочкой и актом сверки' },
+                { label: 'Взаиморасчёты', href: '/company/accounting/counterparty-report', show: acc, icon: Scale, desc: 'Дебет и кредит по контрагентам, сверка', full: 'Дебиторская и кредиторская задолженность по каждому контрагенту, с просрочкой и актом сверки' },
                 { label: 'Остатки по кассам', href: '/company/accounting/balances', show: acc, icon: Wallet, desc: 'Сколько денег на счетах и в кассах', full: 'Сколько денег сейчас на счетах и в кассах' },
-                { label: 'Ввод начальных остатков', href: '/company/accounting/opening-balances', show: acc, icon: Flag, desc: 'Стартовые суммы при запуске учёта', full: 'Стартовые суммы на счетах и долги контрагентов при запуске учёта' },
+                { label: 'Ввод начальных остатков', href: '/company/accounting/opening-balances', show: acc, icon: Flag, desc: 'Стартовые суммы при запуске учёта', full: 'Стартовые суммы на счетах и сальдо по контрагентам при запуске учёта' },
             ],
         },
         {
@@ -212,7 +213,7 @@ export default function FinanceHubPage() {
             title: 'Зарплата',
             icon: Users,
             links: [
-                { label: 'Зарплата', href: '/company/payroll', show: acc && isAdmin, icon: Users, desc: 'Начисления и выплаты сотрудникам' },
+                { label: 'Зарплата', href: '/company/payroll', show: acc && canViewPayroll(user), icon: Users, desc: 'Начисления и выплаты сотрудникам' },
                 { label: 'Моя зарплата', href: '/company/my-salary', show: hasSalary, icon: Users, desc: 'Сколько начислено вам' },
             ],
         },
@@ -275,7 +276,7 @@ export default function FinanceHubPage() {
                     <div className={styles.eyebrow}>Деньги · Каждый день</div>
                     <h1 className={styles.title}>Деньги и документы компании</h1>
                     <p className={styles.subtitle}>
-                        Счета, оплаты и долги. Отчёты — в своём разделе, справочники — в «Кабинете».
+                        Счета, оплаты и взаиморасчёты. Отчёты — в своём разделе, справочники — в «Кабинете».
                     </p>
                 </div>
                 {acc && (
@@ -333,19 +334,19 @@ export default function FinanceHubPage() {
                         label="Дебиторка"
                         value={formatAmount(summary.debtorSum || 0, compact)}
                         title={exactAmount(summary.debtorSum || 0)}
-                        sub="ждём от заказчиков"
+                        sub="задолженность заказчиков"
                     />
                     <Kpi
                         label="Кредиторка"
                         value={formatAmount(summary.creditorSum || 0, compact)}
                         title={exactAmount(summary.creditorSum || 0)}
-                        sub="должны перевозчикам"
+                        sub="задолженность перевозчикам"
                     />
                     <Kpi
-                        label="Рейсы с долгом"
+                        label="Неоплаченные рейсы"
                         value={String(summary.unpaidOrdersCount ?? 0)}
                         sub="заявок не оплачено"
-                        chip={(summary.unpaidOrdersCount ?? 0) > 0 ? 'долг' : undefined}
+                        chip={(summary.unpaidOrdersCount ?? 0) > 0 ? 'к оплате' : undefined}
                         chipTone="warn"
                     />
                 </div>

@@ -5,7 +5,10 @@ import { ExchangeOrder, груз, деньги, когдаПросто, чере
 import { Badge, Card, Route } from '@/components/kit';
 import { FONT } from '@/lib/theme';
 
-/** Заявка в ленте: маршрут, когда, что везём, сколько получите на руки. Нажатие — карточка. */
+/**
+ * Заявка в ленте: маршрут, когда, что везём, сумма за рейс и сколько из неё
+ * на руки (шеф, 27.10.2026; старый сервер — только на руки). Нажатие — карточка.
+ */
 export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: () => void }) {
     const { colors } = useAppTheme();
     const via = черезТочки(order);
@@ -17,8 +20,17 @@ export function LoadCard({ order, onPress }: { order: ExchangeOrder; onPress: ()
                     <Text style={[styles.dateText, { color: colors.textSecondary }]}>{когдаПросто(order.loadingDate)}</Text>
                 </View>
                 <View style={styles.priceBox}>
-                    <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'договорная'}</Text>
-                    {order.price != null && <Text style={[styles.priceNote, { color: colors.textTertiary }]}>на руки</Text>}
+                    {order.trip ? (
+                        <>
+                            <Text style={[styles.price, { color: colors.text }]}>{деньги(order.trip.total)}</Text>
+                            <Text style={[styles.priceNote, { color: colors.textTertiary }]}>за рейс · на руки {деньги(order.trip.onHand)}</Text>
+                        </>
+                    ) : (
+                        <>
+                            <Text style={[styles.price, { color: colors.text }]}>{order.price != null ? деньги(order.price) : 'договорная'}</Text>
+                            {order.price != null && <Text style={[styles.priceNote, { color: colors.textTertiary }]}>на руки</Text>}
+                        </>
+                    )}
                 </View>
             </View>
             <Route from={order.from} fromAddress={via} to={order.to} />

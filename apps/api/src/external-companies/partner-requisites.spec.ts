@@ -23,6 +23,8 @@ function служба(карточка: Record<string, any> = {}) {
         ...карточка,
     };
     const prisma: any = {
+        // Чёрный список компании пуст (F5/S2).
+        companyBlocklist: { findFirst: jest.fn().mockResolvedValue(null) },
         company: {
             findUnique: jest.fn(async () => запись),
             findFirst: jest.fn(async () => null),

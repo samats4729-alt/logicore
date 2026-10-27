@@ -190,6 +190,11 @@ export class UpdateCompanyProfileDto {
     @IsBoolean()
     @IsOptional()
     invoiceApprovalRequired?: boolean;
+
+    @ApiProperty({ description: 'Договор-заявка перевозчику — автоматически по каждой сделке (A14)', required: false })
+    @IsBoolean()
+    @IsOptional()
+    autoContractRequest?: boolean;
 }
 
 export class CreateDriverDto {
@@ -464,6 +469,16 @@ export class CreateVehicleDto {
     @IsString()
     @IsOptional()
     driverId?: string;
+
+    @ApiProperty({ description: 'Страховка машины действует до, ГГГГ-ММ-ДД (R5)', required: false, nullable: true })
+    @IsDateString({}, { message: 'Срок страховки — дата вида 31.12.2026' })
+    @IsOptional()
+    insuranceUntil?: string | null;
+
+    @ApiProperty({ description: 'Техосмотр действует до, ГГГГ-ММ-ДД (R5)', required: false, nullable: true })
+    @IsDateString({}, { message: 'Срок техосмотра — дата вида 31.12.2026' })
+    @IsOptional()
+    inspectionUntil?: string | null;
 }
 
 export class UpdateVehicleDto {
@@ -491,6 +506,16 @@ export class UpdateVehicleDto {
     @IsString()
     @IsOptional()
     driverId?: string;
+
+    @ApiProperty({ description: 'Страховка машины действует до, ГГГГ-ММ-ДД (R5)', required: false, nullable: true })
+    @IsDateString({}, { message: 'Срок страховки — дата вида 31.12.2026' })
+    @IsOptional()
+    insuranceUntil?: string | null;
+
+    @ApiProperty({ description: 'Техосмотр действует до, ГГГГ-ММ-ДД (R5)', required: false, nullable: true })
+    @IsDateString({}, { message: 'Срок техосмотра — дата вида 31.12.2026' })
+    @IsOptional()
+    inspectionUntil?: string | null;
 }
 
 

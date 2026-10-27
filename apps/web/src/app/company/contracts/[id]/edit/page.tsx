@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Input, Collapse, Popconfirm, Tooltip, Select } from 'antd';
-import { ArrowLeft, Loader2, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, RotateCcw, Save, Send, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import ContractCollabPanel, { type CollabState } from '@/components/contracts/ContractCollabPanel';
 import nova from '@/components/nova/nova.module.css';
 import RequisitesFields, {
     type ПравкиРеквизитов, type СтрокаРеквизитов,
@@ -67,6 +69,13 @@ export default function EditContractContentPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+    // Согласование текста со второй стороной (G6): можно ли сохранять
+    // напрямую или правки уходят предложением.
+    const [collab, setCollab] = useState<CollabState | null>(null);
+    const [collabKey, setCollabKey] = useState(0);
+    const [proposeOpen, setProposeOpen] = useState(false);
+    const [proposeSummary, setProposeSummary] = useState('');
+    const proposeMode = !!collab && !collab.directEditAllowed;
     /**
      * Какие статьи раскрыты.
      *
@@ -178,13 +187,36 @@ export default function EditContractContentPage() {
     };
 
     const handleSave = async () => {
+        if (proposeMode) { setProposeOpen(true); return; }
         try {
             setSaving(true);
             await api.put(`/contracts/${contractId}/content`, { content: articles });
             toast.success('Текст договора сохранён');
             setHasChanges(false);
+            setCollabKey((k) => k + 1);
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Ошибка сохранения');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Отправить правки второй стороне. Пока она не примет, в договоре
+     * действует прежний текст — его и показываем снова, а предложение
+     * видно в блоке «Согласование текста».
+     */
+    const handlePropose = async () => {
+        try {
+            setSaving(true);
+            await api.post(`/contracts/${contractId}/proposals`, { content: articles, summary: proposeSummary });
+            toast.success(`Правки отправлены: ${collab?.otherSide?.name ?? 'вторая сторона'} увидит их и примет или отклонит`);
+            setProposeOpen(false);
+            setProposeSummary('');
+            await fetchContent();
+            setCollabKey((k) => k + 1);
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || 'Не удалось отправить правки');
         } finally {
             setSaving(false);
         }
@@ -196,6 +228,7 @@ export default function EditContractContentPage() {
             await api.post(`/contracts/${contractId}/reset-content`);
             toast.success('Текст сброшен к шаблону по умолчанию');
             await fetchContent();
+            setCollabKey((k) => k + 1);
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Ошибка сброса');
         } finally {
@@ -416,25 +449,29 @@ export default function EditContractContentPage() {
                     <Button variant="ghost" onClick={() => router.back()}>
                         <ArrowLeft className="h-4 w-4" /> Назад
                     </Button>
-                    <Popconfirm
-                        title="Сбросить текст к шаблону по умолчанию?"
-                        description="Все ваши изменения будут потеряны."
-                        onConfirm={handleReset}
-                        okText="Да, сбросить"
-                        cancelText="Отмена"
-                    >
-                        <Button variant="outline" className="text-destructive" disabled={saving}>
-                            {saving
-                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                : <RotateCcw className="h-4 w-4" />}
-                            Сбросить к шаблону
-                        </Button>
-                    </Popconfirm>
+                    {/* Сброс к шаблону — та же правка текста: где текст
+                        согласуется со второй стороной, его так не меняют. */}
+                    {!proposeMode && (
+                        <Popconfirm
+                            title="Сбросить текст к шаблону по умолчанию?"
+                            description="Все ваши изменения будут потеряны."
+                            onConfirm={handleReset}
+                            okText="Да, сбросить"
+                            cancelText="Отмена"
+                        >
+                            <Button variant="outline" className="text-destructive" disabled={saving}>
+                                {saving
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : <RotateCcw className="h-4 w-4" />}
+                                Сбросить к шаблону
+                            </Button>
+                        </Popconfirm>
+                    )}
                     <Button onClick={handleSave} disabled={saving || !hasChanges}>
                         {saving
                             ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <Save className="h-4 w-4" />}
-                        Сохранить
+                            : proposeMode ? <Send className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                        {proposeMode ? 'Предложить правки' : 'Сохранить'}
                     </Button>
                 </div>
             </div>
@@ -447,9 +484,18 @@ export default function EditContractContentPage() {
                     background: 'var(--nova-warn-soft)', color: 'var(--nova-warn)',
                     fontSize: 12.5,
                 }}>
-                    Есть несохранённые изменения
+                    {proposeMode
+                        ? 'Есть изменения — чтобы они вошли в договор, предложите их второй стороне'
+                        : 'Есть несохранённые изменения'}
                 </div>
             )}
+
+            <ContractCollabPanel
+                contractId={contractId}
+                reloadKey={collabKey}
+                onLoaded={setCollab}
+                onTextChanged={fetchContent}
+            />
 
             {/* ===== EDITOR CARD ===== */}
             <div className="lc-card" style={{ padding: '24px', marginTop: 0 }}>
@@ -648,11 +694,39 @@ export default function EditContractContentPage() {
                     <Button onClick={handleSave} disabled={saving}>
                         {saving
                             ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <Save className="h-4 w-4" />}
-                        Сохранить изменения
+                            : proposeMode ? <Send className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                        {proposeMode ? 'Предложить правки' : 'Сохранить изменения'}
                     </Button>
                 </div>
             )}
+
+            <Dialog open={proposeOpen} onOpenChange={(next) => { if (!saving) setProposeOpen(next); }}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="text-[15px]">Предложить правки: {collab?.otherSide?.name ?? 'вторая сторона'}</DialogTitle>
+                    </DialogHeader>
+                    <div className="text-[13px] leading-snug text-muted-foreground">
+                        Вторая сторона увидит, какие пункты изменились, и примет или отклонит правки.
+                        До её решения в договоре действует прежний текст.
+                    </div>
+                    <textarea
+                        aria-label="Пояснение к правкам"
+                        value={proposeSummary}
+                        onChange={(e) => setProposeSummary(e.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        placeholder="Коротко, что и зачем меняете — например: срок оплаты 15 дней вместо 30"
+                        className="w-full resize-y rounded-xl border border-solid border-input bg-background px-3 py-2 text-[13px] [font-family:inherit]"
+                    />
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setProposeOpen(false)} disabled={saving}>Отмена</Button>
+                        <Button onClick={handlePropose} disabled={saving}>
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            Отправить
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -24,6 +24,8 @@ interface Step {
      * пустая. Такой шаг ждёт, пока человек сам нажмёт «Дальше».
      */
     fill?: boolean;
+    /** Шаг без подсветки ждёт «Дальше», а не уходит сам (знакомство с кабинетом, J7). */
+    wait?: boolean;
 }
 
 interface TicketDraft {
@@ -275,6 +277,13 @@ export default function AssistantWidget() {
                 }
             } else if (ring) {
                 ring.style.opacity = '0';
+                // Шаг без подсветки (приветствие знакомства, J7) — подсказка по
+                // центру экрана, а не там, где стояла прошлая.
+                if (tip && activeRef.current && !el) {
+                    tip.style.top = `${Math.round(window.innerHeight * 0.3)}px`;
+                    tip.style.left = `${Math.max(8, Math.round((window.innerWidth - tip.offsetWidth) / 2))}px`;
+                    tip.classList.remove('ai-spot-tip-above');
+                }
             }
         };
         loop();
@@ -306,6 +315,7 @@ export default function AssistantWidget() {
 
         if (!step.selector) {
             targetElRef.current = null;
+            if (step.wait) return;
             window.setTimeout(() => {
                 if (activeRef.current && indexRef.current === i) advance();
             }, 1000);
@@ -357,6 +367,28 @@ export default function AssistantWidget() {
         targetElRef.current = null;
         setTourActive(false);
     };
+
+    // Знакомство с кабинетом (J7) идёт той же подсветкой: шаги приходят
+    // событием, а не из ответа ИИ.
+    useEffect(() => {
+        const w = window as Window & { __lcPendingTour?: Step[] };
+        const run = (steps?: Step[], auto = false) => {
+            w.__lcPendingTour = undefined;
+            // Само знакомство при первом входе не перебивает человека: если он
+            // уже открыл помощника или идёт по его маршруту — не начинаем.
+            if (auto && (activeRef.current || openRef.current)) return;
+            if (Array.isArray(steps) && steps.length) startTour(steps);
+        };
+        const onStartTour = (e: Event) => {
+            const detail = (e as CustomEvent<{ steps?: Step[]; auto?: boolean }>).detail;
+            run(detail?.steps, !!detail?.auto);
+        };
+        window.addEventListener('logicore:start-tour', onStartTour);
+        // Знакомство попросили раньше, чем помощник загрузился.
+        if (w.__lcPendingTour) run(w.__lcPendingTour);
+        return () => window.removeEventListener('logicore:start-tour', onStartTour);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     /* Помощник больше не рассказывает про нововведения: для них есть своя
        страница «Что нового». Вываливать их в чат при каждом открытии значило
