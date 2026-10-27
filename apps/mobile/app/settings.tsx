@@ -7,6 +7,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { api } from '@/lib/api';
 import { FONT, RADIUS, SHADOW } from '@/lib/theme';
 import { ListRow, ScreenHeader } from '@/components/kit';
+import { testPush } from '@/lib/push';
 
 export default function SettingsScreen() {
     const { mapTheme, setMapTheme, currentOrder } = useStore();
@@ -71,7 +72,14 @@ export default function SettingsScreen() {
 
                 <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Диагностика</Text>
                 <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.card }]}>
-                    <ListRow icon="navigate-circle-outline" label="Проверить GPS" desc="Получить координаты и отправить диспетчеру" onPress={checkGps} last />
+                    <ListRow icon="navigate-circle-outline" label="Проверить GPS" desc="Получить координаты и отправить диспетчеру" onPress={checkGps} />
+                    <ListRow
+                        icon="notifications-outline"
+                        label="Проверить уведомления"
+                        desc="Пришлём проверочное уведомление на этот телефон"
+                        onPress={async () => { const r = await testPush(); Alert.alert(r.ok ? 'Отправлено' : 'Не получилось', r.message); }}
+                        last
+                    />
                 </View>
             </View>
         </ScrollView>

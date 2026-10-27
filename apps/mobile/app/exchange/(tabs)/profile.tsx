@@ -8,6 +8,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { DriverProfile, exchangeApi, телефонКрасиво, ответ } from '@/lib/exchange';
 import { BRAND, FONT } from '@/lib/theme';
 import { Badge, Button, Card, Row } from '@/components/kit';
+import { testPush } from '@/lib/push';
 
 /** Адрес сайта платформы — для политики конфиденциальности. */
 const SITE_URL: string = (Constants.expoConfig?.extra?.siteUrl as string | undefined) || '';
@@ -145,6 +146,16 @@ export default function ExchangeProfile() {
                 <Row icon="call-outline" label="Телефон" value={телефонКрасиво(me.phone)} />
                 <Row icon="bus-outline" label="Машина" value={[me.vehiclePlate, me.vehicleBodyType, me.vehicleCapacityKg ? `${me.vehicleCapacityKg / 1000} т` : null].filter(Boolean).join(' · ') || '—'} />
                 <Row icon="trophy-outline" label="Рейсов" value={String(me.tripsCompleted)} />
+            </Card>
+
+            {/* Убедиться, что рейсы и выплаты будут приходить уведомлением. */}
+            <Card onPress={async () => { const r = await testPush(); Alert.alert(r.ok ? 'Отправлено' : 'Не получилось', r.message); }} style={styles.menuItem}>
+                <Ionicons name="notifications-outline" size={20} color={colors.text} />
+                <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: 15, fontFamily: FONT.semibold }}>Проверить уведомления</Text>
+                    <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>Пришлём проверочное уведомление на этот телефон</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
             </Card>
 
             <Card onPress={() => router.push('/exchange/documents')} style={styles.menuItem}>

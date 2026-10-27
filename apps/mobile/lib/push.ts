@@ -29,14 +29,17 @@ Notifications.setNotificationHandler({
     }),
 });
 
+/** Чем кончилась попытка: записан, человек запретил, телефон не умеет, сбой. */
+export type PushRegistration = 'ok' | 'denied' | 'unavailable' | 'error';
+
 /**
  * Попросить разрешение и сообщить серверу адрес телефона. Повторный вызов
- * безвреден. Не вышло (отказ, эмулятор, нет связи) — молча: уведомления —
+ * безвреден. Не вышло (отказ, эмулятор, нет связи) — без шума: уведомления —
  * удобство, без них приложение работает.
  */
-export async function registerPush(): Promise<void> {
+export async function registerPush(): Promise<PushRegistration> {
     try {
-        if (Platform.OS === 'web' || !Device.isDevice) return;
+        if (Platform.OS === 'web' || !Device.isDevice) return 'unavailable';
         if (Platform.OS === 'android') {
             await Notifications.setNotificationChannelAsync('default', {
                 name: 'Рейсы и выплаты',
@@ -46,7 +49,7 @@ export async function registerPush(): Promise<void> {
         }
         let { status } = await Notifications.getPermissionsAsync();
         if (status !== 'granted') status = (await Notifications.requestPermissionsAsync()).status;
-        if (status !== 'granted') return;
+        if (status !== 'granted') return 'denied';
         const projectId = (Constants.expoConfig?.extra as any)?.eas?.projectId ?? Constants.easConfig?.projectId;
         const { data: token } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
         await api.post('/notifications/push-devices', {
@@ -55,8 +58,29 @@ export async function registerPush(): Promise<void> {
             deviceId: await getDeviceId(),
         });
         await SecureStore.setItemAsync(TOKEN_KEY, token);
+        return 'ok';
     } catch {
         // Нет Firebase в сборке, нет связи — без уведомлений.
+        return 'error';
+    }
+}
+
+/**
+ * Кнопка «Проверить уведомления»: записать телефон заново и попросить
+ * сервер прислать проверочное. Ответ — словами для водителя.
+ */
+export async function testPush(): Promise<{ ok: boolean; message: string }> {
+    const reg = await registerPush();
+    if (reg === 'denied') return { ok: false, message: 'Уведомления запрещены. Разрешите их: Настройки телефона → Приложения → LogiCore Водитель → Уведомления.' };
+    if (reg === 'unavailable') return { ok: false, message: 'Уведомления работают только в приложении на телефоне.' };
+    if (reg === 'error') return { ok: false, message: 'Телефон не удалось записать для уведомлений. Проверьте интернет и попробуйте ещё раз.' };
+    try {
+        const { data } = await api.post('/notifications/push-devices/test');
+        return data?.sent
+            ? { ok: true, message: 'Отправили проверочное уведомление — оно появится через несколько секунд.' }
+            : { ok: false, message: 'Сервер не смог отправить уведомление. Попробуйте позже.' };
+    } catch {
+        return { ok: false, message: 'Нет связи с сервером. Попробуйте ещё раз.' };
     }
 }
 

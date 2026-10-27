@@ -45,6 +45,22 @@ export class NotificationsController {
         return this.notifications.registerDevice(req.user.sub, dto.token, dto.platform, dto.deviceId);
     }
 
+    /**
+     * Проверка из приложения: уведомление на свои же телефоны. Чтобы водитель
+     * (и владелец) убедились, что уведомления доходят, не трогая заявок.
+     */
+    @Post('push-devices/test')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Проверочное уведомление на свой телефон' })
+    async test(@Request() req: any) {
+        const sent = await this.notifications.sendToUsers([req.user.sub], {
+            title: 'Проверка уведомлений',
+            body: 'Уведомления работают: сюда придут рейсы, решения по анкете и выплаты.',
+            data: { type: 'TEST' },
+        });
+        return { sent };
+    }
+
     @Post('push-devices/remove')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Забыть телефон — водитель вышел из приложения' })
