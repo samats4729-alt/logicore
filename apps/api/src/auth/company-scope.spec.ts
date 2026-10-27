@@ -29,6 +29,11 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     // Всё ниже отбирается по самому водителю (своя анкета, свои фото).
     'ExchangeStatusController.status': 'включена ли биржа — одно да/нет',
     'ExchangeDriverController.me': 'своя анкета водителя биржи',
+    // Push-уведомления (вопрос 26): телефон записывает водитель, в том числе
+    // водитель биржи без компании. Только свой — пользователь берётся из входа.
+    'NotificationsController.register': 'свой телефон для push-уведомлений',
+    'NotificationsController.remove': 'забыть свой телефон при выходе',
+    'NotificationsController.test': 'проверочное уведомление себе',
     'ExchangeDriverController.update': 'своя анкета водителя биржи',
     'ExchangeDriverController.parks': 'список парков биржи для выбора в анкете',
     'ExchangeDriverController.addDocument': 'свои фото документов',
