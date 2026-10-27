@@ -372,11 +372,17 @@ export default function AssistantWidget() {
     // событием, а не из ответа ИИ.
     useEffect(() => {
         const w = window as Window & { __lcPendingTour?: Step[] };
-        const run = (steps?: Step[]) => {
+        const run = (steps?: Step[], auto = false) => {
             w.__lcPendingTour = undefined;
+            // Само знакомство при первом входе не перебивает человека: если он
+            // уже открыл помощника или идёт по его маршруту — не начинаем.
+            if (auto && (activeRef.current || openRef.current)) return;
             if (Array.isArray(steps) && steps.length) startTour(steps);
         };
-        const onStartTour = (e: Event) => run((e as CustomEvent<{ steps?: Step[] }>).detail?.steps);
+        const onStartTour = (e: Event) => {
+            const detail = (e as CustomEvent<{ steps?: Step[]; auto?: boolean }>).detail;
+            run(detail?.steps, !!detail?.auto);
+        };
         window.addEventListener('logicore:start-tour', onStartTour);
         // Знакомство попросили раньше, чем помощник загрузился.
         if (w.__lcPendingTour) run(w.__lcPendingTour);

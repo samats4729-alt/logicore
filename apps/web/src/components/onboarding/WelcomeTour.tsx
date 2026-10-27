@@ -47,10 +47,18 @@ const STEPS: TourStep[] = [
  * десять секунд искала бы то, чего нет.
  */
 export function startWelcomeTour() {
+    dispatchTour(false);
+}
+
+/**
+ * `auto` — знакомство само, при первом входе: помощник его не начнёт, если
+ * человек уже открыл помощника или идёт по его маршруту.
+ */
+function dispatchTour(auto: boolean) {
     const steps = STEPS.filter((s) => !s.selector || document.querySelector(s.selector));
     // Помощник подгружается отдельно: не успел — заберёт шаги при загрузке.
     (window as Window & { __lcPendingTour?: TourStep[] }).__lcPendingTour = steps;
-    window.dispatchEvent(new CustomEvent('logicore:start-tour', { detail: { steps } }));
+    window.dispatchEvent(new CustomEvent('logicore:start-tour', { detail: { steps, auto } }));
 }
 
 const seenKey = (userId: string) => `lc_welcome_tour_${userId}`;
@@ -70,7 +78,7 @@ export default function WelcomeTour() {
         // Меню и шапка дорисовываются после загрузки страницы — даём им время.
         const timer = window.setTimeout(() => {
             try { localStorage.setItem(seenKey(userId), new Date().toISOString()); } catch { /* не запомним — покажем ещё раз */ }
-            startWelcomeTour();
+            dispatchTour(true);
         }, 1800);
         return () => window.clearTimeout(timer);
     }, [userId, pathname]);
