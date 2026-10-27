@@ -3585,6 +3585,7 @@ model ExchangeDriverVehicle {
 
   @@unique([driverId, kind, plate])
   @@index([driverId])
+}
 
 /// Прямой обмен с 1С компании (решение владельца 22–23.10.2026).
 ///
