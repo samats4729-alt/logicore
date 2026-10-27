@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res, BadRequestException, NotFoundException, Optional } from '@nestjs/common';
+import { DriverPushService } from '../notifications/driver-push.service';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { OrdersExportService } from './orders-export.service';
@@ -37,6 +38,7 @@ export class OrdersController {
         private billingService: BillingService,
         private ordersExport: OrdersExportService,
         private auditService: AuditService,
+        @Optional() private driverPush?: DriverPushService,
     ) { }
 
     @Post()
@@ -567,12 +569,15 @@ export class OrdersController {
     async assignDriver(@Param('id') id: string, @Body() dto: AssignDriverDto) {
         // Администратор платформы: своей базы водителей у него нет, поэтому
         // того, кто назначает, не передаём — действует прежнее правило.
-        return this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
+        const before = await this.driverPush?.currentDriver(id) ?? null;
+        const result = await this.ordersService.assignDriver(id, dto.driverId, dto.partnerId, {
             assignedDriverName: dto.assignedDriverName,
             assignedDriverPhone: dto.assignedDriverPhone,
             assignedDriverPlate: dto.assignedDriverPlate,
             assignedDriverTrailer: dto.assignedDriverTrailer,
         }, { trip: { plate: dto.tripPlate, trailer: dto.tripTrailer } });
+        void this.driverPush?.tripAssigned(id, before);
+        return result;
     }
 
     @Get(':id/history')

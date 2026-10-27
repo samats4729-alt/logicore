@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { DriverPushService } from '../notifications/driver-push.service';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { AllowWithoutCompany, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -57,6 +58,7 @@ export class ExchangeController {
         private readonly service: ExchangeService,
         private readonly offers: ExchangeOffersService,
         private readonly audit: AuditService,
+        private readonly driverPush: DriverPushService,
     ) {}
 
     @Get('board')
@@ -118,7 +120,10 @@ export class ExchangeController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Выбрать исполнителя из откликов' })
     async accept(@Request() req: any, @Param('id') id: string, @Param('offerId') offerId: string) {
+        // Кто ждал ответа — до выбора: после него отклики уже закрыты.
+        const waiting = await this.driverPush.activeDriverOffers(id);
         const result = await this.offers.accept(req.user.companyId, req.user.sub, id, offerId);
+        void this.driverPush.offerDecided(id, waiting, offerId);
         await this.audit.log({
             companyId: req.user.companyId,
             user: req.user,

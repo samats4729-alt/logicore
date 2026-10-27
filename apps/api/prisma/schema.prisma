@@ -120,6 +120,8 @@ model User {
   createdSharedReports  SharedReportLink[]    @relation("CreatedSharedReports")
   reviewedPaymentProofs OrderPaymentProof[]   @relation("ReviewedPaymentProofs")
   reviewedCompletions   Order[]               @relation("ReviewedCompletions")
+  /// Телефоны для push-уведомлений (приложение водителя).
+  pushDevices           PushDevice[]
   email                 String?               @unique
   googleId              String?               @unique // Google OAuth ID
   phone                 String
@@ -229,6 +231,25 @@ model User {
   @@index([departmentId])
   @@index([personId])
   @@index([baseCompanyId])
+}
+
+/// Телефон, на который приходят push-уведомления: токен выдаёт сервис Expo
+/// приложению водителя. У водителя один вход — один телефон: новый телефон
+/// заменяет прежний, чтобы уведомления не уходили на чужой аппарат.
+model PushDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// «ExponentPushToken[…]» — адрес телефона в сервисе Expo.
+  token     String   @unique
+  /// android или ios.
+  platform  String?
+  /// Тот же номер устройства, что при входе.
+  deviceId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // ==================== ФАЗА 1: Личность (глобальная идентичность человека) ====================

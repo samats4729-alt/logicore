@@ -80,6 +80,12 @@
         }
       ],
       "@rnmapbox/maps",
+      [
+        "expo-notifications",
+        {
+          "color": "#1677ff"
+        }
+      ],
       "@react-native-google-signin/google-signin",
       [
         "expo-build-properties",

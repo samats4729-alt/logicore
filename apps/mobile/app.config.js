@@ -10,8 +10,23 @@
  * через Google на сайте). Он не секрет: по нему Google выдаёт приложению
  * пропуск, который сервер проверяет.
  */
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * Файл Firebase для push-уведомлений на Android: Expo доставляет их через
+ * Google, и приложению нужен этот файл, чтобы получить адрес телефона. Он не
+ * пароль — в нём номер проекта Firebase и название приложения. Нет файла —
+ * сборка идёт как раньше, просто без уведомлений.
+ */
+const GOOGLE_SERVICES = path.join(__dirname, 'google-services.json');
+
 module.exports = ({ config }) => ({
     ...config,
+    android: {
+        ...config.android,
+        ...(fs.existsSync(GOOGLE_SERVICES) ? { googleServicesFile: './google-services.json' } : {}),
+    },
     extra: {
         ...config.extra,
         apiUrl: process.env.API_URL || config.extra?.apiUrl,

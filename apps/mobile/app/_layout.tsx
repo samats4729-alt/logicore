@@ -12,6 +12,7 @@ import { Unbounded_600SemiBold } from '@expo-google-fonts/unbounded/600SemiBold'
 import { Unbounded_700Bold } from '@expo-google-fonts/unbounded/700Bold';
 import { useStore } from '@/store';
 import { initializeApi, onUnauthorized } from '@/lib/api';
+import { listenPushTaps, registerPush } from '@/lib/push';
 import '@/lib/alert-polyfill';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { FONT } from '@/lib/theme';
@@ -19,6 +20,7 @@ import { IntroSplash } from '@/components/IntroSplash';
 
 export default function RootLayout() {
     const checkAuth = useStore((state) => state.checkAuth);
+    const isAuthenticated = useStore((state) => state.isAuthenticated);
     const { isDark, colors } = useAppTheme();
     // Заставка — только при запуске приложения.
     const [introOn, setIntroOn] = useState(true);
@@ -49,6 +51,15 @@ export default function RootLayout() {
         });
         return () => onUnauthorized(null);
     }, []);
+
+    // Push: вошёл — сообщить серверу адрес телефона; нажал на уведомление —
+    // открыть нужный экран. Только после входа: без него ни адрес не
+    // записать, ни экран рейса не открыть.
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        registerPush();
+        return listenPushTaps();
+    }, [isAuthenticated]);
 
     const fontsReady = fontsLoaded || !!fontError;
 
