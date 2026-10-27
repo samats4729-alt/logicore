@@ -27,11 +27,18 @@ const ORDER_FUEL_SELECT = {
     // Выданная предоплата лежит среди выданного по рейсу — узнаём её по записи запроса.
     advanceRequests: { where: { status: { in: GIVEN_STATUSES }, fuelIssueId: { not: null } }, select: { fuelIssueId: true, kind: true, status: true } },
     exchangeFuelReceipts: {
-        select: { id: true, amount: true, status: true, rejectReason: true, createdAt: true, decidedAt: true },
+        select: { id: true, amount: true, status: true, rejectReason: true, createdAt: true, decidedAt: true, fileKey: true },
         orderBy: { createdAt: 'asc' as const },
     },
     driverPayoutItem: { select: { id: true } },
 } satisfies Prisma.OrderSelect;
+
+/**
+ * Чек, который прикрепил сам парк (шеф, 27.10.2026), лежит в своей папке —
+ * по ней его и отличаем от чеков водителя (отдельного поля в таблице нет).
+ */
+const PARK_RECEIPTS_DIR = 'park';
+const byPark = (fileKey: string) => fileKey.split('/').includes(PARK_RECEIPTS_DIR);
 
 type FuelRow = Prisma.OrderGetPayload<{ select: typeof ORDER_FUEL_SELECT }>;
 
@@ -121,6 +128,8 @@ export class ExchangeFuelService {
                 pending,
                 items: row.exchangeFuelReceipts.map((r) => ({
                     id: r.id, amount: num(r.amount), status: r.status, rejectReason: r.rejectReason, createdAt: r.createdAt,
+                    /** Прикрепил парк, а не водитель. */
+                    byPark: byPark(r.fileKey),
                 })),
             },
             /**
@@ -217,6 +226,29 @@ export class ExchangeFuelService {
      * парк. Больше суммы на руки по рейсу предоплатой не выдать — иначе к
      * выплате уйдёт в минус.
      */
+    /**
+     * Чек прикрепил сам парк (шеф, 27.10.2026): водитель заправился после
+     * рейса и отдал чек в руки, или чек пришёл с заправки. Парк его и
+     * проверяет, поэтому чек сразу принят. Можно, пока водитель не запросил
+     * выплату по рейсу.
+     */
+    async addParkReceipt(parkId: string, userId: string, orderId: string, rawAmount: string, file: Express.Multer.File) {
+        const amount = parseAmount(rawAmount);
+        assertAllowedUpload(file);
+        const row = await this.row({ id: orderId, partnerId: parkId });
+        this.assertOpen(row);
+        const fileKey = `uploads/exchange-fuel/${orderId}/${PARK_RECEIPTS_DIR}/${randomUUID()}${safeExtension(file.originalname)}`;
+        await storeExchangeFile(this.s3, fileKey, file);
+        await this.prisma.exchangeFuelReceipt.create({
+            data: {
+                orderId, driverId: row.exchangeSettlement!.driverId, parkCompanyId: parkId, amount,
+                fileKey, fileName: (file.originalname || 'чек.jpg').slice(0, 200), mimeType: file.mimetype,
+                status: 'ACCEPTED', decidedById: userId, decidedAt: new Date(),
+            },
+        });
+        return this.forPark(parkId, orderId);
+    }
+
     async addIssue(parkId: string, userId: string, orderId: string, dto: FuelIssueDto) {
         const row = await this.row({ id: orderId, partnerId: parkId });
         this.assertOpen(row);

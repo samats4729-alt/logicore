@@ -11,8 +11,8 @@ function tripRow(overrides: Record<string, any> = {}) {
             { id: 'i-2', amount: 60000, method: 'TO_DRIVER', note: null, createdAt: new Date() },
         ],
         exchangeFuelReceipts: [
-            { id: 'r-1', amount: 60000, status: 'ACCEPTED', rejectReason: null, createdAt: new Date(), decidedAt: new Date() },
-            { id: 'r-2', amount: 40000, status: 'PENDING', rejectReason: null, createdAt: new Date(), decidedAt: null },
+            { id: 'r-1', amount: 60000, status: 'ACCEPTED', rejectReason: null, createdAt: new Date(), decidedAt: new Date(), fileKey: 'uploads/exchange-fuel/order-1/r.jpg' },
+            { id: 'r-2', amount: 40000, status: 'PENDING', rejectReason: null, createdAt: new Date(), decidedAt: null, fileKey: 'uploads/exchange-fuel/order-1/p.jpg' },
         ],
         advanceRequests: [],
         driverPayoutItem: null,
@@ -65,7 +65,7 @@ describe('Топливо рейса водителя парка', () => {
                 { id: 'i-1', amount: 60000, method: 'STATION', note: null, createdAt: new Date() },
                 { id: 'adv-1', amount: 50000, method: 'TO_DRIVER', note: 'Предоплата по запросу водителя', createdAt: new Date() },
             ],
-            exchangeFuelReceipts: [{ id: 'r-1', amount: 60000, status: 'ACCEPTED', rejectReason: null, createdAt: new Date(), decidedAt: new Date() }],
+            exchangeFuelReceipts: [{ id: 'r-1', amount: 60000, status: 'ACCEPTED', rejectReason: null, createdAt: new Date(), decidedAt: new Date(), fileKey: 'uploads/exchange-fuel/order-1/r.jpg' }],
             advanceRequests: [{ fuelIssueId: 'adv-1', kind: 'ADVANCE', status: 'APPROVED' }],
         }));
         const v = await service.forDriver('u-driver', 'order-1');
@@ -118,6 +118,34 @@ describe('Топливо рейса водителя парка', () => {
         expect(v.advances.items.map((i) => [i.id, i.byRequest])).toEqual([['a-park', false]]);
         expect(v.issued.total).toBe(50000);
         expect(v.advances.total).toBe(10000);
+    });
+
+    it('парк сам прикрепил чек после рейса: сразу принят, помечен как чек парка', async () => {
+        const { service, prisma, s3 } = build(tripRow({ status: 'COMPLETED' }));
+        await service.addParkReceipt('park-1', 'u-manager', 'order-1', '35 000', PHOTO);
+        expect(s3.uploadFile).toHaveBeenCalled();
+        const data = prisma.exchangeFuelReceipt.create.mock.calls[0][0].data;
+        expect(data).toMatchObject({ orderId: 'order-1', driverId: 'd-1', parkCompanyId: 'park-1', amount: 35000, status: 'ACCEPTED', decidedById: 'u-manager' });
+        expect(data.fileKey).toMatch(/^uploads\/exchange-fuel\/order-1\/park\//);
+    });
+
+    it('у чека видно, кто прикрепил: водитель или парк', async () => {
+        const { service } = build(tripRow({
+            exchangeFuelReceipts: [
+                { id: 'r-drv', amount: 40000, status: 'ACCEPTED', rejectReason: null, createdAt: new Date(), decidedAt: new Date(), fileKey: 'uploads/exchange-fuel/order-1/a.jpg' },
+                { id: 'r-park', amount: 35000, status: 'ACCEPTED', rejectReason: null, createdAt: new Date(), decidedAt: new Date(), fileKey: 'uploads/exchange-fuel/order-1/park/b.jpg' },
+            ],
+        }));
+        const v = await service.forPark('park-1', 'order-1');
+        expect(v.receipts.items.map((r) => [r.id, r.byPark])).toEqual([['r-drv', false], ['r-park', true]]);
+        // Ключ файла наружу не отдаётся.
+        expect(JSON.stringify(v)).not.toContain('uploads/');
+    });
+
+    it('после запроса выплаты чек не прикрепить ни водителю, ни парку', async () => {
+        const { service } = build(tripRow({ status: 'COMPLETED', driverPayoutItem: { id: 'p-1' } }));
+        await expect(service.addParkReceipt('park-1', 'u-manager', 'order-1', '1000', PHOTO)).rejects.toThrow(/Выплата по рейсу уже запрошена/);
+        await expect(service.addReceipt('u-driver', 'order-1', '1000', PHOTO)).rejects.toThrow(/Выплата по рейсу уже запрошена/);
     });
 
     it('убрали выдачу предоплаты парка — уходит и её запись', async () => {

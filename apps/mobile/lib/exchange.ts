@@ -228,7 +228,7 @@ export interface TripFuel {
     receipts: {
         accepted: number;
         pending: number;
-        items: { id: string; amount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rejectReason: string | null; createdAt: string }[];
+        items: { id: string; amount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rejectReason: string | null; createdAt: string; byPark?: boolean }[];
     };
     toPay: number | null;
     withoutReceipt: number;

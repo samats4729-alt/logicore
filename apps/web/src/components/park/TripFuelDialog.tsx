@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
-import { Check, Fuel, Loader2, Trash2, X } from 'lucide-react';
+import { Check, Fuel, Loader2, Paperclip, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { formatMoneyInput, moneyShort, parseMoneyInput } from '@/lib/money-format';
@@ -54,6 +54,10 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
     const [photo, setPhoto] = useState<{ id: string; url: string } | null>(null);
     const [rejecting, setRejecting] = useState<string | null>(null);
     const [reason, setReason] = useState('');
+    // Чек, который парк прикрепляет сам: файл и сумма из чека.
+    const [receiptFile, setReceiptFile] = useState<File | null>(null);
+    const [receiptAmount, setReceiptAmount] = useState('');
+    const fileRef = useRef<HTMLInputElement>(null);
 
     const load = useCallback(() => {
         if (!orderId) return;
@@ -66,6 +70,7 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
     useEffect(() => {
         if (!open) return;
         setFuel(null); setAmount(''); setNote(''); setKind('FUEL'); setMethod('STATION'); setPhoto(null); setRejecting(null);
+        setReceiptFile(null); setReceiptAmount('');
         load();
     }, [open, load]);
 
@@ -90,6 +95,27 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
             applied(data, kind === 'ADVANCE' ? `Записали предоплату ${moneyShort(value)}` : `Записали: ${METHOD_TEXT[method].toLowerCase()} ${moneyShort(value)}`);
         } catch (e) {
             toast.error(ответСервера(e, 'Не удалось записать'));
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    /** Парк сам прикрепляет чек — водитель отдал его после рейса или чек пришёл с заправки. */
+    const addReceipt = async () => {
+        const value = Number(parseMoneyInput(receiptAmount));
+        if (!receiptFile) { toast.error('Выберите фото или файл чека'); return; }
+        if (!(value > 0)) { toast.error('Впишите сумму из чека'); return; }
+        setBusy('receipt');
+        try {
+            const form = new FormData();
+            form.append('file', receiptFile);
+            form.append('amount', String(value));
+            const { data } = await api.post(`/exchange/park/trips/${orderId}/fuel/receipts`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+            setReceiptFile(null); setReceiptAmount('');
+            if (fileRef.current) fileRef.current.value = '';
+            applied(data, `Чек на ${moneyShort(value)} прикреплён`);
+        } catch (e) {
+            toast.error(ответСервера(e, 'Не удалось прикрепить чек'));
         } finally {
             setBusy(null);
         }
@@ -273,14 +299,14 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
                         </section>
 
                         <section className="space-y-2">
-                            <h3 className="m-0 text-[13px] font-semibold">Чеки водителя</h3>
-                            {fuel.receipts.items.length === 0 && <p className="m-0 text-[12.5px] text-muted-foreground">Водитель ещё не присылал чеков.</p>}
+                            <h3 className="m-0 text-[13px] font-semibold">Чеки</h3>
+                            {fuel.receipts.items.length === 0 && <p className="m-0 text-[12.5px] text-muted-foreground">Чеков пока нет.</p>}
                             {fuel.receipts.items.map((r) => (
                                 <div key={r.id} className="space-y-2 rounded-lg border border-solid border-border px-3 py-2">
                                     <div className="flex flex-wrap items-center gap-3">
                                         <div className="flex-1">
                                             <div className="font-semibold tabular-nums">{moneyShort(r.amount)}</div>
-                                            <div className="text-[12px] text-muted-foreground">прислан {dayjs(r.createdAt).format('DD.MM HH:mm')}</div>
+                                            <div className="text-[12px] text-muted-foreground">{r.byPark ? 'прикрепил парк' : 'прислал водитель'} {dayjs(r.createdAt).format('DD.MM HH:mm')}</div>
                                             {r.status === 'REJECTED' && r.rejectReason && <div className="text-[12px] text-destructive">{r.rejectReason}</div>}
                                         </div>
                                         <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-medium', RECEIPT_TEXT[r.status].cls)}>{RECEIPT_TEXT[r.status].label}</span>
@@ -317,6 +343,34 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
                                     )}
                                 </div>
                             ))}
+                            {/* Водитель заправился после рейса и отдал чек — парк прикрепляет сам. */}
+                            {!fuel.locked && (
+                                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 p-3">
+                                    <input
+                                        ref={fileRef}
+                                        type="file"
+                                        accept="image/*,application/pdf"
+                                        className="hidden"
+                                        aria-label="Файл чека"
+                                        onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                                    />
+                                    <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+                                        <Paperclip className="h-3.5 w-3.5" /> {receiptFile ? 'Другой файл' : 'Фото чека'}
+                                    </Button>
+                                    {receiptFile && <span className="max-w-[180px] truncate text-[12px] text-muted-foreground">{receiptFile.name}</span>}
+                                    <Input
+                                        aria-label="Сумма по чеку"
+                                        value={receiptAmount}
+                                        onChange={(e) => setReceiptAmount(formatMoneyInput(e.target.value))}
+                                        inputMode="numeric"
+                                        placeholder="Сумма по чеку, ₸"
+                                        className="h-9 w-44 text-[13px] tabular-nums"
+                                    />
+                                    <Button onClick={addReceipt} disabled={busy === 'receipt'}>
+                                        {busy === 'receipt' && <Loader2 className="h-4 w-4 animate-spin" />} Прикрепить чек
+                                    </Button>
+                                </div>
+                            )}
                         </section>
                     </div>
                 )}

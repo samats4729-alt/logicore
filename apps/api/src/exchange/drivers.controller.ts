@@ -527,6 +527,15 @@ export class ExchangeParkController {
         return this.fuel.removeIssue(req.user.companyId, id);
     }
 
+    @Post('trips/:orderId/fuel/receipts')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE } }))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Парк сам прикрепил чек на топливо к рейсу — сразу принят' })
+    async addParkFuelReceipt(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: FuelReceiptDto, @UploadedFile() file: Express.Multer.File) {
+        await this.drivers.assertPark(req.user.companyId);
+        return this.fuel.addParkReceipt(req.user.companyId, req.user.sub, orderId, dto.amount, file);
+    }
+
     @Put('fuel-receipts/:id/decision')
     @ApiOperation({ summary: 'Чек водителя: принять (можно поправить сумму) или отклонить с причиной' })
     async decideFuelReceipt(@Request() req: any, @Param('id') id: string, @Body() dto: FuelDecisionDto) {

@@ -28,7 +28,8 @@ const TRIP_SELECT = {
             gross: true, opv: true, vosms: true, so: true, ipn: true, preliminary: true,
         },
     },
-    _count: { select: { exchangeFuelReceipts: { where: { status: 'PENDING' } } } },
+    // Чеки на топливо: сколько есть и сколько ждут решения. Отклонённые — не в счёт.
+    exchangeFuelReceipts: { where: { status: { not: 'REJECTED' } }, select: { status: true } },
     forwarder: { select: { name: true } },
     subForwarder: { select: { name: true } },
     customerCompany: { select: { name: true } },
@@ -123,7 +124,9 @@ export class ExchangeParkService {
                     preliminary: r.exchangeSettlement.preliminary,
                 } : null,
                 /** Чеков на топливо ждут решения парка. */
-                fuelReceiptsPending: r._count.exchangeFuelReceipts,
+                fuelReceiptsPending: r.exchangeFuelReceipts.filter((f) => f.status === 'PENDING').length,
+                /** Чеков на топливо по рейсу (принятых и ждущих): 0 — чеков пока не было (шеф, 27.10.2026). */
+                fuelReceipts: r.exchangeFuelReceipts.length,
                 createdAt: r.createdAt,
                 completedAt: r.completedAt,
             };

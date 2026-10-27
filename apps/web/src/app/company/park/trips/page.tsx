@@ -206,9 +206,13 @@ function TaxBreakdown({ s }: { s: ParkTrip['settlement'] }) {
 function FuelButton({ trip, onOpen }: { trip: ParkTrip; onOpen: (t: ParkTrip) => void }) {
     const pending = trip.fuelReceiptsPending ?? 0;
     return (
-        <Button variant="outline" size="sm" onClick={() => onOpen(trip)}>
-            <Fuel className="h-3.5 w-3.5" /> Выдачи и чеки
-            {pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">{pending}</span>}
-        </Button>
+        <div className="inline-flex flex-col items-end gap-0.5">
+            <Button variant="outline" size="sm" onClick={() => onOpen(trip)}>
+                <Fuel className="h-3.5 w-3.5" /> Выдачи и чеки
+                {pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">{pending}</span>}
+            </Button>
+            {/* Чеков по рейсу ещё не было — видно сразу, не открывая окно (шеф, 27.10.2026). */}
+            {trip.fuelReceipts === 0 && <span className="text-[11.5px] font-medium text-amber-700 dark:text-amber-400">чеков пока нет</span>}
+        </div>
     );
 }

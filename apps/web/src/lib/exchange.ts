@@ -382,6 +382,8 @@ export interface ParkTrip {
     } | null;
     /** Чеков на топливо ждут решения парка. */
     fuelReceiptsPending?: number;
+    /** Чеков на топливо по рейсу (принятых и ждущих); 0 — чеков пока не было. Старый сервер не присылает. */
+    fuelReceipts?: number;
     createdAt: string;
     completedAt: string | null;
 }
@@ -402,7 +404,7 @@ export interface ParkTripFuel {
     receipts: {
         accepted: number;
         pending: number;
-        items: { id: string; amount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rejectReason: string | null; createdAt: string }[];
+        items: { id: string; amount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rejectReason: string | null; createdAt: string; byPark?: boolean }[];
     };
     toPay: number | null;
     withoutReceipt: number;

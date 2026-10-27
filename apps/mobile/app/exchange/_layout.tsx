@@ -38,6 +38,7 @@ export default function ExchangeLayout() {
             <Stack.Screen name="documents" options={{ title: 'Мои документы' }} />
             <Stack.Screen name="contacts" options={{ title: 'Номера и почта' }} />
             <Stack.Screen name="vehicles" options={{ title: 'Транспорт' }} />
+            <Stack.Screen name="fuel/[id]" options={{ title: 'Топливо по рейсу' }} />
         </Stack>
     );
 }

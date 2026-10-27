@@ -160,7 +160,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
                             <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
                             <View style={{ flex: 1 }}>
                                 <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 14.5 }}>{деньги(r.amount)}</Text>
-                                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{date(r.createdAt)}</Text>
+                                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{date(r.createdAt)}{r.byPark ? ' · прикрепил парк' : ''}</Text>
                                 {r.status === 'REJECTED' && !!r.rejectReason && (
                                     <Text style={{ color: colors.danger, fontSize: 12.5, marginTop: 2 }}>{r.rejectReason}</Text>
                                 )}
