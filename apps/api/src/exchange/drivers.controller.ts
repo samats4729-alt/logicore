@@ -294,6 +294,12 @@ export class ExchangeDriverController {
         return this.payouts.earnings(req.user.sub);
     }
 
+    @Get('me/pension')
+    @ApiOperation({ summary: 'Пенсионные (ОПВ) по всем рейсам: итог и прибавка с каждого рейса' })
+    pension(@Request() req: any) {
+        return this.payouts.pension(req.user.sub);
+    }
+
     @Put('me/payout-account')
     @ApiOperation({ summary: 'Счёт для выплат (IBAN)' })
     setPayoutAccount(@Request() req: any, @Body() dto: PayoutAccountDto) {

@@ -249,4 +249,32 @@ describe('Выплата водителю парка: рейс по расчёт
         // Только выплаченное: пока выплата не прошла, взнос не перечислен.
         expect(prisma.driverPayout.aggregate.mock.calls[0][0].where).toMatchObject({ status: 'PAID' });
     });
+
+    it('пенсионные по рейсам: итог растёт с каждым довезённым рейсом, видно, что уже перечислено и что прибавится (шеф, 27.10.2026)', async () => {
+        const { service, prisma } = build();
+        const trip = (id: string, day: string, extra: any = {}) => ({ id, orderNumber: id, driverCost: 100000, completedAt: new Date(`2026-10-${day}T10:00:00Z`), routePoints: [], ...extra });
+        prisma.driverPayoutItem.findMany = jest.fn().mockResolvedValue([
+            { opv: 7300, payout: { status: 'PAID' }, order: trip('o-1', '01') },
+            { opv: 9000, payout: { status: 'REQUESTED' }, order: trip('o-2', '05') },
+        ]);
+        prisma.order.findMany.mockImplementation(async ({ where }: any) => (where.status === 'COMPLETED'
+            // Довезён, выплату ещё не просили: ОПВ — из расчёта рейса.
+            ? [trip('o-3', '10', { exchangeSettlement: {
+                scheme: 2, driverTotal: 246600, workNet: 246600, gross: 274000, opv: 27400, vosms: 5480, ipn: 0, so: 12330, deductionAmount: 0,
+                rates: { opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, platformPct: 5, parkPct: 10, deductionMrp: 30, mrp: 4325 },
+            } })]
+            // В пути — прибавится после рейса.
+            : [{ exchangeSettlement: { opv: 12000 } }]));
+        const p = await service.pension('u-1');
+        expect(p).toMatchObject({ opvPct: 10, total: 43700, paid: 7300, waiting: 36400, upcoming: 12000 });
+        // Новые сверху; у каждого — прибавка и сколько стало после рейса.
+        expect(p.trips.map((t) => [t.orderId, t.opv, t.total, t.paid])).toEqual([
+            ['o-3', 27400, 43700, false],
+            ['o-2', 9000, 16300, false],
+            ['o-1', 7300, 7300, true],
+        ]);
+        // Только свои выплаты и свои рейсы через свой парк.
+        expect(prisma.driverPayoutItem.findMany.mock.calls[0][0].where).toEqual({ payout: { driverId: 'd-1' } });
+        expect(prisma.order.findMany.mock.calls[1][0].where).toMatchObject({ driverId: 'u-1', partnerId: 'park-1' });
+    });
 });

@@ -9,7 +9,7 @@ import { ExchangeSettlementService } from './settlement.service';
 import { litersFor } from './settlement-calc';
 
 /** Рейс идёт: водитель назначен и ещё не довёз. */
-const ACTIVE_ORDER: OrderStatus[] = [
+export const ACTIVE_ORDER: OrderStatus[] = [
     OrderStatus.ASSIGNED, OrderStatus.EN_ROUTE_PICKUP, OrderStatus.AT_PICKUP, OrderStatus.LOADING,
     OrderStatus.IN_TRANSIT, OrderStatus.AT_DELIVERY, OrderStatus.UNLOADING, OrderStatus.PROBLEM,
 ];

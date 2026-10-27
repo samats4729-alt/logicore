@@ -243,6 +243,20 @@ export interface TripFuel {
     locked: boolean;
 }
 
+/** Пенсионные (ОПВ) по всем рейсам: итог и прибавка с каждого рейса (шеф, 27.10.2026). */
+export interface Pension {
+    opvPct: number;
+    total: number;
+    /** Уже на пенсионном счёте: выплата проведена. */
+    paid: number;
+    /** Перечислят вместе с выплатой. */
+    waiting: number;
+    /** Прибавится после рейсов, которые сейчас в пути. */
+    upcoming: number;
+    /** Новые сверху; `total` — сколько стало после этого рейса. */
+    trips: { orderId: string; orderNumber: string; route: string; completedAt: string | null; opv: number; paid: boolean; total: number }[];
+}
+
 /** Транспорт водителя: тягачи и прицепы (R4). */
 export type VehicleKind = 'TRACTOR' | 'TRAILER';
 export interface DriverVehicle {
@@ -460,6 +474,7 @@ export const exchangeApi = {
     withdraw: (id: string) => api.post(`/exchange/driver/loads/${id}/offer/withdraw`),
     myOffers: () => api.get<MyOffer[]>('/exchange/driver/offers').then((r) => r.data),
     earnings: () => api.get<Earnings>('/exchange/driver/earnings').then((r) => r.data),
+    pension: () => api.get<Pension>('/exchange/driver/me/pension').then((r) => r.data),
     /** Топливо рейса через парк. Рейс по прежнему расчёту — сервер скажет, что топлива нет. */
     tripFuel: (orderId: string) => api.get<TripFuel>(`/exchange/driver/trips/${orderId}/fuel`).then((r) => r.data),
     addFuelReceipt: async (orderId: string, amount: number, uri: string) => {

@@ -8,6 +8,7 @@ import { SettlementRates, actualPayout, money, payoutOf } from './settlement-cal
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService, PARK_DEFAULTS } from './settlement.service';
 import { DEFAULT_ADVANCE_LIMIT_PCT } from './advance-requests.service';
+import { ACTIVE_ORDER } from './driver-loads.service';
 
 /** Настройки парка: ставки и расчёт «на руки» (топливо на км, вычет, НДС). */
 type ParkRatesInput = PayoutRates & {
@@ -360,6 +361,61 @@ export class ExchangePayoutsService {
                 id: p.id, status: p.status, ...amountsOf(p), trips: p._count.items,
                 requestedAt: p.requestedAt, exportedAt: p.exportedAt, paidAt: p.paidAt, rejectReason: p.rejectReason,
             })),
+        };
+    }
+
+    /**
+     * Пенсионные (ОПВ) по всем рейсам водителя (шеф, 27.10.2026): итог в
+     * отдельной ячейке профиля и прибавка с каждого рейса — чтобы водитель
+     * видел, как сумма растёт, как пассивный доход.
+     *
+     * Рейс попадает сюда, когда довезён. По каждому — состояние: выплата
+     * проведена — взнос перечислен на пенсионный счёт; ещё нет — уйдёт с
+     * выплатой. Рейс в пути — отдельной строкой «прибавится после рейса».
+     * ОПВ берётся из строки выплаты (там фактически удержанное), без
+     * выплаты — из расчёта, как в «Заработке».
+     */
+    async pension(userId: string) {
+        const driver = await this.parkDriver(userId);
+        const rates = await this.rates(driver.parkCompanyId);
+        const [items, unpaid, active] = await Promise.all([
+            this.prisma.driverPayoutItem.findMany({
+                where: { payout: { driverId: driver.id } },
+                select: { opv: true, payout: { select: { status: true } }, order: { select: TRIP_SELECT } },
+            }),
+            this.unpaidTrips(driver),
+            this.prisma.order.findMany({
+                where: { driverId: driver.userId, partnerId: driver.parkCompanyId, status: { in: ACTIVE_ORDER }, exchangeSettlement: { isNot: null } },
+                select: { exchangeSettlement: { select: { opv: true } } },
+            }),
+        ]);
+        const unpaidLines = await this.linesOf(unpaid, rates);
+        const done = [
+            ...items.map((i) => ({ order: i.order, opv: num(i.opv), paid: i.payout.status === 'PAID' })),
+            ...unpaid.map((t, k) => ({ order: t, opv: unpaidLines[k].opv, paid: false })),
+        ]
+            .filter((t) => t.opv > 0)
+            .sort((a, b) => (a.order.completedAt?.getTime() ?? 0) - (b.order.completedAt?.getTime() ?? 0));
+        let running = 0;
+        const trips = done.map((t) => {
+            running = money(running + t.opv);
+            return {
+                orderId: t.order.id, orderNumber: t.order.orderNumber, route: route(t.order), completedAt: t.order.completedAt,
+                opv: t.opv, paid: t.paid, total: running,
+            };
+        });
+        const sum = (list: typeof trips) => money(list.reduce((s, t) => s + t.opv, 0));
+        return {
+            opvPct: rates.opvPct,
+            total: running,
+            /** Уже на пенсионном счёте: выплата по рейсу проведена. */
+            paid: sum(trips.filter((t) => t.paid)),
+            /** Перечислят вместе с выплатой. */
+            waiting: sum(trips.filter((t) => !t.paid)),
+            /** Прибавится, когда довезёт рейсы, которые сейчас в пути. */
+            upcoming: money(active.reduce((s, o) => s + num(o.exchangeSettlement?.opv), 0)),
+            /** Новые сверху; `total` — сколько стало после этого рейса. */
+            trips: trips.reverse(),
         };
     }
 

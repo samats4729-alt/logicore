@@ -61,6 +61,7 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     'ExchangeDriverController.myOffers': 'свои отклики',
     'ExchangeDriverController.joinPark': 'вступить в парк по коду приглашения (своя анкета)',
     'ExchangeDriverController.earnings': 'свой заработок через парк',
+    'ExchangeDriverController.pension': 'свои пенсионные (ОПВ) по рейсам через парк',
     'ExchangeDriverController.setPayoutAccount': 'свой счёт для выплат',
     'ExchangeDriverController.requestPayout': 'запросить свою выплату',
     'ExchangeDriverController.contract': 'свой договор с парком — текст и подписанный экземпляр',
