@@ -61,6 +61,7 @@ function MenuLabel({ label, href }: { label: string; href: string }) {
 }
 
 const AssistantWidget = dynamic(() => import('@/components/ui/AssistantWidget'), { ssr: false });
+const WelcomeTour = dynamic(() => import('@/components/onboarding/WelcomeTour'), { ssr: false });
 
 /** Иконка пункта меню — один размер на всё меню. */
 const ic = (Icon: React.ComponentType<{ className?: string }>) => <Icon className="size-4" />;
@@ -510,6 +511,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                         )}
                     </main>
                     <AssistantWidget />
+                    <WelcomeTour />
                 </div>
             </SidebarInset>
         </SidebarProvider>
