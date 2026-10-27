@@ -28,6 +28,8 @@ export interface JournalOrder {
     partner?: { name: string; email?: string };
     forwarderId?: string;
     subForwarderId?: string;
+    /** Сколько файлов ТТН загружено по рейсу (C1). Старый сервер не присылает. */
+    _count?: { documents?: number };
     /** Счета, выставленные заказчику по этому рейсу. Пусто — счёта ещё нет. */
     accountingDocuments?: { document: { id: string; number: string; status: string } }[];
     subForwarderPrice?: number;

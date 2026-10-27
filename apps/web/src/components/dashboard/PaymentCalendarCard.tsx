@@ -23,6 +23,7 @@ import {
 import { MONTHS_GEN } from '@/lib/ru-date';
 import Loader from '@/components/ui/Loader';
 import DashboardCard from './DashboardCard';
+import PartyMark from './PartyMark';
 import card from './payment-calendar-card.module.css';
 
 /**
@@ -322,10 +323,8 @@ function DayHint({
 
             {строки.map((row) => (
                 <div key={row.documentId} className={card.hintRow}>
-                    <span
-                        className={card.dot}
-                        style={{ background: row.direction === 'IN' ? IN_HEX : OUT_HEX, flexShrink: 0 }}
-                    />
+                    {/* Цвет компании (I3); приход или расход — знак и цвет суммы справа. */}
+                    <PartyMark name={row.party} size={16} />
                     <span className={card.hintParty}>
                         {/* Кто платит или кому платим — первое, что нужно
                             прочитать. Номер счёта уточняет, но не он главный. */}
@@ -394,10 +393,7 @@ function DayPanel({
                             className={card.row}
                             onClick={() => row.orderId && router.push(`/company/orders/${row.orderId}`)}
                         >
-                            <span
-                                className={card.dot}
-                                style={{ background: row.direction === 'IN' ? IN_HEX : OUT_HEX, flexShrink: 0 }}
-                            />
+                            <PartyMark name={row.party} size={18} />
                             <span className={card.rowBody}>
                                 <span className={card.rowParty}>{row.party}</span>
                                 <span className={card.rowInvoice}>

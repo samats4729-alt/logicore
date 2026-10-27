@@ -11,6 +11,7 @@ import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3Service } from '../../s3/s3.service';
 import { decodeUploadName } from '../../common/utils/upload-name';
+import { isSoleTrader } from '../../exchange/exchange-access';
 
 /** Рубильник: требовать ли подтверждение организации для работы. */
 const SETTING_VERIFICATION_REQUIRED = 'verification_required';
@@ -35,6 +36,30 @@ export const VERIFICATION_DOCUMENT_LABELS: Record<string, string> = {
     DIRECTOR_APPOINTMENT: 'Приказ (решение) о назначении первого руководителя',
     DIRECTOR_ID: 'Удостоверение личности руководителя',
 };
+
+/**
+ * Пакет для индивидуального предпринимателя (задачи шефа, P8).
+ *
+ * У ИП нет ни справки о регистрации юрлица, ни приказа о назначении
+ * руководителя: он сам себе руководитель. Его регистрацию подтверждает
+ * талон (уведомление) о регистрации ИП, а личность — удостоверение. С
+ * прежним пакетом перевозчик-ИП не мог пройти проверку вовсе: приказа ему
+ * взять неоткуда.
+ */
+export const SOLE_TRADER_VERIFICATION_DOCUMENTS: DocumentType[] = [
+    DocumentType.COMPANY_REGISTRATION,
+    DocumentType.DIRECTOR_ID,
+];
+
+export const SOLE_TRADER_DOCUMENT_LABELS: Record<string, string> = {
+    COMPANY_REGISTRATION: 'Талон (уведомление) о регистрации ИП',
+    DIRECTOR_ID: 'Удостоверение личности ИП',
+};
+
+/** Какие документы нужны этой организации: ИП — свой пакет. */
+export function requiredDocumentsFor(company: { name?: string | null; bin?: string | null }): DocumentType[] {
+    return isSoleTrader(company) ? SOLE_TRADER_VERIFICATION_DOCUMENTS : REQUIRED_VERIFICATION_DOCUMENTS;
+}
 
 @Injectable()
 export class CompanyVerificationService {
@@ -130,14 +155,18 @@ export class CompanyVerificationService {
             orderBy: { createdAt: 'desc' },
         });
 
+        const required = requiredDocumentsFor(company);
         const attached = new Set(documents.map((document) => document.type));
         return {
             ...company,
             documents,
-            missingDocuments: REQUIRED_VERIFICATION_DOCUMENTS.filter((type) => !attached.has(type)),
+            /** Какие документы нужны — у ИП свой пакет (P8). */
+            requiredDocuments: required,
+            soleTrader: required === SOLE_TRADER_VERIFICATION_DOCUMENTS,
+            missingDocuments: required.filter((type) => !attached.has(type)),
             canSubmit: this.canSubmit(company.verificationStatus)
                 && !company.verificationBlockedAt
-                && REQUIRED_VERIFICATION_DOCUMENTS.every((type) => attached.has(type)),
+                && required.every((type) => attached.has(type)),
         };
     }
 
@@ -151,7 +180,7 @@ export class CompanyVerificationService {
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },
             select: {
-                id: true, verificationStatus: true,
+                id: true, name: true, bin: true, verificationStatus: true,
                 verificationBlockedAt: true, rejectionReason: true,
             },
         });
@@ -170,10 +199,12 @@ export class CompanyVerificationService {
             select: { type: true },
         });
         const attachedTypes = new Set(attached.map((document) => document.type));
-        const missing = REQUIRED_VERIFICATION_DOCUMENTS.filter((type) => !attachedTypes.has(type));
+        const required = requiredDocumentsFor(company);
+        const labels = required === SOLE_TRADER_VERIFICATION_DOCUMENTS ? SOLE_TRADER_DOCUMENT_LABELS : VERIFICATION_DOCUMENT_LABELS;
+        const missing = required.filter((type) => !attachedTypes.has(type));
         if (missing.length) {
             throw new BadRequestException(
-                `Не приложены документы: ${missing.map((type) => VERIFICATION_DOCUMENT_LABELS[type]).join('; ')}`,
+                `Не приложены документы: ${missing.map((type) => labels[type]).join('; ')}`,
             );
         }
 

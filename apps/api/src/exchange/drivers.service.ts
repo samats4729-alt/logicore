@@ -9,6 +9,7 @@ import { birthDateFromIin, digitsOnly, isValidIin, normalizeIdNumber, normalizeP
 import { removeExchangeFile, safeExtension, storeExchangeFile } from './exchange-files';
 import { PARK_FILTER_STATUSES, ParkDriverFilter, UpdateDriverProfileDto } from './dto/driver.dto';
 import { ParkContractService } from './park-contract.service';
+import { tempPassword } from '../auth/temp-password';
 
 /** Подписи документов — ими же сервер говорит, чего не хватает. */
 export const DOCUMENT_TITLES: Record<ExchangeDriverDocumentKind, string> = {
@@ -44,6 +45,7 @@ const DRIVER_SELECT = {
     submittedAt: true, reviewedAt: true, rejectReason: true, blockedAt: true, blockedReason: true,
     tripsCompleted: true, createdAt: true,
     deductionRequested: true, deductionRequestedAt: true, deletionRequestedAt: true,
+    extraPhones: true, docsEmail: true, docsContact: true,
     user: { select: { email: true } },
     documents: { select: { id: true, kind: true, fileName: true, mimeType: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
 } satisfies Prisma.ExchangeDriverSelect;
@@ -204,6 +206,57 @@ export class ExchangeDriversService {
         });
     }
 
+    /**
+     * Парк сам заводит водителя (задачи шефа, Q3/R1).
+     *
+     * Водитель позвонил или пришёл — диспетчер вносит его имя и номер, а
+     * система придумывает пароль. Пароль показывается один раз: его диктуют
+     * водителю, и он входит в приложение по номеру и паролю. Остальное — ИИН,
+     * удостоверение, машину, договор — водитель заполняет в анкете, как при
+     * обычной регистрации, и анкета приходит парку на проверку.
+     *
+     * Номер, который уже есть в системе, второй раз не заводится — так же,
+     * как при регистрации из приложения. Номер из чёрного списка биржи —
+     * тоже: проверку анкеты он всё равно не прошёл бы.
+     */
+    async addByPark(parkId: string, data: { phone: string; lastName: string; firstName: string; middleName?: string }) {
+        const phone = normalizePhone(data.phone);
+        if (!phone) throw new BadRequestException('Телефон — казахстанский мобильный, например +7 701 123 45 67');
+        const lastName = data.lastName.trim();
+        const firstName = data.firstName.trim();
+        if (!lastName || !firstName) throw new BadRequestException('Укажите фамилию и имя водителя');
+
+        const taken = await this.prisma.user.findFirst({
+            where: { phone: { in: [phone, `8${phone.slice(2)}`] } },
+            select: { id: true },
+        });
+        if (taken) {
+            throw new BadRequestException(
+                'Этот номер уже есть в системе. Если водитель зарегистрирован сам, дайте ему код приглашения парка.',
+            );
+        }
+        const blocked = await this.blockedBy({ iin: null, phone, vehiclePlate: null });
+        if (blocked) throw new ForbiddenException(`Этот номер в чёрном списке биржи${blocked.reason ? `: ${blocked.reason}` : ''}`);
+
+        const password = tempPassword();
+        const middleName = data.middleName?.trim() || null;
+        const user = await this.prisma.user.create({
+            data: {
+                role: 'DRIVER',
+                phone,
+                passwordHash: await bcrypt.hash(password, 12),
+                firstName,
+                lastName,
+                middleName,
+                exchangeDriver: {
+                    create: { phone, kind: 'PARK', parkCompanyId: parkId, lastName, firstName, middleName },
+                },
+            },
+            select: { exchangeDriver: { select: { id: true } } },
+        });
+        return { id: user.exchangeDriver!.id, lastName, firstName, phone, password };
+    }
+
     // ==================== водитель (приложение) ====================
 
     /** Анкета водителя. Первый вход — пустая анкета появляется сама. */
@@ -225,6 +278,40 @@ export class ExchangeDriversService {
             where: { id: driver.id },
             data: { deductionRequested: requested, deductionRequestedAt: requested ? new Date() : null },
         });
+        return this.me(userId);
+    }
+
+    /**
+     * Ещё номера и почта для документов (задачи шефа, Q6).
+     *
+     * Второй, третий или зарубежный номер нужен, когда водитель в рейсе за
+     * границей или основной сел. Почта — для актов и счетов от заказчика.
+     * Это не личность и не вход, поэтому анкета на проверку не уходит.
+     */
+    async setContacts(userId: string, dto: { extraPhones?: string[]; docsEmail?: string | null; docsContact?: string | null }) {
+        const driver = await this.ownDriver(userId);
+        if (driver.status === 'BLOCKED') throw new ForbiddenException('Вы заблокированы на бирже');
+        const data: Prisma.ExchangeDriverUpdateInput = {};
+
+        if (dto.extraPhones !== undefined) {
+            const main = normalizePhone(driver.phone) || digitsOnly(driver.phone);
+            const phones: string[] = [];
+            for (const raw of dto.extraPhones.map((p) => p.trim()).filter(Boolean)) {
+                // Казахстанский — к виду +7…; зарубежный — как есть, только цифры с плюсом.
+                const phone = normalizePhone(raw) || (digitsOnly(raw).length >= 10 ? `+${digitsOnly(raw)}` : '');
+                if (!phone) throw new BadRequestException(`«${raw}» не похоже на номер телефона: нужно не меньше 10 цифр`);
+                if (phone !== main && !phones.includes(phone)) phones.push(phone);
+            }
+            data.extraPhones = phones;
+        }
+        if (dto.docsEmail !== undefined) {
+            const email = dto.docsEmail?.trim().toLowerCase() || null;
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new BadRequestException('Почта для документов указана с ошибкой');
+            data.docsEmail = email;
+        }
+        if (dto.docsContact !== undefined) data.docsContact = dto.docsContact?.trim() || null;
+
+        await this.prisma.exchangeDriver.update({ where: { id: driver.id }, data });
         return this.me(userId);
     }
 
@@ -589,7 +676,7 @@ export class ExchangeDriversService {
         });
         const grouped = await this.prisma.exchangeDriver.groupBy({
             by: ['status'],
-            where: { parkCompanyId: companyId, status: { not: 'DRAFT' } },
+            where: { parkCompanyId: companyId },
             _count: { _all: true },
         });
         const count = (s: ExchangeDriverStatus[] | undefined) =>
@@ -601,7 +688,8 @@ export class ExchangeDriversService {
                 approved: count(['APPROVED']),
                 rejected: count(['REJECTED']),
                 blocked: count(['BLOCKED']),
-                all: count(undefined),
+                all: count(PARK_FILTER_STATUSES.all),
+                draft: count(['DRAFT']),
             },
         };
     }

@@ -22,15 +22,48 @@ interface Payee {
  * `in_progress_paid` — рейс в работе, процент придёт после оплаты;
  * `in_progress` — рейс в работе, процент придёт после завершения.
  */
+/**
+ * Схема «процент, когда заказчик оплатил в срок» (задачи шефа, K1: «при
+ * просрочке бонус не начисляется»). По умолчанию её нет: компания выбирает
+ * её сама в условиях оплаты сотрудника. Срок — плановая дата оплаты рейса
+ * (дата счёта или выгрузки плюс отсрочка заказчика).
+ */
+export const CUSTOMER_PAID_ON_TIME = 'CUSTOMER_PAID_ON_TIME';
+
+/** Процент начисляется за оплату заказчика — в срок или вообще. */
+export const accruesOnPayment = (accrualStatus: string | null | undefined) =>
+    accrualStatus === 'CUSTOMER_PAID' || accrualStatus === CUSTOMER_PAID_ON_TIME;
+
+/** День без времени — так сравниваются срок оплаты и день платежа. */
+const dayOf = (value: Date | string) => new Date(value).toISOString().slice(0, 10);
+
 export interface PendingTrip {
     orderId: string;
     orderNumber: string;
     status: string;
-    reason: 'unpaid' | 'in_progress_paid' | 'in_progress';
+    /**
+     * `overdue_lost` — схема «оплатил в срок», а срок прошёл без оплаты:
+     * бонуса за этот рейс уже не будет.
+     */
+    reason: 'unpaid' | 'in_progress_paid' | 'in_progress' | 'overdue_lost';
     baseAmount: number;
     percentValue: number;
     percentBase: string;
     amount: number;
+    /**
+     * Процент придёт после оплаты заказчика, а отсрочка у рейса не задана:
+     * когда он заплатит — неизвестно, а значит, и когда придёт процент
+     * (задачи шефа, K3: «укажите отсрочку платежа для расчёта бонусов»).
+     */
+    customerTermsMissing: boolean;
+    /**
+     * Когда заказчик должен заплатить — плановая дата оплаты рейса. По ней
+     * считается прогноз бонуса до конца месяца (K1). Пусто, если процент
+     * начисляется не за оплату или дата ещё не известна.
+     */
+    expectedAt: string | null;
+    /** Срок оплаты прошёл, а заказчик не заплатил. */
+    overdue: boolean;
 }
 
 /** Схема оплаты для экрана — числами, без служебных полей. */
@@ -144,9 +177,14 @@ export class PayrollService {
             // у экспедитора свой менеджер и своя схема, у заказчика — свои.
             for (const payee of this.payeesOf(order)) {
                 const scheme = await this.getSchemeFor(payee.companyId, payee.userId);
-                if (!scheme || !scheme.isActive || scheme.accrualStatus !== normalizedTrigger) continue;
+                if (!scheme || !scheme.isActive) continue;
+                // «Оплатил в срок» срабатывает на ту же оплату, что и «оплатил».
+                const onTime = scheme.accrualStatus === CUSTOMER_PAID_ON_TIME && normalizedTrigger === 'CUSTOMER_PAID';
+                if (scheme.accrualStatus !== normalizedTrigger && !onTime) continue;
                 // Если тип FIXED, проценты не начисляем
                 if (scheme.type === 'FIXED') continue;
+                // Заплатили позже срока — бонус за рейс не начисляется (K1).
+                if (onTime && !(await this.paidOnTime(orderId, payee.companyId))) continue;
                 await this.accruePercent(order, payee, scheme);
             }
         } catch (error: any) {
@@ -176,7 +214,8 @@ export class PayrollService {
             if (!responsible) return;
 
             const scheme = await this.getSchemeFor(companyId, responsible.userId);
-            if (scheme && scheme.isActive && scheme.type !== 'FIXED' && this.triggerReached(order, scheme.accrualStatus)) {
+            if (scheme && scheme.isActive && scheme.type !== 'FIXED'
+                && await this.triggerReached(order, scheme.accrualStatus, companyId)) {
                 // Начислит новому и сторнирует остальным в этой компании.
                 await this.accruePercent(order, { companyId, userId: responsible.userId }, scheme);
                 return;
@@ -203,7 +242,7 @@ export class PayrollService {
             const accrued = await this.prisma.payrollAccrual.findMany({
                 where: { orderId, kind: 'PERCENT', NOT: { amount: 0 } },
             });
-            const forPayment = accrued.filter((a) => (a.schemeSnapshot as any)?.accrualStatus === 'CUSTOMER_PAID');
+            const forPayment = accrued.filter((a) => accruesOnPayment((a.schemeSnapshot as any)?.accrualStatus));
             if (!forPayment.length) return;
 
             const order = await this.prisma.order.findUnique({
@@ -467,6 +506,7 @@ export class PayrollService {
 
         const schemes = new Map<string, PayrollScheme | null>();
         for (const userId of userIds) schemes.set(userId, await this.getSchemeFor(companyId, userId));
+        const today = dayOf(new Date());
 
         // Маржу считаем разом по всем рейсам: четыре запроса вместо четырёх
         // на каждый рейс.
@@ -490,8 +530,10 @@ export class PayrollService {
             const scheme = schemes.get(userId);
             if (!scheme || scheme.type === 'FIXED' || D(scheme.percentValue).lte(0)) continue;
 
-            const forPayment = scheme.accrualStatus === 'CUSTOMER_PAID';
+            const forPayment = accruesOnPayment(scheme.accrualStatus);
             if (forPayment && order.isCustomerPaid) continue;
+            const expectedAt = forPayment && order.customerPaymentDate ? dayOf(order.customerPaymentDate) : null;
+            const overdue = !!expectedAt && expectedAt < today;
             if (!forPayment && order.status === scheme.accrualStatus) continue;
 
             let base: Money = ZERO;
@@ -514,11 +556,18 @@ export class PayrollService {
                 orderId: order.id,
                 orderNumber: order.orderNumber,
                 status: order.status,
-                reason: forPayment ? (order.status === 'COMPLETED' ? 'unpaid' : 'in_progress_paid') : 'in_progress',
+                reason: overdue && scheme.accrualStatus === CUSTOMER_PAID_ON_TIME
+                    ? 'overdue_lost'
+                    : forPayment ? (order.status === 'COMPLETED' ? 'unpaid' : 'in_progress_paid') : 'in_progress',
                 baseAmount: base.toNumber(),
                 percentValue: D(scheme.percentValue).toNumber(),
                 percentBase: scheme.percentBase,
                 amount: amount.toNumber(),
+                // Срок оплаты уже известен (например, дата поставлена руками) —
+                // спрашивать отсрочку незачем.
+                customerTermsMissing: forPayment && order.customerPaymentDays == null && !expectedAt,
+                expectedAt,
+                overdue,
             });
             result.set(userId, list);
         }
@@ -554,9 +603,53 @@ export class PayrollService {
     }
 
     /** Дошёл ли рейс до события, от которого схема начисляет процент. */
-    private triggerReached(order: { status: string; isCustomerPaid?: boolean | null }, accrualStatus: string) {
+    private async triggerReached(
+        order: { id: string; status: string; isCustomerPaid?: boolean | null },
+        accrualStatus: string,
+        companyId: string,
+    ) {
         if (accrualStatus === 'CUSTOMER_PAID') return !!order.isCustomerPaid;
+        if (accrualStatus === CUSTOMER_PAID_ON_TIME) {
+            return !!order.isCustomerPaid && this.paidOnTime(order.id, companyId);
+        }
         return order.status === accrualStatus;
+    }
+
+    /**
+     * Заплатил ли заказчик в срок (задачи шефа, K1).
+     *
+     * Срок — плановая дата оплаты рейса. День оплаты — дата последнего
+     * поступления по рейсу (самим платежом или долей общего перевода): её
+     * бухгалтер ставит по выписке, а не днём, когда дошли руки внести.
+     * Срока нет — опоздать нельзя, бонус начисляется.
+     */
+    async paidOnTime(orderId: string, companyId: string): Promise<boolean> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { customerPaymentDate: true, customerPaidAt: true },
+        });
+        if (!order) return false;
+        if (!order.customerPaymentDate) return true;
+
+        const [payment, share] = await Promise.all([
+            this.prisma.payment.findFirst({
+                where: { orderId, companyId, direction: 'IN', isDeleted: false },
+                orderBy: { date: 'desc' },
+                select: { date: true },
+            }),
+            this.prisma.paymentOrderShare.findFirst({
+                where: { orderId, payment: { companyId, direction: 'IN', isDeleted: false } },
+                orderBy: { payment: { date: 'desc' } },
+                select: { payment: { select: { date: true } } },
+            }),
+        ]);
+        const days = [payment?.date, share?.payment.date, !payment && !share ? order.customerPaidAt : null]
+            .filter((d): d is Date => !!d)
+            .map(dayOf)
+            .sort();
+        const paidDay = days[days.length - 1];
+        if (!paidDay) return false;
+        return paidDay <= dayOf(order.customerPaymentDate);
     }
 
     private async accruePercent(order: any, payee: Payee, scheme: PayrollScheme) {

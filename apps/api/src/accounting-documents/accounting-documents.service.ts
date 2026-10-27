@@ -366,7 +366,7 @@ export class AccountingDocumentsService {
          */
         const dueDate = dto.dueDate
             ? new Date(dto.dueDate)
-            : (await this.dueDateFromOrders(dto, orderIds)).dueDate;
+            : (await this.dueDateFromOrders(dto, orderIds, companyId)).dueDate;
 
         const created = await this.prisma.$transaction(async (tx) => {
             const number = await this.nextNumber(
@@ -1293,6 +1293,12 @@ export class AccountingDocumentsService {
      * входящего это дата контрагента (`externalDate`), а не день, когда мы
      * завели документ у себя: перевозчик считает срок от своего числа. То же
      * правило, что и в пересчёте плановых дат по рейсу.
+     *
+     * Если в рейсе отсрочка не записана (рейс завели до того, как заполнили
+     * карточку, или условия добавили в карточку позже), берём её из карточки
+     * контрагента — нашей карточки справочника (задачи шефа, H2: «отсрочку
+     * брать из контрагента»). Условия компании, которая сама работает на
+     * платформе, — не наша договорённость, их не подставляем.
      */
     private async dueDateFromOrders(
         document: {
@@ -1300,8 +1306,10 @@ export class AccountingDocumentsService {
             direction: AccountingDocumentDirection;
             documentDate?: string | Date | null;
             externalDate?: string | Date | null;
+            counterpartyId?: string | null;
         },
         orderIds: string[],
+        companyId?: string,
     ) {
         if (document.type !== AccountingDocumentType.PAYMENT_INVOICE || !orderIds.length) {
             return { dueDate: null, dependsOn: null };
@@ -1316,6 +1324,8 @@ export class AccountingDocumentsService {
                 customerPaymentFrom: true,
                 carrierPaymentDays: true,
                 carrierPaymentFrom: true,
+                customerPaymentBanking: true,
+                carrierPaymentBanking: true,
                 customerOriginalsAt: true,
                 carrierOriginalsAt: true,
                 routePoints: {
@@ -1325,16 +1335,40 @@ export class AccountingDocumentsService {
             },
         });
 
-        const terms: OrderPaymentTerms[] = orders.map((order) => ({
-            orderNumber: order.orderNumber,
-            days: outgoing ? order.customerPaymentDays : order.carrierPaymentDays,
-            from: outgoing ? order.customerPaymentFrom : order.carrierPaymentFrom,
-            originalsAt: outgoing ? order.customerOriginalsAt : order.carrierOriginalsAt,
-            // Выгрузка — последняя точка доставки в маршруте, как и в
-            // пересчёте сроков по рейсу.
-            unloadAt: [...order.routePoints].reverse()
-                .find((point) => point.pointType === 'DELIVERY')?.expectedDate ?? null,
-        }));
+        const card = companyId && document.counterpartyId
+            && orders.some((order) => (outgoing ? order.customerPaymentDays : order.carrierPaymentDays) == null)
+            ? await this.prisma.company.findFirst({
+                where: { id: document.counterpartyId, isExternal: true, createdByCompanyId: companyId },
+                select: {
+                    customerPaymentDays: true, customerPaymentFrom: true,
+                    carrierPaymentDays: true, carrierPaymentFrom: true,
+                    customerPaymentBanking: true, carrierPaymentBanking: true,
+                },
+            })
+            : null;
+        const cardTerms = card
+            ? {
+                days: outgoing ? card.customerPaymentDays : card.carrierPaymentDays,
+                from: outgoing ? card.customerPaymentFrom : card.carrierPaymentFrom,
+                banking: outgoing ? card.customerPaymentBanking : card.carrierPaymentBanking,
+            }
+            : null;
+
+        const terms: OrderPaymentTerms[] = orders.map((order) => {
+            const days = outgoing ? order.customerPaymentDays : order.carrierPaymentDays;
+            const fromCard = days == null && cardTerms?.days != null;
+            return {
+                orderNumber: order.orderNumber,
+                days: fromCard ? cardTerms!.days : days,
+                from: fromCard ? cardTerms!.from : (outgoing ? order.customerPaymentFrom : order.carrierPaymentFrom),
+                banking: fromCard ? cardTerms!.banking : (outgoing ? order.customerPaymentBanking : order.carrierPaymentBanking),
+                originalsAt: outgoing ? order.customerOriginalsAt : order.carrierOriginalsAt,
+                // Выгрузка — последняя точка доставки в маршруте, как и в
+                // пересчёте сроков по рейсу.
+                unloadAt: [...order.routePoints].reverse()
+                    .find((point) => point.pointType === 'DELIVERY')?.expectedDate ?? null,
+            };
+        });
 
         const anchorDate = outgoing
             ? document.documentDate
@@ -1375,8 +1409,12 @@ export class AccountingDocumentsService {
         );
 
         const { dueDate, dependsOn } = await this.dueDateFromOrders(
-            { type, direction: query.direction, documentDate: query.documentDate, externalDate: query.externalDate },
+            {
+                type, direction: query.direction, documentDate: query.documentDate,
+                externalDate: query.externalDate, counterpartyId: query.counterpartyId,
+            },
             orderIds,
+            companyId,
         );
         return { dueDate: dueDate ? dueDate.toISOString().slice(0, 10) : null, dependsOn };
     }
@@ -1689,6 +1727,59 @@ export class AccountingDocumentsService {
         };
     }
 
+    /**
+     * Что сообщить контрагенту об оплате счёта (задачи шефа, H7/O3).
+     *
+     * Перевозчик выставил нам счёт и неделями звонит узнать, заплатили ли.
+     * Оплату бухгалтер уже отметил — осталось сказать об этом контрагенту:
+     * письмом, а если он сам работает на платформе — ещё и в его кабинете.
+     *
+     * Сообщить можно только о том, что уже случилось: по счёту должна быть
+     * разнесена хотя бы часть денег. Частичная оплата так и называется — с
+     * остатком, иначе «счёт оплачен» прочтут как «оплачен целиком».
+     */
+    async paidNoticeInfo(companyId: string, id: string) {
+        const document = await this.prisma.accountingDocument.findFirst({
+            where: { id, companyId },
+            select: {
+                id: true, number: true, externalNumber: true, type: true, direction: true, status: true,
+                documentDate: true, externalDate: true, currency: true,
+                total: true, amountPaid: true, balanceDue: true,
+                counterparty: { select: { name: true, email: true, bin: true } },
+                company: { select: { name: true } },
+            },
+        });
+        if (!document) throw new NotFoundException('Документ не найден');
+        if (document.type !== AccountingDocumentType.PAYMENT_INVOICE) {
+            throw new BadRequestException('Сообщить об оплате можно только по счёту на оплату');
+        }
+        if (document.status !== AccountingDocumentStatus.POSTED) {
+            throw new BadRequestException('Счёт не проведён — сообщать об оплате рано');
+        }
+        if (toNum(document.amountPaid) <= 0) {
+            throw new BadRequestException('По счёту ещё нет оплаты — сообщать не о чем');
+        }
+
+        const incoming = document.direction === AccountingDocumentDirection.INCOMING;
+        const platform = document.counterparty?.bin
+            ? await this.findPlatformCompanyByBin(document.counterparty.bin, companyId)
+            : null;
+        return {
+            incoming,
+            // Входящий счёт контрагент знает под своим номером и своей датой.
+            number: incoming ? document.externalNumber || document.number : document.number,
+            documentDate: incoming ? document.externalDate ?? document.documentDate : document.documentDate,
+            currency: document.currency,
+            total: toNum(document.total),
+            paid: toNum(document.amountPaid),
+            balance: toNum(document.balanceDue),
+            senderName: document.company?.name || 'LogiCore',
+            counterpartyName: document.counterparty?.name || null,
+            counterpartyEmail: document.counterparty?.email || null,
+            platformCompanyId: platform?.id ?? null,
+        };
+    }
+
     /** Отметить, что документ ушёл почтой. Вызывается после самой отправки. */
     async markSentByEmail(companyId: string, userId: string, id: string) {
         const updated = await this.prisma.accountingDocument.updateMany({
@@ -1929,11 +2020,13 @@ export class AccountingDocumentsService {
     }
 
     /** Документы, доставленные нам контрагентами с платформы. */
-    async listIncomingDelivered(companyId: string, query: { status?: string } = {}) {
+    async listIncomingDelivered(companyId: string, query: { status?: string; orderId?: string } = {}) {
         return this.prisma.accountingDocument.findMany({
             where: {
                 recipientCompanyId: companyId,
                 sentAt: { not: null },
+                // Из карточки заявки: что прислали по этому рейсу (H8).
+                ...(query.orderId ? { orders: { some: { orderId: query.orderId } } } : {}),
                 ...(query.status === 'PENDING' ? { receiptStatus: null } : {}),
                 ...(query.status === 'ACCEPTED' || query.status === 'REJECTED'
                     ? { receiptStatus: query.status }

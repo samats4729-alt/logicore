@@ -44,6 +44,7 @@ function build(driver: any = { id: 'd-1', userId: 'u-1', kind: 'PARK', parkCompa
             create: jest.fn(async (args: any) => ({ id: 'p-1', net: args.data.net })),
             findMany: jest.fn().mockResolvedValue([]),
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            aggregate: jest.fn().mockResolvedValue({ _sum: { opv: null } }),
         },
         $transaction: jest.fn(async (cb: any) => cb(tx)),
     };
@@ -235,5 +236,17 @@ describe('Выплата водителю парка: рейс по расчёт
         const e = await service.earnings('u-1');
         expect(e.trips[0]).toMatchObject({ net: 280000, workNet: 280000, driverTotal: 400000, fuelIssued: 120000 });
         expect(e.available.net).toBe(280000);
+    });
+
+    it('водитель видит, сколько ОПВ уже ушло на его пенсионный счёт (Q14)', async () => {
+        const { service, prisma } = build();
+        prisma.order.findMany.mockResolvedValue([]);
+        prisma.driverPayout.aggregate
+            .mockResolvedValueOnce({ _sum: { opv: 33000 } })
+            .mockResolvedValueOnce({ _sum: { opv: 7300 } });
+        const e = await service.earnings('u-1');
+        expect(e.opvSaved).toMatchObject({ total: 33000, thisYear: 7300 });
+        // Только выплаченное: пока выплата не прошла, взнос не перечислен.
+        expect(prisma.driverPayout.aggregate.mock.calls[0][0].where).toMatchObject({ status: 'PAID' });
     });
 });

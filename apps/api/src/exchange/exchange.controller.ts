@@ -10,8 +10,9 @@ import { AuditService } from '../audit/audit.service';
 import { ExchangeService } from './exchange.service';
 import { ExchangeOffersService } from './exchange-offers.service';
 import { exchangeEnabled, ExchangeEnabledGuard } from './exchange-enabled.guard';
-import { companyHasExchange, ExchangeCompanyAccessGuard } from './exchange-access';
+import { companyHasExchange, ExchangeCompanyAccessGuard, soleTraderBlock } from './exchange-access';
 import { ExchangeBoardQueryDto, MakeOfferDto, PublishOrderDto, RoutePricesQueryDto, UnpublishOrderDto } from './dto/exchange-order.dto';
+import { OrderContractAutoService } from '../orders/order-contract-auto.service';
 
 /**
  * Включена ли биржа и парк ли компания — кабинет по этому решает, какие
@@ -36,7 +37,9 @@ export class ExchangeStatusController {
         // Компании — только если её отметили в админке.
         if (!(await companyHasExchange(this.prisma, req.user.companyId))) return { enabled: false, isPark: false };
         const company = await this.prisma.company.findUnique({ where: { id: req.user.companyId }, select: { isPark: true } });
-        return { enabled: true, isPark: !!company?.isPark };
+        // ИП смотрит биржу, но выставлять и откликаться не может (P7) — кабинет предупреждает заранее.
+        const soleTrader = !!(await soleTraderBlock(this.prisma, req.user.companyId));
+        return { enabled: true, isPark: !!company?.isPark, soleTrader };
     }
 }
 
@@ -59,6 +62,7 @@ export class ExchangeController {
         private readonly offers: ExchangeOffersService,
         private readonly audit: AuditService,
         private readonly driverPush: DriverPushService,
+        private readonly autoContract: OrderContractAutoService,
     ) {}
 
     @Get('board')
@@ -133,6 +137,8 @@ export class ExchangeController {
             entityLabel: `Заявка ${result.orderNumber}: с биржи выбран исполнитель ${result.executor} за ${result.price.toLocaleString('ru-RU')} ₸`,
             orderId: id,
         });
+        // Договор-заявка перевозчику — сама, если так настроено (A14).
+        this.autoContract.schedule(id, req.user.companyId, req.user);
         return result;
     }
 
@@ -147,7 +153,9 @@ export class ExchangeController {
             action: 'UPDATE',
             entity: 'order',
             entityId: id,
-            entityLabel: `Заявка ${state.orderNumber} выставлена на биржу за ${dto.price.toLocaleString('ru-RU')} ₸`,
+            entityLabel: dto.price
+                ? `Заявка ${state.orderNumber} выставлена на биржу за ${dto.price.toLocaleString('ru-RU')} ₸`
+                : `Заявка ${state.orderNumber} выставлена на биржу без цены — исполнители предложат свою`,
         });
         return state;
     }

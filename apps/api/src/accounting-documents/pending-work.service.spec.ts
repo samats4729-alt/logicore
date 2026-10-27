@@ -31,6 +31,8 @@ const INVOICES = [
     { id: 'd3', number: 'СЧ-003', status: 'POSTED', dueDate: '2027-01-01', balanceDue: 700000 },
     // Черновик: никому не отправлен, просрочки нет.
     { id: 'd4', number: 'СЧ-004', status: 'DRAFT', dueDate: '2026-05-01', balanceDue: 900000 },
+    // Срок через три дня — «ждёт оплаты, срок подходит» (I6).
+    { id: 'd5', number: 'СЧ-005', status: 'POSTED', dueDate: new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10), balanceDue: 250000 },
 ];
 
 /** Живым считается документ вида `type`, если он не отменён. */
@@ -70,7 +72,9 @@ function makePrisma(ordersScope: string | null = null) {
         accountingDocument: {
             findMany: jest.fn(async ({ where }: any) => INVOICES
                 .filter((invoice) => invoice.status === where.status)
-                .filter((invoice) => new Date(invoice.dueDate) < where.dueDate.lt)
+                .filter((invoice) => (where.dueDate.lt
+                    ? new Date(invoice.dueDate) < where.dueDate.lt
+                    : new Date(invoice.dueDate) >= where.dueDate.gte && new Date(invoice.dueDate) <= where.dueDate.lte))
                 .filter((invoice) => invoice.balanceDue > where.balanceDue.gt)
                 .map((invoice) => ({
                     id: invoice.id,
@@ -242,3 +246,36 @@ describe('PendingWorkService — висяки для дашборда', () => {
 
 // Ссылка на CUSTOMER нужна, чтобы имя контрагента в наборе читалось.
 void CUSTOMER;
+
+describe('«Требует оформления»: счета со сроком и порядок строк (I6)', () => {
+    it('счёт со сроком в ближайшую неделю — в группе «ждёт оплаты», с днями до срока', async () => {
+        const service = new PendingWorkService(makePrisma());
+
+        const { dueInvoices, overdueInvoices } = await service.getPendingWork(COMPANY);
+
+        expect(dueInvoices.items.map((i) => i.label)).toEqual(['СЧ-005']);
+        expect(dueInvoices.items[0].daysLeft).toBeGreaterThanOrEqual(2);
+        expect(dueInvoices.items[0].daysLeft).toBeLessThanOrEqual(3);
+        // Просроченным он не считается.
+        expect(overdueInvoices.items.map((i) => i.label)).not.toContain('СЧ-005');
+    });
+
+    it('рейсы с суммой — выше рейсов без суммы', async () => {
+        const prisma: any = {
+            user: { findUnique: jest.fn(async () => ({ ordersScope: null })) },
+            company: { findUnique: jest.fn(async () => ({ managersSeeOwnOrdersOnly: false })) },
+            order: {
+                findMany: jest.fn(async () => [
+                    { id: 'z', orderNumber: 'ЗК-0', customerPrice: 0, updatedAt: new Date('2026-07-01'), customerCompany: null },
+                    { id: 'm', orderNumber: 'ЗК-300', customerPrice: 300000, updatedAt: new Date('2026-07-05'), customerCompany: null },
+                ]),
+            },
+            accountingDocument: { findMany: jest.fn(async () => []) },
+        };
+        const service = new PendingWorkService(prisma);
+
+        const { ordersWithoutAct } = await service.getPendingWork(COMPANY);
+
+        expect(ordersWithoutAct.items.map((i) => i.label)).toEqual(['ЗК-300', 'ЗК-0']);
+    });
+});

@@ -176,3 +176,19 @@ describe('Активность на дашборде', () => {
         ]));
     });
 });
+
+describe('Активность: чужая заявка, которую ведёт наш сотрудник (J1)', () => {
+    it('по ответственному засчитываются только старые заявки без экспедитора', async () => {
+        const { service, prisma } = служба([]);
+
+        await service.getDashboardActivity(КОМПАНИЯ);
+
+        // Заявка другой организации холдинга с нашим сотрудником в
+        // ответственных — её деньги не наши, маржа месяца от них не уходит в минус.
+        const where = prisma.order.findMany.mock.calls[0][0].where;
+        expect(where.AND[0].OR).toContainEqual({
+            responsibleManager: { companyId: КОМПАНИЯ }, forwarderId: null, partnerId: null,
+        });
+        expect(where.AND[0].OR).not.toContainEqual({ responsibleManager: { companyId: КОМПАНИЯ } });
+    });
+});

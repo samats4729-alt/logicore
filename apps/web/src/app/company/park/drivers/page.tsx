@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { ArrowLeft, FileWarning, UsersRound } from 'lucide-react';
+import { ArrowLeft, FileWarning, UserPlus, UsersRound } from 'lucide-react';
 import { api } from '@/lib/api';
 import { EXCHANGE_DRIVER_STATUS_LABELS } from '@/lib/vocabulary';
 import { ParkDriverFilter, ParkDriverList, иинКрасиво, фиоВодителя, телефонКрасиво } from '@/lib/exchange';
@@ -11,9 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusPill from '@/components/ui/StatusPill';
 import styles from '@/components/nova/nova.module.css';
+import AddParkDriverDialog from '@/components/park/AddParkDriverDialog';
 
 const FILTERS: { key: ParkDriverFilter; label: string }[] = [
     { key: 'pending', label: 'На проверке' },
+    // Вошли по коду или добавлены парком, анкету ещё не отправили (Q3).
+    { key: 'draft', label: 'Заполняют анкету' },
     { key: 'approved', label: 'Допущены' },
     { key: 'rejected', label: 'Отказ' },
     { key: 'blocked', label: 'Заблокированы' },
@@ -36,6 +39,9 @@ export default function ParkDriversPage() {
     }, []);
     const [data, setData] = useState<ParkDriverList | null>(null);
     const [failed, setFailed] = useState<string | null>(null);
+    /** «Добавить водителя» — парк заводит его сам (Q3/R1). */
+    const [adding, setAdding] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
     /**
      * Чего не хватает в реквизитах парка для договора с водителями. Договор
      * собирается из «Кабинет → Организация»; без БИН, адреса и директора
@@ -69,7 +75,7 @@ export default function ParkDriversPage() {
                     : 'Не удалось загрузить водителей. Обновите страницу.');
             });
         return () => { alive = false; };
-    }, [filter]);
+    }, [filter, reloadKey]);
 
     return (
         <div className={styles.page}>
@@ -85,7 +91,15 @@ export default function ParkDriversPage() {
                     <Button variant="outline" onClick={() => router.push('/company/park')}>
                         <ArrowLeft className="h-4 w-4" /> К кабинету
                     </Button>
+                    <Button onClick={() => setAdding(true)}>
+                        <UserPlus className="h-4 w-4" /> Добавить водителя
+                    </Button>
                 </div>
+                <AddParkDriverDialog
+                    open={adding}
+                    onOpenChange={setAdding}
+                    onAdded={() => { setFilter('draft'); setReloadKey((k) => k + 1); }}
+                />
             </div>
 
             {requisitesGaps.length > 0 && (

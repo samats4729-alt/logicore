@@ -5,7 +5,7 @@ import { InputNumber, Select } from 'antd';
 import { BadgeCheck, CircleAlert, Loader2, Receipt, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { INVOICE_TIMINGS, PAYMENT_ANCHORS } from '@/lib/settlement-terms';
+import { DAY_KINDS, INVOICE_TIMINGS, PAYMENT_ANCHORS } from '@/lib/settlement-terms';
 import { VAT_RATES } from '@/lib/tax';
 import nova from '@/components/nova/nova.module.css';
 
@@ -32,6 +32,9 @@ interface Terms {
     customerPaymentFrom: string | null;
     carrierPaymentDays: number | null;
     carrierPaymentFrom: string | null;
+    /** Отсрочка в банковских днях (F3). */
+    customerPaymentBanking: boolean;
+    carrierPaymentBanking: boolean;
 }
 
 const VAT_OPTIONS = [
@@ -63,6 +66,7 @@ export default function PartnerSettlementTerms({
         vatPayer: null, vatRate: null, invoiceTiming: null,
         customerPaymentDays: null, customerPaymentFrom: null,
         carrierPaymentDays: null, carrierPaymentFrom: null,
+        customerPaymentBanking: false, carrierPaymentBanking: false,
     });
     const [saving, setSaving] = useState(false);
 
@@ -75,6 +79,8 @@ export default function PartnerSettlementTerms({
             customerPaymentFrom: partner?.customerPaymentFrom ?? null,
             carrierPaymentDays: partner?.carrierPaymentDays ?? null,
             carrierPaymentFrom: partner?.carrierPaymentFrom ?? null,
+            customerPaymentBanking: !!partner?.customerPaymentBanking,
+            carrierPaymentBanking: !!partner?.carrierPaymentBanking,
         });
     }, [partner]);
 
@@ -91,6 +97,8 @@ export default function PartnerSettlementTerms({
                 customerPaymentFrom: draft.customerPaymentFrom,
                 carrierPaymentDays: draft.carrierPaymentDays,
                 carrierPaymentFrom: draft.carrierPaymentFrom,
+                customerPaymentBanking: draft.customerPaymentBanking,
+                carrierPaymentBanking: draft.carrierPaymentBanking,
             });
             toast.success('Условия расчётов сохранены — новые рейсы пойдут по ним');
             onSaved(res.data);
@@ -201,6 +209,14 @@ export default function PartnerSettlementTerms({
                                         addonAfter="дн."
                                     />
                                     <Select
+                                        style={{ width: 150 }}
+                                        disabled={!canEdit}
+                                        aria-label="Какие дни"
+                                        value={!!draft.customerPaymentBanking}
+                                        onChange={(v) => setDraft({ ...draft, customerPaymentBanking: v })}
+                                        options={DAY_KINDS}
+                                    />
+                                    <Select
                                         style={{ width: 260 }}
                                         allowClear
                                         disabled={!canEdit}
@@ -237,6 +253,14 @@ export default function PartnerSettlementTerms({
                                     value={draft.carrierPaymentDays}
                                     onChange={(v) => setDraft({ ...draft, carrierPaymentDays: v })}
                                     addonAfter="дн."
+                                />
+                                <Select
+                                    style={{ width: 150 }}
+                                    disabled={!canEdit}
+                                    aria-label="Какие дни"
+                                    value={!!draft.carrierPaymentBanking}
+                                    onChange={(v) => setDraft({ ...draft, carrierPaymentBanking: v })}
+                                    options={DAY_KINDS}
                                 />
                                 <Select
                                     style={{ width: 260 }}

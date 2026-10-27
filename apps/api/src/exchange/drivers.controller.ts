@@ -28,8 +28,11 @@ import { ParkContractService } from './park-contract.service';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
+import { fuelChangeText, fuelView } from './fuel-history';
 import { PlatformFeeDto } from './dto/fuel.dto';
-import { FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
+import { AdvanceDecisionDto, AdvanceRequestDto, FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
+import { ExchangeAdvanceRequestsService } from './advance-requests.service';
+import { ExchangeDriverVehiclesService } from './driver-vehicles.service';
 import { DriverPushService } from '../notifications/driver-push.service';
 
 /**
@@ -48,8 +51,8 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
     res.send(file.pdf);
 }
 import {
-    AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
-    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
+    AddParkDriverDto, AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
+    ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, DriverContactsDto, DriverVehicleDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
 const LOGIN_ATTEMPTS_PER_MINUTE = Number(process.env.AUTH_THROTTLE_LIMIT) || 5;
@@ -114,7 +117,64 @@ export class ExchangeDriverController {
         private readonly s3: S3Service,
         private readonly contracts: ParkContractService,
         private readonly fuel: ExchangeFuelService,
+        private readonly advances: ExchangeAdvanceRequestsService,
+        private readonly vehicles: ExchangeDriverVehiclesService,
     ) {}
+
+    // ==================== транспорт: тягачи и прицепы (R4) ====================
+
+    @Get('me/vehicles')
+    @ApiOperation({ summary: 'Тягачи и прицепы водителя' })
+    myVehicles(@Request() req: any) {
+        return this.vehicles.list(req.user.sub);
+    }
+
+    @Post('me/vehicles')
+    @ApiOperation({ summary: 'Добавить тягач или прицеп' })
+    addVehicle(@Request() req: any, @Body() dto: DriverVehicleDto) {
+        return this.vehicles.add(req.user.sub, dto);
+    }
+
+    @Delete('me/vehicles/:id')
+    @ApiOperation({ summary: 'Убрать тягач или прицеп' })
+    removeVehicle(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.remove(req.user.sub, id);
+    }
+
+    @Post('me/vehicles/:id/main')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Сделать основным' })
+    mainVehicle(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.makeMain(req.user.sub, id);
+    }
+
+    // ==================== топливо и аванс заранее (Q17) ====================
+
+    @Get('trips/:orderId/advances')
+    @ApiOperation({ summary: 'Сколько можно попросить по рейсу и прежние запросы' })
+    tripAdvances(@Request() req: any, @Param('orderId') orderId: string) {
+        return this.advances.forDriver(req.user.sub, orderId);
+    }
+
+    @Post('trips/:orderId/advances')
+    @ApiOperation({ summary: 'Попросить на топливо или аванс по рейсу' })
+    requestAdvance(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: AdvanceRequestDto) {
+        return this.advances.request(req.user.sub, orderId, dto);
+    }
+
+    @Post('advances/:id/resubmit')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Перезагрузил документы — отправить запрос снова' })
+    resubmitAdvance(@Request() req: any, @Param('id') id: string) {
+        return this.advances.resubmit(req.user.sub, id);
+    }
+
+    @Post('advances/:id/cancel')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Отозвать свой запрос, пока парк не решил' })
+    cancelAdvance(@Request() req: any, @Param('id') id: string) {
+        return this.advances.cancel(req.user.sub, id);
+    }
 
     // ==================== топливо рейса ====================
     // Водитель доезжает до заправки, звонит в парк, чек пробивают на БИН парка —
@@ -265,6 +325,12 @@ export class ExchangeDriverController {
         return this.drivers.cancelDeletion(req.user.sub);
     }
 
+    @Put('me/contacts')
+    @ApiOperation({ summary: 'Ещё номера и почта для бухгалтерских документов' })
+    setContacts(@Request() req: any, @Body() dto: DriverContactsDto) {
+        return this.drivers.setContacts(req.user.sub, dto);
+    }
+
     @Put('me/deduction')
     @ApiOperation({ summary: 'Заявление на базовый вычет по ИПН — у другого работодателя не получаю' })
     setDeduction(@Request() req: any, @Body() dto: DeductionRequestDto) {
@@ -377,7 +443,36 @@ export class ExchangeParkController {
         private readonly contracts: ParkContractService,
         private readonly fuel: ExchangeFuelService,
         private readonly registry: ExchangeParkRegistryService,
+        private readonly advances: ExchangeAdvanceRequestsService,
+        private readonly vehicles: ExchangeDriverVehiclesService,
     ) {}
+
+    // ==================== запросы водителей на топливо и аванс (Q17) ====================
+    // Решает бухгалтер парка: он смотрит рейс, накладную и подтверждение
+    // получателя — поэтому здесь и бухгалтер, и право «Бухгалтерия».
+
+    @Get('advances')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @RequirePermissions('orders', 'accounting')
+    @ApiOperation({ summary: 'Запросы водителей на топливо и аванс' })
+    advanceRequests(@Request() req: any, @Query('scope') scope?: string) {
+        return this.advances.forPark(req.user.companyId, scope === 'all' ? 'all' : 'open');
+    }
+
+    @Post('advances/:id/decide')
+    @HttpCode(HttpStatus.OK)
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @RequirePermissions('orders', 'accounting')
+    @ApiOperation({ summary: 'Решение по запросу: выдать, доп. проверка, перезагрузить документы, отказ' })
+    async decideAdvance(@Request() req: any, @Param('id') id: string, @Body() dto: AdvanceDecisionDto) {
+        const result = await this.advances.decide(req.user.companyId, req.user.sub, id, dto);
+        const what = { APPROVE: 'выдано', CHECK: 'на доп. проверку', REUPLOAD: 'перезагрузить документы', REJECT: 'отказ' }[dto.action];
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'STATUS', entity: 'driver_advance', entityId: id, orderId: result.orderId,
+            entityLabel: `${result.kind === 'FUEL' ? 'Топливо' : 'Аванс'} водителю ${result.driver.name}, ${result.amount.toLocaleString('ru-RU')} ₸: ${what}${result.parkNote ? ` — ${result.parkNote}` : ''}`,
+        });
+        return result;
+    }
 
     @Get('overview')
     @ApiOperation({ summary: 'Кабинет парка: водители, рейсы, заработок за месяц, код приглашения' })
@@ -510,7 +605,17 @@ export class ExchangeParkController {
     @Put('rates')
     @ApiOperation({ summary: 'Изменить ставки удержаний' })
     async setRates(@Request() req: any, @Body() dto: PayoutRatesDto) {
+        const before = await this.payouts.parkRates(req.user.companyId);
         const result = await this.payouts.setRates(req.user.companyId, req.user.sub, dto);
+        // История цен на топливо (задачи шефа, Q15) — в журнале действий, отдельной записью.
+        const fuelChange = fuelChangeText(before, result);
+        if (fuelChange) {
+            await this.audit.log({
+                companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_fuel',
+                entityLabel: `Топливо: ${fuelChange}`,
+                details: { before: fuelView(before), after: fuelView(result) },
+            });
+        }
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
             entityLabel: `Ставки выплат: комиссия ${dto.commissionPct}%, ОПВ ${dto.opvPct}%, ВОСМС ${dto.vosmsPct}%, ИПН ${dto.ipnPct}%, СО ${dto.soPct}%${dto.vatPayer ? `, НДС ${dto.vatPct ?? 16}%` : ''}`,
@@ -523,10 +628,17 @@ export class ExchangeParkController {
     async setSeason(@Request() req: any, @Body() dto: FuelSeasonDto) {
         const result = await this.payouts.setFuelSeason(req.user.companyId, req.user.sub, dto.season);
         await this.audit.log({
-            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_rates',
-            entityLabel: `Топливо: ${dto.season === 'WINTER' ? 'зимняя' : 'летняя'} цена`,
+            companyId: req.user.companyId, user: req.user, action: 'UPDATE', entity: 'park_fuel',
+            entityLabel: `Топливо: ${dto.season === 'WINTER' ? 'зимняя' : 'летняя'} цена — ${result.fuelPerKm.toLocaleString('ru-RU')} ₸ за км`,
+            details: { after: fuelView(result) },
         });
         return result;
+    }
+
+    @Get('rates/fuel-history')
+    @ApiOperation({ summary: 'История цен на топливо: кто, когда и что поменял' })
+    fuelHistory(@Request() req: any) {
+        return this.payouts.fuelHistory(req.user.companyId);
     }
 
     @Put('rates/confirm')
@@ -553,10 +665,32 @@ export class ExchangeParkController {
         return this.drivers.parkDrivers(req.user.companyId, query.status);
     }
 
+    @Post('drivers')
+    @ApiOperation({ summary: 'Добавить водителя самому: имя и номер, пароль придумает система' })
+    async add(@Request() req: any, @Body() dto: AddParkDriverDto) {
+        const added = await this.drivers.addByPark(req.user.companyId, dto);
+        await this.audit.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'CREATE',
+            entity: 'exchange_driver',
+            entityId: added.id,
+            // Пароля в журнале нет: его видит только тот, кто добавил, и один раз.
+            entityLabel: `${added.lastName} ${added.firstName}: добавлен парком, ${added.phone}`,
+        });
+        return added;
+    }
+
     @Get('drivers/:id')
     @ApiOperation({ summary: 'Анкета водителя' })
     card(@Request() req: any, @Param('id') id: string) {
         return this.drivers.parkDriverCard(req.user.companyId, id);
+    }
+
+    @Get('drivers/:id/vehicles')
+    @ApiOperation({ summary: 'Тягачи и прицепы водителя (R4)' })
+    driverVehicles(@Request() req: any, @Param('id') id: string) {
+        return this.vehicles.forPark(req.user.companyId, id);
     }
 
     @Get('documents/:id')

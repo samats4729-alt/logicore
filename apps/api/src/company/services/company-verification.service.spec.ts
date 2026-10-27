@@ -178,3 +178,40 @@ describe('CompanyVerificationService', () => {
         });
     });
 });
+
+describe('Проверка организации: пакет для ИП (P8)', () => {
+    it('ИП подтверждается талоном о регистрации и удостоверением — без приказа о руководителе', async () => {
+        const { service, prisma } = makeService();
+        prisma.company.findUnique.mockResolvedValue({
+            id: COMPANY, name: 'ИП «Береке Транс»', bin: null,
+            verificationStatus: CompanyVerificationStatus.DRAFT, rejectionReason: null,
+        });
+        prisma.document.findMany.mockResolvedValue([
+            { type: DocumentType.COMPANY_REGISTRATION }, { type: DocumentType.DIRECTOR_ID },
+        ]);
+
+        await service.submit(COMPANY);
+
+        expect(prisma.company.update.mock.calls[0][0].data.verificationStatus).toBe(CompanyVerificationStatus.PENDING);
+    });
+
+    it('кабинет ИП видит свой пакет', async () => {
+        const { service, prisma } = makeService();
+        prisma.company.findUnique.mockResolvedValue({
+            id: COMPANY, name: 'ИП Ахметов', bin: null, verificationStatus: CompanyVerificationStatus.DRAFT,
+        });
+        const status = await service.getStatus(COMPANY);
+        expect(status.soleTrader).toBe(true);
+        expect(status.requiredDocuments).toEqual([DocumentType.COMPANY_REGISTRATION, DocumentType.DIRECTOR_ID]);
+        expect(status.missingDocuments).toEqual([DocumentType.COMPANY_REGISTRATION, DocumentType.DIRECTOR_ID]);
+    });
+
+    it('ИП без талона — понятная причина его словами', async () => {
+        const { service, prisma } = makeService();
+        prisma.company.findUnique.mockResolvedValue({
+            id: COMPANY, name: 'ИП Ахметов', bin: null, verificationStatus: CompanyVerificationStatus.DRAFT, rejectionReason: null,
+        });
+        prisma.document.findMany.mockResolvedValue([{ type: DocumentType.DIRECTOR_ID }]);
+        await expect(service.submit(COMPANY)).rejects.toThrow('Талон');
+    });
+});

@@ -75,6 +75,14 @@ describe('Биржа: кто выставляет заявку', () => {
         expect(state.onExchange).toBe(true);
     });
 
+    it('без цены (P4): на бирже договорная, исполнители предложат свою', async () => {
+        const { service, prisma } = build();
+        prisma.order.findFirst.mockResolvedValueOnce(order()).mockResolvedValueOnce(order({ exchangePublishedAt: new Date() }));
+        const state = await service.publish(OUR, USER, 'order-1', { price: null });
+        expect(prisma.order.updateMany.mock.calls[0][0].data).toMatchObject({ exchangePrice: null });
+        expect(state.price).toBeNull();
+    });
+
     it('заказчик, у которого рейс ведёт экспедитор, выставить не может', async () => {
         const { service } = build(order({ customerCompanyId: OUR, forwarderId: OTHER }));
         await expect(service.publish(OUR, USER, 'order-1', { price: 1 })).rejects.toThrow(/только компания, которая ищет исполнителя/);

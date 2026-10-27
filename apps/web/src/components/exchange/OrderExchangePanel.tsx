@@ -9,6 +9,7 @@ import { formatMoneyInput, moneyShort, parseMoneyInput } from '@/lib/money-forma
 import { ExchangeOrderState, exchangeEnabled, ответСервера } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RoutePricesPanel } from './RoutePricesPanel';
 import OffersList from './OffersList';
@@ -57,6 +58,21 @@ export default function OrderExchangePanel({ orderId, reloadKey, onChanged }: { 
 
     useEffect(() => { load(); }, [load, reloadKey]);
 
+    // ИП выставлять не может (P7): говорим, как быть, вместо пустого места.
+    if (state?.soleTrader) {
+        return (
+            <section className={nova.card} aria-label="Биржа">
+                <div className={nova.cardHead}>
+                    <Store size={14} />
+                    <h3 className={nova.cardTitle}>Биржа</h3>
+                </div>
+                <div className={`${nova.cardBody} text-[13px] text-muted-foreground`}>
+                    Индивидуальный предприниматель выставляет заявки на биржу через парк или приложение водителя —
+                    напрямую от ИП нельзя.
+                </div>
+            </section>
+        );
+    }
     if (!state || (!state.onExchange && !state.canPublish)) return null;
 
     return (
@@ -70,7 +86,7 @@ export default function OrderExchangePanel({ orderId, reloadKey, onChanged }: { 
                     <>
                         <div className="text-[13px]">
                             <div className="font-semibold">
-                                На бирже с {dayjs(state.publishedAt).format('DD.MM HH:mm')} · за {moneyShort(state.price ?? 0)}
+                                На бирже с {dayjs(state.publishedAt).format('DD.MM HH:mm')} · {state.price != null ? `за ${moneyShort(state.price)}` : 'без цены'}
                             </div>
                             <div className="mt-0.5 text-[12px] text-muted-foreground">
                                 Её видят перевозчики и водители. Выберите исполнителя из откликов ниже.
@@ -117,6 +133,8 @@ function PublishDialog({ state, open, onOpenChange, onDone }: {
     onDone: (state: ExchangeOrderState) => void;
 }) {
     const [price, setPrice] = useState('');
+    /** «Без цены» (P4): исполнители предложат свою, на бирже — «договорная». */
+    const [noPrice, setNoPrice] = useState(false);
     const [note, setNote] = useState('');
     const [tried, setTried] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -125,18 +143,22 @@ function PublishDialog({ state, open, onOpenChange, onDone }: {
         if (!open) return;
         setPrice(state.price ? String(state.price) : state.suggestedPrice ? String(state.suggestedPrice) : '');
         setNote(state.note ?? '');
+        setNoPrice(false);
         setTried(false);
     }, [open, state]);
 
     const amount = Number(parseMoneyInput(price));
-    const priceError = tried && !(amount > 0) ? 'Укажите цену — исполнители будут соглашаться на неё или предлагать свою' : null;
+    const priceError = tried && !noPrice && !(amount > 0) ? 'Укажите цену — исполнители будут соглашаться на неё или предлагать свою' : null;
 
     const submit = async () => {
         setTried(true);
-        if (!(amount > 0)) return;
+        if (!noPrice && !(amount > 0)) return;
         setSaving(true);
         try {
-            const { data } = await api.post(`/exchange/orders/${state.orderId}/publish`, { price: amount, note: note.trim() || undefined });
+            const { data } = await api.post(`/exchange/orders/${state.orderId}/publish`, {
+                price: noPrice ? null : amount,
+                note: note.trim() || undefined,
+            });
             toast.success(`Заявка ${state.orderNumber} на бирже`);
             onOpenChange(false);
             onDone(data);
@@ -154,25 +176,33 @@ function PublishDialog({ state, open, onOpenChange, onDone }: {
                     <DialogTitle className="text-[15px]">Выставить заявку {state.orderNumber} на биржу</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
-                    <label className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1">
                         <span className={`text-[12px] font-medium ${priceError ? 'text-destructive' : 'text-muted-foreground'}`}>
                             Сколько платите исполнителю, ₸
                         </span>
-                        <Input
-                            aria-label="Цена для исполнителя"
-                            value={formatMoneyInput(parseMoneyInput(price))}
-                            onChange={(e) => setPrice(parseMoneyInput(e.target.value).replace(/[^\d.]/g, ''))}
-                            placeholder="Сумма в тенге"
-                            inputMode="numeric"
-                            className="h-10 text-[15px] font-semibold tabular-nums placeholder:font-normal"
-                        />
+                        {!noPrice && (
+                            <Input
+                                aria-label="Цена для исполнителя"
+                                value={formatMoneyInput(parseMoneyInput(price))}
+                                onChange={(e) => setPrice(parseMoneyInput(e.target.value).replace(/[^\d.]/g, ''))}
+                                placeholder="Сумма в тенге"
+                                inputMode="numeric"
+                                className="h-10 text-[15px] font-semibold tabular-nums placeholder:font-normal"
+                            />
+                        )}
+                        <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                            <Checkbox checked={noPrice} onCheckedChange={(c) => setNoPrice(c === true)} />
+                            Без цены — пусть исполнители предложат свою
+                        </label>
                         {priceError && <span role="alert" className="text-[12px] text-destructive">{priceError}</span>}
                         <span className="text-[12px] text-muted-foreground">
-                            Перевозчику и водителю с ИП — эта сумма. Водителю без ИП, через парк, из неё оплачивается топливо и работа,
-                            а налоги парка, 10 % комиссии и НДС прибавятся сверху: полную цену увидите в его отклике до выбора.
+                            {noPrice
+                                ? 'На бирже цена будет «договорная»: перевозчики и водители назовут свою, вы выберете из откликов.'
+                                : 'Перевозчику и водителю с ИП — эта сумма. Водителю без ИП, через парк, из неё оплачивается топливо и работа, '
+                                    + 'а налоги парка, 10 % комиссии и НДС прибавятся сверху: полную цену увидите в его отклике до выбора.'}
                         </span>
-                    </label>
-                    {state.from && state.to && (
+                    </div>
+                    {!noPrice && state.from && state.to && (
                         <RoutePricesPanel origin={state.from} destination={state.to} onUse={(p) => setPrice(String(p))} />
                     )}
                     <label className="flex flex-col gap-1">

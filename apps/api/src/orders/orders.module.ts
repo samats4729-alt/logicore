@@ -3,10 +3,12 @@ import { Module } from '@nestjs/common';
 import { BillingModule } from '../billing/billing.module';
 import { OrdersService } from './orders.service';
 import { OrdersExportService } from './orders-export.service';
+import { OrderDeleteService } from './order-delete.service';
 import { OrdersController } from './orders.controller';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
 import { OrderDocumentsService } from './order-documents.service';
+import { OrderContractAutoService } from './order-contract-auto.service';
 import { OrderSettlementsModule } from './order-settlements.module';
 import { StampImageService } from '../common/services/stamp-image.service';
 import { EmailModule } from '../email/email.module';
@@ -24,11 +26,13 @@ import { CurrencyModule } from '../currency/currency.module';
     providers: [
         OrdersService,
         OrdersExportService,
+        OrderDeleteService,
         PowerOfAttorneyService,
         OrderContractService,
         OrderDocumentsService,
+        OrderContractAutoService,
         StampImageService,
     ],
-    exports: [OrdersService, OrderSettlementsModule],
+    exports: [OrdersService, OrderSettlementsModule, OrderContractAutoService],
 })
 export class OrdersModule { }

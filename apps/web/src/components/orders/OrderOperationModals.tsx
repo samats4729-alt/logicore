@@ -1,4 +1,5 @@
 'use client';
+import PoaAttachmentsPicker, { type PoaAttachments } from './PoaAttachmentsPicker';
 
 import { Alert, Button, Checkbox, Form, Input, Modal, Select, Tag, Typography } from 'antd';
 import type { FormInstance } from 'antd';
@@ -54,6 +55,9 @@ interface OrderOperationModalsProps {
     customEmailInput: string;
     setCustomEmailInput: (value: string) => void;
     handleAddCustomEmail: () => void;
+    /** Вложения к письму с доверенностью (D3). */
+    poaAttachments: PoaAttachments;
+    setPoaAttachments: (v: PoaAttachments) => void;
 
     /** Ссылка для водителя */
     driverLinkModalOpen: boolean;
@@ -83,6 +87,7 @@ export default function OrderOperationModals(props: OrderOperationModalsProps) {
         transferLoading, handleTransferResponsible,
         sharePoAModalOpen, setSharePoAModalOpen, sharePoALoading, handleSharePoA,
         shareEmailsList, setShareEmailsList, customEmailInput, setCustomEmailInput, handleAddCustomEmail,
+        poaAttachments, setPoaAttachments,
         driverLinkModalOpen, setDriverLinkModalOpen, driverLinkUrl, driverLinkLoading,
         regenerateDriverLink, driverPhone,
     } = props;
@@ -215,6 +220,7 @@ export default function OrderOperationModals(props: OrderOperationModalsProps) {
                     <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddCustomEmail}>Добавить</Button>
                 </div>
             </div>
+            <PoaAttachmentsPicker orderId={order.id} open={sharePoAModalOpen} value={poaAttachments} onChange={setPoaAttachments} />
         </Modal>
 
         {/* =================== INCOME MODAL =================== */}

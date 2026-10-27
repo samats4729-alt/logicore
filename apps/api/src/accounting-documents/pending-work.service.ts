@@ -13,6 +13,8 @@ import { documentsOfOwnOrders, managerOrdersFilter } from '../common/manager-ord
 
 /** Сколько строк показывать в виджете; счётчик считается по всей выборке. */
 const PREVIEW_LIMIT = 5;
+/** Сколько дней вперёд счёт считается «срок подходит». */
+const DUE_SOON_DAYS = 7;
 
 /** Потолок выборки: виджет отвечает «сколько и какие», а не грузит всё. */
 const SCAN_LIMIT = 500;
@@ -25,6 +27,8 @@ export interface PendingWorkItem {
     amount: number;
     /** Сколько дней висит: с завершения рейса или с даты платежа по счёту. */
     daysWaiting: number;
+    /** Счёт ждёт оплаты: сколько дней до срока (0 — сегодня). */
+    daysLeft?: number;
     /** Куда вести по клику. */
     orderId?: string;
     documentId?: string;
@@ -60,6 +64,7 @@ export class PendingWorkService {
         ordersWithoutAct: PendingWorkGroup;
         actsWithoutInvoice: PendingWorkGroup;
         overdueInvoices: PendingWorkGroup;
+        dueInvoices: PendingWorkGroup;
         unconfirmedSettlements: PendingWorkGroup;
         generatedAt: Date;
     }> {
@@ -72,17 +77,19 @@ export class PendingWorkService {
             role: viewer?.role,
             userId: viewer?.userId,
         });
-        const [ordersWithoutAct, actsWithoutInvoice, overdueInvoices, unconfirmedSettlements] =
+        const [ordersWithoutAct, actsWithoutInvoice, overdueInvoices, dueInvoices, unconfirmedSettlements] =
             await Promise.all([
                 this.ordersWithoutAct(companyId, свои),
                 this.actsWithoutInvoice(companyId, свои),
                 this.overdueInvoices(companyId, свои),
+                this.dueInvoices(companyId, свои),
                 this.unconfirmedSettlements(companyId, свои),
             ]);
         return {
             ordersWithoutAct,
             actsWithoutInvoice,
             overdueInvoices,
+            dueInvoices,
             unconfirmedSettlements,
             generatedAt: new Date(),
         };
@@ -213,11 +220,16 @@ export class PendingWorkService {
         });
 
         const total = orders.reduce((sum, order) => sum.plus(D(order.customerPrice)), ZERO);
+        // Рейсы с деньгами — выше рейсов без суммы (задачи шефа, I6): нулевая
+        // строка над строкой на 300 тысяч только отвлекает. Внутри — по-прежнему
+        // самые давние сверху.
+        const withMoney = (order: { customerPrice: unknown }) => D(order.customerPrice as any).gt(0);
+        const sorted = [...orders.filter(withMoney), ...orders.filter((order) => !withMoney(order))];
         return {
             count: orders.length,
             total: toNum(total),
             truncated: orders.length === SCAN_LIMIT,
-            items: orders.slice(0, PREVIEW_LIMIT).map((order) => ({
+            items: sorted.slice(0, PREVIEW_LIMIT).map((order) => ({
                 id: order.id,
                 orderId: order.id,
                 label: order.orderNumber,
@@ -267,6 +279,57 @@ export class PendingWorkService {
                 counterparty: document.counterparty?.name ?? null,
                 amount: toNum(document.balanceDue),
                 daysWaiting: document.dueDate ? this.daysSince(document.dueDate) : 0,
+            })),
+        };
+    }
+
+    /**
+     * Счёт выставлен, срок оплаты подходит — в ближайшие 7 дней (задачи
+     * шефа, I6: «выставленные счета, ожидающие оплаты, подошедшие по
+     * графику»). Ещё не просрочен, но звонить заказчику пора.
+     */
+    private async dueInvoices(
+        companyId: string,
+        свои: Prisma.OrderWhereInput | null,
+    ): Promise<PendingWorkGroup> {
+        const today = this.today();
+        const weekAhead = new Date(today.getTime() + DUE_SOON_DAYS * 24 * 60 * 60 * 1000);
+        const documents = await this.prisma.accountingDocument.findMany({
+            where: {
+                companyId,
+                type: AccountingDocumentType.PAYMENT_INVOICE,
+                direction: AccountingDocumentDirection.OUTGOING,
+                status: AccountingDocumentStatus.POSTED,
+                dueDate: { gte: today, lte: weekAhead },
+                balanceDue: { gt: 0 },
+                ...(свои ? documentsOfOwnOrders(свои) : {}),
+            },
+            select: {
+                id: true,
+                number: true,
+                dueDate: true,
+                balanceDue: true,
+                counterparty: { select: { name: true } },
+            },
+            orderBy: { dueDate: 'asc' },
+            take: SCAN_LIMIT,
+        });
+
+        const total = documents.reduce((sum, document) => sum.plus(D(document.balanceDue)), ZERO);
+        return {
+            count: documents.length,
+            total: toNum(total),
+            truncated: documents.length === SCAN_LIMIT,
+            items: documents.slice(0, PREVIEW_LIMIT).map((document) => ({
+                id: document.id,
+                documentId: document.id,
+                label: document.number,
+                counterparty: document.counterparty?.name ?? null,
+                amount: toNum(document.balanceDue),
+                daysWaiting: 0,
+                daysLeft: document.dueDate
+                    ? Math.max(0, Math.round((document.dueDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)))
+                    : 0,
             })),
         };
     }

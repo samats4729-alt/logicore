@@ -100,7 +100,8 @@ export function ExchangeCarrierSlot({ placeholder = 'Выберете из от�
  */
 export async function publishNewOrder(
     order: { id: string; orderNumber?: string | null },
-    price: number,
+    /** null — без цены: исполнители предложат свою (P4). */
+    price: number | null,
     open: (orderId: string) => void,
     /** «создана» — из мастера новой заявки, «сохранена» — из правки. */
     done: 'создана' | 'сохранена' = 'создана',

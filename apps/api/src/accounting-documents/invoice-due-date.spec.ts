@@ -141,3 +141,16 @@ describe('Срок оплаты счёта', () => {
         });
     });
 });
+
+describe('срок счёта в банковских днях (F3)', () => {
+    it('10 банковских дней от даты счёта — без выходных и праздников', () => {
+        // 1 октября 2026 — четверг; 10 рабочих дней — 15 октября.
+        const { dueDate } = invoiceDueDate('2026-10-01', [{ days: 10, from: 'INVOICE', banking: true }]);
+        expect(dueDate?.toISOString().slice(0, 10)).toBe('2026-10-15');
+    });
+
+    it('без отметки — как раньше, календарные дни', () => {
+        const { dueDate } = invoiceDueDate('2026-10-01', [{ days: 10, from: 'INVOICE' }]);
+        expect(dueDate?.toISOString().slice(0, 10)).toBe('2026-10-11');
+    });
+});

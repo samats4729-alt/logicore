@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Loader2, Users } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Loader2, Users, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ParkRegistry, ParkRegistryLine, RegistryPayStatus, день, иинКрасиво, ответСервера } from '@/lib/exchange';
@@ -128,11 +128,35 @@ export default function ParkRegistryPage() {
                         <div className="mb-3 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
                             <Kpi label="Рейсов" value={String(driverId ? lines.length : data.totals.trips)} />
                             <Kpi label="Начислено водителям" value={sum(shown.gross)} />
-                            <Kpi label="Удержано (ОПВ, ВОСМС, ИПН)" value={sum(shown.withheld)} />
+                            <Kpi label="Удержано у водителей" value={sum(shown.withheld)} />
                             <Kpi label="В бюджет всего, с СО" value={sum(shown.toBudget)} strong />
                             <Kpi label="К перечислению водителям" value={sum(shown.toPay)} />
                             <Kpi label="Выплачено" value={sum(shown.paid)} />
                         </div>
+                    )}
+
+                    {/* Итог месяца парка одной сводкой (задачи шефа, K8): оборот, налоги, прибыль. */}
+                    {!driverId && (
+                        <section className={`${styles.card} mb-3`}>
+                            <div className={styles.cardHead}>
+                                <Wallet size={14} />
+                                <h2 className={styles.cardTitle}>Итог месяца парка</h2>
+                            </div>
+                            <div className="grid gap-3 p-4 pt-1 sm:grid-cols-3 xl:grid-cols-6">
+                                <Kpi label="Оборот по рейсам" value={sum(data.totals.customerPrice)} />
+                                <Kpi label="НДС" value={sum(data.totals.vat)} />
+                                <Kpi label="Налоги и взносы в бюджет" value={sum(data.totals.toBudget)} />
+                                <Kpi label="Комиссия парка по расчёту" value={sum(data.totals.parkFee)} />
+                                <Kpi
+                                    label={(data.totals.fuelDiff ?? 0) < 0 ? 'Перерасход топлива' : 'Экономия топлива'}
+                                    value={sum(Math.abs(data.totals.fuelDiff ?? 0))}
+                                />
+                                <Kpi label="Прибыль парка" value={sum(data.totals.parkProfit ?? data.totals.parkFee)} strong />
+                            </div>
+                            <p className="m-0 px-4 pb-3 text-[12px] text-muted-foreground">
+                                Прибыль — ваша комиссия плюс разница по топливу: расчёт против чеков по довезённым рейсам. Доля LogiCore — {sum(data.totals.platformFee)}, в прибыль не входит.
+                            </p>
+                        </section>
                     )}
 
                     {data.drivers.length > 1 && (

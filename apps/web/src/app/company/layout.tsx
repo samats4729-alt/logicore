@@ -41,6 +41,7 @@ import { isNavItemActive } from '@/lib/cabinet-nav';
 import { ROLE_LABELS } from '@/lib/vocabulary';
 import { exchangeStatus } from '@/lib/exchange';
 import { useNewOffersCount, useOffersFeedPolling } from '@/lib/offers-feed';
+import { useEnterToNextField } from '@/lib/enter-to-next';
 
 /**
  * Название пункта меню с подписью «бета-тестирование».
@@ -134,6 +135,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     // любой страницы кабинета (владелец, 15.10.2026).
     useOffersFeedPolling();
     const newOffers = useNewOffersCount();
+    // Enter — к следующему полю формы, как в 1С (задачи шефа, E3).
+    useEnterToNextField();
 
     useEffect(() => {
         if (!user?.companyId) return;
@@ -264,6 +267,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 children: [
                     { key: '/company/orders', label: 'Все заявки' },
                     { key: '/company/orders/create', label: 'Новая заявка' },
+                    { key: '/company/orders/attorneys', label: 'Доверенности' },
                     // Биржа — только если открыта на сервере и этой компании.
                     ...(exchangeOn ? [{ key: '/company/exchange', label: 'Биржа', badge: newOffers }] : []),
                 ],
@@ -279,6 +283,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 children: [
                     { key: '/company/requests', label: 'Запросы на расчёт' },
                     { key: '/company/calculator', label: 'Калькулятор рейса' },
+                    { key: '/company/driver-calculator', label: 'Расчёт водителя без ИП' },
                 ],
             });
         }
@@ -328,6 +333,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 children: [
                     { key: '/company/accounting/pnl', label: 'Отчёт по прибыли' },
                     { key: '/company/accounting/carrier-profit', label: 'Прибыль по перевозчику' },
+                    { key: '/company/accounting/manager-profit', label: 'Маржа по менеджерам' },
                     { key: '/company/accounting/registry', label: 'Реестр заявок' },
                     { key: '/company/accounting/cashflow', label: 'Движение денег' },
                     { key: '/company/accounting/expenses-by-category', label: 'Расходы по статьям' },
@@ -349,6 +355,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 ...(isAdmin ? [{ key: '/company/vehicles', label: 'Автопарк' }] : []),
                 { key: '/company/locations', label: 'Адреса и склады' },
                 ...(hasPerm('partners') ? [{ key: '/company/contracts', label: 'Договоры' }] : []),
+                ...(hasPerm('partners') || hasPerm('drivers') ? [{ key: '/company/blocklist', label: 'Чёрный список' }] : []),
                 ...(isAdmin ? [{ key: '/company/users', label: 'Сотрудники' }] : []),
                 ...(hasPerm('documents') ? [{ key: '/company/documents', label: 'Документы' }] : []),
                 ...(isAdmin && auditEnabled ? [{ key: '/company/audit', label: 'Журнал действий' }] : []),
@@ -369,6 +376,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     { key: '/company/park', label: 'Обзор' },
                     { key: '/company/park/drivers', label: 'Водители парка' },
                     { key: '/company/park/trips', label: 'Рейсы водителей' },
+                    { key: '/company/park/advances', label: 'Запросы водителей' },
                     { key: '/company/park/payouts', label: 'Выплаты водителям' },
                     { key: '/company/park/registry', label: 'Реестр бухгалтера' },
                 ],

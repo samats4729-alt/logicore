@@ -20,6 +20,22 @@ interface SupportAnswer {
     id: string; title: string; answeredAt: string | null;
 }
 
+/** Весть о документе: ТТН, счёт перевозчика, оплата (C5/H8, H7). */
+interface DocumentNotice {
+    id: string;
+    kind: 'TTN' | 'INCOMING_INVOICE' | 'INVOICE_PAID';
+    title: string;
+    text: string;
+    at: string;
+    href: string;
+}
+
+const NOTICE_COLOR: Record<DocumentNotice['kind'], string> = {
+    TTN: 'var(--nova-accent)',
+    INCOMING_INVOICE: 'var(--nova-warn)',
+    INVOICE_PAID: 'var(--nova-pos)',
+};
+
 /** Метка «эти ответы поддержки уже видели». */
 const LS_ANSWERS_KEY = 'lc_notif_last_answer_seen';
 
@@ -29,22 +45,26 @@ function usePolledData() {
     const [events, setEvents] = useState<OrderEvent[]>([]);
     const [pending, setPending] = useState<PendingItem[]>([]);
     const [answers, setAnswers] = useState<SupportAnswer[]>([]);
+    const [notices, setNotices] = useState<DocumentNotice[]>([]);
     const [loading, setLoading] = useState(true);
     const mountedRef = useRef(true);
 
     const fetchAll = useCallback(async () => {
         try {
-            const [evRes, pendRes, ansRes] = await Promise.all([
+            const [evRes, pendRes, ansRes, notRes] = await Promise.all([
                 api.get('/company/orders/events', { params: { limit: 15 } }),
                 api.get('/company/orders/pending-confirmations'),
                 // Ответ поддержки — событие того же рода: человек ждал и
                 // должен узнать сразу, а не открывать раздел наугад.
                 api.get('/assistant/support/my/answers').catch(() => ({ data: [] })),
+                // Документы: ТТН от водителя, счёт перевозчика, оплата нашего счёта.
+                api.get('/company/notices').catch(() => ({ data: [] })),
             ]);
             if (mountedRef.current) {
                 setEvents(evRes.data);
                 setPending(pendRes.data);
                 setAnswers(ansRes.data || []);
+                setNotices(notRes.data || []);
                 setLoading(false);
             }
         } catch {
@@ -59,14 +79,14 @@ function usePolledData() {
         return () => { mountedRef.current = false; clearInterval(timer); };
     }, [fetchAll]);
 
-    return { events, pending, answers, loading };
+    return { events, pending, answers, notices, loading };
 }
 
 export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boolean }) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const { events, pending, answers, loading } = usePolledData();
+    const { events, pending, answers, notices, loading } = usePolledData();
     // Отклики на свои заявки на бирже — из общего счётчика кабинета (lib/offers-feed):
     // тот же список, что у значков в меню, без второго опроса сервера.
     const offers = useOffersFeed((s) => s.offers);
@@ -94,7 +114,9 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
     const hasPending = pending.length > 0;
     // Новые отклики — пришедшие после последнего открытия колокольчика.
     const newOffers = lastSeen ? offers.filter((o) => откликИзменён(o) > lastSeen) : offers;
-    const showDot = hasNewUpdates || hasPending || newEventCount > 0 || freshAnswers.length > 0 || newOffers.length > 0;
+    const newNotices = lastSeen ? notices.filter((n) => n.at > lastSeen) : notices;
+    const showDot = hasNewUpdates || hasPending || newEventCount > 0 || freshAnswers.length > 0 || newOffers.length > 0
+        || newNotices.length > 0;
 
     // При открытии — отметить прочитанным
     useEffect(() => {
@@ -219,6 +241,40 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                         </div>
                     )}
 
+                    {/* Документы: ТТН, счета перевозчиков, оплаты. */}
+                    {notices.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--nova-fg-3)', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
+                                Документы{newNotices.length > 0 ? ` · новых ${newNotices.length}` : ''}
+                            </div>
+                            {notices.slice(0, 6).map((n) => (
+                                <div
+                                    key={n.id}
+                                    onClick={() => { router.push(n.href); setOpen(false); }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                                        cursor: 'pointer', borderRadius: 8, transition: 'background 0.12s',
+                                    }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--nova-hover)')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                    <i style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: NOTICE_COLOR[n.kind] }} />
+                                    <span style={{ flex: 1, minWidth: 0 }}>
+                                        <span style={{ display: 'block', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {n.title}
+                                        </span>
+                                        <span style={{ display: 'block', fontSize: 12, color: 'var(--nova-fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {n.text}
+                                        </span>
+                                    </span>
+                                    <span style={{ fontSize: 11, color: 'var(--nova-fg-3)', whiteSpace: 'nowrap' }}>
+                                        {dayjs(n.at).format('DD.MM HH:mm')}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     {/* Ожидающие подтверждения */}
                     {hasPending && (
                         <div style={{ marginBottom: 8 }}>
@@ -288,7 +344,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                     )}
 
                     {/* Пусто */}
-                    {!loading && !hasPending && events.length === 0 && offers.length === 0 && (
+                    {!loading && !hasPending && events.length === 0 && offers.length === 0 && notices.length === 0 && (
                         <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--nova-fg-3)', fontSize: 13 }}>
                             Пока нет уведомлений
                         </div>

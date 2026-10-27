@@ -12,6 +12,10 @@ export interface DriverProfile {
     middleName: string | null;
     iin: string | null;
     phone: string | null;
+    /** Ещё номера и контакты для документов (Q6). Старый сервер не присылает. */
+    extraPhones?: string[];
+    docsEmail?: string | null;
+    docsContact?: string | null;
     /** Из ИИН — сервер считает сам. */
     birthDate: string | null;
     /** Удостоверение личности: номер, кем выдано, даты «ГГГГ-ММ-ДД…». */
@@ -222,6 +226,32 @@ export interface TripFuel {
     locked: boolean;
 }
 
+/** Транспорт водителя: тягачи и прицепы (R4). */
+export type VehicleKind = 'TRACTOR' | 'TRAILER';
+export interface DriverVehicle {
+    id: string; kind: VehicleKind; plate: string; model: string | null; bodyType: string | null;
+    capacityKg: number | null; regNumber: string | null; isOwn: boolean; isMain: boolean; createdAt: string;
+}
+export interface DriverVehicles {
+    kind: 'IP' | 'PARK' | null;
+    /** Идёт рейс — основной тягач не сменить. */
+    onTrip: boolean;
+    tractors: DriverVehicle[];
+    trailers: DriverVehicle[];
+}
+
+/** Деньги заранее по рейсу: на топливо или аванс (Q17). */
+export type AdvanceKind = 'FUEL' | 'ADVANCE';
+export type AdvanceStatus = 'REQUESTED' | 'CHECK' | 'REUPLOAD' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+export interface TripAdvances {
+    /** Нет — у рейса нет расчёта суммы водителю, просить не из чего. */
+    limit: { pct: number; tripTotal: number; cap: number; issued: number; pending: number; available: number } | null;
+    requests: {
+        id: string; kind: AdvanceKind; amount: number; comment: string | null; status: AdvanceStatus;
+        parkNote: string | null; issuedAmount: number | null; createdAt: string;
+    }[];
+}
+
 /** Фото чека на топливо — отдаёт только сервер и только самому водителю. */
 export const fuelReceiptPath = (id: string) => `/exchange/driver/fuel-receipts/${id}/file`;
 
@@ -231,6 +261,8 @@ export type PayoutStatus = 'REQUESTED' | 'EXPORTED' | 'PAID' | 'REJECTED';
 export interface Earnings {
     parkName: string | null;
     rates: { commissionPct: number; opvPct: number; vosmsPct: number; ipnPct: number; soPct: number };
+    /** Сколько ОПВ уже ушло на пенсионный счёт (по выплаченным выплатам). Старый сервер не присылает. */
+    opvSaved?: { total: number; year: number; thisYear: number };
     iban: string | null;
     bank: string | null;
     available: PayoutAmounts;
@@ -391,6 +423,13 @@ export const exchangeApi = {
     cancelDeletion: () => api.post('/exchange/driver/me/delete/cancel'),
     /** Заявление на базовый вычет по ИПН. */
     setDeduction: (requested: boolean) => api.put<DriverProfile>('/exchange/driver/me/deduction', { requested }).then((r) => r.data),
+    vehicles: () => api.get<DriverVehicles>('/exchange/driver/me/vehicles').then((r) => r.data),
+    addVehicle: (input: { kind: VehicleKind; plate: string; model?: string; bodyType?: string; capacityKg?: number; regNumber?: string; isOwn?: boolean }) =>
+        api.post<DriverVehicles>('/exchange/driver/me/vehicles', input).then((r) => r.data),
+    removeVehicle: (id: string) => api.delete<DriverVehicles>(`/exchange/driver/me/vehicles/${id}`).then((r) => r.data),
+    makeMainVehicle: (id: string) => api.post<DriverVehicles & { needsReview: boolean }>(`/exchange/driver/me/vehicles/${id}/main`).then((r) => r.data),
+    setContacts: (data: { extraPhones: string[]; docsEmail: string | null; docsContact: string | null }) =>
+        api.put<DriverProfile>('/exchange/driver/me/contacts', data).then((r) => r.data),
 
     feed: (bodyType?: string) =>
         api.get<ExchangeOrder[]>('/exchange/driver/loads', { params: bodyType ? { bodyType } : {} }).then((r) => r.data),
@@ -411,6 +450,11 @@ export const exchangeApi = {
         }).then((r) => r.data);
     },
     removeFuelReceipt: (id: string) => api.delete<TripFuel>(`/exchange/driver/fuel-receipts/${id}`).then((r) => r.data),
+    tripAdvances: (orderId: string) => api.get<TripAdvances>(`/exchange/driver/trips/${orderId}/advances`).then((r) => r.data),
+    requestAdvance: (orderId: string, input: { kind: AdvanceKind; amount: number; comment?: string }) =>
+        api.post<TripAdvances>(`/exchange/driver/trips/${orderId}/advances`, input).then((r) => r.data),
+    resubmitAdvance: (id: string) => api.post<TripAdvances>(`/exchange/driver/advances/${id}/resubmit`).then((r) => r.data),
+    cancelAdvance: (id: string) => api.post<TripAdvances>(`/exchange/driver/advances/${id}/cancel`).then((r) => r.data),
     setPayoutAccount: (iban: string, bank?: string) => api.put('/exchange/driver/me/payout-account', { iban, bank }).then((r) => r.data),
     requestPayout: () => api.post<{ id: string; net: number; trips: number }>('/exchange/driver/payouts/request').then((r) => r.data),
 };

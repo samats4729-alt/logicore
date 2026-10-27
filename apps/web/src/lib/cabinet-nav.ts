@@ -13,7 +13,7 @@
 const CABINET_ROUTES = [
     '/company/cabinet', '/company/users', '/company/settings', '/company/audit',
     '/company/partners', '/company/contracts', '/company/locations',
-    '/company/vehicles', '/company/documents', '/company/profile',
+    '/company/vehicles', '/company/documents', '/company/profile', '/company/blocklist',
     '/company/accounting/settings', '/company/accounting/payment-conditions',
     '/company/accounting/payment-forms', '/company/accounting/ownership-types',
     '/company/accounting/banks', '/company/accounting/currencies',
@@ -43,11 +43,12 @@ const FINANCE_ROUTES = [
  */
 export const REPORTS_ROUTES = [
     '/company/reports', '/company/accounting/pnl', '/company/accounting/carrier-profit',
+    '/company/accounting/manager-profit',
     '/company/accounting/registry', '/company/accounting/cashflow',
     '/company/accounting/expenses-by-category',
 ];
 
-const REQUESTS_ROUTES = ['/company/requests', '/company/calculator'];
+const REQUESTS_ROUTES = ['/company/requests', '/company/calculator', '/company/driver-calculator'];
 
 export const HUB_ROUTES: Record<string, string[]> = {
     '/company/cabinet': CABINET_ROUTES,

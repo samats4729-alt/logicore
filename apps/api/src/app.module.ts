@@ -22,6 +22,7 @@ import { DriverModule } from './driver/driver.module';
 import { CargoTypesModule } from './cargo-types/cargo-types.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ExternalCompaniesModule } from './external-companies/external-companies.module';
+import { BlocklistModule } from './blocklist/blocklist.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { EmailModule } from './email/email.module';
 import { AssistantModule } from './assistant/assistant.module';
@@ -78,6 +79,7 @@ import { ReportsModule } from './reports/reports.module';
         CargoTypesModule,
         ContractsModule,
         ExternalCompaniesModule,
+        BlocklistModule,
         AccountingModule,
         AccountingDocumentsModule,
         PaymentProofsModule,

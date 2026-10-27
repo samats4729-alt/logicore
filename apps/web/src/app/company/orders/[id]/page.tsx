@@ -35,6 +35,8 @@ import OrderDocuments from '@/components/orders/OrderDocuments';
 import PillTabs from '@/components/ui/PillTabs';
 import OrderDetails, { OrderSideCards } from '@/components/orders/OrderDetails';
 import { OrderStageBar } from '@/components/orders/OrderStageBar';
+import DeleteOrderDialog from '@/components/orders/DeleteOrderDialog';
+import { NO_ATTACHMENTS, type PoaAttachments } from '@/components/orders/PoaAttachmentsPicker';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
@@ -135,6 +137,8 @@ export default function OrderDetailPage() {
     const [actLoading, setActLoading] = useState(false);
     /** «Отменить заявку?» — отмена из меню «Действия» переспрашивает, как и раньше. */
     const [cancelAsk, setCancelAsk] = useState(false);
+    /** «Удалить заявку» (A12) — окно само скажет, если удалить нельзя. */
+    const [deleteAsk, setDeleteAsk] = useState(false);
     const [invoiceLoading, setInvoiceLoading] = useState(false);
     /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
     const [documentChainKey, setDocumentChainKey] = useState(0);
@@ -311,6 +315,7 @@ export default function OrderDetailPage() {
 
     // Share PoA modal
     const [sharePoAModalOpen, setSharePoAModalOpen] = useState(false);
+    const [poaAttachments, setPoaAttachments] = useState<PoaAttachments>(NO_ATTACHMENTS);
     const [sharePoALoading, setSharePoALoading] = useState(false);
     const [shareEmailsList, setShareEmailsList] = useState<{ email: string; checked: boolean; label: string }[]>([]);
     const [customEmailInput, setCustomEmailInput] = useState('');
@@ -1148,7 +1153,9 @@ export default function OrderDetailPage() {
     const [activeTab, setActiveTab] = useState('details');
     // Из колокольчика и с биржи ведут прямо на отклики: ?tab=offers.
     useEffect(() => {
-        if (new URLSearchParams(window.location.search).get('tab') === 'offers') setActiveTab('offers');
+        // Из вести о ТТН — на документы, о деньгах — на финансы.
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        if (tab === 'offers' || tab === 'documents' || tab === 'finances') setActiveTab(tab);
     }, []);
     const [contracts, setContracts] = useState<any[]>([]);
     const [poaDocuments, setPoaDocuments] = useState<any[]>([]);
@@ -1294,6 +1301,7 @@ export default function OrderDetailPage() {
         }
         setShareEmailsList(uniqueList);
         setCustomEmailInput('');
+        setPoaAttachments(NO_ATTACHMENTS);
         setSharePoAModalOpen(true);
     };
 
@@ -1303,7 +1311,16 @@ export default function OrderDetailPage() {
         const uniqueEmails = Array.from(new Set(selectedEmails));
         setSharePoALoading(true);
         try {
-            await api.post(`/orders/${orderId}/share-power-of-attorney`, { emails: uniqueEmails });
+            // С вложениями — формой с файлами, без них — как раньше.
+            if (poaAttachments.files.length || poaAttachments.documentIds.length) {
+                const form = new FormData();
+                form.append('emails', JSON.stringify(uniqueEmails));
+                form.append('documentIds', JSON.stringify(poaAttachments.documentIds));
+                poaAttachments.files.forEach((f) => form.append('files', f));
+                await api.post(`/orders/${orderId}/share-power-of-attorney`, form);
+            } else {
+                await api.post(`/orders/${orderId}/share-power-of-attorney`, { emails: uniqueEmails });
+            }
             toast.success('Доверенность отправлена');
             setSharePoAModalOpen(false);
         } catch (error: any) {
@@ -1643,6 +1660,14 @@ export default function OrderDetailPage() {
                                         </DropdownMenuItem>
                                     </>
                                 )}
+                                {['COMPANY_ADMIN', 'FORWARDER', 'LOGISTICIAN'].includes(user?.role || '') && (
+                                    <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onSelect={() => setDeleteAsk(true)}
+                                    >
+                                        <Trash2 className="h-4 w-4" /> Удалить заявку
+                                    </DropdownMenuItem>
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                         {canChangeStatus && (
@@ -1661,6 +1686,8 @@ export default function OrderDetailPage() {
 
             {/* Где рейс сейчас — полосой этапов, как в макете. */}
             <OrderStageBar status={order.status} />
+
+            <DeleteOrderDialog orderId={orderId} orderNumber={order.orderNumber} open={deleteAsk} onOpenChange={setDeleteAsk} />
 
             <Dialog open={cancelAsk} onOpenChange={setCancelAsk}>
                 <DialogContent className="max-w-sm">
@@ -2125,6 +2152,10 @@ export default function OrderDetailPage() {
                                             </button>
                                         )}
                                     </div>
+                                    {/* Чем блоки отличаются (задачи шефа, A7): их принимали за дубль. */}
+                                    <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                        Деньги по банку и кассе: оплата от заказчика и оплата перевозчику. Только эти платежи закрывают долги и счета.
+                                    </p>
                                     <Table columns={paymentColumns} dataSource={payments} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет зарегистрированных платежей' }} scroll={{ x: true }} />
                                 </section>
 
@@ -2144,6 +2175,9 @@ export default function OrderDetailPage() {
                                                 </button>
                                             )}
                                         </div>
+                                        <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                            Прочие доходы рейса — возврат, компенсация. Прибавляются к марже, долг заказчика не закрывают: его оплату вносите в «Платежи».
+                                        </p>
                                         <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
                                     </section>
                                     <section className={nova.card} style={{ marginBottom: 0 }}>
@@ -2163,6 +2197,9 @@ export default function OrderDetailPage() {
                                                 </button>
                                             )}
                                         </div>
+                                        <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
+                                            Затраты рейса кроме оплаты перевозчику — топливо, ремонт, штрафы. Уменьшают маржу; оплату перевозчику вносите в «Платежи».
+                                        </p>
                                         <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
                                     </section>
                                 </div>
@@ -2303,6 +2340,8 @@ export default function OrderDetailPage() {
                 customEmailInput={customEmailInput}
                 setCustomEmailInput={setCustomEmailInput}
                 handleAddCustomEmail={handleAddCustomEmail}
+                poaAttachments={poaAttachments}
+                setPoaAttachments={setPoaAttachments}
                 driverLinkModalOpen={driverLinkModalOpen}
                 setDriverLinkModalOpen={setDriverLinkModalOpen}
                 driverLinkUrl={driverLinkUrl}

@@ -11,6 +11,7 @@ import {
     ORDER_FINANCE_SELECT,
     orderFinancePayments,
 } from '../accounting/services/finance-calculator.service';
+import { expiringDocuments } from './document-expiry';
 
 /**
  * Расчёты для блоков дашборда-конструктора (макет «LogiCore на shadcn Nova»,
@@ -422,6 +423,8 @@ export class DashboardBoardService {
                 })),
                 pendingSoon: pendingSoon.map((o) => ({ id: o.id, orderNumber: o.orderNumber, ...route(o), loadingDate: pickupDate(o) })),
                 noTtn: completedNoTtn.map((o) => ({ id: o.id, orderNumber: o.orderNumber, completedAt: o.completedAt })),
+                // Удостоверения водителей, у которых кончается срок (задачи шефа, R5).
+                docsExpiring: await expiringDocuments(this.prisma, req.companyId, now),
             },
         };
     }

@@ -88,11 +88,18 @@ export interface PendingTrip {
     orderId: string;
     orderNumber: string;
     status: string;
-    reason: 'unpaid' | 'in_progress_paid' | 'in_progress';
+    /** `overdue_lost` — схема «оплатил в срок», срок прошёл: бонуса не будет (K1). */
+    reason: 'unpaid' | 'in_progress_paid' | 'in_progress' | 'overdue_lost';
     baseAmount: number;
     percentValue: number;
     percentBase: string;
     amount: number;
+    /** Процент придёт после оплаты, а отсрочка у заказчика не задана (K3). Старый сервер не присылает. */
+    customerTermsMissing?: boolean;
+    /** Когда заказчик должен заплатить — по ней прогноз до конца месяца (K1). */
+    expectedAt?: string | null;
+    /** Срок оплаты прошёл, а заказчик не заплатил. */
+    overdue?: boolean;
 }
 
 /** Начисление с расшифровкой. */
@@ -130,6 +137,8 @@ export interface EmployeeMonth {
     planTrips: PlanTrip[];
     pending: PendingTrip[];
     pendingTotal: number;
+    /** Сколько придёт до конца месяца, если заказчики заплатят в срок (K1). Старый сервер не присылает. */
+    forecastMonthEnd?: number;
 }
 
 /**
@@ -199,6 +208,7 @@ export function сотрудников(n: number): string {
 
 /** Когда начисляется процент — словами. */
 export function моментНачисления(accrualStatus: string): string {
+    if (accrualStatus === 'CUSTOMER_PAID_ON_TIME') return 'после оплаты заказчиком в срок';
     return accrualStatus === 'CUSTOMER_PAID' ? 'после оплаты заказчиком' : 'после завершения рейса';
 }
 
@@ -227,6 +237,7 @@ export function бонусСловами(rules: { threshold: number; bonusAmount
 export function причинаОжидания(reason: PendingTrip['reason']): string {
     switch (reason) {
         case 'unpaid': return 'ждёт оплаты заказчика';
+        case 'overdue_lost': return 'срок оплаты прошёл — бонуса за рейс не будет';
         case 'in_progress_paid': return 'в работе, придёт после оплаты';
         default: return 'в работе, придёт после завершения';
     }

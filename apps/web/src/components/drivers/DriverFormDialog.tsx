@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { alreadyExistsMessage, driverKindLabel, type PoolDriver } from '@/lib/driver-pool';
+import { tempPassword } from '@/lib/temp-password';
 
 /**
  * Водитель: добавить в список или поправить.
@@ -95,6 +96,8 @@ export default function DriverFormDialog({
     const [errors, setErrors] = useState<Partial<Record<keyof Values, string>>>({});
     const [saving, setSaving] = useState(false);
     const [confirmRemove, setConfirmRemove] = useState(false);
+    /** Придуманный пароль показываем открыто — его надо продиктовать водителю. */
+    const [showPassword, setShowPassword] = useState(false);
 
     const editing = !!driver;
 
@@ -105,6 +108,7 @@ export default function DriverFormDialog({
         setCarrierId('');
         setErrors({});
         setConfirmRemove(false);
+        setShowPassword(false);
         if (!driver) {
             // Перевозчики — только для нештатного, и только чтобы отметить,
             // от кого он: на рейс его всё равно можно поставить за любого.
@@ -274,6 +278,44 @@ export default function DriverFormDialog({
                                     placeholder="Иванович" className="h-9 text-[13px]" />
                             </Field>
                         </div>
+                    </Section>
+
+                    {/* Порядок, как просил шеф (E1): ФИО → удостоверение → телефон → машина. */}
+                    <Section title="Документ" hint="для доверенности">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <Field label="Вид">
+                                <select
+                                    value={values.docType}
+                                    onChange={(e) => set('docType', e.target.value)}
+                                    className="h-9 w-full rounded-xl border border-input bg-background px-3 text-[13px]"
+                                >
+                                    <option value="">не указан</option>
+                                    <option value="ID_CARD">Удостоверение личности</option>
+                                    <option value="PASSPORT">Паспорт</option>
+                                </select>
+                            </Field>
+                            <Field label="Номер">
+                                <Input value={values.docNumber} onChange={(e) => set('docNumber', e.target.value)}
+                                    placeholder="012345678" className="h-9 text-[13px] tabular-nums" />
+                            </Field>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <Field label="Выдан">
+                                <DateStringField value={values.docIssuedAt} onChange={(v) => set('docIssuedAt', v)}
+                                    className="h-9 w-full text-[13px]" />
+                            </Field>
+                            <Field label="Кем выдан">
+                                <Input value={values.docIssuedBy} onChange={(e) => set('docIssuedBy', e.target.value)}
+                                    placeholder="МВД РК" className="h-9 text-[13px]" />
+                            </Field>
+                            <Field label="Действует до">
+                                <DateStringField value={values.docExpiresAt} onChange={(v) => set('docExpiresAt', v)}
+                                    className="h-9 w-full text-[13px]" />
+                            </Field>
+                        </div>
+                    </Section>
+
+                    <Section title="Связь">
                         <div className="grid gap-3 sm:grid-cols-2">
                             <Field label="Телефон" error={errors.phone} required>
                                 <Input value={values.phone} onChange={(e) => set('phone', e.target.value)}
@@ -316,48 +358,24 @@ export default function DriverFormDialog({
                         </div>
                     </Section>
 
-                    <Section title="Документ" hint="для доверенности">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <Field label="Вид">
-                                <select
-                                    value={values.docType}
-                                    onChange={(e) => set('docType', e.target.value)}
-                                    className="h-9 w-full rounded-xl border border-input bg-background px-3 text-[13px]"
-                                >
-                                    <option value="">не указан</option>
-                                    <option value="ID_CARD">Удостоверение личности</option>
-                                    <option value="PASSPORT">Паспорт</option>
-                                </select>
-                            </Field>
-                            <Field label="Номер">
-                                <Input value={values.docNumber} onChange={(e) => set('docNumber', e.target.value)}
-                                    placeholder="012345678" className="h-9 text-[13px] tabular-nums" />
-                            </Field>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <Field label="Выдан">
-                                <DateStringField value={values.docIssuedAt} onChange={(v) => set('docIssuedAt', v)}
-                                    className="h-9 w-full text-[13px]" />
-                            </Field>
-                            <Field label="Действует до">
-                                <DateStringField value={values.docExpiresAt} onChange={(v) => set('docExpiresAt', v)}
-                                    className="h-9 w-full text-[13px]" />
-                            </Field>
-                            <Field label="Кем выдан">
-                                <Input value={values.docIssuedBy} onChange={(e) => set('docIssuedBy', e.target.value)}
-                                    placeholder="МВД РК" className="h-9 text-[13px]" />
-                            </Field>
-                        </div>
-                    </Section>
-
                     {штатный && (
                         <Section title="Приложение водителя">
                             <Field
                                 label={editing ? 'Новый пароль' : 'Пароль'}
-                                hint={editing ? 'оставьте пустым, чтобы не менять' : 'необязательно — можно выдать позже'}
+                                hint={showPassword
+                                    ? 'запишите или продиктуйте водителю — после сохранения пароль не показывается'
+                                    : editing ? 'оставьте пустым, чтобы не менять' : 'необязательно — можно выдать позже'}
                             >
-                                <Input value={values.password} onChange={(e) => set('password', e.target.value)}
-                                    type="password" autoComplete="new-password" className="h-9 text-[13px]" />
+                                <div className="flex gap-2">
+                                    <Input value={values.password} onChange={(e) => set('password', e.target.value)}
+                                        type={showPassword ? 'text' : 'password'} autoComplete="new-password"
+                                        className="h-9 text-[13px] tabular-nums" />
+                                    {/* Пароль придумывает система (R1): диспетчеру не нужно сочинять его самому. */}
+                                    <Button type="button" variant="outline" size="sm" className="h-9 shrink-0"
+                                        onClick={() => { set('password', tempPassword()); setShowPassword(true); }}>
+                                        Придумать
+                                    </Button>
+                                </div>
                             </Field>
                         </Section>
                     )}

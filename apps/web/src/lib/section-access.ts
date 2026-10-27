@@ -41,6 +41,8 @@ const SECTIONS: { prefix: string; permission?: string; roles?: string[]; title: 
     { prefix: '/company/orders', permission: 'orders', title: 'Заявки' },
     { prefix: '/company/requests', permission: 'orders', title: 'Запросы' },
     { prefix: '/company/exchange', permission: 'orders', title: 'Биржа' },
+    // Запросы на топливо и аванс решает и бухгалтер парка (Q17) — правило раньше общего.
+    { prefix: '/company/park/advances', roles: ['LOGISTICIAN', 'ACCOUNTANT'], title: 'Запросы водителей' },
     { prefix: '/company/park', permission: 'orders', title: 'Кабинет парка' },
     { prefix: '/company/tracking', permission: 'tracking', title: 'GPS-мониторинг' },
     { prefix: '/company/partners', permission: 'partners', title: 'Контрагенты' },
@@ -48,6 +50,7 @@ const SECTIONS: { prefix: string; permission?: string; roles?: string[]; title: 
     { prefix: '/company/drivers', permission: 'drivers', title: 'Водители' },
     { prefix: '/company/contracts', permission: 'partners', roles: ['LOGISTICIAN'], title: 'Договоры' },
     { prefix: '/company/vehicles', roles: ['LOGISTICIAN'], title: 'Автопарк' },
+    { prefix: '/company/blocklist', roles: ['LOGISTICIAN', 'ACCOUNTANT'], title: 'Чёрный список' },
     // Подписку продлевает тот, кто платит. Права раздела тут ни при чём:
     // деньги за кабинет — дело руководителя, а не бухгалтерии.
     { prefix: '/company/billing', roles: [], title: 'Подписка' },

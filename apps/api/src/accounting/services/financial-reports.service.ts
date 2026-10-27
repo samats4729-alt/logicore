@@ -23,7 +23,7 @@ import * as XLSX from 'xlsx';
 import { SharedReportLinkService, ВИД_ССЫЛКИ } from './shared-report-link.service';
 import { CurrencyRevaluationService } from './currency-revaluation.service';
 import { kzToday } from '../../common/utils/business-date';
-import { documentsOfOwnOrders, managerOrdersFilter } from '../../common/manager-orders';
+import { documentsOfOwnOrders, legacyManagedOrderWhere, managerOrdersFilter } from '../../common/manager-orders';
 import type { JournalViewer } from '../../common/journal-company';
 import { periodStart, periodEnd, calendarDay } from '../../common/utils/period';
 import { exchangeOutcome, paymentInBase } from './exchange-difference';
@@ -444,7 +444,8 @@ export class FinancialReportsService {
                         { forwarderId: companyId },
                         { partnerId: companyId },
                         { subForwarderId: companyId },
-                        { responsibleManager: { companyId: companyId } },
+                        // Чужая заявка, которую ведёт наш сотрудник, — не наши деньги (J1).
+                        legacyManagedOrderWhere(companyId),
                     ]
                 },
                 {
@@ -1718,6 +1719,111 @@ export class FinancialReportsService {
 
         const rows = Array.from(map.values())
             .map(r => ({
+                ...r,
+                revenue: toNum(r.revenue),
+                cost: toNum(r.cost),
+                margin: toNum(r.margin),
+                marginPct: r.revenue.gt(0) ? Math.round(r.margin.div(r.revenue).times(100).toNumber()) : 0,
+            }))
+            .sort((a, b) => b.margin - a.margin);
+
+        const totals = {
+            orders: rows.reduce((s, r) => s + r.orders, 0),
+            revenue: money(rows.reduce((s, r) => s + r.revenue, 0)),
+            cost: money(rows.reduce((s, r) => s + r.cost, 0)),
+            margin: money(rows.reduce((s, r) => s + r.margin, 0)),
+        };
+        return { rows, totals };
+    }
+
+    // ==================== МАРЖА ПО МЕНЕДЖЕРАМ ====================
+
+    /**
+     * Маржа по менеджерам со сделками каждого (задачи шефа, J8).
+     *
+     * Шеф хочет с общего объёма провалиться в менеджеров, а от менеджера — в
+     * его сделки. Деньги считаются тем же калькулятором, что «Прибыль по
+     * перевозчику» и реестр: два отчёта об одной марже не должны расходиться.
+     *
+     * Менеджер, который видит только свои заявки, и здесь видит только себя.
+     */
+    async getManagerProfitReport(
+        companyId: string,
+        query: { startDate?: string; endDate?: string },
+        viewer?: { role?: string | null; userId?: string | null },
+    ) {
+        const start = query.startDate ? new Date(query.startDate) : null;
+        const end = query.endDate ? new Date(query.endDate) : null;
+        const dateFilter = start && end ? { createdAt: { gte: start, lte: end } } : {};
+        const свои = viewer
+            ? await managerOrdersFilter(this.prisma, { companyId, role: viewer.role, userId: viewer.userId })
+            : null;
+
+        const orders = await this.prisma.order.findMany({
+            where: {
+                AND: [
+                    { OR: [{ forwarderId: companyId }, { partnerId: companyId }] },
+                    { OR: [{ isConfirmed: true }, { status: { not: 'PENDING' } }] },
+                    dateFilter,
+                    ...(свои ? [свои] : []),
+                ],
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+            },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                responsibleManager: { select: { id: true, firstName: true, lastName: true } },
+                customerCompany: { select: { name: true } },
+                routePoints: {
+                    orderBy: { sequence: 'asc' },
+                    select: { location: { select: { city: true } } },
+                },
+                ...ORDER_FINANCE_RELATIONS_SELECT,
+            },
+        });
+
+        type Deal = {
+            id: string; orderNumber: string; createdAt: Date; status: string;
+            route: string; customer: string | null; isCustomerPaid: boolean;
+            revenue: number; cost: number; margin: number; marginPct: number;
+        };
+        const map = new Map<string, {
+            managerId: string | null; manager: string;
+            orders: number; revenue: Money; cost: Money; margin: Money; deals: Deal[];
+        }>();
+        for (const order of orders) {
+            const fin = this.calculator.computeOrderFinance({
+                order, payments: orderFinancePayments(order), incomes: order.incomes, expenses: order.expenses, companyId,
+            });
+            const m = order.responsibleManager;
+            const key = m?.id ?? '—';
+            const cur = map.get(key) || {
+                managerId: m?.id ?? null,
+                manager: m ? `${m.lastName || ''} ${m.firstName || ''}`.trim() || 'Без имени' : 'Без ответственного',
+                orders: 0, revenue: ZERO, cost: ZERO, margin: ZERO, deals: [],
+            };
+            cur.orders += 1;
+            cur.revenue = roundMoney(cur.revenue.plus(fin.revenue));
+            cur.cost = roundMoney(cur.cost.plus(fin.executorCost));
+            cur.margin = roundMoney(cur.margin.plus(fin.margin));
+            const cities = order.routePoints.map((p) => p.location?.city).filter(Boolean) as string[];
+            cur.deals.push({
+                id: order.id,
+                orderNumber: order.orderNumber,
+                createdAt: order.createdAt,
+                status: order.status,
+                route: cities.length ? `${cities[0]} → ${cities[cities.length - 1]}` : '—',
+                customer: order.customerCompany?.name ?? null,
+                isCustomerPaid: Boolean(fin.isCustomerPaid),
+                revenue: toNum(fin.revenue),
+                cost: toNum(fin.executorCost),
+                margin: toNum(fin.margin),
+                marginPct: D(fin.revenue).gt(0) ? Math.round(D(fin.margin).div(D(fin.revenue)).times(100).toNumber()) : 0,
+            });
+            map.set(key, cur);
+        }
+
+        const rows = Array.from(map.values())
+            .map((r) => ({
                 ...r,
                 revenue: toNum(r.revenue),
                 cost: toNum(r.cost),

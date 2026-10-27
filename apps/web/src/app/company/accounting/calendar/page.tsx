@@ -26,6 +26,7 @@ import {
     WithoutInvoice,
 } from '@/lib/planned-payments';
 import { Button } from '@/components/ui/button';
+import PartyMark from '@/components/dashboard/PartyMark';
 import { toast } from 'sonner';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -466,6 +467,9 @@ function PaymentRow({
                     {row.direction === 'IN' ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                 </span>
             )}
+
+            {/* Цвет компании (задачи шефа, I3): 20–30 контрагентов различаются глазом. */}
+            <PartyMark name={row.party} size={22} />
 
             <span className="min-w-0 flex-1 leading-tight">
                 <span className="block truncate text-[13.5px] font-semibold text-foreground">{row.party}</span>

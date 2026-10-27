@@ -5,6 +5,7 @@ import {
     AccountingDocumentDirection,
     AccountingDocumentStatus,
     AccountingDocumentType,
+    DocumentType,
     Prisma,
     UserRole,
 } from '@prisma/client';
@@ -13,7 +14,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
 import { asExecutorSees, maskForCustomer } from '../orders/order-visibility';
-import { managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
+import { documentNotices } from './document-notices';
+import { legacyManagedOrderWhere, managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
 import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
 import { MODULE_PERMISSIONS } from '../auth/module-permissions';
 import { D, ZERO, toNum } from '../common/utils/money';
@@ -23,6 +25,8 @@ import { S3Service } from '../s3/s3.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
+import { vehicleDocDates, VehicleDocDatesInput } from './document-expiry';
+import { assertNotBlocked } from '../blocklist/blocklist';
 import { kzMonthShifted, kzStartOfMonth, kzStartOfMonthShifted, kzStartOfToday } from '../common/utils/business-date';
 import {
     FinanceCalculatorService,
@@ -692,6 +696,9 @@ export class CompanyService {
                 take,
                 include: {
                     routePoints: { include: { location: true }, orderBy: { sequence: 'asc' } },
+                    // Загружена ли ТТН файлом — пометка в журнале (задачи шефа, C1):
+                    // по каким сделкам накладная есть, а по каким её ещё ждать.
+                    _count: { select: { documents: { where: { type: DocumentType.TTN } } } },
                     // Выставлен ли по рейсу счёт заказчику. Логист этого не
                     // видел: понять, что счёт забыли, можно было только сверяя
                     // список заявок с журналом счетов вручную.
@@ -874,7 +881,7 @@ export class CompanyService {
             this.prisma.order.findMany({
                 where: {
                     AND: [
-                        { OR: [...participant, { responsibleManager: { companyId } }] },
+                        { OR: [...participant, legacyManagedOrderWhere(companyId)] },
                         // Заявка «в ожидании», которую ещё не подтвердили, —
                         // не работа и не деньги: договорённости по ней нет.
                         { OR: [{ isConfirmed: true }, { status: { not: 'PENDING' } }] },
@@ -1024,6 +1031,7 @@ export class CompanyService {
         managersSeeOwnOrdersOnly?: boolean;
         managersSeeOwnPartnersOnly?: boolean;
         invoiceApprovalRequired?: boolean;
+        autoContractRequest?: boolean;
     }) {
         const company = await this.prisma.company.findUnique({
             where: { id: companyId },
@@ -1443,11 +1451,13 @@ export class CompanyService {
     /**
      * Создать транспорт
      */
-    async createVehicle(companyId: string, data: { type: string; plate: string; model: string; trailerNumber?: string; driverId?: string }) {
-        const { driverId, ...vehicleData } = data;
+    async createVehicle(companyId: string, data: { type: string; plate: string; model: string; trailerNumber?: string; driverId?: string } & VehicleDocDatesInput) {
+        const { driverId, insuranceUntil, inspectionUntil, ...vehicleData } = data;
+        await assertNotBlocked(this.prisma, companyId, { plates: [data.plate, data.trailerNumber] });
         const vehicle = await this.prisma.vehicle.create({
             data: {
                 ...vehicleData,
+                ...vehicleDocDates({ insuranceUntil, inspectionUntil }),
                 companyId,
                 isActive: true,
             },
@@ -1487,7 +1497,7 @@ export class CompanyService {
     /**
      * Обновить транспорт
      */
-    async updateVehicle(companyId: string, id: string, data: Partial<{ type: string; plate: string; model: string; trailerNumber?: string; driverId?: string | null }>) {
+    async updateVehicle(companyId: string, id: string, data: Partial<{ type: string; plate: string; model: string; trailerNumber?: string; driverId?: string | null }> & VehicleDocDatesInput) {
         const vehicle = await this.prisma.vehicle.findFirst({
             where: { id, companyId },
         });
@@ -1495,12 +1505,18 @@ export class CompanyService {
             throw new NotFoundException('Транспорт не найден');
         }
 
-        const { driverId, ...vehicleData } = data;
+        const { driverId, insuranceUntil, inspectionUntil, ...vehicleData } = data;
         const oldPlate = vehicle.plate;
+        await assertNotBlocked(this.prisma, companyId, {
+            plates: [
+                data.plate && data.plate !== vehicle.plate ? data.plate : null,
+                data.trailerNumber && data.trailerNumber !== vehicle.trailerNumber ? data.trailerNumber : null,
+            ],
+        });
 
         const updatedVehicle = await this.prisma.vehicle.update({
             where: { id },
-            data: vehicleData,
+            data: { ...vehicleData, ...vehicleDocDates({ insuranceUntil, inspectionUntil }) },
         });
 
         if (driverId !== undefined) {
@@ -2083,6 +2099,11 @@ export class CompanyService {
             orderId: o.id, orderNumber: o.orderNumber,
             status: o.status, changedAt: o.updatedAt.toISOString(),
         }));
+    }
+
+    /** Вести о документах для колокольчика: ТТН, счета перевозчиков, оплаты (C5/H8). */
+    getDocumentNotices(companyId: string, viewer: { role?: string | null; userId?: string | null }) {
+        return documentNotices(this.prisma, companyId, viewer);
     }
 
     /** Заявки компании, ожидающие подтверждения завершения */

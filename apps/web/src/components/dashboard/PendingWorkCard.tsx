@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ClipboardList, Clock, FileCheck2, FileWarning, ShieldCheck } from 'lucide-react';
+import { CalendarClock, ClipboardList, Clock, FileCheck2, FileWarning, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import Loader from '@/components/ui/Loader';
 import nova from '@/components/nova/nova.module.css';
@@ -17,6 +17,8 @@ interface PendingWorkItem {
     daysWaiting: number;
     orderId?: string;
     documentId?: string;
+    /** Счёт ждёт оплаты: сколько дней до срока. */
+    daysLeft?: number;
 }
 
 interface PendingWorkGroup {
@@ -31,6 +33,8 @@ interface PendingWork {
     ordersWithoutAct: PendingWorkGroup;
     actsWithoutInvoice: PendingWorkGroup;
     overdueInvoices: PendingWorkGroup;
+    /** Старый сервер не присылает. */
+    dueInvoices?: PendingWorkGroup;
 }
 
 type GroupKey = keyof PendingWork;
@@ -48,6 +52,10 @@ const daysLabel = (days: number) => {
     return `${days} дней`;
 };
 
+/**
+ * Порядок групп (задачи шефа, I6): сначала деньги, которые должны прийти, —
+ * просроченные и подошедшие по графику счета; документальные хвосты — ниже.
+ */
 const GROUPS: {
     key: GroupKey;
     title: string;
@@ -57,18 +65,24 @@ const GROUPS: {
     negative?: boolean;
 }[] = [
     {
-        // Первым: пока расчёты не проверены, по рейсу нельзя выставить счёт —
-        // то есть встают и остальные две группы.
+        key: 'overdueInvoices',
+        title: 'Счёт просрочен',
+        hint: 'срок оплаты прошёл, деньги не пришли',
+        icon: <Clock size={14} />,
+        negative: true,
+    },
+    {
+        key: 'dueInvoices',
+        title: 'Счёт ждёт оплаты',
+        hint: 'срок оплаты в ближайшие 7 дней',
+        icon: <CalendarClock size={14} />,
+    },
+    {
+        // Пока расчёты не проверены, по рейсу нельзя выставить счёт.
         key: 'unconfirmedSettlements',
         title: 'Расчёты ждут проверки',
         hint: 'в карточке контрагента не заполнены НДС или срок оплаты',
         icon: <ShieldCheck size={14} />,
-    },
-    {
-        key: 'ordersWithoutAct',
-        title: 'Рейс завершён, акта нет',
-        hint: 'услуга оказана, но документально не закрыта',
-        icon: <FileWarning size={14} />,
     },
     {
         key: 'actsWithoutInvoice',
@@ -77,11 +91,10 @@ const GROUPS: {
         icon: <FileCheck2 size={14} />,
     },
     {
-        key: 'overdueInvoices',
-        title: 'Счёт просрочен',
-        hint: 'срок оплаты прошёл, деньги не пришли',
-        icon: <Clock size={14} />,
-        negative: true,
+        key: 'ordersWithoutAct',
+        title: 'Рейс завершён, акта нет',
+        hint: 'услуга оказана, но документально не закрыта',
+        icon: <FileWarning size={14} />,
     },
 ];
 
@@ -109,7 +122,7 @@ export default function PendingWorkCard() {
     if (!available) return null;
 
     const openItem = (key: GroupKey, item: PendingWorkItem) => {
-        if (key === 'overdueInvoices' && item.documentId) {
+        if ((key === 'overdueInvoices' || key === 'dueInvoices') && item.documentId) {
             router.push(`/company/accounting/invoices/${item.documentId}`);
             return;
         }
@@ -164,7 +177,11 @@ export default function PendingWorkCard() {
                                         >
                                             <span className={styles.itemLabel}>{item.label}</span>
                                             <span className={styles.itemParty}>{item.counterparty || '—'}</span>
-                                            <span className={styles.itemDays}>{daysLabel(item.daysWaiting)}</span>
+                                            <span className={styles.itemDays}>
+                                                {item.daysLeft != null
+                                                    ? (item.daysLeft === 0 ? 'сегодня' : `через ${daysLabel(item.daysLeft)}`)
+                                                    : daysLabel(item.daysWaiting)}
+                                            </span>
                                             <span className={styles.itemSum}>{money(item.amount)}</span>
                                         </button>
                                     ))}

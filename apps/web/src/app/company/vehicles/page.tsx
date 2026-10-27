@@ -7,6 +7,23 @@ import { api } from '@/lib/api';
 import { VEHICLE_TYPES } from '@/lib/constants';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
+import { DateStringField } from '@/components/ui/DateField';
+
+/** За сколько дней предупреждать о сроке — как в «Требуют внимания» на главной. */
+const WARN_DAYS = 30;
+
+/** Срок страховки или техосмотра: красным — истёк, оранжевым — меньше месяца. */
+function DocDate({ label, value }: { label: string; value?: string | null }) {
+    if (!value) return <div style={{ color: 'var(--lc-text-ter)', fontSize: 12 }}>{label}: не указан</div>;
+    const date = new Date(value);
+    const left = (date.getTime() - Date.now()) / 86_400_000;
+    const color = left < 0 ? '#dc3545' : left <= WARN_DAYS ? '#e67e22' : undefined;
+    return (
+        <div style={{ fontSize: 12, color, fontWeight: color ? 600 : undefined }}>
+            {label}: {left < 0 ? 'истёк' : 'до'} {date.toLocaleDateString('ru-RU', { timeZone: 'UTC' })}
+        </div>
+    );
+}
 
 interface Vehicle {
     id: string;
@@ -25,6 +42,9 @@ interface Vehicle {
     driverFirstName?: string;
     driverMiddleName?: string;
     driverIin?: string;
+    /** Сроки документов своей машины (R5), «2026-12-31T00:00:00.000Z». */
+    insuranceUntil?: string | null;
+    inspectionUntil?: string | null;
 }
 
 export default function VehiclesPage() {
@@ -145,6 +165,8 @@ export default function VehiclesPage() {
                         type: values.type,
                         trailerNumber: values.trailerNumber || null,
                         driverId: finalDriverId || null,
+                        insuranceUntil: values.insuranceUntil || null,
+                        inspectionUntil: values.inspectionUntil || null,
                     });
                     toast.success('Транспорт успешно обновлён');
                 }
@@ -168,6 +190,8 @@ export default function VehiclesPage() {
                     type: values.type,
                     trailerNumber: values.trailerNumber || null,
                     driverId: finalDriverId || null,
+                    insuranceUntil: values.insuranceUntil || null,
+                    inspectionUntil: values.inspectionUntil || null,
                 });
                 toast.success('Транспорт успешно добавлен');
             }
@@ -190,6 +214,8 @@ export default function VehiclesPage() {
             plate: vehicle.plate,
             trailerNumber: vehicle.trailerNumber || '',
             type: vehicle.type,
+            insuranceUntil: vehicle.insuranceUntil?.slice(0, 10) || undefined,
+            inspectionUntil: vehicle.inspectionUntil?.slice(0, 10) || undefined,
             driverId: vehicle.driverId || undefined,
             editDriverDetails: false,
             driverLastName: vehicle.source === 'carrier' ? vehicle.driverLastName : (assignedDriver?.lastName || ''),
@@ -290,6 +316,19 @@ export default function VehiclesPage() {
                 }
                 return <span style={{ color: 'var(--lc-text-ter)' }}>—</span>;
             },
+        },
+        {
+            title: 'Страховка и техосмотр',
+            key: 'docs',
+            width: 190,
+            render: (_: any, record: Vehicle) => record.source === 'carrier'
+                ? <span style={{ color: 'var(--lc-text-ter)' }}>—</span>
+                : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <DocDate label="Страховка" value={record.insuranceUntil} />
+                        <DocDate label="Техосмотр" value={record.inspectionUntil} />
+                    </div>
+                ),
         },
         {
             title: 'Принадлежность',
@@ -491,6 +530,23 @@ export default function VehiclesPage() {
 
                     {(!editingVehicle || editingVehicle.source === 'own') && (
                         <>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Form.Item
+                                        name="insuranceUntil"
+                                        label="Страховка действует до"
+                                        extra="За месяц до конца срока напомним на главной"
+                                    >
+                                        <DateStringField style={{ width: '100%' }} />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="inspectionUntil" label="Техосмотр действует до">
+                                        <DateStringField style={{ width: '100%' }} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+
                             <Form.Item
                                 name="driverId"
                                 label="Назначенный водитель (опционально)"

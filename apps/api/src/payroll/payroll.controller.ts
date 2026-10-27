@@ -47,6 +47,12 @@ function schemeData(dto: any) {
     };
 }
 
+/** Последний день месяца «2026-10» → «2026-10-31». */
+function monthEndDay(month: string): string {
+    const [y, m] = month.split('-').map(Number);
+    return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
 /** Кто в зарплатной ведомости: без водителей и получателей груза. */
 const NOT_ON_PAYROLL: UserRole[] = [UserRole.DRIVER, UserRole.RECIPIENT];
 
@@ -447,7 +453,10 @@ export class PayrollController {
             const percentTotal = sumOf(accruals.filter(a => a.kind === 'PERCENT'), (a) => a.amount);
             const kpiTotal = sumOf(accruals.filter(a => a.kind === 'KPI'), (a) => a.amount);
             const total = salary.plus(percentTotal).plus(kpiTotal);
-            const pendingPercent = sumOf(pending.get(user.id) ?? [], (p: PendingTrip) => p.amount);
+            const pendingPercent = sumOf(
+                (pending.get(user.id) ?? []).filter((p: PendingTrip) => p.reason !== 'overdue_lost'),
+                (p: PendingTrip) => p.amount,
+            );
 
             // Завершённые рейсы, которые человек вёл в этой компании
             const ordersCount = await this.prisma.order.count({
@@ -573,7 +582,7 @@ export class PayrollController {
         if (!companyId) {
             return {
                 accruals: [], totals: { salary: 0, percentTotal: 0, kpiTotal: 0, total: 0 }, bonusesEnabled: false,
-                terms: null, bonusProgress: [], planTrips: [], pending: [], pendingTotal: 0,
+                terms: null, bonusProgress: [], planTrips: [], pending: [], pendingTotal: 0, forecastMonthEnd: 0,
             };
         }
 
@@ -753,7 +762,17 @@ export class PayrollController {
             bonusProgress,
             planTrips,
             pending,
-            pendingTotal: toNum(sumOf(pending, (p) => p.amount)),
+            // Пропавшие бонусы (просрочка при схеме «в срок») в «ещё придёт» не входят.
+            pendingTotal: toNum(sumOf(pending.filter((p) => p.reason !== 'overdue_lost'), (p) => p.amount)),
+            /**
+             * Прогноз до конца месяца (K1): проценты по рейсам, которые заказчик
+             * должен оплатить по календарю не позже конца месяца и ещё не
+             * просрочил. Просроченные сюда не входят: когда заплатят — неизвестно.
+             */
+            forecastMonthEnd: toNum(sumOf(
+                pending.filter((p) => p.expectedAt && !p.overdue && p.expectedAt <= monthEndDay(currentMonth)),
+                (p) => p.amount,
+            )),
         };
     }
 }

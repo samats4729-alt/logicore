@@ -4,9 +4,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { kzToday } from '../common/utils/business-date';
 import { MakeOfferDto } from './dto/exchange-order.dto';
 import { EXCHANGE_ORDER_SELECT, ON_EXCHANGE, exchangeView, managerOf } from './exchange-orders';
-import { PUBLISHER_HAS_ACCESS } from './exchange-access';
+import { PUBLISHER_HAS_ACCESS, soleTraderBlock } from './exchange-access';
 import { ExchangeDriverLoadsService } from './driver-loads.service';
 import { ExchangeSettlementService, SettlementCalc } from './settlement.service';
+import { BlockCandidates, findBlock } from '../blocklist/blocklist';
 
 /** Что о водителе видит компания в отклике — чтобы решить, кого выбрать. */
 const DRIVER_IN_OFFER = {
@@ -15,6 +16,9 @@ const DRIVER_IN_OFFER = {
     ipName: true, vehiclePlate: true, vehicleBodyType: true, vehicleCapacityKg: true,
     tripsCompleted: true, createdAt: true, parkCompanyId: true,
     park: { select: { id: true, name: true } },
+    extraPhones: true, docsEmail: true, docsContact: true,
+    /** Основной прицеп — уходит в рейс вместе с водителем (R4). */
+    vehicles: { where: { kind: 'TRAILER', isMain: true }, select: { plate: true }, take: 1 },
 } satisfies Prisma.ExchangeDriverSelect;
 
 const OFFER_SELECT = {
@@ -53,6 +57,11 @@ function offerView(o: OfferRow) {
             vehicleCapacityKg: d.vehicleCapacityKg,
             tripsCompleted: d.tripsCompleted,
             since: d.createdAt,
+            /** Ещё номера и куда слать акты и счета (Q6). */
+            extraPhones: d.extraPhones,
+            docsEmail: d.docsEmail,
+            docsContact: d.docsContact,
+            trailerPlate: d.vehicles?.[0]?.plate ?? null,
         } : null,
         company: o.company ? { name: o.company.name, bin: o.company.bin } : null,
     };
@@ -110,6 +119,18 @@ export class ExchangeOffersService {
         return order;
     }
 
+    /**
+     * Компания, выставившая заявку, занесла откликающегося в свой чёрный
+     * список (F5/S2) — отклик не принимаем. Причину не называем: это
+     * внутренняя запись той компании.
+     */
+    private async assertNotBlockedBy(order: { subForwarderId: string | null; forwarderId: string | null; customerCompanyId: string | null }, candidates: BlockCandidates) {
+        const owner = managerOf(order);
+        if (owner && await findBlock(this.prisma, owner, candidates)) {
+            throw new ForbiddenException('Откликнуться на эту заявку нельзя: компания, которая её выставила, не принимает ваши отклики');
+        }
+    }
+
     /** Цена отклика: согласен — цена компании; своя — обязательна. */
     private priceOf(order: { exchangePrice: Prisma.Decimal | null }, dto: MakeOfferDto): number {
         if (dto.agree) {
@@ -151,6 +172,13 @@ export class ExchangeOffersService {
     async offerAsDriver(userId: string, orderId: string, dto: MakeOfferDto) {
         const driver = await this.drivers.approvedDriver(userId);
         const order = await this.openOrder(orderId);
+        const who = await this.prisma.exchangeDriver.findUnique({
+            where: { id: driver.id },
+            select: { iin: true, phone: true, vehiclePlate: true, park: { select: { bin: true } } },
+        });
+        await this.assertNotBlockedBy(order, {
+            binIin: [who?.iin, who?.park?.bin], phones: [who?.phone], plates: [who?.vehiclePlate],
+        });
         // Водитель парка — по новому расчёту; со своим ИП — цена как названа.
         const calc = driver.kind === 'PARK' && driver.parkCompanyId ? await this.driverCalc(driver, order, dto) : null;
         const data = {
@@ -237,11 +265,16 @@ export class ExchangeOffersService {
     // ==================== компания-перевозчик ====================
 
     async offerAsCompany(companyId: string, userId: string, orderId: string, dto: MakeOfferDto) {
+        // ИП в исполнении на бирже не участвует — только через парк или приложение (P7).
+        const soleTrader = await soleTraderBlock(this.prisma, companyId);
+        if (soleTrader) throw new ForbiddenException(soleTrader);
         // Парк откликается, как любой перевозчик: он и сам возит (владелец, 15.10.2026).
         const order = await this.openOrder(orderId);
         if ([order.customerCompanyId, order.forwarderId, order.subForwarderId].includes(companyId)) {
             throw new BadRequestException('Это ваша заявка — откликаться на неё не нужно');
         }
+        const me = await this.prisma.company.findUnique({ where: { id: companyId }, select: { bin: true, phone: true } });
+        await this.assertNotBlockedBy(order, { binIin: [me?.bin], phones: [me?.phone] });
         const data = {
             status: 'ACTIVE' as const,
             price: this.priceOf(order, dto),
@@ -370,6 +403,7 @@ export class ExchangeOffersService {
                 assignedDriverName: view.name,
                 assignedDriverPhone: d.phone,
                 assignedDriverPlate: d.vehiclePlate,
+                assignedDriverTrailer: d.vehicles?.[0]?.plate ?? null,
                 assignedAt: now,
                 isConfirmed: true,
             };

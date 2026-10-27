@@ -44,12 +44,20 @@ export const invoiceTimingLabel = (timing?: string | null): string | null =>
 export function paymentTermsLabel(
     days?: number | null,
     anchor?: string | null,
+    /** Отсрочка в банковских днях (F3). */
+    banking?: boolean | null,
 ): string | null {
     if (days === null || days === undefined) return null;
     const from = anchorLabel(anchor);
     if (!from) return null;
-    return `${days === 0 ? 'по факту' : `${days} дн.`} ${from}`;
+    return `${days === 0 ? 'по факту' : `${days} ${banking ? 'банк. дн.' : 'дн.'}`} ${from}`;
 }
+
+/** Какие дни у отсрочки (F3): календарные или банковские — без выходных и праздников РК. */
+export const DAY_KINDS: { value: boolean; label: string }[] = [
+    { value: false, label: 'календарных' },
+    { value: true, label: 'банковских' },
+];
 
 /** Одна сторона расчётов — как её отдаёт сервер. */
 export interface SettlementSide {
@@ -59,6 +67,8 @@ export interface SettlementSide {
     vatRate: number | null;
     days: number | null;
     from: string | null;
+    /** Отсрочка в банковских днях (F3). Старый сервер не присылает. */
+    banking?: boolean;
     /** Плановая дата платежа, когда день отсчёта уже известен. */
     dueDate: string | null;
     /** Чего ждём, чтобы её посчитать: «выгрузки», «оригиналов накладных». */

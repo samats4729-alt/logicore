@@ -22,6 +22,7 @@ import { AssignDriverDto } from '../orders/dto/order.dto';
 import { setAuthCookie } from '../auth/auth-cookie';
 import * as path from 'path';
 import * as fs from 'fs';
+import { OrderContractAutoService } from '../orders/order-contract-auto.service';
 
 @ApiTags('company')
 @Controller('company')
@@ -36,6 +37,7 @@ export class CompanyController {
         private billingService: BillingService,
         private auditService: AuditService,
         private dashboardBoard: DashboardBoardService,
+        private autoContract: OrderContractAutoService,
         private driverPush: DriverPushService,
     ) { }
 
@@ -510,6 +512,8 @@ export class CompanyController {
             userId: req.user.id,
         });
         void this.driverPush.tripAssigned(id, before);
+        // Договор-заявка перевозчику — сама, если так настроено (A14).
+        this.autoContract.schedule(id, req.user.companyId, req.user);
         return result;
     }
 
@@ -539,7 +543,10 @@ export class CompanyController {
         @Body() dto: { partnerId: string; price: number },
         @Request() req: any
     ) {
-        return this.ordersService.assignForwarder(id, req.user.companyId, dto.partnerId, dto.price);
+        const result = await this.ordersService.assignForwarder(id, req.user.companyId, dto.partnerId, dto.price);
+        // Договор-заявка перевозчику — сама, если так настроено (A14).
+        this.autoContract.schedule(id, req.user.companyId, req.user);
+        return result;
     }
 
     // ==================== Водители компании ====================
@@ -785,6 +792,15 @@ export class CompanyController {
         const safeLimit = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 50) : 20;
         return this.companyService.getOrderEvents(req.user.companyId, safeLimit, {
             role: req.user.role, userId: req.user.id,
+        });
+    }
+
+    @Get('notices')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.WAREHOUSE_MANAGER, UserRole.FORWARDER, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Вести о документах для колокольчика: ТТН, счета перевозчиков, оплаты' })
+    getDocumentNotices(@Request() req: any) {
+        return this.companyService.getDocumentNotices(req.user.companyId, {
+            role: req.user.role, userId: req.user.id ?? req.user.sub,
         });
     }
 

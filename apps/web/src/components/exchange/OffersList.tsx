@@ -192,13 +192,26 @@ export default function OffersList({ orderId, onAccepted, newSince = null }: {
                                             )}
                                         </div>
                                         <div className="text-[12px] text-muted-foreground">{whoIs(o)}</div>
+                                        {/* Ещё номера и куда слать акты и счета — водитель указал в приложении (Q6). */}
+                                        {!!o.driver?.extraPhones?.length && (
+                                            <div className="text-[12px] text-muted-foreground">
+                                                ещё: {o.driver.extraPhones.map((p, i) => (
+                                                    <span key={p}>{i > 0 && ', '}<a href={`tel:${p}`} className="tabular-nums text-foreground">{телефонКрасиво(p)}</a></span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {(o.driver?.docsEmail || o.driver?.docsContact) && (
+                                            <div className="truncate text-[12px] text-muted-foreground" title={[o.driver.docsEmail, o.driver.docsContact].filter(Boolean).join(' · ')}>
+                                                документы: {[o.driver.docsEmail, o.driver.docsContact].filter(Boolean).join(' · ')}
+                                            </div>
+                                        )}
                                         {o.comment && <div className="mt-0.5 truncate text-[12px]" title={o.comment}>«{o.comment}»</div>}
                                     </TableCell>
                                     <TableCell className="py-2.5 text-[12.5px]">
                                         {o.driver ? (
                                             <span className="inline-flex items-center gap-1.5">
                                                 <Truck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                                {[o.driver.vehiclePlate, o.driver.vehicleBodyType, тонн(o.driver.vehicleCapacityKg)].filter(Boolean).join(' · ') || 'не указана'}
+                                                {[o.driver.vehiclePlate, o.driver.trailerPlate ? `прицеп ${o.driver.trailerPlate}` : null, o.driver.vehicleBodyType, тонн(o.driver.vehicleCapacityKg)].filter(Boolean).join(' · ') || 'не указана'}
                                             </span>
                                         ) : <span className="text-muted-foreground">своя у перевозчика</span>}
                                     </TableCell>

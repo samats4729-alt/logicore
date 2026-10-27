@@ -22,8 +22,10 @@ export class DriverPublicController {
 
     @Throttle({ default: { limit: 30, ttl: 60000 } })
     @Post(':token/problem')
-    async problem(@Param('token') token: string, @Body() body: { comment?: string }) {
-        return this.driverService.reportProblem(token, body?.comment);
+    // Фото — необязательно: старая страница шлёт только комментарий JSON-ом.
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
+    async problem(@Param('token') token: string, @Body() body: { comment?: string }, @UploadedFile() file?: Express.Multer.File) {
+        return this.driverService.reportProblem(token, body?.comment, file);
     }
 
     @Throttle({ default: { limit: 120, ttl: 60000 } })

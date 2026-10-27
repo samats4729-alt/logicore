@@ -432,6 +432,14 @@ export class AccountingService {
         return this.reportsService.getCarrierProfitReport(companyId, query);
     }
 
+    async getManagerProfitReport(
+        companyId: string,
+        query: { startDate?: string; endDate?: string },
+        viewer: { role?: string | null; userId?: string | null },
+    ) {
+        return this.reportsService.getManagerProfitReport(companyId, query, viewer);
+    }
+
     async getExpensesByCategoryReport(companyId: string, query: { startDate?: string; endDate?: string }) {
         return this.reportsService.getExpensesByCategoryReport(companyId, query);
     }

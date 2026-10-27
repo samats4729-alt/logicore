@@ -420,6 +420,11 @@ model Company {
   /// пока финотдел не разберёт завал, которого вчера не было.
   invoiceApprovalSince    DateTime?
 
+  /// Договор-заявка перевозчику — сама по каждой сделке (задачи шефа, A14):
+  /// формируется, проводится без бухгалтера и уходит перевозчику, как только
+  /// у рейса есть перевозчик и ставка. Выключено по умолчанию.
+  autoContractRequest     Boolean   @default(false)
+
   managersSeeOwnOrdersOnly   Boolean @default(true) // менеджер видит только свои заявки
   managersSeeOwnPartnersOnly Boolean @default(false) // менеджер видит только своих контрагентов
 
@@ -552,6 +557,11 @@ model Company {
   carrierPaymentDays Int?
   carrierPaymentFrom String?
 
+  /// Отсрочка считается в банковских днях (без выходных и праздников РК),
+  /// а не в календарных. Отдельно по сторонам — как и сами отсрочки (F3).
+  customerPaymentBanking Boolean @default(false)
+  carrierPaymentBanking  Boolean @default(false)
+
   /// Грузы компании на бирже.
 
   /// Парк — компания-посредник на бирже: арендует машину с экипажем у
@@ -567,9 +577,12 @@ model Company {
   parkPayoutRates ParkPayoutRates?
   /// Выплаты водителям парка.
   driverPayouts   DriverPayout[]
+  driverAdvanceRequests DriverAdvanceRequest[]
   exchangeDrivers ExchangeDriver[] @relation("ParkExchangeDrivers")
   /// Отклики компании-перевозчика на заявки других компаний с биржи.
   exchangeOffers  ExchangeOffer[]  @relation("CompanyExchangeOffers")
+  /// Свой чёрный список (задачи шефа, F5/S2).
+  blocklist       CompanyBlocklist[]
 }
 
 // ... existing models ...
@@ -925,6 +938,9 @@ model Order {
   customerPaymentFrom String?
   carrierPaymentDays  Int?
   carrierPaymentFrom  String?
+  /// Отсрочка в банковских днях — снимок из карточки, как и сами дни (F3).
+  customerPaymentBanking Boolean @default(false)
+  carrierPaymentBanking  Boolean @default(false)
 
   /// Когда оригиналы накладных дошли до того, кто их ждёт.
   ///
@@ -1021,6 +1037,8 @@ model Order {
   /// Топливо рейса: что парк оплатил или перевёл и чеки водителя.
   exchangeFuelIssues    ExchangeFuelIssue[]
   exchangeFuelReceipts  ExchangeFuelReceipt[]
+  /// Запросы водителя на топливо и аванс по рейсу (Q17).
+  advanceRequests       DriverAdvanceRequest[]
 
   // Relations
   routePoints               OrderRoutePoint[]
@@ -1237,6 +1255,13 @@ model Contract {
   endDate   DateTime?
   notes     String?
   content   Json? // Содержимое: массив статей [{title, paragraphs: [{number, text}]}]
+
+  // Подписанный экземпляр (задачи шефа, G5): скан или PDF с подписями сторон.
+  signedFileUrl    String?
+  signedFileName   String?
+  signedFileMime   String?
+  signedFileSize   Int?
+  signedUploadedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2058,6 +2083,9 @@ model Vehicle {
   plate         String // license plate
   model         String // model details
   trailerNumber String? // optional trailer plate
+  // Сроки документов машины (задачи шефа, R5): напоминание в «Требуют внимания».
+  insuranceUntil  DateTime? @db.Date // страховка (ОГПО ВТС) действует до
+  inspectionUntil DateTime? @db.Date // техосмотр действует до
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -3164,10 +3192,21 @@ model ExchangeDriver {
   contracts ExchangeDriverContract[]
   settlements   ExchangeTripSettlement[]
   fuelReceipts  ExchangeFuelReceipt[]
+  /// Тягачи и прицепы водителя (R4); основной тягач — машина из анкеты.
+  vehicles      ExchangeDriverVehicle[]
+  advanceRequests DriverAdvanceRequest[]
 
   /// Счёт для выплат через парк: IBAN и банк. Без счёта выплату не запросить.
   payoutIban String?
   payoutBank String?
+
+  /// Ещё номера (задачи шефа, Q6): второй, третий, зарубежный — до трёх.
+  /// Меняются без повторной проверки: вход и личность держит основной номер.
+  extraPhones String[] @default([])
+  /// Куда слать бухгалтерские документы (акты, счета) — видит заказчик.
+  docsEmail   String?
+  /// Кто по документам: имя и телефон бухгалтера, если не сам водитель.
+  docsContact String?
 
   /// Заявление водителя на базовый вычет по ИПН (30 МРП): «у другого работодателя
   /// не получаю». Без заявления вычета нет — так сказали налоговики (16.10.2026).
@@ -3335,6 +3374,93 @@ model ExchangeDriverContract {
   @@index([parkCompanyId])
 }
 
+/// Чёрный список компании (задачи шефа, F5/S2): мошенники по БИН/ИИН,
+/// телефону и госномеру. Записанное здесь компания не может завести в свой
+/// справочник контрагентов, водителей и машин, и с ним не пройдёт отклик
+/// на её биржевую заявку. Список у каждой компании свой: чужое мнение о
+/// контрагенте на других не распространяется.
+model CompanyBlocklist {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// BIN_IIN, PHONE или PLATE.
+  kind        String
+  /// Приведённое значение: цифры у БИН/ИИН, +7… у телефона, госномер заглавными без пробелов.
+  value       String
+  /// Кто это — название фирмы или ФИО, как записал сотрудник.
+  name        String?
+  reason      String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([companyId, kind, value])
+}
+
+/// Запрос водителя парка на топливо или аванс по рейсу (задачи шефа, Q17).
+///
+/// Водитель в рейсе просит часть денег заранее — не больше доли от суммы за
+/// рейс, которую задал парк (по умолчанию 50 %). Запрос приходит в кабинет
+/// парка; бухгалтер выдаёт, отправляет на доп. проверку, просит перезагрузить
+/// документы или отказывает. Выданное записывается как «дали на топливо» по
+/// рейсу и вычитается из выплаты в конце — так же, как деньги на заправке.
+model DriverAdvanceRequest {
+  id            String         @id @default(cuid())
+  parkCompanyId String
+  park          Company        @relation(fields: [parkCompanyId], references: [id], onDelete: Cascade)
+  driverId      String
+  driver        ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  orderId       String
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// FUEL — на топливо, ADVANCE — аванс (предоплата).
+  kind          String
+  amount        Decimal        @db.Decimal(18, 2)
+  comment       String?
+  /// REQUESTED — ждёт парка; CHECK — на доп. проверке; REUPLOAD — перезагрузить
+  /// документы; APPROVED — выдано; REJECTED — отказ; CANCELLED — водитель отозвал.
+  status        String         @default("REQUESTED")
+  /// Что сказал парк: что проверяют, что перезагрузить, почему отказ.
+  parkNote      String?
+  decidedById   String?
+  decidedAt     DateTime?
+  /// Сколько выдали и запись «дали на топливо», которой выдали.
+  issuedAmount  Decimal?       @db.Decimal(18, 2)
+  fuelIssueId   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([parkCompanyId, status])
+  @@index([driverId])
+  @@index([orderId])
+}
+
+/// Транспорт водителя биржи (задачи шефа, R4): несколько тягачей и прицепов.
+///
+/// Основной тягач — это машина из анкеты (её проверяет парк и называет
+/// договор с парком); запись здесь держится с анкетой заодно. Основной
+/// прицеп уходит в рейс, когда компания выбирает водителя.
+model ExchangeDriverVehicle {
+  id         String         @id @default(cuid())
+  driverId   String
+  driver     ExchangeDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// TRACTOR — тягач (или грузовик), TRAILER — прицеп или полуприцеп.
+  kind       String
+  /// Госномер — заглавными, без пробелов.
+  plate      String
+  model      String?
+  bodyType   String?
+  capacityKg Int?
+  /// Номер техпаспорта.
+  regNumber  String?
+  /// Записана на водителя; нет — нужна доверенность от владельца.
+  isOwn      Boolean        @default(true)
+  isMain     Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([driverId, kind, plate])
+  @@index([driverId])
+}
+
 /// Чёрный список биржи: кого заблокировали за обман, тот не вернётся ни с
 /// тем же ИИН, ни с тем же телефоном, ни с той же машиной.
 model ExchangeBlocklist {
@@ -3443,6 +3569,9 @@ model ParkPayoutRates {
   vatPayer       Boolean @default(false)
   /// Ставка НДС, % (2026: 16).
   vatPct         Decimal @default(16) @db.Decimal(5, 2)
+  /// Сколько от суммы за рейс водитель может попросить до конца рейса — на
+  /// топливо или авансом, % (задачи шефа, Q17: «50 %, если не задано иначе»).
+  advanceLimitPct Int    @default(50)
   /// Бухгалтер парка подтвердил ставки и порядок расчёта. Пока пусто — расчёт
   /// «предварительный»: выгрузка в 1С и «выплачено» — только с явным согласием.
   /// Любая правка ставок снимает подтверждение.
