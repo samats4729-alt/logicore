@@ -117,7 +117,7 @@ export default function ParkTripsPage() {
                                     <TableHead className="h-9 text-[12.5px]">Статус</TableHead>
                                     <TableHead className="h-9 text-right text-[12.5px]">За рейс</TableHead>
                                     <TableHead className="h-9 text-[12.5px]">Налоги по рейсу</TableHead>
-                                    <TableHead className="h-9 text-right text-[12.5px]">Топливо</TableHead>
+                                    <TableHead className="h-9 text-right text-[12.5px]">Топливо и предоплата</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -202,12 +202,12 @@ function TaxBreakdown({ s }: { s: ParkTrip['settlement'] }) {
     );
 }
 
-/** «Топливо» у рейса: сколько чеков ждут решения — сразу на кнопке. */
+/** «Выдачи и чеки» у рейса: топливо, предоплата, чеки; сколько чеков ждут решения — сразу на кнопке. */
 function FuelButton({ trip, onOpen }: { trip: ParkTrip; onOpen: (t: ParkTrip) => void }) {
     const pending = trip.fuelReceiptsPending ?? 0;
     return (
         <Button variant="outline" size="sm" onClick={() => onOpen(trip)}>
-            <Fuel className="h-3.5 w-3.5" /> Топливо
+            <Fuel className="h-3.5 w-3.5" /> Выдачи и чеки
             {pending > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">{pending}</span>}
         </Button>
     );

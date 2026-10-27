@@ -13,10 +13,10 @@ export class FuelReceiptDto {
     amount: string;
 }
 
-/** Водитель просит на топливо или аванс по рейсу (Q17). */
+/** Водитель просит на топливо или предоплату по рейсу (Q17). */
 export class AdvanceRequestDto {
     @ApiProperty({ enum: ['FUEL', 'ADVANCE'] })
-    @IsIn(['FUEL', 'ADVANCE'], { message: 'Выберите: на топливо или аванс' })
+    @IsIn(['FUEL', 'ADVANCE'], { message: 'Выберите: топливо или предоплата' })
     kind: 'FUEL' | 'ADVANCE';
 
     @ApiProperty({ description: 'Сумма, ₸' })
@@ -47,8 +47,16 @@ export class AdvanceDecisionDto {
     method?: 'STATION' | 'TO_DRIVER';
 }
 
-/** Парк дал денег на топливо: оплатил на заправке сам или перевёл водителю. */
+/**
+ * Парк выдал по рейсу сам: топливо (оплатил на заправке или перевёл) или
+ * предоплату водителю (шеф, 27.10.2026). Без вида — топливо, как раньше.
+ */
 export class FuelIssueDto {
+    @ApiProperty({ required: false, enum: ['FUEL', 'ADVANCE'] })
+    @IsOptional()
+    @IsIn(['FUEL', 'ADVANCE'], { message: 'Выберите: топливо или предоплата' })
+    kind?: 'FUEL' | 'ADVANCE';
+
     @ApiProperty({ description: 'Сумма, ₸' })
     @IsNumber({}, { message: 'Сумма — числом' })
     @Min(1, { message: 'Сумма должна быть больше нуля' })

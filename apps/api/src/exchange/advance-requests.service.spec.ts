@@ -10,7 +10,7 @@ describe('водитель просит на топливо или предоп�
      */
     function setup(opts: {
         pct?: number | null; fuelIssued?: number; advanceIssued?: number; pendingFuel?: number; pendingAdvance?: number;
-        fuelEstimate?: number; status?: string; payoutItem?: boolean; request?: any;
+        fuelEstimate?: number; status?: string; payoutItem?: boolean; request?: any; advanceByPark?: boolean;
     } = {}) {
         const request = {
             id: 'a1', status: 'REQUESTED', kind: 'FUEL', amount: 60000, orderId: 'o1',
@@ -22,8 +22,8 @@ describe('водитель просит на топливо или предоп�
             order: { orderNumber: '000000023' }, driver: { id: 'd1', lastName: 'Водителев', firstName: 'Тест', phone: '+77019990001' },
         };
         const issues = [
-            ...(opts.fuelIssued ? [{ id: 'fuel-1', amount: opts.fuelIssued }] : []),
-            ...(opts.advanceIssued ? [{ id: 'adv-1', amount: opts.advanceIssued }] : []),
+            ...(opts.fuelIssued ? [{ id: 'fuel-1', amount: opts.fuelIssued, method: 'STATION', note: null, createdAt: new Date('2026-10-27T08:00:00Z') }] : []),
+            ...(opts.advanceIssued ? [{ id: 'adv-1', amount: opts.advanceIssued, method: 'TO_DRIVER', note: null, createdAt: new Date('2026-10-27T09:00:00Z') }] : []),
         ];
         const open = [
             ...(opts.pendingFuel ? [{ id: 'p-fuel', kind: 'FUEL', amount: opts.pendingFuel }] : []),
@@ -47,8 +47,10 @@ describe('водитель просит на топливо или предоп�
                 count: jest.fn(async ({ where }: any) => open.filter((r) => r.kind === where.kind).length),
                 create: jest.fn().mockResolvedValue({ id: 'a-new' }),
                 findMany: jest.fn(async ({ where }: any) => {
-                    // Выданная предоплата — по ней узнаём, какая запись выдачи — предоплата.
-                    if (where.status === 'APPROVED') return opts.advanceIssued ? [{ fuelIssueId: 'adv-1' }] : [];
+                    // Записи выдач — по ним видно, какая выдача — предоплата и кто её начал.
+                    if (where.fuelIssueId) {
+                        return opts.advanceIssued ? [{ fuelIssueId: 'adv-1', kind: 'ADVANCE', status: opts.advanceByPark ? 'ISSUED' : 'APPROVED' }] : [];
+                    }
                     if (where.status?.in) return open.filter((r) => !where.id || r.id !== where.id.not);
                     return [];
                 }),
@@ -97,6 +99,24 @@ describe('водитель просит на топливо или предоп�
         expect(prisma.driverAdvanceRequest.create).not.toHaveBeenCalled();
         await service.request('u1', 'o1', { kind: 'ADVANCE', amount: 1000 });
         expect(prisma.driverAdvanceRequest.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('предоплата, которую парк выдал сам, тоже уменьшает лимит предоплаты', async () => {
+        const { service } = setup({ advanceIssued: 100000, advanceByPark: true });
+        const { limit } = await service.forDriver('u1', 'o1');
+        expect(limit?.advance).toEqual({ cap: 123300, issued: 100000, pending: 0, available: 23300 });
+        expect(limit?.fuel.issued).toBe(0);
+    });
+
+    it('водитель видит каждую выдачу: топливо или предоплата, по его запросу или парк сам', async () => {
+        const parkGave = setup({ fuelIssued: 60000, advanceIssued: 50000, advanceByPark: true });
+        const { issued } = await parkGave.service.forDriver('u1', 'o1');
+        expect(issued.map((i) => [i.kind, i.amount, i.byRequest])).toEqual([['FUEL', 60000, false], ['ADVANCE', 50000, false]]);
+        // Предоплата парка — не запрос: в список запросов её не берём.
+        expect(parkGave.prisma.driverAdvanceRequest.findMany.mock.calls.some(([a]: any) => a.where.status?.not === 'ISSUED')).toBe(true);
+
+        const onRequest = setup({ advanceIssued: 50000 });
+        expect((await onRequest.service.forDriver('u1', 'o1')).issued).toEqual([expect.objectContaining({ kind: 'ADVANCE', byRequest: true })]);
     });
 
     it('парк задал свою долю предоплаты — считается по ней', async () => {

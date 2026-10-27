@@ -7,9 +7,10 @@ import { NotificationsService, PushContent } from './notifications.service';
  *
  * Только то, ради чего водитель должен открыть приложение: выбрали на рейс
  * или груз ушёл другому, анкета проверена, выплата прошла или отклонена,
- * решение по чеку на топливо, назначили на рейс в компании.
+ * парк выдал топливо или предоплату, решение по чеку на топливо, назначили
+ * на рейс в компании.
  *
- * Сумм в уведомлениях нет, кроме своей же выплаты: текст виден на
+ * Сумм в уведомлениях нет, кроме своих же денег (выплата, выдача по рейсу): текст виден на
  * заблокированном экране, и цена рейса там ни к чему. Каждое событие
  * вызывается после того, как действие уже прошло, и никогда не бросает
  * исключений — сбой уведомления не отменяет решение парка или логиста.
@@ -132,6 +133,24 @@ export class DriverPushService {
                     body: `${reason?.trim() ? `Причина: ${reason.trim()}. ` : ''}Рейсы снова доступны к выплате.`,
                     data: { type: 'PAYOUT_REJECTED', url: '/exchange/(tabs)/earnings' },
                 });
+        });
+    }
+
+    /**
+     * Парк выдал по рейсу топливо или предоплату — по запросу или сам (шеф,
+     * 27.10.2026). Сумма — своя, как у выплаты.
+     */
+    moneyIssued(orderId: string, kind: 'FUEL' | 'ADVANCE', amount: number | string, method: string) {
+        return this.safe('выдача по рейсу', async () => {
+            const o = await this.prisma.order.findUnique({ where: { id: orderId }, select: { driverId: true } });
+            if (!o?.driverId) return;
+            const route = await this.route(orderId);
+            const sum = Math.round(Number(String(amount).replace(/\s/g, '').replace(',', '.'))).toLocaleString('ru-RU');
+            await this.send([o.driverId], {
+                title: kind === 'ADVANCE' ? 'Парк выдал предоплату' : method === 'STATION' ? 'Парк оплатил топливо' : 'Парк перевёл на топливо',
+                body: `${sum} ₸${route ? ` — рейс ${route}` : ''}.`,
+                data: { type: kind === 'ADVANCE' ? 'ADVANCE_ISSUED' : 'FUEL_ISSUED', orderId, url: '/exchange/(tabs)/trip' },
+            });
         });
     }
 

@@ -479,8 +479,9 @@ export class ExchangeParkController {
         const what = { APPROVE: 'выдано', CHECK: 'на доп. проверку', REUPLOAD: 'перезагрузить документы', REJECT: 'отказ' }[dto.action];
         await this.audit.log({
             companyId: req.user.companyId, user: req.user, action: 'STATUS', entity: 'driver_advance', entityId: id, orderId: result.orderId,
-            entityLabel: `${result.kind === 'FUEL' ? 'Топливо' : 'Аванс'} водителю ${result.driver.name}, ${result.amount.toLocaleString('ru-RU')} ₸: ${what}${result.parkNote ? ` — ${result.parkNote}` : ''}`,
+            entityLabel: `${result.kind === 'FUEL' ? 'Топливо' : 'Предоплата'} водителю ${result.driver.name}, ${result.amount.toLocaleString('ru-RU')} ₸: ${what}${result.parkNote ? ` — ${result.parkNote}` : ''}`,
         });
+        if (dto.action === 'APPROVE') void this.driverPush.moneyIssued(result.orderId, result.kind, result.issuedAmount ?? result.amount, dto.method ?? 'TO_DRIVER');
         return result;
     }
 
@@ -506,10 +507,17 @@ export class ExchangeParkController {
     }
 
     @Post('trips/:orderId/fuel/issues')
-    @ApiOperation({ summary: 'Дали на топливо: оплатили на заправке или перевели водителю' })
+    @ApiOperation({ summary: 'Выдали по рейсу без запроса водителя: топливо (на заправке или переводом) или предоплату' })
     async addFuelIssue(@Request() req: any, @Param('orderId') orderId: string, @Body() dto: FuelIssueDto) {
         await this.drivers.assertPark(req.user.companyId);
-        return this.fuel.addIssue(req.user.companyId, req.user.sub, orderId, dto);
+        const result = await this.fuel.addIssue(req.user.companyId, req.user.sub, orderId, dto);
+        const advance = dto.kind === 'ADVANCE';
+        await this.audit.log({
+            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'driver_advance', entityId: orderId, orderId,
+            entityLabel: `${advance ? 'Предоплата' : 'Топливо'} водителю по рейсу ${result.orderNumber}, ${Number(dto.amount).toLocaleString('ru-RU')} ₸: выдано без запроса${dto.note?.trim() ? ` — ${dto.note.trim()}` : ''}`,
+        });
+        void this.driverPush.moneyIssued(orderId, advance ? 'ADVANCE' : 'FUEL', dto.amount, advance ? 'TO_DRIVER' : dto.method);
+        return result;
     }
 
     @Delete('fuel-issues/:id')

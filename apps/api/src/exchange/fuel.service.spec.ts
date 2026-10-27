@@ -29,7 +29,14 @@ function build(row = tripRow()) {
             findFirst: jest.fn().mockResolvedValue({ id: 'r-2', orderId: 'order-1', status: 'PENDING', fileKey: 'k' }),
         },
         exchangeFuelIssue: { create: jest.fn(), delete: jest.fn(), findFirst: jest.fn() },
+        driverAdvanceRequest: { deleteMany: jest.fn() },
     };
+    const tx: any = {
+        exchangeFuelIssue: { create: jest.fn().mockResolvedValue({ id: 'issue-new' }) },
+        driverAdvanceRequest: { create: jest.fn() },
+    };
+    prisma.$transaction = jest.fn(async (arg: any) => (typeof arg === 'function' ? arg(tx) : arg));
+    prisma.tx = tx;
     const s3: any = { isS3Enabled: () => true, uploadFile: jest.fn(), deleteFile: jest.fn() };
     return { service: new ExchangeFuelService(prisma, s3), prisma, s3 };
 }
@@ -59,7 +66,7 @@ describe('Топливо рейса водителя парка', () => {
                 { id: 'adv-1', amount: 50000, method: 'TO_DRIVER', note: 'Предоплата по запросу водителя', createdAt: new Date() },
             ],
             exchangeFuelReceipts: [{ id: 'r-1', amount: 60000, status: 'ACCEPTED', rejectReason: null, createdAt: new Date(), decidedAt: new Date() }],
-            advanceRequests: [{ fuelIssueId: 'adv-1' }],
+            advanceRequests: [{ fuelIssueId: 'adv-1', kind: 'ADVANCE', status: 'APPROVED' }],
         }));
         const v = await service.forDriver('u-driver', 'order-1');
         expect(v.issued).toMatchObject({ total: 60000, items: [expect.objectContaining({ id: 'i-1' })] });
@@ -69,6 +76,56 @@ describe('Топливо рейса водителя парка', () => {
         expect(v.ownMoney).toBe(0);
         // На руки 246 600 − предоплата 50 000; топливо сошлось чеками.
         expect(v.toPay).toBe(196600);
+    });
+
+    it('парк выдал предоплату сам: переводом водителю, отмечено как выдача без запроса', async () => {
+        const { service, prisma } = build(tripRow({
+            exchangeSettlement: { scheme: 2, driverTotal: 246600, workNet: 246600, fuelEstimate: 126000, distanceKm: 1200, driverId: 'd-1' },
+        }));
+        await service.addIssue('park-1', 'u-manager', 'order-1', { amount: 50000, method: 'STATION', kind: 'ADVANCE', note: 'на ремонт' });
+        expect(prisma.tx.exchangeFuelIssue.create.mock.calls[0][0].data).toMatchObject({ orderId: 'order-1', method: 'TO_DRIVER', amount: 50000 });
+        expect(prisma.tx.driverAdvanceRequest.create.mock.calls[0][0].data).toMatchObject({
+            kind: 'ADVANCE', status: 'ISSUED', amount: 50000, issuedAmount: 50000, fuelIssueId: 'issue-new', driverId: 'd-1', parkNote: 'на ремонт', decidedById: 'u-manager',
+        });
+        // Топливо без вида — как раньше, без записи запроса.
+        await service.addIssue('park-1', 'u-manager', 'order-1', { amount: 30000, method: 'STATION' });
+        expect(prisma.exchangeFuelIssue.create.mock.calls[0][0].data).toMatchObject({ method: 'STATION', amount: 30000 });
+        expect(prisma.tx.driverAdvanceRequest.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('предоплатой больше суммы на руки не выдать', async () => {
+        const { service } = build(tripRow({
+            exchangeSettlement: { scheme: 2, driverTotal: 246600, workNet: 246600, fuelEstimate: 126000, distanceKm: 1200, driverId: 'd-1' },
+            exchangeFuelIssues: [{ id: 'adv-1', amount: 200000, method: 'TO_DRIVER', note: null, createdAt: new Date() }],
+            advanceRequests: [{ fuelIssueId: 'adv-1', kind: 'ADVANCE', status: 'ISSUED' }],
+        }));
+        await expect(service.addIssue('park-1', 'u-manager', 'order-1', { amount: 50000, method: 'TO_DRIVER', kind: 'ADVANCE' }))
+            .rejects.toThrow(/не больше 46\s600 ₸ \(остаток суммы на руки\)/);
+    });
+
+    it('выдачи помечены: по запросу водителя или парк сам', async () => {
+        const { service } = build(tripRow({
+            exchangeSettlement: { scheme: 2, driverTotal: 246600, workNet: 246600, fuelEstimate: 126000, distanceKm: 1200, driverId: 'd-1' },
+            exchangeFuelIssues: [
+                { id: 'f-park', amount: 30000, method: 'STATION', note: null, createdAt: new Date() },
+                { id: 'f-req', amount: 20000, method: 'TO_DRIVER', note: null, createdAt: new Date() },
+                { id: 'a-park', amount: 10000, method: 'TO_DRIVER', note: null, createdAt: new Date() },
+            ],
+            advanceRequests: [{ fuelIssueId: 'f-req', kind: 'FUEL', status: 'APPROVED' }, { fuelIssueId: 'a-park', kind: 'ADVANCE', status: 'ISSUED' }],
+        }));
+        const v = await service.forDriver('u-driver', 'order-1');
+        expect(v.issued.items.map((i) => [i.id, i.byRequest])).toEqual([['f-park', false], ['f-req', true]]);
+        expect(v.advances.items.map((i) => [i.id, i.byRequest])).toEqual([['a-park', false]]);
+        expect(v.issued.total).toBe(50000);
+        expect(v.advances.total).toBe(10000);
+    });
+
+    it('убрали выдачу предоплаты парка — уходит и её запись', async () => {
+        const { service, prisma } = build();
+        prisma.exchangeFuelIssue.findFirst.mockResolvedValue({ id: 'a-park', orderId: 'order-1' });
+        await service.removeIssue('park-1', 'a-park');
+        expect(prisma.driverAdvanceRequest.deleteMany).toHaveBeenCalledWith({ where: { fuelIssueId: 'a-park', status: 'ISSUED' } });
+        expect(prisma.exchangeFuelIssue.delete).toHaveBeenCalledWith({ where: { id: 'a-park' } });
     });
 
     it('чек: фото и сумма — уходит парку на проверку', async () => {

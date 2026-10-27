@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { money } from './settlement-calc';
-import { parseAmount, splitIssues } from './fuel.service';
+import { GIVEN_STATUSES, givenItems, parseAmount, splitIssues } from './fuel.service';
 
 const num = (v: Prisma.Decimal | number | null | undefined) => (v == null ? 0 : Number(v));
 
@@ -77,15 +77,15 @@ export class ExchangeAdvanceRequestsService {
         const settlement = await this.prisma.exchangeTripSettlement.findUnique({ where: { orderId: order.id }, select: { driverTotal: true, fuelEstimate: true } });
         if (!settlement || !order.partnerId) return null;
         const pct = await this.limitPct(order.partnerId);
-        const [issues, advances, open] = await Promise.all([
+        const [issues, links, open] = await Promise.all([
             this.prisma.exchangeFuelIssue.findMany({ where: { orderId: order.id }, select: { id: true, amount: true } }),
-            this.prisma.driverAdvanceRequest.findMany({ where: { orderId: order.id, kind: 'ADVANCE', status: 'APPROVED' }, select: { fuelIssueId: true } }),
+            this.givenLinks(order.id),
             this.prisma.driverAdvanceRequest.findMany({
                 where: { orderId: order.id, status: { in: OPEN }, ...(except ? { id: { not: except } } : {}) },
                 select: { kind: true, amount: true },
             }),
         ]);
-        const given = splitIssues(issues, advances.map((a) => a.fuelIssueId));
+        const given = splitIssues(issues, links);
         const pending = (kind: AdvanceKind) => money(open.filter((r) => r.kind === kind).reduce((sum, r) => sum + num(r.amount), 0));
         const part = (cap: number, issued: number, waiting: number) => ({ cap, issued, pending: waiting, available: money(Math.max(0, cap - issued - waiting)) });
         const onHand = num(settlement.driverTotal);
@@ -95,6 +95,14 @@ export class ExchangeAdvanceRequestsService {
             fuel: part(num(settlement.fuelEstimate), given.fuelTotal, pending('FUEL')),
             advance: part(money((onHand * pct) / 100), given.advanceTotal, pending('ADVANCE')),
         };
+    }
+
+    /** Записи, которыми по рейсу выдали деньги: по запросу или парк сам. */
+    private givenLinks(orderId: string) {
+        return this.prisma.driverAdvanceRequest.findMany({
+            where: { orderId, status: { in: GIVEN_STATUSES }, fuelIssueId: { not: null } },
+            select: { fuelIssueId: true, kind: true, status: true },
+        });
     }
 
     /** Отказ по сумме — коротко: сколько доступно и из какого лимита. */
@@ -116,7 +124,7 @@ export class ExchangeAdvanceRequestsService {
     private async driverOf(userId: string) {
         const driver = await this.prisma.exchangeDriver.findUnique({ where: { userId }, select: { id: true, kind: true, parkCompanyId: true, status: true } });
         if (!driver || driver.kind !== 'PARK' || !driver.parkCompanyId) {
-            throw new ForbiddenException('Топливо и аванс через приложение — для водителей парка');
+            throw new ForbiddenException('Топливо и предоплата через приложение — для водителей парка');
         }
         if (driver.status === 'BLOCKED') throw new ForbiddenException('Вы заблокированы на бирже');
         return driver as typeof driver & { parkCompanyId: string };
@@ -132,10 +140,22 @@ export class ExchangeAdvanceRequestsService {
         return { driver, order };
     }
 
+    /**
+     * Лимиты, свои запросы и всё, что выдано по рейсу (шеф, 27.10.2026):
+     * водитель видит каждую выдачу — топливо или предоплата, сколько, когда
+     * и по его ли запросу. Предоплата, которую парк выдал сам, — не запрос,
+     * в список запросов она не идёт, только в выданное.
+     */
     async forDriver(userId: string, orderId: string) {
         const { order } = await this.driverTrip(userId, orderId);
-        const rows = await this.prisma.driverAdvanceRequest.findMany({ where: { orderId }, select: REQUEST_SELECT, orderBy: { createdAt: 'desc' } });
-        return { limit: await this.available(order), requests: rows.map(view) };
+        const [rows, issues, links] = await Promise.all([
+            this.prisma.driverAdvanceRequest.findMany({ where: { orderId, status: { not: 'ISSUED' } }, select: REQUEST_SELECT, orderBy: { createdAt: 'desc' } }),
+            this.prisma.exchangeFuelIssue.findMany({
+                where: { orderId }, select: { id: true, amount: true, method: true, note: true, createdAt: true }, orderBy: { createdAt: 'desc' },
+            }),
+            this.givenLinks(orderId),
+        ]);
+        return { limit: await this.available(order), requests: rows.map(view), issued: givenItems(issues, links) };
     }
 
     async request(userId: string, orderId: string, dto: { kind: string; amount: string | number; comment?: string | null }) {
@@ -192,7 +212,8 @@ export class ExchangeAdvanceRequestsService {
 
     async forPark(parkId: string, scope: 'open' | 'all' = 'open') {
         const rows = await this.prisma.driverAdvanceRequest.findMany({
-            where: { parkCompanyId: parkId, ...(scope === 'open' ? { status: { in: OPEN } } : {}) },
+            // Предоплата, которую парк выдал сам (ISSUED), — не запрос водителя.
+            where: { parkCompanyId: parkId, status: scope === 'open' ? { in: OPEN } : { not: 'ISSUED' } },
             select: REQUEST_SELECT,
             orderBy: { createdAt: 'desc' },
             take: 300,

@@ -122,7 +122,26 @@ export function TripAdvance({ orderId }: { orderId: string }) {
                 </Text>
             )}
 
-            {data.requests.map((r) => (
+            {/* Всё, что парк выдал по рейсу: по запросу или сам (шеф, 27.10.2026). */}
+            {!!data.issued?.length && (
+                <View style={{ marginTop: 14 }}>
+                    <Text style={[styles.caption, { color: colors.textTertiary }]}>ВЫДАНО</Text>
+                    {data.issued.map((i) => (
+                        <View key={i.id} style={[styles.given, { borderTopColor: colors.border2 }]}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 14.5 }}>{KIND[i.kind]}</Text>
+                                <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>
+                                    {date(i.createdAt)} · {i.byRequest ? 'по вашему запросу' : 'выдал парк'} · {i.method === 'STATION' ? 'на заправке' : 'переводом'}
+                                </Text>
+                            </View>
+                            <Text style={{ color: colors.text, fontFamily: FONT.bold, fontSize: 15, fontVariant: ['tabular-nums'] }}>{деньги(i.amount)}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+            {/* Выданные запросы уже в «Выдано» — здесь только ждущие и отказы. */}
+            {data.requests.filter((r) => !data.issued || r.status !== 'APPROVED').map((r) => (
                 <View key={r.id} style={[styles.item, { borderTopColor: colors.border2 }]}>
                     <View style={styles.head}>
                         <Text style={{ flex: 1, color: colors.text, fontFamily: FONT.bold, fontSize: 14.5 }}>
@@ -140,7 +159,7 @@ export function TripAdvance({ orderId }: { orderId: string }) {
                         {r.status === 'REUPLOAD' && (
                             <View style={{ marginTop: 8, gap: 6 }}>
                                 <Text style={{ color: colors.textSecondary, fontSize: 12.5 }}>
-                                    Загрузите документы заново в разделе «Документы» этого рейса, затем отправьте запрос снова.
+                                    Перезагрузите документы рейса и отправьте снова.
                                 </Text>
                                 <Button
                                     title="Отправить снова"
@@ -184,6 +203,8 @@ function LimitLine({ label, value, hint }: { label: string; value: number; hint:
 
 const styles = StyleSheet.create({
     limits: { gap: 10, marginBottom: 8 },
+    caption: { fontSize: 11, fontFamily: FONT.bold, letterSpacing: 1.1, marginBottom: 2 },
+    given: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1 },
     limitLine: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     note: { fontSize: 13, lineHeight: 18 },
     chips: { flexDirection: 'row', gap: 8, marginBottom: 12 },

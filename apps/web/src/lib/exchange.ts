@@ -396,9 +396,9 @@ export interface ParkTripFuel {
     distanceKm: number | null;
     /** Лимит на топливо в литрах — по расходу парка на 100 км. */
     fuelLiters?: number | null;
-    issued: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string }[] };
+    issued: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string; byRequest?: boolean }[] };
     /** Предоплата водителю из суммы на руки: вычитается из выплаты, чек не нужен. */
-    advances?: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string }[] };
+    advances?: { total: number; items: { id: string; amount: number; method: 'STATION' | 'TO_DRIVER'; note: string | null; createdAt: string; byRequest?: boolean }[] };
     receipts: {
         accepted: number;
         pending: number;

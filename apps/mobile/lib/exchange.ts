@@ -286,6 +286,11 @@ export interface TripAdvances {
         id: string; kind: AdvanceKind; amount: number; comment: string | null; status: AdvanceStatus;
         parkNote: string | null; issuedAmount: number | null; createdAt: string;
     }[];
+    /**
+     * Всё, что парк выдал по рейсу (шеф, 27.10.2026): топливо или предоплата,
+     * по запросу водителя или парк сам. Старый сервер не присылает.
+     */
+    issued?: { id: string; kind: AdvanceKind; amount: number; method: 'STATION' | 'TO_DRIVER'; createdAt: string; byRequest: boolean }[];
 }
 
 /** Фото чека на топливо — отдаёт только сервер и только самому водителю. */
