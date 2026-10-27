@@ -85,7 +85,9 @@ test.describe('Доверенность после замены водителя
         test.skip(!рейс, 'на стенде нет рейса с водителем у внешнего перевозчика');
 
         await page.goto(`/company/orders/${рейс.id}`);
-        await page.getByRole('button', { name: 'На почту' }).click();
+        // «На почту» — пункт меню «Доверенность» в шапке заявки (редизайн #79).
+        await page.getByRole('button', { name: 'Доверенность' }).click();
+        await page.getByRole('menuitem', { name: 'На почту' }).click();
         const обычное = окно(page, 'Отправить доверенность по email');
 
         await expect(обычное).toBeVisible();
