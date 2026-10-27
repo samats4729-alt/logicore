@@ -136,11 +136,11 @@ describe('рассылка доверенности по почте', () => {
 
         expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({
             orderId: 'order-1',
-            entity: 'order_document',
-            entityLabel: 'Отправлена доверенность · водитель Садыков Марат → skl@example.kz, buh@example.kz',
+            entity: 'power_of_attorney_sent',
+            entityLabel: 'Доверенность по заявке № ЗК-2601 отправлена · водитель Садыков Марат → skl@example.kz, buh@example.kz',
             // По этим адресам новую доверенность после замены водителя
             // предложат отправить туда же.
-            details: { kind: 'POWER_OF_ATTORNEY_SHARE', emails: ['skl@example.kz', 'buh@example.kz'] },
+            details: expect.objectContaining({ kind: 'POWER_OF_ATTORNEY_SHARE', emails: ['skl@example.kz', 'buh@example.kz'], driver: 'Садыков Марат' }),
         }));
     });
 
