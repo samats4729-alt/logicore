@@ -174,12 +174,12 @@ export function TripFuelDialog({ orderId, orderNumber, open, onOpenChange, onCha
                         {/* Лимит — топливо по километражу: расход сверх него налоговая сверяет с пробегом. */}
                         {!!fuel.fuelEstimate && fuel.receipts.accepted + fuel.receipts.pending > fuel.fuelEstimate && (
                             <div className="rounded-lg border border-solid border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                                Чеков на {moneyShort(fuel.receipts.accepted + fuel.receipts.pending - fuel.fuelEstimate)} больше лимита на топливо по километражу — сверьте с водителем, почему.
+                                Чеки сверх лимита на топливо: {moneyShort(fuel.receipts.accepted + fuel.receipts.pending - fuel.fuelEstimate)}.
                             </div>
                         )}
                         {(fuel.advances?.total ?? 0) > 0 && (
                             <div className="rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">
-                                Предоплата водителю — {moneyShort(fuel.advances?.total ?? 0)}: вычтется из выплаты, чек на неё не нужен.
+                                Предоплата водителю: {moneyShort(fuel.advances?.total ?? 0)} — удерживается из выплаты, чек не нужен.
                             </div>
                         )}
                         {fuel.locked && (

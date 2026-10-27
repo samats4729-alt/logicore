@@ -79,21 +79,21 @@ describe('водитель просит на топливо или предоп�
         expect(prisma.driverAdvanceRequest.create.mock.calls[0][0].data).toEqual(expect.objectContaining({
             parkCompanyId: 'park', driverId: 'd1', orderId: 'o1', kind: 'FUEL', amount: 26000,
         }));
-        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 26001 })).rejects.toThrow(/на топливо можно не больше 26\s000 ₸: лимит по километражу — 126\s000 ₸/);
+        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 26001 })).rejects.toThrow(/Топливо — не больше 26\s000 ₸ \(лимит 126\s000 ₸\)/);
         // Топливо, выданное парком, предоплату не уменьшает.
         await service.request('u1', 'o1', { kind: 'ADVANCE', amount: 123300 });
-        await expect(service.request('u1', 'o1', { kind: 'ADVANCE', amount: 123301 })).rejects.toThrow(/предоплату можно не больше 123\s300 ₸: это 50 % от суммы на руки/);
+        await expect(service.request('u1', 'o1', { kind: 'ADVANCE', amount: 123301 })).rejects.toThrow(/Предоплата — не больше 123\s300 ₸ \(50 % от суммы на руки\)/);
     });
 
     it('топливо по рейсу не посчитано — на топливо не попросить, предоплату можно', async () => {
         const { service } = setup({ fuelEstimate: 0 });
-        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 1000 })).rejects.toThrow(/не посчитано/);
+        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 1000 })).rejects.toThrow(/не рассчитано/);
         await expect(service.request('u1', 'o1', { kind: 'ADVANCE', amount: 1000 })).resolves.toBeDefined();
     });
 
     it('пока парк решает прошлый запрос того же вида — новый не уходит; другого вида — уходит', async () => {
         const { service, prisma } = setup({ pendingFuel: 30000 });
-        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 1000 })).rejects.toThrow(/решает прошлый запрос на топливо/);
+        await expect(service.request('u1', 'o1', { kind: 'FUEL', amount: 1000 })).rejects.toThrow(/Запрос на топливо уже у парка/);
         expect(prisma.driverAdvanceRequest.create).not.toHaveBeenCalled();
         await service.request('u1', 'o1', { kind: 'ADVANCE', amount: 1000 });
         expect(prisma.driverAdvanceRequest.create).toHaveBeenCalledTimes(1);
@@ -108,7 +108,7 @@ describe('водитель просит на топливо или предоп�
 
     it('парк не выдаст больше лимита своего вида: предоплату — сверх доли от суммы на руки', async () => {
         const { service, tx } = setup({ advanceIssued: 100000, request: { kind: 'ADVANCE', amount: 30000 } });
-        await expect(service.decide('park', 'acc', 'a1', { action: 'APPROVE' })).rejects.toThrow(/Выдать предоплату можно не больше 23\s300 ₸/);
+        await expect(service.decide('park', 'acc', 'a1', { action: 'APPROVE' })).rejects.toThrow(/Предоплата — не больше 23\s300 ₸/);
         expect(tx.exchangeFuelIssue.create).not.toHaveBeenCalled();
     });
 

@@ -97,18 +97,18 @@ export class ExchangeAdvanceRequestsService {
         };
     }
 
-    /** Отказ по сумме — словами водителя: какой лимит и почему столько. */
-    private overLimit(kind: AdvanceKind, limit: NonNullable<Awaited<ReturnType<ExchangeAdvanceRequestsService['available']>>>, who: 'driver' | 'park') {
+    /** Отказ по сумме — коротко: сколько доступно и из какого лимита. */
+    private overLimit(kind: AdvanceKind, limit: NonNullable<Awaited<ReturnType<ExchangeAdvanceRequestsService['available']>>>) {
         const tg = (v: number) => `${v.toLocaleString('ru-RU')} ₸`;
         if (kind === 'FUEL') {
-            if (!limit.fuel.cap) return 'Топливо по этому рейсу не посчитано — о деньгах на топливо договоритесь с парком по телефону';
+            if (!limit.fuel.cap) return 'Топливо по рейсу не рассчитано — уточните у парка';
             return limit.fuel.available > 0
-                ? `${who === 'park' ? 'Выдать' : 'Попросить'} на топливо можно не больше ${tg(limit.fuel.available)}: лимит по километражу — ${tg(limit.fuel.cap)}, за вычетом уже выданного на топливо${who === 'driver' ? ' и ждущего решения' : ''}`
-                : `Лимит на топливо по рейсу — ${tg(limit.fuel.cap)} — уже выдан${who === 'driver' ? ' или ждёт решения парка' : ''}`;
+                ? `Топливо — не больше ${tg(limit.fuel.available)} (лимит ${tg(limit.fuel.cap)})`
+                : 'Лимит на топливо исчерпан';
         }
         return limit.advance.available > 0
-            ? `${who === 'park' ? 'Выдать' : 'Попросить'} предоплату можно не больше ${tg(limit.advance.available)}: это ${limit.pct} % от суммы на руки за вычетом уже выданной предоплаты${who === 'driver' ? ' и ждущей решения' : ''}`
-            : `Сейчас предоплату не получить: ${limit.pct} % от суммы на руки уже выданы${who === 'driver' ? ' или ждут решения парка' : ''}`;
+            ? `Предоплата — не больше ${tg(limit.advance.available)} (${limit.pct} % от суммы на руки)`
+            : 'Лимит предоплаты исчерпан';
     }
 
     // ==================== водитель ====================
@@ -150,12 +150,12 @@ export class ExchangeAdvanceRequestsService {
         // попросить разом, но парку проще решить один, чем разбирать очередь.
         const open = await this.prisma.driverAdvanceRequest.count({ where: { orderId, kind, status: { in: OPEN } } });
         if (open) {
-            throw new BadRequestException(`Пока парк решает прошлый запрос ${kind === 'FUEL' ? 'на топливо' : 'на предоплату'}, новый не отправить. Прошлый можно отозвать`);
+            throw new BadRequestException(`Запрос ${kind === 'FUEL' ? 'на топливо' : 'предоплаты'} уже у парка — дождитесь ответа или отзовите его`);
         }
         const limit = await this.available(order);
         if (!limit) throw new BadRequestException('По этому рейсу нет расчёта суммы водителю — аванс посчитать не из чего');
         const amount = parseAmount(dto.amount);
-        if (amount > (kind === 'FUEL' ? limit.fuel : limit.advance).available) throw new BadRequestException(this.overLimit(kind, limit, 'driver'));
+        if (amount > (kind === 'FUEL' ? limit.fuel : limit.advance).available) throw new BadRequestException(this.overLimit(kind, limit));
         const created = await this.prisma.driverAdvanceRequest.create({
             data: {
                 parkCompanyId: driver.parkCompanyId, driverId: driver.id, orderId,
@@ -221,7 +221,7 @@ export class ExchangeAdvanceRequestsService {
             const kind = row.kind as AdvanceKind;
             const limit = await this.available(row.order, row.id);
             if (limit && amount > (kind === 'FUEL' ? limit.fuel : limit.advance).available) {
-                throw new BadRequestException(this.overLimit(kind, limit, 'park'));
+                throw new BadRequestException(this.overLimit(kind, limit));
             }
             const method = dto.method === 'STATION' ? 'STATION' : 'TO_DRIVER';
             await this.prisma.$transaction(async (tx) => {

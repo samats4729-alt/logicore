@@ -664,7 +664,7 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                         <span className="text-[12px] font-medium text-muted-foreground">Предоплата водителю, % от суммы на руки</span>
                         <Input value={extra.advanceLimitPct} onChange={(e) => setExtra((x) => ({ ...x, advanceLimitPct: e.target.value }))} inputMode="numeric" className="h-9 w-32 text-[13px] tabular-nums" />
                         <span className="text-[11px] text-muted-foreground">
-                            столько водитель может попросить предоплатой до конца рейса, за вычетом уже выданной; 0 — предоплату просить нельзя. На топливо он просит отдельно — в пределах топлива по километражу рейса
+                            сколько водитель может получить до конца рейса; 0 — нельзя. Топливо — отдельно, по километражу
                         </span>
                     </label>
                 </div>

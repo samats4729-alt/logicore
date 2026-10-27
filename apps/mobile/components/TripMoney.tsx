@@ -31,14 +31,12 @@ export function TripMoneyLines({ money, opvPct, distanceKm, liters }: {
             <Part
                 label="Топливо (ГСМ)"
                 value={money.fuel}
-                hint={money.fuel > 0
-                    ? `Лимит на заправку по рейсу${fuelFrom ? ` (${fuelFrom})` : ''}: заправляйтесь в пределах этой суммы, чек — на БИН парка`
-                    : 'Топливо по рейсу не посчитано — договоритесь с парком'}
+                hint={money.fuel > 0 ? ['Лимит на заправку', fuelFrom].filter(Boolean).join(' · ') : 'Не рассчитано — уточните у парка'}
             />
             <Part
                 label={`Пенсионные (ОПВ)${opvPct ? ` ${opvPct} %` : ''}`}
                 value={money.opv}
-                hint="Копятся на вашем пенсионном счёте"
+                hint="На ваш пенсионный счёт"
             />
         </View>
     );

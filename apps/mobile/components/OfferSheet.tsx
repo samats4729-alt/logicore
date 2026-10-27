@@ -84,7 +84,7 @@ export function OfferSheet({ visible, mine, busy, fuel, opvPct, onSubmit, onClos
                     {trip ? (
                         <View style={[styles.trip, { backgroundColor: colors.surface2 }]}>
                             <View style={styles.tripLine}>
-                                <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 13.5 }}>Сумма за рейс выйдет</Text>
+                                <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 13.5 }}>Сумма за рейс</Text>
                                 <Text style={{ color: colors.text, fontSize: 16, fontFamily: FONT.bold, fontVariant: ['tabular-nums'] }}>{деньги(trip.total)}</Text>
                             </View>
                             <Text style={{ color: colors.textTertiary, fontSize: 12.5, lineHeight: 17, marginTop: 2 }}>
@@ -93,7 +93,7 @@ export function OfferSheet({ visible, mine, busy, fuel, opvPct, onSubmit, onClos
                         </View>
                     ) : (
                         <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
-                            Сколько хотите получить чистыми, на руки. Топливо и пенсионные парк добавит сверху.
+                            Топливо и пенсионные добавятся сверху.
                         </Text>
                     )}
 

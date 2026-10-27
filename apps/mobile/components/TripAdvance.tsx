@@ -6,7 +6,7 @@ import { AdvanceKind, AdvanceStatus, TripAdvances, exchangeApi, деньги, о
 import { Badge, Button, Chip, Field, Section } from '@/components/kit';
 import { FONT } from '@/lib/theme';
 
-const KIND: Record<AdvanceKind, string> = { FUEL: 'На топливо', ADVANCE: 'Предоплата' };
+const KIND: Record<AdvanceKind, string> = { FUEL: 'Топливо', ADVANCE: 'Предоплата' };
 const STATUS: Record<AdvanceStatus, { label: string; tone: 'orange' | 'green' | 'red' | 'gray' }> = {
     REQUESTED: { label: 'Ждёт парка', tone: 'orange' },
     CHECK: { label: 'На доп. проверке', tone: 'orange' },
@@ -20,7 +20,7 @@ const OPEN: AdvanceStatus[] = ['REQUESTED', 'CHECK', 'REUPLOAD'];
 const date = (d: string) => new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 /**
- * Деньги заранее: на топливо или предоплата по рейсу (задачи шефа, Q17).
+ * Топливо и предоплата по рейсу (задачи шефа, Q17).
  *
  * Раньше попросить можно было только всё «на руки» и только после рейса.
  * Теперь в рейсе — заранее, и два вида отдельно (шеф, 27.10.2026): на
@@ -54,13 +54,13 @@ export function TripAdvance({ orderId }: { orderId: string }) {
 
     const send = async () => {
         const sum = Number(amount.replace(/\D/g, ''));
-        if (!(sum > 0)) { Alert.alert('Сумма', 'Впишите, сколько нужно'); return; }
+        if (!(sum > 0)) { Alert.alert('Сумма', 'Укажите сумму'); return; }
         setBusy(true);
         try {
             setData(await exchangeApi.requestAdvance(orderId, { kind, amount: sum, comment: comment.trim() || undefined }));
             setAmount('');
             setComment('');
-            Alert.alert('Запрос отправлен', 'Парк проверит рейс и документы и ответит здесь же.');
+            Alert.alert('Запрос отправлен', 'Ответ парка появится здесь.');
         } catch (e) {
             Alert.alert('Не получилось', ответ(e, 'Попробуйте ещё раз'));
         } finally {
@@ -80,14 +80,13 @@ export function TripAdvance({ orderId }: { orderId: string }) {
     const pretty = amount ? Number(amount).toLocaleString('ru-RU').replace(/,/g, ' ') : '';
 
     return (
-        <Section title="Деньги заранее" icon="wallet-outline">
+        <Section title="Топливо и предоплата" icon="wallet-outline">
+            {/* Сколько ещё доступно — выданное и запрошенное уже вычтены. */}
             <View style={styles.limits}>
-                <LimitLine label="На топливо" value={limit.fuel.available} hint={limit.fuel.cap ? `лимит по километражу ${деньги(limit.fuel.cap)}` : 'топливо по рейсу не посчитано'} />
-                <LimitLine label="Предоплата" value={limit.advance.available} hint={`${limit.pct} % от суммы на руки ${деньги(limit.onHand)}`} />
+                <LimitLine label="Топливо" value={limit.fuel.available} hint={limit.fuel.cap ? `лимит ${деньги(limit.fuel.cap)}` : 'не рассчитано'} />
+                <LimitLine label="Предоплата" value={limit.advance.available} hint={`${limit.pct} % от суммы на руки`} />
             </View>
-            <Text style={[styles.note, { color: colors.textSecondary }]}>
-                Столько ещё можно попросить — уже выданное и ждущее решения вычтено. Выданное вычтут из выплаты в конце; на топливо — с учётом чеков.
-            </Text>
+            <Text style={[styles.note, { color: colors.textTertiary }]}>Выданное удержат из выплаты.</Text>
 
             <View style={[styles.chips, { marginTop: 12 }]}>
                 {(['FUEL', 'ADVANCE'] as const).map((k) => (
@@ -97,7 +96,7 @@ export function TripAdvance({ orderId }: { orderId: string }) {
             {current.available > 0 && !pending && (
                 <View>
                     <Field
-                        label="Сколько нужно, ₸"
+                        label="Сумма, ₸"
                         value={pretty}
                         onChangeText={(v: string) => setAmount(v.replace(/\D/g, '').slice(0, 9))}
                         keyboardType="number-pad"
@@ -105,23 +104,21 @@ export function TripAdvance({ orderId }: { orderId: string }) {
                     />
                     <Field
                         label="Комментарий"
-                        hint="Необязательно: на что и где"
+                        placeholder="Необязательно"
                         value={comment}
                         onChangeText={setComment}
                         maxLength={300}
                     />
-                    <Button title="Попросить" icon="paper-plane-outline" loading={busy} onPress={send} />
+                    <Button title="Запросить" icon="paper-plane-outline" loading={busy} onPress={send} />
                 </View>
             )}
             {pending ? (
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                    Пока парк решает прошлый запрос {kind === 'FUEL' ? 'на топливо' : 'на предоплату'}, такой же новый не отправить.
+                    Запрос {kind === 'FUEL' ? 'на топливо' : 'предоплаты'} у парка. Новый — после ответа.
                 </Text>
             ) : current.available <= 0 && (
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                    {kind === 'FUEL'
-                        ? current.cap ? 'Лимит на топливо по рейсу уже выдан или ждёт решения парка.' : 'Топливо по рейсу не посчитано — о деньгах на топливо договоритесь с парком по телефону.'
-                        : 'Предоплата по рейсу уже выдана или ждёт решения парка.'}
+                    {kind === 'FUEL' && !current.cap ? 'Топливо по рейсу не рассчитано — уточните у парка.' : 'Лимит исчерпан.'}
                 </Text>
             )}
 

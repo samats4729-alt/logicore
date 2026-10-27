@@ -41,7 +41,7 @@ export function PensionCard() {
         <Card>
             <View style={styles.head}>
                 <Ionicons name="trending-up" size={18} color={colors.pos} />
-                <Text style={[styles.label, { color: colors.textTertiary }]}>ПЕНСИОННЫЕ НАКОПЛЕНИЯ (ОПВ)</Text>
+                <Text style={[styles.label, { color: colors.textTertiary }]}>ПЕНСИОННЫЕ (ОПВ)</Text>
             </View>
             <View style={styles.totalRow}>
                 <Text style={[styles.total, { color: colors.text }]}>{деньги(data.total)}</Text>
@@ -53,8 +53,8 @@ export function PensionCard() {
             </View>
             <Text style={[styles.note, { color: colors.textSecondary }]}>
                 {data.trips.length
-                    ? `С каждого рейса ${data.opvPct} % оплаты за работу идёт на ваш пенсионный счёт — это ваши деньги.`
-                    : `Пока пусто. С каждого рейса ${data.opvPct} % оплаты за работу пойдёт на ваш пенсионный счёт — здесь будет видно, как сумма растёт.`}
+                    ? `${data.opvPct} % с каждого рейса — на ваш пенсионный счёт.`
+                    : `${data.opvPct} % с каждого рейса будет копиться здесь.`}
             </Text>
 
             {bars.length > 0 && (
@@ -76,9 +76,9 @@ export function PensionCard() {
             )}
 
             <View style={[styles.split, { borderTopColor: colors.border2 }]}>
-                <Split label="Уже на пенсионном счёте" value={data.paid} />
-                <Split label="Перечислят с выплатой" value={data.waiting} />
-                {data.upcoming > 0 && <Split label="Прибавится после рейса в пути" value={data.upcoming} plus />}
+                <Split label="Перечислено" value={data.paid} />
+                <Split label="С ближайшей выплатой" value={data.waiting} />
+                {data.upcoming > 0 && <Split label="За рейс в пути" value={data.upcoming} plus />}
             </View>
 
             {shown.length > 0 && (
@@ -88,7 +88,7 @@ export function PensionCard() {
                             <View style={{ flex: 1 }}>
                                 <Text style={{ color: colors.pos, fontFamily: FONT.bold, fontSize: 14.5, fontVariant: ['tabular-nums'] }}>+{деньги(t.opv)}</Text>
                                 <Text style={{ color: colors.textTertiary, fontSize: 12.5 }} numberOfLines={1}>
-                                    {когда(t.completedAt)} · {t.paid ? 'на счёте' : 'ждёт выплаты'} · {t.route}
+                                    {когда(t.completedAt)} · {t.paid ? 'перечислено' : 'с выплатой'} · {t.route}
                                 </Text>
                             </View>
                             <Text style={{ color: colors.textSecondary, fontSize: 13, fontVariant: ['tabular-nums'] }}>стало {деньги(t.total)}</Text>

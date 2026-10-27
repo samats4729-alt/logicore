@@ -422,7 +422,7 @@ export default function CurrentTrip({
 
                 {/* ===== Топливо (водитель парка) ===== */}
                 {fuel && <TripFuel orderId={currentOrder.id} />}
-                {/* ===== Деньги заранее: топливо и аванс (Q17) ===== */}
+                {/* ===== Топливо и предоплата (Q17) ===== */}
                 {fuel && <TripAdvance orderId={currentOrder.id} />}
             </View>
         </ScrollView>

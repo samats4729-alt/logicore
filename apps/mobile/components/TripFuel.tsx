@@ -99,13 +99,11 @@ export function TripFuel({ orderId }: { orderId: string }) {
                     </View>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
                         {fueled > 0
-                            ? `Заправлено по чекам на ${деньги(fueled)}${left >= 0 ? `, осталось ${деньги(left)}` : ''}.`
-                            : 'Заправляйтесь в пределах этой суммы.'}
+                            ? `По чекам ${деньги(fueled)}${left >= 0 ? ` · осталось ${деньги(left)}` : ''}`
+                            : 'Заправляйтесь в пределах лимита'}
                     </Text>
                     {left < 0 && (
-                        <Text style={[styles.warn, { color: colors.danger }]}>
-                            Чеков на {деньги(-left)} больше лимита — налоговая сверяет расход с пробегом. Объясните парку, почему.
-                        </Text>
+                        <Text style={[styles.warn, { color: colors.danger }]}>Сверх лимита {деньги(-left)} — согласуйте с парком.</Text>
                     )}
                 </View>
             )}
@@ -115,7 +113,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 <Text style={[styles.binLabel, { color: colors.textTertiary }]}>ЧЕК — НА БИН ПАРКА</Text>
                 <Text selectable style={[styles.bin, { color: colors.text }]}>{bin || 'БИН не указан'}</Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                    {fuel.park?.name ? `${fuel.park.name}. ` : ''}Покажите кассиру — он пробьёт чек на парк. {fuel.scheme === 2 ? 'Без чека деньги на топливо вычтут из вашей выплаты.' : 'Без этого с денег на топливо будет налог.'}
+                    {fuel.park?.name ? `${fuel.park.name}. ` : ''}Покажите кассиру.
                 </Text>
             </View>
 
@@ -139,11 +137,6 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 {fuelDiff < 0 && <Line label={scheme2 ? 'Топливо без принятого чека' : 'Парк дал на топливо'} value={`− ${деньги(-fuelDiff)}`} />}
                 {fuelDiff > 0 && <Line label="Заправились за свои — вернут" value={`+ ${деньги(fuelDiff)}`} />}
                 {fuel.toPay != null && <Line label="Вам останется" value={деньги(fuel.toPay)} strong />}
-                {scheme2 && (fuel.issued.total > 0 || fuel.receipts.accepted > 0) && (
-                    <Text style={[styles.note, { color: colors.textSecondary }]}>
-                        Парк дал на топливо {деньги(fuel.issued.total)}, чеков принято на {деньги(fuel.receipts.accepted)}.
-                    </Text>
-                )}
                 {fuel.receipts.pending > 0 && (
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
                         Чеки на {деньги(fuel.receipts.pending)} — на проверке у парка.
@@ -152,7 +145,7 @@ export function TripFuel({ orderId }: { orderId: string }) {
                 {/* Тревожно — только то, на что чека нет вовсе: ждущие проверки — не в счёт. */}
                 {noReceipt > 0 && (
                     <Text style={[styles.warn, { color: colors.danger }]}>
-                        Нет чека на {деньги(noReceipt)} — {fuel.scheme === 2 ? 'эту сумму вычтут из выплаты' : 'с этой суммы будет налог'}. Отправьте чек.
+                        Нет чека на {деньги(noReceipt)} — {fuel.scheme === 2 ? 'удержат из выплаты' : 'будет налог'}.
                     </Text>
                 )}
                 {fuel.locked && (

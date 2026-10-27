@@ -144,7 +144,7 @@ export default function EarningsScreen() {
                 {onHand && (
                     <View>
                         <Line label="Договорились, на руки" value={деньги(agreedSum)} colors={colors} />
-                        <Line label="Парк дал заранее (топливо, предоплата)" value={`− ${деньги(fuelSum)}`} colors={colors} />
+                        <Line label="Выдано: топливо и предоплата" value={`− ${деньги(fuelSum)}`} colors={colors} />
                         {receiptsSum > 0 && <Line label="Чеки на топливо" value={`+ ${деньги(receiptsSum)}`} colors={colors} />}
                         <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6, lineHeight: 17 }}>
                             Налоги и взносы за вас парк платит сверху — из вашей суммы они не вычитаются и идут в ваш пенсионный счёт и медстраховку.
@@ -217,7 +217,7 @@ export default function EarningsScreen() {
                             <Text style={{ color: colors.textTertiary, fontSize: 12.5 }}>
                                 Заявка {t.orderNumber}{t.completedAt ? ` · довёз ${date(t.completedAt)}` : ''}
                                 {t.driverTotal != null
-                                    ? ` · договорились ${деньги(t.driverTotal)}${t.fuelIssued ? `, дали заранее ${деньги(t.fuelIssued)}` : ''}`
+                                    ? ` · договорились ${деньги(t.driverTotal)}${t.fuelIssued ? `, выдано ${деньги(t.fuelIssued)}` : ''}`
                                     : ` · начислено ${деньги(t.gross)}`}
                             </Text>
                         </Card>
@@ -240,7 +240,7 @@ export default function EarningsScreen() {
                             {p.status !== 'REJECTED' && (
                                 <Text style={{ color: colors.textTertiary, fontSize: 12.5, marginTop: 2 }}>
                                     {p.fuelIssued != null
-                                        ? `Парк дал заранее ${деньги(p.fuelIssued)} · налоги за вас платит парк`
+                                        ? `Выдано ${деньги(p.fuelIssued)} · налоги за вас платит парк`
                                         : `Начислено ${деньги(p.gross)} · удержано ${деньги(p.gross - p.net)} — комиссия и налоги`}
                                 </Text>
                             )}
