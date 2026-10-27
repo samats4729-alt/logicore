@@ -12,7 +12,7 @@ import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PaginationQueryDto, getPaginationParams } from '../common/dto/pagination.dto';
-import { maskForCustomer } from '../orders/order-visibility';
+import { asExecutorSees, maskForCustomer } from '../orders/order-visibility';
 import { managerOrdersFilter, ВИДИМОСТЬ_ЗАЯВОК as ORDERS_SCOPE } from '../common/manager-orders';
 import { БЛОКИ_ДАШБОРДА } from '../common/dashboard-blocks';
 import { MODULE_PERMISSIONS } from '../auth/module-permissions';
@@ -915,7 +915,10 @@ export class CompanyService {
             return [];
         };
 
-        for (const o of monthOrders) {
+        for (const raw of monthOrders) {
+            // Рейс, где мы перевозчик у экспедитора, — со своей стороны: наша
+            // выручка — наша ставка, наш заказчик — экспедитор.
+            const o = asExecutorSees(raw, companyId);
             const корзины = bucketsOf(new Date(o.createdAt));
 
             // Считаем деньги только по заявкам месяца, попавшего в таблицу.

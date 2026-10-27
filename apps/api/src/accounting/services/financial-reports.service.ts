@@ -27,7 +27,7 @@ import { documentsOfOwnOrders, managerOrdersFilter } from '../../common/manager-
 import type { JournalViewer } from '../../common/journal-company';
 import { periodStart, periodEnd, calendarDay } from '../../common/utils/period';
 import { exchangeOutcome, paymentInBase } from './exchange-difference';
-import { isCustomerOnly } from '../../orders/order-visibility';
+import { asExecutorSees, hideExecutorCost, historyCommentFor, isCustomerOnly, isOrderOwner } from '../../orders/order-visibility';
 
 /** Учётная валюта: в ней ведутся все итоги отчётов. */
 const BASE_CURRENCY = 'KZT';
@@ -146,13 +146,28 @@ export class FinancialReportsService {
                     orderBy: { assignedAt: 'desc' },
                 },
                 changeLog: {
-                    include: { user: { select: { id: true, firstName: true, lastName: true } } },
+                    include: { user: { select: { id: true, firstName: true, lastName: true, companyId: true } } },
                     orderBy: { createdAt: 'desc' },
                     take: 50,
                 },
             },
         });
         if (!order) throw new NotFoundException('Заявка не найдена');
+
+        // Журнал правок и история — по правилу денег (владелец, 25.10.2026).
+        // В журнале хозяина рейса его ставки («Ставка перевозчика: 0 ->
+        // 555555») и платежи перевозчику; другой стороне — только записи её
+        // людей и то, что не про деньги (водитель сменил статус, сообщил о
+        // проблеме).
+        const owner = isOrderOwner(order, companyId);
+        const changeLog = owner
+            ? order.changeLog
+            : order.changeLog.filter((e) => e.user?.companyId === companyId || !/^(finance|payment)/.test(e.action));
+        const statusHistory = order.statusHistory.map((s) => ({ ...s, comment: historyCommentFor(s.comment, order, { companyId }) ?? null }));
+
+        // Перевозчик (парк с биржи) считает свою сторону: выручка — его ставка
+        // у экспедитора, а не цена заказчика (`asExecutorSees`).
+        const seen = { ...asExecutorSees(order, companyId), changeLog, statusHistory };
 
         // «Только заказчик» — не исполнитель этой же заявки. Компания бывает по рейсу и
         // заказчиком, и экспедитором (своя перевозка, своя заявка на бирже): прятать от
@@ -230,7 +245,7 @@ export class FinancialReportsService {
         ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         const fin = this.calculator.computeOrderFinance({
-            order,
+            order: seen,
             payments: [...allPayments, ...sharesAsPayments(shares)],
             incomes,
             expenses,
@@ -239,18 +254,9 @@ export class FinancialReportsService {
 
         if (isCustomer) {
             return {
-                order: {
-                    ...order,
-                    driverCost: null,
-                    subForwarderPrice: null,
-                    subForwarderId: null,
-                    isDriverPaid: false,
-                    driverPaidAt: null,
-                    isSubForwarderPaid: false,
-                    subForwarderPaidAt: null,
-                    partner: null,
-                    subForwarder: null,
-                },
+                // Правило одно с карточкой: вся сторона исполнителя, включая
+                // его НДС и отсрочку, а не только сумма.
+                order: hideExecutorCost({ ...seen }),
                 payments,
                 incomes,
                 expenses: [],
@@ -262,9 +268,9 @@ export class FinancialReportsService {
                      * тут хуже отсутствующей.
                      */
                     currency: (order as any).currency || 'KZT',
-                    driverCostCurrency: (order as any).driverCostCurrency || 'KZT',
+                    driverCostCurrency: 'KZT',
                     customerPriceBase: toNum((order as any).customerPriceBase),
-                    driverCostBase: toNum((order as any).driverCostBase),
+                    driverCostBase: 0,
                     unconvertedCurrencies: fin.unconvertedCurrencies,
                     customerPrice: order.customerPrice || 0,
                     driverCost: 0,
@@ -283,14 +289,17 @@ export class FinancialReportsService {
                     executorDebt: 0,
                     revenueNet: 0,
                     revenueVat: 0,
-                    executorCostNet: fin.executorCostNet,
-                    executorCostVat: fin.executorCostVat,
+                    // Себестоимость исполнителя без НДС и сам НДС — та же
+                    // ставка, только по частям. Экран заказчика их не
+                    // показывал, но в ответ они уходили.
+                    executorCostNet: 0,
+                    executorCostVat: 0,
                 },
             };
         }
 
         return {
-            order,
+            order: seen,
             payments,
             incomes,
             expenses,
@@ -301,25 +310,25 @@ export class FinancialReportsService {
                  * не вошли, и об этом сказано прямо: молчаливая цифра
                  * тут хуже отсутствующей.
                  */
-                currency: (order as any).currency || 'KZT',
-                driverCostCurrency: (order as any).driverCostCurrency || 'KZT',
-                customerPriceBase: toNum((order as any).customerPriceBase),
-                driverCostBase: toNum((order as any).driverCostBase),
+                currency: (seen as any).currency || 'KZT',
+                driverCostCurrency: (seen as any).driverCostCurrency || 'KZT',
+                customerPriceBase: toNum((seen as any).customerPriceBase),
+                driverCostBase: toNum((seen as any).driverCostBase),
                 unconvertedCurrencies: fin.unconvertedCurrencies,
-                customerPrice: toNum(order.customerPrice),
-                driverCost: toNum(order.driverCost),
-                subForwarderPrice: toNum(order.subForwarderPrice),
+                customerPrice: toNum(seen.customerPrice),
+                driverCost: toNum(seen.driverCost),
+                subForwarderPrice: toNum(seen.subForwarderPrice),
                 executorCost: toNum(fin.executorCost),
                 margin: toNum(fin.margin),
                 totalIncomes: toNum(fin.paidIn.plus(fin.extraIncomes)),
                 totalExpenses: toNum(fin.paidOut.plus(fin.otherExpenses)),
                 balance: toNum(fin.paidIn.plus(fin.extraIncomes).minus(fin.paidOut).minus(fin.otherExpenses)),
                 isCustomerPaid: fin.isCustomerPaid,
-                isDriverPaid: order.subForwarderId ? false : fin.isExecutorPaid,
-                isSubForwarderPaid: order.subForwarderId ? fin.isExecutorPaid : false,
+                isDriverPaid: seen.subForwarderId ? false : fin.isExecutorPaid,
+                isSubForwarderPaid: seen.subForwarderId ? fin.isExecutorPaid : false,
                 customerDebt: toNum(fin.customerDebt),
-                driverDebt: order.subForwarderId ? 0 : toNum(fin.executorDebt),
-                subForwarderDebt: order.subForwarderId ? toNum(fin.executorDebt) : 0,
+                driverDebt: seen.subForwarderId ? 0 : toNum(fin.executorDebt),
+                subForwarderDebt: seen.subForwarderId ? toNum(fin.executorDebt) : 0,
                 executorDebt: toNum(fin.executorDebt),
                 revenueNet: toNum(fin.revenueNet),
                 revenueVat: toNum(fin.revenueVat),
@@ -479,7 +488,9 @@ export class FinancialReportsService {
             take: scope.take,
         });
 
-        const rows = orders.map(order => {
+        const rows = orders.map(raw => {
+            // Перевозчик в реестре — со своей стороны сделки (`asExecutorSees`).
+            const order = asExecutorSees(raw, companyId);
             const isCustomer = isCustomerOnly(order, companyId);
             const fin = this.calculator.computeOrderFinance({
                 order,
@@ -726,7 +737,8 @@ export class FinancialReportsService {
         let withDebt = 0;
         const items: any[] = [];
 
-        for (const order of orders) {
+        for (const raw of orders) {
+            const order = asExecutorSees(raw, companyId);
             const fin = this.calculator.computeOrderFinance({
                 order,
                 payments: orderFinancePayments(order),
@@ -795,6 +807,8 @@ export class FinancialReportsService {
                 include: {
                     customerCompany: { select: { id: true, name: true } },
                     customer: { select: { id: true, firstName: true, lastName: true } },
+                    // Для перевозчика заказчик — экспедитор (`asExecutorSees`).
+                    forwarder: { select: { id: true, name: true } },
                     ...ORDER_FINANCE_RELATIONS_SELECT,
                 },
                 orderBy: { createdAt: 'desc' },
@@ -804,7 +818,8 @@ export class FinancialReportsService {
             scope.paginated ? this.prisma.order.count({ where }) : Promise.resolve(0),
         ]);
 
-        const rows = orders.map(order => {
+        const rows = orders.map(raw => {
+            const order = asExecutorSees(raw, companyId);
             const fin = this.calculator.computeOrderFinance({
                 order,
                 payments: orderFinancePayments(order),
@@ -858,7 +873,18 @@ export class FinancialReportsService {
                         { isConfirmed: true },
                         { status: { not: 'PENDING' } }
                     ]
-                }
+                },
+                // Рейс, который компания везёт перевозчиком у чужого
+                // экспедитора, — её выручка, а не расход: ставка в нём —
+                // то, что платят ей (`asExecutorSees`).
+                {
+                    OR: [
+                        { partnerId: null },
+                        { partnerId: { not: companyId } },
+                        { forwarderId: null },
+                        { forwarderId: companyId },
+                    ]
+                },
             ],
             status: { notIn: ['DRAFT', 'CANCELLED'] },
             createdAt: scope.createdAt,
@@ -1133,7 +1159,9 @@ export class FinancialReportsService {
             return counterpartyMap.get(key)!;
         };
 
-        for (const order of orders) {
+        for (const raw of orders) {
+            // Перевозчик — со своей стороны: его контрагент — экспедитор.
+            const order = asExecutorSees(raw, companyId);
             const isCustomer = order.customerCompanyId === companyId;
             const isForwarder = order.forwarderId === companyId || order.partnerId === companyId;
             const isSubForwarder = order.subForwarderId === companyId;
@@ -1670,7 +1698,9 @@ export class FinancialReportsService {
         });
 
         const map = new Map<string, { carrier: string; orders: number; revenue: Money; cost: Money; margin: Money }>();
-        for (const order of orders) {
+        for (const raw of orders) {
+            // Рейс, где мы перевозчик у экспедитора, — наша выручка по нашей ставке.
+            const order = asExecutorSees(raw, companyId);
             const fin = this.calculator.computeOrderFinance({
                 order, payments: orderFinancePayments(order), incomes: order.incomes, expenses: order.expenses, companyId,
             });
@@ -1806,6 +1836,12 @@ export class FinancialReportsService {
                 completedAt: true,
                 customerPrice: true,
                 customerCompany: { select: { id: true, name: true } },
+                // Для перевозчика акт — экспедитору на его ставку (`asExecutorSees`).
+                customerCompanyId: true,
+                forwarderId: true,
+                partnerId: true,
+                driverCost: true,
+                forwarder: { select: { id: true, name: true } },
                 routePoints: {
                     select: { pointType: true, sequence: true, location: { select: { city: true, address: true } } },
                     orderBy: { sequence: 'asc' },
@@ -1814,7 +1850,7 @@ export class FinancialReportsService {
             orderBy: { createdAt: 'desc' },
         });
 
-        return orders.map((o) => {
+        return orders.map((raw) => asExecutorSees(raw, companyId)).map((o) => {
             const pts = o.routePoints || [];
             const pickup = pts.find((p) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
             const delivery = [...pts].reverse().find((p) => p.pointType === 'DELIVERY');
@@ -1835,8 +1871,15 @@ export class FinancialReportsService {
     // ==================== АКТ ВЫПОЛНЕННЫХ РАБОТ ====================
 
     async getActOfWork(companyId: string, orderId: string) {
-        const order = await this.prisma.order.findUnique({
-            where: { id: orderId },
+        // Акт выставляет только тот, кто по рейсу оказывает услугу. Раньше
+        // заявку брали по одному номеру, без проверки, чья она: любая
+        // компания получала по чужой заявке цену заказчика и его реквизиты,
+        // а номера заявок видны на бирже всем перевозчикам.
+        const row = await this.prisma.order.findFirst({
+            where: {
+                id: orderId,
+                OR: [{ forwarderId: companyId }, { partnerId: companyId }, { subForwarderId: companyId }],
+            },
             include: {
                 customerCompany: true,
                 forwarder: true,
@@ -1845,7 +1888,10 @@ export class FinancialReportsService {
                 routePoints: { include: { location: { select: { city: true, address: true } } }, orderBy: { sequence: 'asc' } },
             },
         });
-        if (!order) throw new NotFoundException('Заявка не найдена');
+        if (!row) throw new NotFoundException('Заявка не найдена');
+        // Перевозчик выставляет акт экспедитору на свою ставку, а не
+        // заказчику экспедитора на его цену (`asExecutorSees`).
+        const order = asExecutorSees(row, companyId);
 
         // Определяем исполнителя (мы) и заказчика (кому выставляем акт)
         let issuer: any = null;
@@ -2373,7 +2419,8 @@ export class FinancialReportsService {
         let creditorSum : Money = ZERO;
         let unpaidOrdersCount = 0;
 
-        for (const order of orders) {
+        for (const raw of orders) {
+            const order = asExecutorSees(raw, companyId);
             const fin = this.calculator.computeOrderFinance({
                 order,
                 payments: orderFinancePayments(order),

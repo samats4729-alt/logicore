@@ -383,10 +383,10 @@ export class ExchangeOffersService {
                 // рейс без расчёта «на руки», как раньше.
                 const offered = offer.calc as unknown as SettlementCalc | null;
                 const calc = offered ? this.settlement.atAccept(offered, await this.settlement.context(driver, order.id)) : null;
-                if (calc) {
-                    settlementData = this.settlement.fixData(order.id, driver, calc);
-                    comment += ` — водителю на руки ${Math.round(calc.driverTotal).toLocaleString('ru-RU')} ₸ с топливом`;
-                }
+                // Сколько водителю на руки, в историю не пишем: её видит
+                // компания, выбравшая водителя, а это расчёт парка с его
+                // водителем (владелец, 25.10.2026). Парк видит его в «Рейсах».
+                if (calc) settlementData = this.settlement.fixData(order.id, driver, calc);
             }
         } else {
             throw new BadRequestException('Отклик без исполнителя');

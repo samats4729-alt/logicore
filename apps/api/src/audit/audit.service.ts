@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { historyCommentFor, isOrderOwner } from '../orders/order-visibility';
+import type { OrderSides } from '../orders/order-visibility';
 
 const SETTING_COMPANIES_ENABLED = 'audit_companies_enabled';
 const SETTINGS_CACHE_TTL_MS = 30_000;
@@ -91,8 +93,16 @@ export class AuditService {
      *
      * Ленту собираем здесь, а не на экране: сортировка по времени поверх
      * двух источников и подстановка имён — это работа сервера.
+     *
+     * `viewer` — кто смотрит. Записи о выборе исполнителя он видит по правилу
+     * денег (`historyCommentFor`), а действия людей — только своей компании,
+     * если рейс ведёт не он: в журнале действий хозяина рейса его ставки и
+     * правки цен (владелец, 25.10.2026).
      */
-    async getOrderHistory(orderId: string) {
+    async getOrderHistory(
+        orderId: string,
+        viewer?: { companyId?: string | null; driver?: boolean; order: OrderSides },
+    ) {
         const [statuses, actions] = await Promise.all([
             this.prisma.orderStatusHistory.findMany({
                 where: { orderId },
@@ -118,16 +128,21 @@ export class AuditService {
             users.map(u => [u.id, `${u.lastName || ''} ${u.firstName || ''}`.trim() || null]),
         );
 
+        const ownActionsOnly = !!viewer && (!!viewer.driver || !isOrderOwner(viewer.order, viewer.companyId));
+        const visibleActions = ownActionsOnly
+            ? actions.filter(a => !viewer!.driver && !!viewer!.companyId && a.companyId === viewer!.companyId)
+            : actions;
+
         const feed = [
             ...statuses.map(s => ({
                 kind: 'STATUS' as const,
                 at: s.changedAt,
                 status: s.status,
-                comment: s.comment,
+                comment: viewer ? historyCommentFor(s.comment, viewer.order, viewer) ?? null : s.comment,
                 userName: s.changedById ? nameById.get(s.changedById) ?? null : null,
                 userRole: null as string | null,
             })),
-            ...actions.map(a => ({
+            ...visibleActions.map(a => ({
                 kind: 'ACTION' as const,
                 at: a.createdAt,
                 action: a.action,

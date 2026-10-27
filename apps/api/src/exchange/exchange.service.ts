@@ -91,6 +91,27 @@ export class ExchangeService {
     private stateView(order: StateRow, companyId: string) {
         const blocker = this.blocker(order, companyId);
         const published = !!order.exchangePublishedAt && !order.exchangeClosedAt;
+        // Цена на бирже и подсказка из ставки перевозчика — сторона сделки
+        // того, кто ищет исполнителя. Заказчику это маржа экспедитора, той же
+        // чувствительности, что ставка в карточке (владелец, 25.10.2026).
+        if (managerOf(order) !== companyId) {
+            return {
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                onExchange: published && !blocker,
+                canPublish: false,
+                reason: blocker,
+                publishedAt: order.exchangePublishedAt,
+                price: null,
+                note: null,
+                closedAt: order.exchangeClosedAt,
+                closeReason: null,
+                from: cityName(order.routePoints.find((p) => p.pointType !== 'DELIVERY')),
+                to: cityName([...order.routePoints].reverse().find((p) => p.pointType === 'DELIVERY')),
+                offersCount: 0,
+                suggestedPrice: null,
+            };
+        }
         return {
             orderId: order.id,
             orderNumber: order.orderNumber,

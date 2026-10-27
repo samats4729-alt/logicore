@@ -585,12 +585,18 @@ export class OrdersController {
     async history(@Param('id') id: string, @Request() req: any) {
         // Через findById, чтобы права на заявку проверялись ровно так же, как
         // при её открытии: историю видит тот, кто видит сам рейс.
-        await this.ordersService.findById(id, {
+        const order = await this.ordersService.findById(id, {
             userId: req.user.sub,
             role: req.user.role,
             companyId: req.user.companyId,
         });
-        return this.auditService.getOrderHistory(id);
+        // Администратор платформы видит всё; остальные — по правилу денег.
+        if (req.user.role === UserRole.ADMIN) return this.auditService.getOrderHistory(id);
+        return this.auditService.getOrderHistory(id, {
+            companyId: req.user.companyId,
+            driver: req.user.role === UserRole.DRIVER,
+            order,
+        });
     }
 
     @Put(':id')
