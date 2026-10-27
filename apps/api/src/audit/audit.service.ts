@@ -6,6 +6,9 @@ import type { OrderSides } from '../orders/order-visibility';
 const SETTING_COMPANIES_ENABLED = 'audit_companies_enabled';
 const SETTINGS_CACHE_TTL_MS = 30_000;
 
+/** Записи журнала о деньгах водителя парка — в истории рейса только самому парку. */
+export const PARK_PRIVATE_ENTITIES = new Set(['driver_advance']);
+
 export interface AuditEntry {
     companyId?: string | null;
     /** req.user — берём id/имя/роль автора действия */
@@ -154,9 +157,12 @@ export class AuditService {
         );
 
         const ownActionsOnly = !!viewer && (!!viewer.driver || !isOrderOwner(viewer.order, viewer.companyId));
-        const visibleActions = ownActionsOnly
+        // Выдачи водителю парка (топливо, предоплата) — его деньги на руки:
+        // их видит только парк, даже хозяину рейса не показываем (27.10.2026).
+        const visibleActions = (ownActionsOnly
             ? actions.filter(a => !viewer!.driver && !!viewer!.companyId && a.companyId === viewer!.companyId)
-            : actions;
+            : actions
+        ).filter(a => !viewer || !PARK_PRIVATE_ENTITIES.has(a.entity) || a.companyId === viewer.companyId);
 
         const feed = [
             ...statuses.map(s => ({
