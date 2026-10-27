@@ -11,6 +11,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PayrollService } from '../payroll/payroll.service';
 import { kzStartOfToday, kzTodayString } from '../common/utils/business-date';
 import { maskForCustomer, maskForDriver } from './order-visibility';
+import { driverCompanyOf, tripManagerFor } from './trip-manager';
 import { OrderSettlementsService } from './order-settlements.service';
 import { компанииБазы, водительПодходит } from '../common/driver-pool';
 
@@ -1713,17 +1714,29 @@ export class OrdersService {
                 // Чей груз везёт — водитель видит, кто заказчик (имя, не реквизиты
                 // и не цену: цену заказчика убирает maskForDriver ниже).
                 customerCompany: { select: { id: true, name: true } },
+                // Кто ведёт рейс — для кнопки WhatsApp; наружу уходит только свой.
+                responsibles: { select: { companyId: true, user: { select: { firstName: true, lastName: true, phone: true, isActive: true } } } },
             },
             orderBy: { createdAt: 'desc' },
             take: includeHistory ? 50 : undefined,
         });
+        const driver = await this.prisma.user.findUnique({ where: { id: driverId }, select: { companyId: true } });
+        const companyIds = Array.from(new Set(orders.map((o) => driverCompanyOf(o, driver?.companyId ?? null)).filter((id): id is string => !!id)));
+        const companies = new Map(
+            (companyIds.length ? await this.prisma.company.findMany({ where: { id: { in: companyIds } }, select: { id: true, name: true, phone: true } }) : [])
+                .map((c) => [c.id, c]),
+        );
         // Водителю платит перевозчик или экспедитор. Сколько за тот же рейс
         // платит грузовладелец — не его сведения, а в списке рейсов эта
         // сумма приезжала вместе со всем остальным. Правило то же, что в
         // карточке: одно на обе выдачи, иначе они снова разойдутся —
         // сначала из списка убрали цену заказчика, а ставка перевозчика
         // осталась и там, и там.
-        return orders.map((order) => maskForDriver(order as any));
+        return orders.map(({ responsibles, ...order }) => {
+            // Контакт — до маскировки: она стирает, чей парк в рейсе.
+            const manager = tripManagerFor({ ...order, responsibles }, driver?.companyId ?? null, companies);
+            return { ...maskForDriver(order as any), manager };
+        });
     }
 
     /**

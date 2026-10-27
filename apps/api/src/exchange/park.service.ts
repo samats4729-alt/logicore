@@ -30,6 +30,8 @@ const TRIP_SELECT = {
     },
     // Чеки на топливо: сколько есть и сколько ждут решения. Отклонённые — не в счёт.
     exchangeFuelReceipts: { where: { status: { not: 'REJECTED' } }, select: { status: true } },
+    // Кто ведёт рейс от каждой компании; парку — свой (к нему водитель пишет в WhatsApp).
+    responsibles: { select: { companyId: true, user: { select: { id: true, firstName: true, lastName: true } } } },
     forwarder: { select: { name: true } },
     subForwarder: { select: { name: true } },
     customerCompany: { select: { name: true } },
@@ -127,6 +129,11 @@ export class ExchangeParkService {
                 fuelReceiptsPending: r.exchangeFuelReceipts.filter((f) => f.status === 'PENDING').length,
                 /** Чеков на топливо по рейсу (принятых и ждущих): 0 — чеков пока не было (шеф, 27.10.2026). */
                 fuelReceipts: r.exchangeFuelReceipts.length,
+                /** Кто ведёт рейс от парка — ему водитель пишет в WhatsApp из приложения (28.10.2026). */
+                responsible: (() => {
+                    const u = r.responsibles.find((x) => x.companyId === companyId)?.user;
+                    return u ? { id: u.id, name: [u.lastName, u.firstName].filter(Boolean).join(' ') || 'Сотрудник' } : null;
+                })(),
                 createdAt: r.createdAt,
                 completedAt: r.completedAt,
             };

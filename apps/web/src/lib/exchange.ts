@@ -384,6 +384,8 @@ export interface ParkTrip {
     fuelReceiptsPending?: number;
     /** Чеков на топливо по рейсу (принятых и ждущих); 0 — чеков пока не было. Старый сервер не присылает. */
     fuelReceipts?: number;
+    /** Кто ведёт рейс от парка — к нему водитель пишет в WhatsApp. */
+    responsible?: { id: string; name: string } | null;
     createdAt: string;
     completedAt: string | null;
 }
