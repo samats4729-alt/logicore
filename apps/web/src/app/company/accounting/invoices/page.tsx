@@ -159,7 +159,7 @@ export default function InvoicesRegistryPage() {
         [plannedTotals, withoutInvoice, direction],
     );
     const сторонаДолга = direction === 'OUTGOING' ? 'Дебиторка' : 'Кредиторка';
-    const чейДолг = direction === 'OUTGOING' ? 'должны нам' : 'должны мы';
+    const чейДолг = direction === 'OUTGOING' ? 'сальдо по дебету' : 'сальдо по кредиту';
 
     useEffect(() => {
         api.get('/company/my-companies')
@@ -479,7 +479,7 @@ export default function InvoicesRegistryPage() {
                     <div className={nova.tile}>
                         <div className={nova.tileLabel}>{сторонаДолга}</div>
                         <div className={nova.tileValue}>{money(долг.total)}</div>
-                        <div className={nova.tileSub}>всего {чейДолг} на сегодня</div>
+                        <div className={nova.tileSub}>{чейДолг} на сегодня</div>
                     </div>
                     <div className={nova.tile}>
                         <div className={nova.tileLabel}>Выставлено счетами</div>

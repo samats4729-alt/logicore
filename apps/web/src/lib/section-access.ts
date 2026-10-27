@@ -51,6 +51,8 @@ const SECTIONS: { prefix: string; permission?: string; roles?: string[]; title: 
     { prefix: '/company/contracts', permission: 'partners', roles: ['LOGISTICIAN'], title: 'Договоры' },
     { prefix: '/company/vehicles', roles: ['LOGISTICIAN'], title: 'Автопарк' },
     { prefix: '/company/blocklist', roles: ['LOGISTICIAN', 'ACCOUNTANT'], title: 'Чёрный список' },
+    // Обмен с 1С: настраивает руководитель, бухгалтер смотрит журнал.
+    { prefix: '/company/one-c', roles: ['ACCOUNTANT'], title: 'Обмен с 1С' },
     // Подписку продлевает тот, кто платит. Права раздела тут ни при чём:
     // деньги за кабинет — дело руководителя, а не бухгалтерии.
     { prefix: '/company/billing', roles: [], title: 'Подписка' },

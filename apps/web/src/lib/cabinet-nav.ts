@@ -13,7 +13,7 @@
 const CABINET_ROUTES = [
     '/company/cabinet', '/company/users', '/company/settings', '/company/audit',
     '/company/partners', '/company/contracts', '/company/locations',
-    '/company/vehicles', '/company/documents', '/company/profile', '/company/blocklist',
+    '/company/vehicles', '/company/documents', '/company/profile', '/company/blocklist', '/company/one-c',
     '/company/accounting/settings', '/company/accounting/payment-conditions',
     '/company/accounting/payment-forms', '/company/accounting/ownership-types',
     '/company/accounting/banks', '/company/accounting/currencies',

@@ -23,6 +23,7 @@ import { CargoTypesModule } from './cargo-types/cargo-types.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ExternalCompaniesModule } from './external-companies/external-companies.module';
 import { BlocklistModule } from './blocklist/blocklist.module';
+import { OneCModule } from './onec/onec.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { EmailModule } from './email/email.module';
 import { AssistantModule } from './assistant/assistant.module';
@@ -80,6 +81,7 @@ import { ReportsModule } from './reports/reports.module';
         ContractsModule,
         ExternalCompaniesModule,
         BlocklistModule,
+        OneCModule,
         AccountingModule,
         AccountingDocumentsModule,
         PaymentProofsModule,

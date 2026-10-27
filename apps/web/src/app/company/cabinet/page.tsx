@@ -27,6 +27,7 @@ import {
     Users,
     Warehouse,
     Ban,
+    Plug,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -107,6 +108,7 @@ export default function CabinetPage() {
             icon: Building2,
             links: [
                 { label: 'Организации и реквизиты', desc: 'Название, БИН, подписи, печать', href: '/company/settings', icon: Building2, show: isAdmin },
+                { label: 'Обмен с 1С', desc: 'Ваша 1С подключается к LogiCore сама', href: '/company/one-c', icon: Plug, show: isAdmin || acc },
                 { label: 'Счета и кассы', desc: 'Ваши расчётные счета и кассы', href: '/company/accounting/settings?tab=accounts', icon: Banknote, show: acc },
                 { label: 'Нумерация заявок', desc: 'Формат номера как в 1С', href: '/company/accounting/order-numbering', icon: Hash, show: acc },
                 { label: 'Нумерация счетов', desc: 'Префикс, следующий номер', href: '/company/accounting/document-numbering', icon: Hash, show: acc },

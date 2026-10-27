@@ -57,7 +57,7 @@ export const ROUTES = `
 - /company/accounting/operations — Все операции: вся история движения денег
 - /company/accounting/calendar — Платёжный календарь: что и когда движется по деньгам
 - /company/accounting/planned — Планируемые платежи: что предстоит заплатить и получить
-- /company/accounting/counterparty-report — Взаиморасчёты: кто кому должен, просрочка, сверка
+- /company/accounting/counterparty-report — Взаиморасчёты: дебиторская и кредиторская задолженность по контрагентам, просрочка, сверка
 - /company/accounting/reconciliation-act — Акт сверки с контрагентом
 - /company/accounting/balances — Остатки по кассам и счетам
 - /company/accounting/opening-balances — Ввод начальных остатков при запуске учёта

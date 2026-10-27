@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Tabs, Table, Button, Typography, Modal, Form, InputNumber, Input, Tag } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, BankOutlined, InboxOutlined, CarOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, BankOutlined, InboxOutlined, CarOutlined, UploadOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { fetchCounterparties } from '@/lib/counterparties';
 import { formatMoneyInput, parseMoneyInput } from '@/lib/money-format';
@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import nova from '@/components/nova/nova.module.css';
 import { DateField } from '@/components/ui/DateField';
+import { OpeningsFrom1CDialog } from '@/components/accounting/OpeningsFrom1CDialog';
 
 const { Text } = Typography;
 
@@ -56,6 +57,8 @@ export default function OpeningBalancesPage() {
     // Модалка контрагента
     const [cpModal, setCpModal] = useState<{ partner: Partner; side: 'receivable' | 'payable' } | null>(null);
     const [cpForm] = Form.useForm();
+    // Загрузка начальных остатков из оборотно-сальдовой ведомости 1С
+    const [from1c, setFrom1c] = useState(false);
 
     useEffect(() => { fetchAll(); }, []);
 
@@ -121,7 +124,7 @@ export default function OpeningBalancesPage() {
         };
         try {
             await api.put(`/accounting/counterparty-openings/${partner.id}`, payload);
-            toast.success('Начальный долг сохранён');
+            toast.success('Начальный остаток сохранён');
             setCpModal(null);
             fetchAll();
         } catch {
@@ -145,7 +148,7 @@ export default function OpeningBalancesPage() {
     const cpColumns = (side: 'receivable' | 'payable') => [
         { title: 'Контрагент', dataIndex: 'name', key: 'name', render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
         {
-            title: side === 'receivable' ? 'Дебиторка' : 'Кредиторка',
+            title: side === 'receivable' ? 'Дебиторская задолженность' : 'Кредиторская задолженность',
             key: 'amt',
             align: 'right' as const,
             width: 220,
@@ -177,6 +180,7 @@ export default function OpeningBalancesPage() {
                         Один раз при старте учёта укажите, сколько денег было на счетах и кто кому был должен. Дальше система считает всё сама — эти цифры станут отправной точкой для взаиморасчётов и остатков.
                     </p>
                 </div>
+                <Button icon={<UploadOutlined />} onClick={() => setFrom1c(true)}>Загрузить остатки из 1С</Button>
             </div>
 
             <div className="lc-card" style={{ padding: 16 }}>
@@ -211,6 +215,8 @@ export default function OpeningBalancesPage() {
                 />
             </div>
 
+            <OpeningsFrom1CDialog open={from1c} onOpenChange={setFrom1c} partners={partners} openings={openings} onSaved={fetchAll} />
+
             {/* Модалка счёта */}
             <Modal open={!!accModal} title={`Начальный остаток — ${accModal?.name || ''}`} onCancel={() => setAccModal(null)} onOk={() => accForm.submit()} okText="Сохранить" cancelText="Отмена" destroyOnClose>
                 <Form form={accForm} layout="vertical" onFinish={saveAcc} style={{ marginTop: 12 }}>
@@ -224,9 +230,9 @@ export default function OpeningBalancesPage() {
             </Modal>
 
             {/* Модалка контрагента */}
-            <Modal open={!!cpModal} title={cpModal ? `${cpModal.side === 'receivable' ? 'Дебиторка' : 'Кредиторка'} — ${cpModal.partner.name}` : ''} onCancel={() => setCpModal(null)} onOk={() => cpForm.submit()} okText="Сохранить" cancelText="Отмена" destroyOnClose>
+            <Modal open={!!cpModal} title={cpModal ? `${cpModal.side === 'receivable' ? 'Дебиторская задолженность' : 'Кредиторская задолженность'} — ${cpModal.partner.name}` : ''} onCancel={() => setCpModal(null)} onOk={() => cpForm.submit()} okText="Сохранить" cancelText="Отмена" destroyOnClose>
                 <Form form={cpForm} layout="vertical" onFinish={saveCp} style={{ marginTop: 12 }}>
-                    <Form.Item name="amount" label={cpModal?.side === 'receivable' ? 'Долг заказчика перед нами на дату начала' : 'Наш долг перед перевозчиком на дату начала'}>
+                    <Form.Item name="amount" label={cpModal?.side === 'receivable' ? 'Сальдо по дебету на дату начала' : 'Сальдо по кредиту на дату начала'}>
                         <InputNumber size="large" style={{ width: '100%' }} min={0} formatter={moneyFmt} parser={moneyParse} addonAfter="₸" />
                     </Form.Item>
                     <Form.Item name="openingDate" label="На дату">
