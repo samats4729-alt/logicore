@@ -34,48 +34,9 @@ const КАК_ЭКСПЕДИТОР = { id: 'c1', forwarderCompanyId: МЫ, custom
 const КАК_ЗАКАЗЧИК = { id: 'c1', forwarderCompanyId: ВТОРАЯ_СТОРОНА, customerCompanyId: МЫ };
 
 describe('Текст договора: кто правит', () => {
-    describe('сохранение правок', () => {
-        it('экспедитор правит — как и раньше', async () => {
-            const { service, prisma } = служба(КАК_ЭКСПЕДИТОР);
-            await service.updateContractContent('c1', МЫ, { articles: [] });
-            expect(prisma.contract.update).toHaveBeenCalled();
-        });
-
-        it('заказчик тоже правит — ради этого правка и делалась', async () => {
-            const { service, prisma } = служба(КАК_ЗАКАЗЧИК);
-            await service.updateContractContent('c1', МЫ, { articles: [] });
-            expect(prisma.contract.update).toHaveBeenCalled();
-        });
-
-        it('посторонняя компания не правит', async () => {
-            // Доступ расширен на вторую сторону, а не на всех: номер договора
-            // приходит из браузера, и без проверки это был бы способ
-            // переписать чужой договор.
-            const { service, prisma } = служба(КАК_ЭКСПЕДИТОР);
-            await expect(service.updateContractContent('c1', ПОСТОРОННИЙ, { articles: [] }))
-                .rejects.toThrow('Нет доступа к этому договору');
-            expect(prisma.contract.update).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('сброс к шаблону', () => {
-        it('круг тот же, что у правки', async () => {
-            // Разойдись они — сторона получила бы наполовину рабочий
-            // редактор: править можно, начать заново нельзя.
-            for (const договор of [КАК_ЭКСПЕДИТОР, КАК_ЗАКАЗЧИК]) {
-                const { service, prisma } = служба(договор);
-                await service.resetContractContent('c1', МЫ);
-                expect(prisma.contract.update).toHaveBeenCalled();
-            }
-        });
-
-        it('посторонняя компания не сбрасывает', async () => {
-            const { service, prisma } = служба(КАК_ЭКСПЕДИТОР);
-            await expect(service.resetContractContent('c1', ПОСТОРОННИЙ))
-                .rejects.toThrow('Нет доступа к этому договору');
-            expect(prisma.contract.update).not.toHaveBeenCalled();
-        });
-    });
+    // Сохранение и сброс текста теперь пишут версию в историю и живут в
+    // ContractCollabService (G6) — их круг проверяется в
+    // contract-collab.service.spec: обе стороны правят, посторонний нет.
 
     describe('чтение осталось прежним', () => {
         it('обе стороны читают текст', async () => {

@@ -1265,15 +1265,80 @@ model Contract {
   signedFileSize   Int?
   signedUploadedAt DateTime?
 
+  /// Номер текущей версии текста (G6). 0 — текст ещё ни разу не меняли.
+  contentVersion Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   agreements SupplementaryAgreement[]
+  revisions  ContractRevision[]
+  proposals  ContractProposal[]
 
   @@unique([customerCompanyId, forwarderCompanyId, contractNumber])
   @@index([customerCompanyId])
   @@index([forwarderCompanyId])
   @@index([status])
+}
+
+/// Версия текста договора (G6, владелец 25.10.2026): каждое изменение —
+/// снимок текста целиком, кто и когда. Версии не правятся и не удаляются:
+/// это и есть история договора.
+model ContractRevision {
+  id              String   @id @default(cuid())
+  contractId      String
+  contract        Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  version         Int
+  content         Json
+  /// Откуда версия: INITIAL — текст до начала истории, SAVE — сохранила
+  /// сторона, PROPOSAL — принятое предложение, RESET — сброс к шаблону.
+  source          String
+  authorCompanyId String?
+  authorUserId    String?
+  /// Снимок «Фамилия Имя · компания» — человек может уйти, история остаётся.
+  authorName      String?
+  note            String?
+  proposalId      String?
+  createdAt       DateTime @default(now())
+
+  @@unique([contractId, version])
+  @@index([contractId])
+}
+
+enum ContractProposalStatus {
+  PENDING // Ждёт решения второй стороны
+  ACCEPTED // Принято — стало новой версией
+  REJECTED // Отклонено второй стороной
+  WITHDRAWN // Отозвано тем, кто предложил
+  OUTDATED // Текст изменился после предложения — принять уже нельзя
+}
+
+/// Предложение правок текста договора одной стороной другой (G6). Хранит
+/// предлагаемый текст целиком и версию, на которой он основан: если текст
+/// с тех пор изменился, предложение устаревает, а не перетирает чужие правки.
+model ContractProposal {
+  id          String                 @id @default(cuid())
+  contractId  String
+  contract    Contract               @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  baseVersion Int
+  content     Json
+  /// Что меняется — словами того, кто предложил.
+  summary     String?
+  status      ContractProposalStatus @default(PENDING)
+
+  proposedByCompanyId String
+  proposedByUserId    String?
+  proposedByName      String?
+  createdAt           DateTime @default(now())
+
+  decidedByCompanyId String?
+  decidedByUserId    String?
+  decidedByName      String?
+  decidedAt          DateTime?
+  /// Причина отказа или комментарий при принятии.
+  decisionNote       String?
+
+  @@index([contractId, status])
 }
 
 model SupplementaryAgreement {
