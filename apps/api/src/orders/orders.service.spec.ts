@@ -95,8 +95,11 @@ describe('OrdersService.findDriverOrders', () => {
                     driverCost: 380000,
                     customerCompany: { id: 'company-1', name: 'ТОО «Ромашка»' },
                     routePoints: [],
+                    responsibles: [],
                 }]),
             },
+            user: { findUnique: jest.fn().mockResolvedValue(null) },
+            company: { findMany: jest.fn().mockResolvedValue([]) },
         };
         const service = new OrdersService(
             prisma as any,
@@ -119,7 +122,7 @@ describe('OrdersService.findDriverOrders', () => {
 
 describe('OrdersService.findDriverOrders — рейс с проблемой', () => {
     it('после «Проблемы» рейс остаётся у водителя текущим', async () => {
-        const prisma = { order: { findMany: jest.fn().mockResolvedValue([]) } };
+        const prisma = { order: { findMany: jest.fn().mockResolvedValue([]) }, user: { findUnique: jest.fn().mockResolvedValue(null) }, company: { findMany: jest.fn() } };
         const service = new OrdersService(
             prisma as any,
             {} as any,

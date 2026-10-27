@@ -26,6 +26,7 @@ import { useTabBarSpace } from '@/components/TabBar';
 import { TripFuel } from '@/components/TripFuel';
 import { TripAdvance } from '@/components/TripAdvance';
 import { appendPhoto } from '@/lib/upload';
+import { openWhatsApp } from '@/lib/whatsapp';
 
 /** Высота ползунка «смахните вправо» (кружок 54 + поля). */
 const SWIPE_HEIGHT = 64;
@@ -341,6 +342,28 @@ export default function CurrentTrip({
                     </Pressable>
                 </View>
 
+                {/* ===== WhatsApp тому, кто ведёт рейс (владелец, 28.10.2026) ===== */}
+                {!!currentOrder.manager && (
+                    <Pressable
+                        onPress={() => openWhatsApp(
+                            currentOrder.manager!.phone,
+                            `Здравствуйте! ${[user?.lastName, user?.firstName].filter(Boolean).join(' ') || 'Водитель'}, рейс ${currentOrder.orderNumber}.`,
+                        )}
+                        accessibilityRole="button"
+                        accessibilityLabel="Написать в WhatsApp"
+                        style={({ pressed }: { pressed: boolean }) => [styles.whatsapp, { backgroundColor: colors.card, opacity: pressed ? 0.85 : 1 }]}
+                    >
+                        <View style={styles.whatsappIcon}><Ionicons name="logo-whatsapp" size={22} color="#ffffff" /></View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.actionTitle, { color: colors.text, marginTop: 0 }]}>Написать в WhatsApp</Text>
+                            <Text style={[styles.actionSub, { color: colors.textTertiary }]} numberOfLines={1}>
+                                {currentOrder.manager.responsible ? `${currentOrder.manager.name} · ведёт рейс` : currentOrder.manager.name}
+                            </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                    </Pressable>
+                )}
+
                 {/* ===== Маршрут: точки по порядку ===== */}
                 <Section title="Маршрут" icon="git-commit-outline" right={точек(currentOrder.routePoints?.length || 0)}>
                     {currentOrder.routePoints?.map((point, index) => {
@@ -511,6 +534,9 @@ const styles = StyleSheet.create({
     dockPlate: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 
     actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+    whatsapp: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: RADIUS.card, padding: 14, minHeight: 64, marginBottom: 12 },
+    /** Фирменный зелёный WhatsApp — узнаётся сразу, в обеих темах. */
+    whatsappIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#25D366', alignItems: 'center', justifyContent: 'center' },
     action: { flex: 1, borderRadius: RADIUS.card, padding: 16 },
     actionSpinner: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     actionTitle: { fontFamily: FONT.semibold, fontSize: 14.5, letterSpacing: -0.2, marginTop: 12 },

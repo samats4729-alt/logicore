@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusPill from '@/components/ui/StatusPill';
 import { TripFuelDialog } from '@/components/park/TripFuelDialog';
+import { ParkStaff, TripResponsibleSelect } from '@/components/park/TripResponsibleSelect';
 import styles from '@/components/nova/nova.module.css';
 
 const FILTERS: { key: ParkTripFilter; label: string }[] = [
@@ -43,6 +44,17 @@ export default function ParkTripsPage() {
     const [failed, setFailed] = useState(false);
     const [fuelTrip, setFuelTrip] = useState<ParkTrip | null>(null);
     const [reload, setReload] = useState(0);
+    // Сотрудники парка — выбрать, кто ведёт рейс (к нему водитель пишет в WhatsApp).
+    const [staff, setStaff] = useState<ParkStaff[]>([]);
+
+    useEffect(() => {
+        api.get('/company/users', { params: { segment: 'office' } })
+            .then((r) => setStaff(Array.isArray(r.data) ? r.data : (r.data?.data ?? [])))
+            .catch(() => setStaff([]));
+    }, []);
+
+    const assigned = (id: string) => (responsible: { id: string; name: string }) =>
+        setTrips((list) => list?.map((t) => (t.id === id ? { ...t, responsible } : t)) ?? list);
 
     useEffect(() => {
         const wanted = new URLSearchParams(window.location.search).get('status');
@@ -130,6 +142,11 @@ export default function ParkTripsPage() {
                                         <TableCell>
                                             <div>{t.driverName ?? '—'}</div>
                                             {t.vehiclePlate && <div className="text-[12px] text-muted-foreground">{t.vehiclePlate}</div>}
+                                            {t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && (
+                                                <div className="mt-1">
+                                                    <TripResponsibleSelect orderId={t.id} current={t.responsible ?? null} staff={staff} onChanged={assigned(t.id)} />
+                                                </div>
+                                            )}
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">{день(t.loadingDate)}</TableCell>
                                         <TableCell className="text-muted-foreground">{t.customerName ?? '—'}</TableCell>
@@ -158,6 +175,9 @@ export default function ParkTripsPage() {
                                         <span className="shrink-0 text-[15px] font-bold tabular-nums">{t.price != null ? moneyShort(t.price) : '—'}</span>
                                     </div>
                                     <div className="text-[12px] text-muted-foreground">{t.driverName ?? '—'}{t.vehiclePlate ? ` · ${t.vehiclePlate}` : ''} · {день(t.loadingDate)}</div>
+                                    {t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && (
+                                        <TripResponsibleSelect orderId={t.id} current={t.responsible ?? null} staff={staff} onChanged={assigned(t.id)} />
+                                    )}
                                     {t.settlement && (
                                         <div className="text-[12px] text-muted-foreground">водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}</div>
                                     )}

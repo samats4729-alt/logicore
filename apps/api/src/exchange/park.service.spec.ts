@@ -44,13 +44,28 @@ describe('Кабинет парка', () => {
         const trip = (id: string, receipts: { status: string }[]) => ({
             id, orderNumber: id, status: 'COMPLETED', driverCost: 400000, createdAt: new Date(), completedAt: new Date(),
             assignedDriverName: 'Рулев', assignedDriverPlate: null, exchangeSettlement: null,
-            exchangeFuelReceipts: receipts, forwarder: null, subForwarder: null, customerCompany: null, routePoints: [],
+            exchangeFuelReceipts: receipts, responsibles: [], forwarder: null, subForwarder: null, customerCompany: null, routePoints: [],
         });
         prisma.order.findMany.mockResolvedValue([trip('o-none', []), trip('o-two', [{ status: 'ACCEPTED' }, { status: 'PENDING' }])]);
         const rows = await service.trips('park-1', 'done');
         expect(rows.map((r) => [r.id, r.fuelReceipts, r.fuelReceiptsPending])).toEqual([['o-none', 0, 0], ['o-two', 2, 1]]);
         // Отклонённые чеки — не в счёт: их и не выбираем.
         expect(prisma.order.findMany.mock.calls[0][0].select.exchangeFuelReceipts.where).toEqual({ status: { not: 'REJECTED' } });
+    });
+
+    it('в рейсе видно, кто его ведёт от парка, — чужой ответственный не показывается', async () => {
+        const { service, prisma } = build();
+        prisma.order.findMany.mockResolvedValue([{
+            id: 'o-1', orderNumber: 'o-1', status: 'IN_TRANSIT', driverCost: 400000, createdAt: new Date(), completedAt: null,
+            assignedDriverName: 'Рулев', assignedDriverPlate: null, exchangeSettlement: null, exchangeFuelReceipts: [],
+            responsibles: [
+                { companyId: 'fwd', user: { id: 'u-fwd', firstName: 'Ерлан', lastName: 'Экспедиторов' } },
+                { companyId: 'park-1', user: { id: 'u-park', firstName: 'Алия', lastName: 'Паркова' } },
+            ],
+            forwarder: null, subForwarder: null, customerCompany: null, routePoints: [],
+        }]);
+        const [row] = await service.trips('park-1', 'active');
+        expect(row.responsible).toEqual({ id: 'u-park', name: 'Паркова Алия' });
     });
 
     it('не парк — кабинета парка нет', async () => {

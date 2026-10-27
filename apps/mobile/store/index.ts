@@ -36,6 +36,12 @@ export interface Order {
     createdAt?: string;
     /** Компания-заказчик. Старый сервер её не присылает — тогда поля нет. */
     customerCompany?: { id: string; name: string } | null;
+    /**
+     * Кто ведёт рейс от парка или компании водителя — для кнопки WhatsApp.
+     * `responsible: false` — ответственного нет, это общий номер компании.
+     * Старый сервер не присылает.
+     */
+    manager?: { name: string; phone: string; responsible: boolean } | null;
     routePoints: Array<{
         pointType: string;
         sequence: number;
