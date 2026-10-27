@@ -29,6 +29,7 @@ import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
 import { fuelChangeText, fuelView } from './fuel-history';
+import { ExchangeParkEarningsService } from './park-earnings.service';
 import { PlatformFeeDto } from './dto/fuel.dto';
 import { AdvanceDecisionDto, AdvanceRequestDto, FuelDecisionDto, FuelIssueDto, FuelReceiptDto } from './dto/fuel.dto';
 import { ExchangeAdvanceRequestsService } from './advance-requests.service';
@@ -51,7 +52,7 @@ function sendContractPdf(res: Response, file: { number: string; pdf: Buffer }, i
     res.send(file.pdf);
 }
 import {
-    AddParkDriverDto, AdminCompaniesQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
+    AddParkDriverDto, AdminCompaniesQueryDto, ParkEarningsQueryDto, DriverDocumentDto, DriverFeedQueryDto, DriverGoogleAuthDto, DriverPhoneRegisterDto, DriverReasonDto, ParkDriversQueryDto,
     ConfirmRatesDto, DeductionRequestDto, DeletionRequestDto, DriverContactsDto, DriverVehicleDto, ExportPayoutsDto, FuelSeasonDto, ParkCodeDto, ParkPayoutsQueryDto, PreliminaryAckDto, ParkTripsQueryDto, PayoutAccountDto, PayoutRatesDto, SetExchangeAccessDto, SetParkDto, UpdateDriverProfileDto,
 } from './dto/driver.dto';
 
@@ -754,7 +755,20 @@ export class ExchangeAdminController {
         private readonly drivers: ExchangeDriversService,
         private readonly settlement: ExchangeSettlementService,
         private readonly loads: ExchangeDriverLoadsService,
+        private readonly earnings: ExchangeParkEarningsService,
     ) {}
+
+    @Get('park-earnings')
+    @ApiOperation({ summary: 'Заработок LogiCore по паркам: рейсы, сумма перевозок, доля LogiCore, подписка' })
+    parkEarnings(@Query() query: ParkEarningsQueryDto) {
+        return this.earnings.summary(query);
+    }
+
+    @Get('park-earnings/:parkId')
+    @ApiOperation({ summary: 'История начислений по парку: рейсы с долей LogiCore и оплаты подписки' })
+    parkEarningsHistory(@Param('parkId') parkId: string, @Query() query: ParkEarningsQueryDto) {
+        return this.earnings.history(parkId, query);
+    }
 
     @Get('deletion-requests')
     @ApiOperation({ summary: 'Водители, которые просят удалить аккаунт' })

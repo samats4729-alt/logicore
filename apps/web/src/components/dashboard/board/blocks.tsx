@@ -323,9 +323,14 @@ export function UpcomingBlock() {
     const rows = st.limit === 'all' ? all : all.slice(0, Number(st.limit));
     const col = (c: 'date' | 'status' | 'price') => st.columns.includes(c);
     if (!rows.length) {
+        // Заявок нет вовсе — у новой компании «рейсы уже в пути» звучало
+        // бы неправдой: рейсов ещё не было.
+        const none = Object.values(data!.byStatus).every((n) => !n);
         return (
             <BlockNote>
-                {st.only === 'pending' ? 'Все ближайшие погрузки назначены — без исполнителя ничего нет' : 'Ближайших погрузок нет — все рейсы уже в пути или завершены'}
+                {none
+                    ? 'Погрузок пока нет — они появятся здесь, когда вы создадите заявку'
+                    : st.only === 'pending' ? 'Все ближайшие погрузки назначены — без исполнителя ничего нет' : 'Ближайших погрузок нет — все рейсы уже в пути или завершены'}
             </BlockNote>
         );
     }

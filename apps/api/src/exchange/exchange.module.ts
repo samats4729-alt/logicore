@@ -17,6 +17,7 @@ import { ExchangeParkRegistryService } from './park-registry.service';
 import { ParkContractService } from './park-contract.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeFuelService } from './fuel.service';
+import { ExchangeParkEarningsService } from './park-earnings.service';
 import { StampImageService } from '../common/services/stamp-image.service';
 import { DriverCalculatorController } from './driver-calculator.controller';
 import { OrdersModule } from '../orders/orders.module';
@@ -31,6 +32,6 @@ import { ExchangeDriverVehiclesService } from './driver-vehicles.service';
         ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController, ExchangeAdminController,
         ExchangePublicController, DriverCalculatorController,
     ],
-    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService, ExchangeParkService, ExchangePayoutsService, ParkContractService, StampImageService, ExchangeSettlementService, ExchangeFuelService, ExchangeParkRegistryService, ExchangeAdvanceRequestsService, ExchangeDriverVehiclesService],
+    providers: [ExchangeService, ExchangeDriversService, ExchangeDriverLoadsService, ExchangeOffersService, ExchangeParkService, ExchangePayoutsService, ParkContractService, StampImageService, ExchangeSettlementService, ExchangeFuelService, ExchangeParkRegistryService, ExchangeAdvanceRequestsService, ExchangeDriverVehiclesService, ExchangeParkEarningsService],
 })
 export class ExchangeModule {}

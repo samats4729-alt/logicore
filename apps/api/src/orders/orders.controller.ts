@@ -11,7 +11,7 @@ import { decodeUploadName } from '../common/utils/upload-name';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { PowerOfAttorneyService } from './power-of-attorney.service';
 import { OrderContractService } from './order-contract.service';
-import { OrderDocumentsService } from './order-documents.service';
+import { OrderDocumentsService, POA_SHARE_KIND, разобратьПочты } from './order-documents.service';
 import { OrderSettlementsService } from './order-settlements.service';
 import { ACCOUNTING_ORDER_FIELDS, canTouchAccounting } from '../auth/accounting-access';
 import { CompanyVerifiedGuard, RequireVerifiedCompany } from '../company/guards/company-verified.guard';
@@ -512,6 +512,20 @@ export class OrdersController {
         res.end(pdfBuffer);
     }
 
+    @Get(':id/power-of-attorney/recipients')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
+    @ApiOperation({ summary: 'Кому ушла последняя доверенность по рейсу' })
+    async powerOfAttorneyRecipients(@Param('id') id: string, @Request() req: any) {
+        // Сначала — что рейс виден этому человеку: адреса получателей не
+        // отдаём по одному лишь номеру заявки.
+        await this.ordersService.findById(id, {
+            userId: req.user.sub,
+            role: req.user.role,
+            companyId: req.user.companyId,
+        });
+        return this.orderDocuments.lastPowerOfAttorneyRecipients(id, req.user.companyId ?? null);
+    }
+
     @Post(':id/share-power-of-attorney')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.LOGISTICIAN, UserRole.FORWARDER)
     @ApiOperation({ summary: 'Отправить доверенность по email получателям' })
@@ -574,7 +588,8 @@ export class OrdersController {
         const pickupCity = pickupPoint?.location?.city || pickupPoint?.location?.address || '';
         const deliveryCity = deliveryPoint?.location?.city || deliveryPoint?.location?.address || '';
 
-        // Машина рейса — снимок в заявке (как в самой доверенности), иначе карточка водителя.
+        // Машина и телефон — из рейса, как в самой доверенности и в карточке:
+        // снимок в заявке, иначе карточка водителя.
         const снимок = !!(order as any).assignedDriverPlate;
         const driverInfo = {
             fullName: driver
@@ -585,7 +600,7 @@ export class OrdersController {
             vehicleModel: driver?.vehicleModel || undefined,
             vehiclePlate: (снимок ? (order as any).assignedDriverPlate : driver?.vehiclePlate) || undefined,
             trailer: (снимок ? (order as any).assignedDriverTrailer : driver?.trailerNumber) || undefined,
-            phone: driver?.phone || (order as any).assignedDriverPhone || undefined,
+            phone: (order as any).assignedDriverPhone || driver?.phone || undefined,
             route: (pickupCity && deliveryCity) ? `${pickupCity} → ${deliveryCity}` : undefined,
         };
 
@@ -610,7 +625,10 @@ export class OrdersController {
             )
         );
 
-        // Журнал отправленных доверенностей (задачи шефа, D4): кому, когда, по какой заявке, с чем.
+        // Журнал отправленных доверенностей (задачи шефа, D4): кому, когда, по
+        // какой заявке, с чем. По этим же адресам после замены водителя
+        // предлагают отправить новую доверенность туда же (POA_SHARE_KIND).
+        const адреса = разобратьПочты(body.emails);
         await this.auditService.log({
             companyId: req.user.companyId,
             user: req.user,
@@ -618,10 +636,11 @@ export class OrdersController {
             entity: 'power_of_attorney_sent',
             entityId: id,
             orderId: id,
-            entityLabel: `Доверенность по заявке № ${order.orderNumber} отправлена: ${body.emails.join(', ')}`,
+            entityLabel: `Доверенность по заявке № ${order.orderNumber} отправлена · водитель ${driverInfo.fullName || '—'} → ${адреса.join(', ')}`,
             details: {
+                kind: POA_SHARE_KIND,
                 orderNumber: order.orderNumber,
-                emails: body.emails,
+                emails: адреса,
                 driver: driverInfo.fullName ?? null,
                 vehicle: [driverInfo.vehiclePlate, driverInfo.trailer].filter(Boolean).join(' / ') || null,
                 attachments: attachments.map((a) => a.filename),

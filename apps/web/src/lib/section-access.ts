@@ -62,6 +62,17 @@ const SECTIONS: { prefix: string; permission?: string; roles?: string[]; title: 
     { prefix: '/company/payroll', roles: [], title: 'Зарплата' },
 ];
 
+/**
+ * Зарплаты сотрудников — по решению администратора компании, а не по
+ * должности (владелец, 25.10.2026): ему открыто всегда, остальным — по
+ * галочке «Зарплата» в «Сотрудниках». На сервере — `PayrollViewGuard`.
+ */
+export function canViewPayroll(user: { role?: string; permissions?: string[] } | null | undefined): boolean {
+    if (!user?.role) return false;
+    if (user.role === 'COMPANY_ADMIN' || user.role === 'ADMIN') return true;
+    return (user.permissions || []).includes('payroll');
+}
+
 export interface SectionCheck {
     allowed: boolean;
     /** Название раздела — чтобы сказать, куда именно нельзя. */
@@ -73,6 +84,11 @@ export function checkSectionAccess(
     user: { role?: string; permissions?: string[] } | null | undefined,
 ): SectionCheck {
     if (!user?.role) return { allowed: true };
+
+    // Зарплата — единственный раздел, который роль «Экспедитор» сама не открывает.
+    if (pathname.startsWith('/company/payroll')) {
+        return canViewPayroll(user) ? { allowed: true } : { allowed: false, title: 'Зарплата' };
+    }
 
     // Владелец компании и экспедитор ходят везде — как в меню.
     if (FULL_ACCESS_ROLES.includes(user.role)) return { allowed: true };
