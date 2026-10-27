@@ -165,6 +165,32 @@ export class AuthService {
             throw new UnauthorizedException('Неверный телефон или пароль');
         }
 
+        return this.входВодителя(user, deviceId);
+    }
+
+    /**
+     * Вход водителя по номеру, который он только что подтвердил кодом из СМС
+     * (вопрос 26). Пароль не нужен: код пришёл на этот номер — значит, номер
+     * его. Запись выбирается так же, как при входе по паролю.
+     */
+    async loginDriverByVerifiedPhone(phone: string, deviceId: string): Promise<{ accessToken: string; user: any }> {
+        const цифры = phone.replace(/\D/g, '').slice(-10);
+        const кандидаты = await this.prisma.user.findMany({
+            where: { phone: { in: [`+7${цифры}`, `8${цифры}`, `7${цифры}`] }, role: 'DRIVER', isActive: true },
+            include: { company: true },
+        });
+        if (!кандидаты.length) {
+            throw new UnauthorizedException('Водителя с таким номером нет. Работаете сами — нажмите «Регистрация»; водителю компании номер заводит диспетчер.');
+        }
+        const [user] = await this.упорядочитьВодителей(кандидаты);
+        return this.входВодителя(user, deviceId);
+    }
+
+    /** Выдать вход водителю: одна сессия на человека, как при входе по почте. */
+    private async входВодителя<T extends { id: string; email: string | null; role: any; companyId: string | null; passwordHash: string | null }>(
+        user: T,
+        deviceId: string,
+    ): Promise<{ accessToken: string; user: any }> {
         // Single Session Policy — как в loginWithEmail
         try {
             const existingSession = await this.redisService.getSession(user.id);
@@ -213,22 +239,24 @@ export class AuthService {
         кандидаты: T[],
         password: string,
     ): Promise<T | null> {
-        let порядок = кандидаты;
-        if (кандидаты.length > 1) {
-            const рейсы = await this.prisma.order.groupBy({
-                by: ['driverId'],
-                where: { driverId: { in: кандидаты.map((к) => к.id) } },
-                _max: { createdAt: true },
-            });
-            const последний = new Map(рейсы.map((р) => [р.driverId, р._max.createdAt?.getTime() ?? 0]));
-            порядок = [...кандидаты].sort((а, б) =>
-                ((последний.get(б.id) ?? 0) - (последний.get(а.id) ?? 0))
-                || (б.updatedAt.getTime() - а.updatedAt.getTime()));
-        }
-        for (const к of порядок) {
+        for (const к of await this.упорядочитьВодителей(кандидаты)) {
             if (к.passwordHash && await bcrypt.compare(password, к.passwordHash)) return к;
         }
         return null;
+    }
+
+    /** Записи водителя с одним номером — свежая по рейсам первой (см. выше). */
+    private async упорядочитьВодителей<T extends { id: string; updatedAt: Date }>(кандидаты: T[]): Promise<T[]> {
+        if (кандидаты.length < 2) return кандидаты;
+        const рейсы = await this.prisma.order.groupBy({
+            by: ['driverId'],
+            where: { driverId: { in: кандидаты.map((к) => к.id) } },
+            _max: { createdAt: true },
+        });
+        const последний = new Map(рейсы.map((р) => [р.driverId, р._max.createdAt?.getTime() ?? 0]));
+        return [...кандидаты].sort((а, б) =>
+            ((последний.get(б.id) ?? 0) - (последний.get(а.id) ?? 0))
+            || (б.updatedAt.getTime() - а.updatedAt.getTime()));
     }
 
     /**

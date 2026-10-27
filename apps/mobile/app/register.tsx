@@ -10,6 +10,7 @@ import { GOOGLE_WEB_CLIENT_ID, useStore } from '@/store';
 import { exchangeApi, ответ } from '@/lib/exchange';
 import { FONT, RADIUS } from '@/lib/theme';
 import { DRIVER_KINDS } from '@/lib/driver-kinds';
+import { useSmsCode } from '@/lib/sms';
 
 type Kind = 'PARK' | 'IP';
 
@@ -36,6 +37,9 @@ export default function RegisterScreen() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [busy, setBusy] = useState<'phone' | 'google' | null>(null);
+    // Номер подтверждается кодом из СМС — когда сервис СМС подключён (вопрос 26).
+    const sms = useSmsCode('REGISTER');
+    const [code, setCode] = useState('');
 
     const failed = (error: any) => {
         const text = ответ(error, error?.message || 'Проверьте интернет и попробуйте ещё раз');
@@ -60,9 +64,13 @@ export default function RegisterScreen() {
             Alert.alert('Пароль короткий', `Нужно не меньше ${MIN_PASSWORD} символов`);
             return;
         }
+        if (sms.enabled && !/^\d{6}$/.test(code)) {
+            Alert.alert('Подтвердите номер', sms.sentTo ? 'Введите шесть цифр из СМС' : 'Нажмите «Получить код» — пришлём СМС на этот номер');
+            return;
+        }
         setBusy('phone');
         try {
-            await registerByPhone(cleanPhone, password, kind);
+            await registerByPhone(cleanPhone, password, kind, sms.enabled ? code : undefined);
             router.replace('/exchange');
         } catch (error: any) {
             failed(error);
@@ -152,6 +160,45 @@ export default function RegisterScreen() {
                             accessibilityLabel="Номер телефона"
                         />
                     </View>
+
+                    {sms.enabled && (
+                        <>
+                            <Text style={styles.fieldLabel}>Код из СМС</Text>
+                            <View style={styles.inputWrap}>
+                                <Ionicons name="chatbox-ellipses-outline" size={18} color="#868e9c" />
+                                <TextInput
+                                    // minWidth 0 — иначе поле не уступает место надписи «Снова через N с».
+                                    style={[styles.input, { minWidth: 0 }]}
+                                    placeholder="6 цифр"
+                                    placeholderTextColor="#b0b6c3"
+                                    keyboardType="number-pad"
+                                    textContentType="oneTimeCode"
+                                    autoComplete="sms-otp"
+                                    maxLength={6}
+                                    value={code}
+                                    onChangeText={(t: string) => setCode(t.replace(/\D/g, ''))}
+                                    editable={!busy}
+                                    accessibilityLabel="Код из СМС"
+                                />
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        const cleanPhone = phone.replace(/[\s\-()]/g, '');
+                                        if (!/^(\+7|8)7\d{9}$/.test(cleanPhone)) {
+                                            Alert.alert('Проверьте номер', 'Казахстанский мобильный, например +7 701 123 45 67');
+                                            return;
+                                        }
+                                        sms.send(cleanPhone);
+                                    }}
+                                    disabled={sms.sending || sms.wait > 0}
+                                    hitSlop={8}
+                                >
+                                    <Text numberOfLines={1} style={[styles.codeLink, (sms.sending || sms.wait > 0) && { color: '#b0b6c3' }]}>
+                                        {sms.sending ? 'Отправляем…' : sms.wait > 0 ? `Снова через ${sms.wait} с` : sms.sentTo ? 'Прислать снова' : 'Получить код'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
 
                     <Text style={styles.fieldLabel}>Придумайте пароль</Text>
                     <View style={styles.inputWrap}>
@@ -282,6 +329,7 @@ const styles = StyleSheet.create({
         borderRadius: RADIUS.button, borderWidth: 1, borderColor: '#dfe2e7', backgroundColor: '#ffffff',
     },
     secondaryText: { fontFamily: FONT.semibold, color: '#0b0d12', fontSize: 16 },
+    codeLink: { fontFamily: FONT.semibold, fontSize: 13, color: '#1677ff', flexShrink: 0 },
     step: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
     stepNum: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0b0d12', marginTop: 1 },
     stepNumText: { fontFamily: FONT.semibold, fontSize: 12, color: '#ffffff' },

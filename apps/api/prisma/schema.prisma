@@ -600,6 +600,28 @@ model Partnership {
   @@index([status])
 }
 
+/// Код из СМС для регистрации и входа водителя по номеру телефона
+/// (решение владельца 25.10.2026, вопрос 26: СМС — только для регистрации и
+/// входа). Сам код не хранится — только его отпечаток; живёт пять минут,
+/// пять неверных попыток — и нужен новый.
+model PhoneCode {
+  id        String    @id @default(cuid())
+  /// «+77011234567».
+  phone     String
+  /// REGISTER — регистрация, LOGIN — вход.
+  purpose   String
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  /// С какого адреса просили — чтобы один адрес не рассылал СМС на сотни номеров.
+  ip        String?
+  createdAt DateTime  @default(now())
+
+  @@index([phone, purpose, createdAt])
+  @@index([ip, createdAt])
+}
+
 model Session {
   id        String   @id @default(cuid())
   userId    String

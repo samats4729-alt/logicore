@@ -23,9 +23,14 @@ import { api, setAuthToken } from '@/lib/api';
 import { exchangeApi, ответ } from '@/lib/exchange';
 import { FONT, RADIUS } from '@/lib/theme';
 import { useIntro, type Measurable } from '@/lib/intro';
+import { useSmsCode } from '@/lib/sms';
 
 export default function LoginScreen() {
-    const { login, loginWithGoogle } = useStore();
+    const { login, loginWithGoogle, loginWithCode } = useStore();
+    // Вход по коду из СМС — когда сервис СМС подключён на сервере (вопрос 26).
+    const sms = useSmsCode('LOGIN');
+    const [mode, setMode] = useState<'password' | 'sms'>('password');
+    const [code, setCode] = useState('');
 
     // Заставка при запуске: пока она идёт, экран скрыт под ней. На передаче экран проявляется сверху вниз,
     // а знак из заставки прилетает на место знака в шапке — поэтому свой знак показываем только после неё.
@@ -90,6 +95,32 @@ export default function LoginScreen() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
+    const sendLoginCode = async () => {
+        const cleanPhone = phone.replace(/[\s\-()]/g, '');
+        if (!/^(\+7|8)7\d{9}$/.test(cleanPhone)) {
+            Alert.alert('Проверьте телефон', 'Казахстанский мобильный, например +7 701 123 45 67');
+            return;
+        }
+        await sms.send(cleanPhone);
+    };
+
+    const handleCodeLogin = async () => {
+        const cleanPhone = phone.replace(/[\s\-()]/g, '');
+        if (!/^\d{6}$/.test(code)) {
+            Alert.alert('Введите код', 'Шесть цифр из СМС');
+            return;
+        }
+        setLoading(true);
+        try {
+            await loginWithCode(cleanPhone, code);
+            router.replace(isExchangeDriver(useStore.getState().user) ? '/exchange' : '/(tabs)');
+        } catch (error: any) {
+            Alert.alert('Не удалось войти', ответ(error, 'Проверьте код и подключение к интернету'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleLogin = async () => {
         const cleanPhone = phone.replace(/[\s\-()]/g, '');
         if (!/^(\+7|8)\d{10}$/.test(cleanPhone)) {
@@ -142,7 +173,23 @@ export default function LoginScreen() {
                 {/* Карточка входа */}
                 <Animated.View style={[styles.card, rise(0.32, 0.9, 56)]}>
                     <Text style={styles.cardTitle}>Вход для водителя</Text>
-                    <Text style={styles.cardSub}>По номеру телефона и паролю</Text>
+                    <Text style={styles.cardSub}>{mode === 'sms' ? 'По номеру телефона и коду из СМС' : 'По номеру телефона и паролю'}</Text>
+
+                    {sms.enabled && (
+                        <View style={styles.modeRow} accessibilityRole="tablist">
+                            {([['password', 'По паролю'], ['sms', 'По коду из СМС']] as const).map(([value, label]) => (
+                                <TouchableOpacity
+                                    key={value}
+                                    style={[styles.modeBtn, mode === value && styles.modeBtnOn]}
+                                    onPress={() => setMode(value)}
+                                    accessibilityRole="tab"
+                                    accessibilityState={{ selected: mode === value }}
+                                >
+                                    <Text style={[styles.modeText, mode === value && styles.modeTextOn]}>{label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
 
                     <Text style={styles.fieldLabel}>Телефон</Text>
                     <View style={styles.inputWrap}>
@@ -159,6 +206,51 @@ export default function LoginScreen() {
                         />
                     </View>
 
+                    {mode === 'sms' ? (
+                        <>
+                            <Text style={styles.fieldLabel}>Код из СМС</Text>
+                            <View style={styles.inputWrap}>
+                                <Ionicons name="chatbox-ellipses-outline" size={18} color="#868e9c" />
+                                <TextInput
+                                    // minWidth 0 — иначе поле не уступает место надписи «Снова через N с».
+                                    style={[styles.input, { minWidth: 0 }]}
+                                    placeholder="6 цифр"
+                                    placeholderTextColor="#b0b6c3"
+                                    keyboardType="number-pad"
+                                    textContentType="oneTimeCode"
+                                    autoComplete="sms-otp"
+                                    maxLength={6}
+                                    value={code}
+                                    onChangeText={(t: string) => setCode(t.replace(/\D/g, ''))}
+                                    editable={!loading}
+                                    onSubmitEditing={handleCodeLogin}
+                                    accessibilityLabel="Код из СМС"
+                                />
+                                <TouchableOpacity onPress={sendLoginCode} disabled={sms.sending || sms.wait > 0} hitSlop={8}>
+                                    <Text numberOfLines={1} style={[styles.codeLink, (sms.sending || sms.wait > 0) && { color: '#b0b6c3' }]}>
+                                        {sms.sending ? 'Отправляем…' : sms.wait > 0 ? `Снова через ${sms.wait} с` : sms.sentTo ? 'Прислать снова' : 'Получить код'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.button, (loading || !sms.sentTo) && { opacity: 0.7 }]}
+                                onPress={handleCodeLogin}
+                                disabled={loading || !sms.sentTo}
+                                activeOpacity={0.88}
+                            >
+                                {loading ? <ActivityIndicator color="#fff" /> : (
+                                    <>
+                                        <Text style={styles.buttonText}>Войти</Text>
+                                        <View style={styles.buttonArrow}>
+                                            <Ionicons name="arrow-forward" size={16} color="#0b0d12" />
+                                        </View>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </>
+                    ) : (
+                    <>
                     <Text style={styles.fieldLabel}>Пароль</Text>
                     <View style={styles.inputWrap}>
                         <Ionicons name="lock-closed-outline" size={18} color="#868e9c" />
@@ -195,6 +287,8 @@ export default function LoginScreen() {
                             </>
                         )}
                     </TouchableOpacity>
+                    </>
+                    )}
 
                     {/* Регистрация и вход через Google — в той же карточке, сразу под
                         «Войти» (владелец, 13.10.2026): отдельным блоком внизу экрана их не
@@ -428,6 +522,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
     },
     secondaryText: { fontFamily: FONT.semibold, color: '#0b0d12', fontSize: 16 },
+    modeRow: { flexDirection: 'row', backgroundColor: '#f1f2f4', borderRadius: 999, padding: 3, marginBottom: 16 },
+    modeBtn: { flex: 1, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+    modeBtnOn: { backgroundColor: '#0b0d12' },
+    modeText: { fontFamily: FONT.medium, fontSize: 13.5, color: '#4c5460' },
+    modeTextOn: { color: '#ffffff' },
+    codeLink: { fontFamily: FONT.semibold, fontSize: 13, color: '#1677ff', flexShrink: 0 },
     orRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 12 },
     orLine: { flex: 1, height: 1, backgroundColor: '#eceef2' },
     orText: { fontFamily: FONT.regular, fontSize: 12.5, color: '#9aa1ad' },

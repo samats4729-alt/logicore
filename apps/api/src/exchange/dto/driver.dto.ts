@@ -32,6 +32,13 @@ export class DriverPhoneRegisterDto {
     @IsNotEmpty()
     @MaxLength(200)
     deviceId: string;
+
+    /** Код из СМС — обязателен, когда вход по СМС включён (вопрос 26). */
+    @ApiProperty({ required: false, example: '123456' })
+    @IsOptional()
+    @IsString()
+    @MaxLength(10)
+    code?: string;
 }
 
 /** Вход водителя через Google: токен от Google и устройство (одна сессия на человека). */

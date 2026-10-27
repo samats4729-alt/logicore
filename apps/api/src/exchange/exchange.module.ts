@@ -18,10 +18,11 @@ import { ParkContractService } from './park-contract.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeFuelService } from './fuel.service';
 import { StampImageService } from '../common/services/stamp-image.service';
+import { SmsModule } from '../sms/sms.module';
 
 /** Биржа грузов. Выключена, пока на сервере нет `EXCHANGE_ENABLED=true`. */
 @Module({
-    imports: [PrismaModule, AuditModule, AuthModule],
+    imports: [PrismaModule, AuditModule, AuthModule, SmsModule],
     controllers: [
         ExchangeStatusController, ExchangeController,
         ExchangeDriverAuthController, ExchangeDriverController, ExchangeParkController, ExchangeAdminController,

@@ -63,10 +63,12 @@ interface AppState {
 
     // Auth actions
     login: (phone: string, password: string) => Promise<void>;
+    /** Вход водителя по коду из СМС (когда СМС подключены). */
+    loginWithCode: (phone: string, code: string) => Promise<void>;
     /** Вход водителя биржи через Google. Отменил выбор аккаунта — false. */
     loginWithGoogle: () => Promise<boolean>;
-    /** Регистрация водителя биржи по номеру и паролю — сразу и вход. Пока без СМС. */
-    registerByPhone: (phone: string, password: string, kind: 'PARK' | 'IP') => Promise<void>;
+    /** Регистрация водителя биржи по номеру и паролю — сразу и вход. Код из СМС — когда СМС подключены. */
+    registerByPhone: (phone: string, password: string, kind: 'PARK' | 'IP', code?: string) => Promise<void>;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
 
@@ -123,9 +125,18 @@ export const useStore = create<AppState>((set, get) => ({
         return true;
     },
 
-    registerByPhone: async (phone, password, kind) => {
+    loginWithCode: async (phone, code) => {
         const deviceId = await getDeviceId();
-        const response = await api.post('/exchange/driver/auth/phone/register', { phone, password, kind, deviceId });
+        const response = await api.post('/auth/sms/login', { phone, code, deviceId });
+        const { accessToken, user } = response.data;
+        await setAuthToken(accessToken);
+        await SecureStore.setItemAsync('user', JSON.stringify(user));
+        set({ user, isAuthenticated: true });
+    },
+
+    registerByPhone: async (phone, password, kind, code) => {
+        const deviceId = await getDeviceId();
+        const response = await api.post('/exchange/driver/auth/phone/register', { phone, password, kind, deviceId, ...(code ? { code } : {}) });
         const { accessToken, user } = response.data;
         await setAuthToken(accessToken);
         await SecureStore.setItemAsync('user', JSON.stringify(user));

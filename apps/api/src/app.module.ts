@@ -11,6 +11,7 @@ import { TrackingModule } from './tracking/tracking.module';
 import { DocumentsModule } from './documents/documents.module';
 import { WarehouseModule } from './warehouse/warehouse.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SmsModule } from './sms/sms.module';
 import { RedisModule } from './redis/redis.module';
 import { CompanyModule } from './company/company.module';
 import { S3Module } from './s3/s3.module';
@@ -67,6 +68,7 @@ import { ReportsModule } from './reports/reports.module';
         DocumentsModule,
         WarehouseModule,
         NotificationsModule,
+        SmsModule,
         CompanyModule,
         S3Module,
 

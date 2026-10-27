@@ -1,5 +1,5 @@
 import {
-    Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query, Request, Res, UploadedFile, UseGuards,
+    BadRequestException, Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query, Request, Res, UploadedFile, UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -25,6 +25,7 @@ import { MakeOfferDto } from './dto/exchange-order.dto';
 import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import { ParkContractService } from './park-contract.service';
+import { PhoneCodeService } from '../sms/phone-code.service';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService } from './settlement.service';
 import { ExchangeParkRegistryService } from './park-registry.service';
@@ -66,6 +67,7 @@ export class ExchangeDriverAuthController {
     constructor(
         private readonly drivers: ExchangeDriversService,
         private readonly auth: AuthService,
+        private readonly codes: PhoneCodeService,
     ) {}
 
     @Post('google')
@@ -90,6 +92,12 @@ export class ExchangeDriverAuthController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Регистрация водителя биржи по номеру телефона' })
     async registerByPhone(@Body() dto: DriverPhoneRegisterDto, @Res({ passthrough: true }) response: Response) {
+        // Вход по СМС включён — номер подтверждается кодом (вопрос 26). Выключен —
+        // как раньше: номер проверяет парк звонком перед допуском.
+        if (this.codes.enabled()) {
+            if (!dto.code?.trim()) throw new BadRequestException('Подтвердите номер: нажмите «Получить код» и введите цифры из СМС');
+            await this.codes.verify(dto.phone, 'REGISTER', dto.code);
+        }
         const user = await this.drivers.registerByPhone(dto);
         const accessToken = await this.auth.issueSession(user.id, { sub: user.id, email: null, role: user.role, companyId: null }, dto.deviceId);
         setAuthCookie(response, accessToken);
