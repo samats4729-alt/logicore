@@ -180,6 +180,15 @@ describe('Разнесение из 1С: в справочник LogiCore', () =
         expect(s.bankFilled).toBe(1);
         expect(db.companies.find((c) => c.id === 'gk-local')).toMatchObject({ bankAccount: 'KZ12009NPS0413609816', bankBic: 'GCVPKZ2A' });
     });
+
+    it('БИН из чёрного списка — не заводится и не считается ошибкой', async () => {
+        const db = fakeDb('co-1');
+        db.blocked.push('150840001234');
+        const s = await importerOf(db).import('conn-1', 'co-1', objects, 'user-1', ALL);
+        expect(s.counterparties.blocked).toBe(1);
+        expect(db.external.createExternalCompany).not.toHaveBeenCalled();
+        expect(s.errors).toEqual([]);
+    });
 });
 
 /** Оплата покупателя из 1С по нашему акту (форма — как в схеме EnterpriseData 1.10). */
