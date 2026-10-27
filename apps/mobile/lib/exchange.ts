@@ -60,6 +60,8 @@ export const DOCUMENTS: { kind: DocumentKind; title: string; hint: string }[] = 
 /** Договор с парком — полный текст, как его собирает сервер (`park-contract.ts`). */
 export interface ContractContent {
     version: string;
+    /** Вид договора словами («аренды транспортного средства с экипажем»); нет — в подписанных до 26.10.2026. */
+    subtitle?: string;
     number: string;
     date: string;
     title: string;

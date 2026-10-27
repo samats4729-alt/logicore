@@ -13,6 +13,7 @@ import StatusPill from '@/components/ui/StatusPill';
 import { DriverDocuments } from '@/components/exchange/DriverDocuments';
 import { DriverDecisionDialog } from '@/components/exchange/DriverDecisionDialog';
 import styles from '@/components/nova/nova.module.css';
+import { VehicleOwnerContracts } from '@/components/exchange/VehicleOwnerContracts';
 
 /**
  * Анкета водителя — для проверки парком.
@@ -173,7 +174,7 @@ export default function ParkDriverPage() {
                         <Row label="Техпаспорт" value={driver.vehicleRegNumber ? `№ ${driver.vehicleRegNumber}` : '—'} />
                         <Row label="Кузов" value={driver.vehicleBodyType || '—'} />
                         <Row label="Грузоподъёмность" value={driver.vehicleCapacityKg ? `${driver.vehicleCapacityKg / 1000} т` : '—'} />
-                        <Row label="Владелец" value={driver.vehicleIsOwn ? 'сам водитель' : 'другой человек — нужна доверенность'} />
+                        <Row label="Владелец" value={driver.vehicleIsOwn ? 'сам водитель' : 'другой человек — нужен договор с владельцем (ниже)'} />
                     </div>
                 </section>
             </div>
@@ -209,6 +210,17 @@ export default function ParkDriverPage() {
                             Скачать договор (PDF)
                         </Button>
                     )}
+                </div>
+            </section>
+
+            {/* Машина не водителя — парк арендует её у владельца отдельным договором (Q9). */}
+            <section className={styles.card}>
+                <div className={styles.cardHead}>
+                    <Truck size={14} />
+                    <h2 className={styles.cardTitle}>Договор с владельцем машины</h2>
+                </div>
+                <div className={styles.cardBody}>
+                    <VehicleOwnerContracts driverId={driver.id} />
                 </div>
             </section>
 
