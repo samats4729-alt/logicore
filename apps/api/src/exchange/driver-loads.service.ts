@@ -60,45 +60,16 @@ export class ExchangeDriverLoadsService {
         const calc = view.price != null ? this.settlement.tryBase(ctx, view.price) : null;
         return {
             ...view,
-            /** Водителю на руки — без топлива: топливо оплачивает парк. */
-            price: calc ? calc.driverTotal : null,
-            /** Топливо по расчёту — оплачивает парк; чеки на БИН парка. */
-            fuelEstimate: ctx.fuel || null,
-            distanceKm: ctx.distanceKm,
             /**
-             * Из чего сложилась сумма на руки (владелец, 15.10.2026: «комиссия и
-             * общая сумма — чтобы было понятно, за что высчитывают»). Это
-             * меняет решение от 12.10, когда цену компании водителю не
-             * показывали: теперь он видит её и всё, что из неё уходит.
+             * Водителю — только сумма чистыми на руки: налоги и топливо уже
+             * вычтены (Q14, владелец 25.10.2026: «только чистыми на руки видит
+             * сумму и всё»). Сумму за рейс, топливо, налоги, комиссию и цену
+             * для компании сервер водителю не отдаёт вовсе. Меняет решение
+             * 15.10, когда водителю показывали расшифровку (`breakdown`):
+             * старое приложение без неё просто ничего не рисует.
              */
-            breakdown: calc ? {
-                /** Сумма заказчика на бирже (до налогов и комиссии). */
-                base: calc.base,
-                customerPrice: calc.customerPrice,
-                platformPct: calc.rates.platformPct,
-                platformFee: calc.platformFee,
-                parkPct: calc.rates.parkPct,
-                parkFee: calc.parkFee,
-                /** Комиссия 10 % со всей суммы: доля парка и LogiCore. */
-                commission: calc.commission,
-                /** Оплата за работу (доход по договору) и ОПВ, удержанное из неё. */
-                gross: calc.gross,
-                opv: calc.opv,
-                /** За счёт парка: ОСМС, СО, ИПН. */
-                taxes: (Math.round(calc.vosms * 100) + Math.round(calc.so * 100) + Math.round(calc.ipn * 100)) / 100,
-                vosms: calc.vosms,
-                ipn: calc.ipn,
-                so: calc.so,
-                /** Применён ли базовый вычет (водитель написал заявление). */
-                deductionApplied: calc.deductionApplied,
-                /** НДС сверху — только если парк плательщик НДС; иначе 0. */
-                vat: calc.vat,
-                vatPct: calc.rates.vatPct ?? 0,
-                driverTotal: calc.driverTotal,
-                fuel: calc.fuel,
-                /** Бухгалтер парка ещё не подтвердил расчёт — суммы предварительные. */
-                preliminary: calc.preliminary,
-            } : null,
+            price: calc ? calc.driverTotal : null,
+            distanceKm: ctx.distanceKm,
         };
     }
 
