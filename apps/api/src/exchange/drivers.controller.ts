@@ -497,6 +497,12 @@ export class ExchangeParkController {
         return this.park.trips(req.user.companyId, query.status);
     }
 
+    @Get('offers')
+    @ApiOperation({ summary: 'Отклики водителей парка на бирже: ждут решения и решённые за две недели' })
+    offers(@Request() req: any) {
+        return this.park.offers(req.user.companyId);
+    }
+
     // ==================== топливо рейса ====================
 
     @Get('trips/:orderId/fuel')
