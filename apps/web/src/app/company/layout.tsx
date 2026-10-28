@@ -41,6 +41,7 @@ import { isNavItemActive } from '@/lib/cabinet-nav';
 import { ROLE_LABELS } from '@/lib/vocabulary';
 import { exchangeStatus } from '@/lib/exchange';
 import { useNewOffersCount, useOffersFeedPolling } from '@/lib/offers-feed';
+import { useParkOffersPolling } from '@/lib/park-offers-feed';
 import { useEnterToNextField } from '@/lib/enter-to-next';
 
 /**
@@ -136,6 +137,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     // любой страницы кабинета (владелец, 15.10.2026).
     useOffersFeedPolling();
     const newOffers = useNewOffersCount();
+    // Парку — отклики его водителей: колокольчик и всплывающие уведомления (29.10.2026).
+    useParkOffersPolling();
     // Enter — к следующему полю формы, как в 1С (задачи шефа, E3).
     useEnterToNextField();
 

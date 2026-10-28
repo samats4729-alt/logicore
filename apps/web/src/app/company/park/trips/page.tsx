@@ -13,6 +13,7 @@ import StatusPill from '@/components/ui/StatusPill';
 import { TripFuelDialog } from '@/components/park/TripFuelDialog';
 import { ParkStaff, TripResponsibleSelect } from '@/components/park/TripResponsibleSelect';
 import { ParkOffersTable } from '@/components/park/ParkOffersTable';
+import { useParkOffersFeed } from '@/lib/park-offers-feed';
 import styles from '@/components/nova/nova.module.css';
 
 const FILTERS: { key: ParkTripFilter; label: string }[] = [
@@ -74,6 +75,8 @@ export default function ParkTripsPage() {
             .catch(() => setOffersFailed(true));
     }, [reload]);
     const waiting = (offers ?? []).filter((o) => o.status === 'ACTIVE').length;
+    // Открыли отклики — в колокольчике они больше не новые.
+    useEffect(() => { if (filter === 'offers') useParkOffersFeed.getState().markSeen(); }, [filter]);
 
     useEffect(() => {
         if (filter === 'offers') return;

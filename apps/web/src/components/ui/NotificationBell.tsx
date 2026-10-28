@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { BellOutlined, NotificationOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import { useOffersFeed } from '@/lib/offers-feed';
+import { ParkOffersBellSection, useNewParkOffers } from '@/components/park/ParkOffersBellSection';
 import { откликИзменён, ценаИзменена } from '@/lib/exchange';
 import { moneyShort } from '@/lib/money-format';
 import { STATUS_LABELS, STATUS_PILL } from '@/components/ui/StatusPill';
@@ -115,8 +116,10 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
     // Новые отклики — пришедшие после последнего открытия колокольчика.
     const newOffers = lastSeen ? offers.filter((o) => откликИзменён(o) > lastSeen) : offers;
     const newNotices = lastSeen ? notices.filter((n) => n.at > lastSeen) : notices;
+    // У парка — отклики его водителей (29.10.2026).
+    const newParkOffers = useNewParkOffers(lastSeen);
     const showDot = hasNewUpdates || hasPending || newEventCount > 0 || freshAnswers.length > 0 || newOffers.length > 0
-        || newNotices.length > 0;
+        || newNotices.length > 0 || newParkOffers > 0;
 
     // При открытии — отметить прочитанным
     useEffect(() => {
@@ -173,6 +176,9 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                         padding: 12,
                     }}
                 >
+                    {/* Парку — отклики его водителей: откликнулся, выбран, выбран другой. */}
+                    <ParkOffersBellSection onNavigate={(href) => { router.push(href); setOpen(false); }} />
+
                     {/* Ответы поддержки: человек писал и ждёт. */}
                     {answers.length > 0 && (
                         <div style={{ marginBottom: 8 }}>
