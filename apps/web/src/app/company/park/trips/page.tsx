@@ -132,7 +132,7 @@ export default function ParkTripsPage() {
                     <div className={styles.cardHead}>
                         <Hand size={14} />
                         <h2 className={styles.cardTitle}>Отклики водителей</h2>
-                        {offers && offers.length > 0 && <span className={styles.cardCount}>{waiting} ждут решения</span>}
+                        {offers && offers.length > 0 && <span className={styles.cardCount}>Ждут решения: {waiting}</span>}
                     </div>
                     {offersFailed ? (
                         <div className={styles.empty}>Не удалось загрузить отклики — обновите страницу.</div>
