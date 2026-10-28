@@ -78,6 +78,9 @@ export function useNewOffersCount(): number {
     return useOffersFeed((s) => s.offers.filter((o) => !s.seenAt || откликИзменён(o) > s.seenAt).length);
 }
 
+/** Сколько висит уведомление об отклике: новость, ради которой человек ждёт, — не четыре секунды. */
+const TOAST_MS = 15_000;
+
 /** Отклик словами для всплывающего уведомления: кто, за сколько, куда. */
 const откликКратко = (o: IncomingOffer) => `${o.name} · ${moneyShort(o.price)} · ${o.from} → ${o.to}`;
 
@@ -116,6 +119,7 @@ export function useOffersFeedPolling() {
             if (unseen.length && !toasted) {
                 toast(unseen.length === 1 ? `Новый отклик на заявку №${unseen[0].orderNumber}` : `Новые отклики на ваши заявки: ${unseen.length}`, {
                     description: unseen.length === 1 ? откликКратко(unseen[0]) : 'Откройте предложения, чтобы выбрать исполнителя',
+                    duration: TOAST_MS,
                     action: {
                         label: 'Открыть',
                         onClick: () => router.push(unseen.length === 1 ? `/company/orders/${unseen[0].orderId}?tab=offers` : '/company/exchange?tab=offers'),
@@ -132,6 +136,7 @@ export function useOffersFeedPolling() {
         if (fresh.length > 3) {
             toast(`Новые отклики на ваши заявки: ${fresh.length}`, {
                 description: 'Откройте предложения, чтобы выбрать исполнителя',
+                duration: TOAST_MS,
                 action: { label: 'Открыть', onClick: () => router.push('/company/exchange?tab=offers') },
             });
             return;
@@ -139,6 +144,7 @@ export function useOffersFeedPolling() {
         for (const o of fresh) {
             toast(ценаИзменена(o) ? `Отклик на заявку №${o.orderNumber}: новая цена` : `Новый отклик на заявку №${o.orderNumber}`, {
                 description: откликКратко(o),
+                duration: TOAST_MS,
                 action: { label: 'Открыть', onClick: () => router.push(`/company/orders/${o.orderId}?tab=offers`) },
             });
         }
