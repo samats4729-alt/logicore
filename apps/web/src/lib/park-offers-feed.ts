@@ -21,6 +21,8 @@ import { useAuthStore } from '@/store/auth';
  */
 
 const POLL_MS = 60_000;
+/** Сколько висит уведомление: новость, ради которой ждут, — не четыре секунды. */
+const TOAST_MS = 15_000;
 const OFFERS_PAGE = '/company/park/trips?status=offers';
 const seenKey = (userId: string, companyId: string) => `lc_park_offers_seen:${userId}:${companyId}`;
 
@@ -112,6 +114,7 @@ export function useParkOffersPolling() {
             if (unseen.length && !toasted) {
                 toast(`Водители откликнулись на заявки: ${unseen.length}`, {
                     description: 'Отклики — в «Рейсах водителей»',
+                    duration: TOAST_MS,
                     action: { label: 'Открыть', onClick: () => router.push(OFFERS_PAGE) },
                 });
             }
@@ -124,6 +127,7 @@ export function useParkOffersPolling() {
         for (const { o, title } of events.slice(0, 3)) {
             toast(title, {
                 description: o.status === 'ACCEPTED' ? 'Рейс появился в «Рейсах водителей»' : подробно(o),
+                duration: TOAST_MS,
                 action: { label: 'Открыть', onClick: () => router.push(o.status === 'ACCEPTED' ? '/company/park/trips' : OFFERS_PAGE) },
             });
         }
