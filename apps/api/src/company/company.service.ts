@@ -2126,7 +2126,30 @@ export class CompanyService {
             take: 10,
             select: { id: true, orderNumber: true, pendingStatus: true, pendingStatusAt: true },
         });
-        return orders.map((o) => ({ id: o.id, orderNumber: o.orderNumber, pendingStatus: o.pendingStatus, pendingStatusAt: o.pendingStatusAt?.toISOString() || null }));
+        // Запрос на удаление заявки (владелец, 29.10.2026): другая сторона ждёт
+        // нашего ответа — или наш запрос отклонили, и мы должны об этом узнать.
+        const deletes = await this.prisma.orderDeleteRequest.findMany({
+            where: {
+                declinedAt: null,
+                requestedByCompanyId: { not: companyId },
+                NOT: { approvedCompanyIds: { has: companyId } },
+                order: { OR: [{ customerCompanyId: companyId }, { forwarderId: companyId }, { partnerId: companyId }, { subForwarderId: companyId }] },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+            select: { createdAt: true, order: { select: { id: true, orderNumber: true } } },
+        });
+        const declined = await this.prisma.orderDeleteRequest.findMany({
+            where: { requestedByCompanyId: companyId, declinedAt: { not: null } },
+            orderBy: { declinedAt: 'desc' },
+            take: 10,
+            select: { declinedAt: true, order: { select: { id: true, orderNumber: true } } },
+        });
+        return [
+            ...deletes.map((d) => ({ id: d.order.id, orderNumber: d.order.orderNumber, pendingStatus: 'DELETE', pendingStatusAt: d.createdAt.toISOString() })),
+            ...declined.map((d) => ({ id: d.order.id, orderNumber: d.order.orderNumber, pendingStatus: 'DELETE_DECLINED', pendingStatusAt: d.declinedAt?.toISOString() ?? null })),
+            ...orders.map((o) => ({ id: o.id, orderNumber: o.orderNumber, pendingStatus: o.pendingStatus, pendingStatusAt: o.pendingStatusAt?.toISOString() || null })),
+        ];
     }
 
     /** Глобальный поиск: заявки по номеру + контрагенты по названию */

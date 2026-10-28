@@ -705,26 +705,73 @@ export class OrdersController {
 
     @Get(':id/delete-check')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
-    @ApiOperation({ summary: 'Можно ли удалить заявку — и что мешает' })
-    async deleteCheck(@Param('id') id: string) {
-        const why = await this.orderDelete.blockers(id);
-        return { canDelete: why.length === 0, blockers: why };
+    @ApiOperation({ summary: 'Можно ли удалить заявку: что мешает, чьё согласие нужно, есть ли запрос' })
+    async deleteCheck(@Param('id') id: string, @Request() req: any) {
+        return this.orderDelete.check(id, req.user.companyId, req.user.role);
     }
 
     @Delete(':id')
     @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
-    @ApiOperation({ summary: 'Удалить заявку без платежей и учётных документов' })
-    async deleteOrder(@Param('id') id: string, @Request() req: any) {
-        const result = await this.orderDelete.delete(id, req.user.companyId, req.user.role);
+    @ApiOperation({ summary: 'Удалить заявку без платежей и учётных документов; с другой стороной в LogiCore — запрос на удаление' })
+    async deleteOrder(@Param('id') id: string, @Body() body: { reason?: string } | undefined, @Request() req: any) {
+        const result = await this.orderDelete.delete(id, req.user.companyId, req.user.role, req.user.id, body?.reason);
         await this.auditService.log({
             companyId: req.user.companyId,
             user: req.user,
-            action: 'DELETE',
+            action: result.deleted ? 'DELETE' : 'UPDATE',
             entity: 'order',
             entityId: id,
-            entityLabel: `Заявка №${result.orderNumber} удалена`,
+            entityLabel: result.deleted ? `Заявка №${result.orderNumber} удалена` : `Заявка №${result.orderNumber}: запрос на удаление`,
         });
         return result;
+    }
+
+    @Get(':id/delete-request')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN, UserRole.ACCOUNTANT)
+    @ApiOperation({ summary: 'Запрос на удаление заявки: кто просит, чьё согласие ждём' })
+    async deleteRequest(@Param('id') id: string, @Request() req: any) {
+        return this.orderDelete.view(id, req.user.companyId, req.user.role);
+    }
+
+    @Post(':id/delete-request/approve')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Согласиться удалить заявку; согласились все — заявка удаляется' })
+    async approveDelete(@Param('id') id: string, @Request() req: any) {
+        const result = await this.orderDelete.approve(id, req.user.companyId, req.user.id);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: result.deleted ? 'DELETE' : 'UPDATE',
+            entity: 'order',
+            entityId: id,
+            entityLabel: result.deleted
+                ? `Заявка №${result.orderNumber} удалена с согласия всех сторон`
+                : `Заявка №${result.orderNumber}: согласие на удаление`,
+        });
+        return result;
+    }
+
+    @Post(':id/delete-request/decline')
+    @Roles(UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Отказать в удалении заявки' })
+    async declineDelete(@Param('id') id: string, @Body() body: { reason?: string } | undefined, @Request() req: any) {
+        const result = await this.orderDelete.decline(id, req.user.companyId, req.user.id, body?.reason);
+        await this.auditService.log({
+            companyId: req.user.companyId,
+            user: req.user,
+            action: 'UPDATE',
+            entity: 'order',
+            entityId: id,
+            entityLabel: `Заявка №${result.orderNumber}: запрос на удаление отклонён`,
+        });
+        return result;
+    }
+
+    @Delete(':id/delete-request')
+    @Roles(UserRole.ADMIN, UserRole.COMPANY_ADMIN, UserRole.FORWARDER, UserRole.LOGISTICIAN)
+    @ApiOperation({ summary: 'Отозвать свой запрос на удаление заявки' })
+    async withdrawDelete(@Param('id') id: string, @Request() req: any) {
+        return this.orderDelete.withdraw(id, req.user.companyId, req.user.role, req.user.id);
     }
 
     @Put(':id')

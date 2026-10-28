@@ -296,7 +296,9 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                                         {p.orderNumber}
                                     </span>
                                     <span style={{ fontSize: 12, color: 'var(--nova-warn)', flex: 1 }}>
-                                        Ожидает подтверждения завершения
+                                        {p.pendingStatus === 'DELETE' ? 'Запрос на удаление заявки'
+                                            : p.pendingStatus === 'DELETE_DECLINED' ? 'Запрос на удаление отклонён'
+                                                : 'Ожидает подтверждения завершения'}
                                     </span>
                                     {p.pendingStatusAt && (
                                         <span style={{ fontSize: 11, color: 'var(--nova-fg-3)', whiteSpace: 'nowrap' }}>

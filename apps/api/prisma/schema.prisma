@@ -1041,6 +1041,8 @@ model Order {
   exchangeFuelReceipts  ExchangeFuelReceipt[]
   /// Запросы водителя на топливо и аванс по рейсу (Q17).
   advanceRequests       DriverAdvanceRequest[]
+  /// Запрос одной из сторон удалить заявку — ждёт согласия остальных.
+  deleteRequest         OrderDeleteRequest?
 
   // Relations
   routePoints               OrderRoutePoint[]
@@ -3888,4 +3890,28 @@ model DriverPayoutItem {
   soPct         Decimal @db.Decimal(5, 2)
 
   @@index([payoutId])
+}
+
+/// Запрос на удаление заявки (владелец, 29.10.2026: «заявка без согласия
+/// заказчика удалилась — надо, чтобы отправлялось подтверждение»).
+///
+/// Если в заявке есть другая компания, зарегистрированная в LogiCore, одна
+/// сторона заявку не удаляет: отправляет запрос, остальные соглашаются или
+/// отклоняют. Заявка удаляется, когда согласились все. Отклонённый запрос
+/// остаётся, пока отправитель его не скроет: он должен узнать об отказе.
+/// Один запрос на заявку.
+model OrderDeleteRequest {
+  id                   String   @id @default(cuid())
+  orderId              String   @unique
+  order                Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  requestedByCompanyId String
+  requestedByUserId    String?
+  reason               String?
+  /// Компании, которые уже согласились удалить.
+  approvedCompanyIds   String[] @default([])
+  /// Отказ: кто отклонил, причина, когда.
+  declinedByCompanyId  String?
+  declineReason        String?
+  declinedAt           DateTime?
+  createdAt            DateTime @default(now())
 }
