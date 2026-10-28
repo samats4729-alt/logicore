@@ -52,7 +52,7 @@ export const РЕЙС_В_ПУТИ: readonly OrderStatus[] = [
     OrderStatus.PROBLEM,
 ];
 
-const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     DRAFT: [OrderStatus.PENDING, OrderStatus.CANCELLED],
     PENDING: [OrderStatus.ASSIGNED, OrderStatus.DRAFT, OrderStatus.CANCELLED],
     ASSIGNED: [
@@ -503,6 +503,18 @@ export class OrdersService {
                     { routePoints: { some: { location: { city: like } } } },
                     { routePoints: { some: { location: { address: like } } } },
                     { routePoints: { some: { location: { name: like } } } },
+                    // Администратору платформы (без своей компании в фильтре) — ещё
+                    // по всем сторонам, БИН, водителю и госномеру: найти любую заявку
+                    // (владелец, 28.10.2026). Компаниям — нет: поиск по чужому
+                    // перевозчику подсказал бы, кто везёт их груз.
+                    ...(filters?.companyId ? [] : [
+                        { customerCompany: { bin: like } },
+                        { forwarder: { OR: [{ name: like }, { bin: like }] } },
+                        { subForwarder: { OR: [{ name: like }, { bin: like }] } },
+                        { partner: { OR: [{ name: like }, { bin: like }] } },
+                        { assignedDriverName: like },
+                        { assignedDriverPlate: like },
+                    ]),
                 ],
             });
         }
@@ -856,7 +868,7 @@ export class OrdersService {
     /**
      * Получить зарегистрированных участников заказа (isExternal = false)
      */
-    private async getRegisteredParticipants(order: any): Promise<string[]> {
+    async getRegisteredParticipants(order: any): Promise<string[]> {
         const participantIds = [
             order.customerCompanyId,
             order.forwarderId,
@@ -910,7 +922,9 @@ export class OrdersService {
 
         // Возврат статуса с «Завершён»: свободно, если контрагентов нет на платформе;
         // если в заявке есть другая зарегистрированная компания — только по согласованию с ней.
-        if (order.status === OrderStatus.COMPLETED && status !== OrderStatus.COMPLETED) {
+        // Администратор платформы — без согласования (владелец, 28.10.2026: заявку,
+        // которую стороны сами не могут ни отменить, ни удалить, решает он из админки).
+        if (order.status === OrderStatus.COMPLETED && status !== OrderStatus.COMPLETED && role !== 'ADMIN') {
             let initiatorCompanyId = companyId;
             if (!initiatorCompanyId && changedById) {
                 const userObj = await this.prisma.user.findUnique({

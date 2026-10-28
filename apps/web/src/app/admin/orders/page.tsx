@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { Table, Card, Button, Tag, Space, Modal, Form, Input, Select, Typography, InputNumber, Drawer, Descriptions, Divider } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, UserAddOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, UserAddOutlined, FileSearchOutlined } from '@ant-design/icons';
+import { useRouter } from 'next/navigation';
 import { api, Order, Location, User } from '@/lib/api';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
 import { toast } from 'sonner';
@@ -20,7 +21,10 @@ const statusLabels = ORDER_STATUS_LABELS;
 
 
 export default function OrdersPage() {
+    const router = useRouter();
     const [orders, setOrders] = useState<Order[]>([]);
+    // Поиск по всей платформе: номер, груз, город, компании сторон (владелец, 28.10.2026).
+    const [search, setSearch] = useState('');
     const [locations, setLocations] = useState<Location[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -56,7 +60,7 @@ export default function OrdersPage() {
     const fetchData = async () => {
         try {
             const [ordersRes, locationsRes, driversRes] = await Promise.all([
-                api.get('/orders'),
+                api.get('/orders', { params: { limit: 100 } }),
                 api.get('/locations'),
                 api.get('/users/drivers'),
             ]);
@@ -66,6 +70,19 @@ export default function OrdersPage() {
             setDrivers(driversRes.data || []);
         } catch (error) {
             toast.error('Ошибка загрузки данных');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    /** Найти заявки — сервер ищет по всем компаниям; пусто — последние 100. */
+    const runSearch = async (q: string) => {
+        setLoading(true);
+        try {
+            const res = await api.get('/orders', { params: { limit: 100, ...(q.trim() ? { search: q.trim() } : {}) } });
+            setOrders(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+        } catch {
+            toast.error('Не удалось найти заявки');
         } finally {
             setLoading(false);
         }
@@ -235,6 +252,14 @@ export default function OrdersPage() {
             key: 'actions',
             render: (_: any, record: Order) => (
                 <Space>
+                    {/* Разбор: все данные и деньги, почему нельзя отменить или удалить и что сделать. */}
+                    <Button
+                        type="text"
+                        icon={<FileSearchOutlined />}
+                        aria-label="Разбор заявки"
+                        title="Разбор: можно ли отменить или удалить"
+                        onClick={() => router.push(`/admin/orders/${record.id}`)}
+                    />
                     <Button
                         type="text"
                         icon={<EyeOutlined />}
@@ -276,6 +301,15 @@ export default function OrdersPage() {
                     <FileText size={14} />
                     <h2 className={nova.cardTitle}>Перевозки</h2>
                     {orders.length > 0 && <span className={nova.cardCount}>{orders.length}</span>}
+                    <Input.Search
+                        allowClear
+                        value={search}
+                        onChange={(e) => { setSearch(e.target.value); if (!e.target.value) runSearch(''); }}
+                        onSearch={runSearch}
+                        placeholder="Номер, компания, БИН, водитель, госномер, город"
+                        aria-label="Поиск заявок"
+                        style={{ marginLeft: 'auto', maxWidth: 380 }}
+                    />
                 </div>
                 <Table
                     columns={columns}

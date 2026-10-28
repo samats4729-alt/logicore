@@ -33,6 +33,6 @@ import { CurrencyModule } from '../currency/currency.module';
         OrderContractAutoService,
         StampImageService,
     ],
-    exports: [OrdersService, OrderSettlementsModule, OrderContractAutoService],
+    exports: [OrdersService, OrderSettlementsModule, OrderContractAutoService, OrderDeleteService],
 })
 export class OrdersModule { }

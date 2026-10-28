@@ -51,6 +51,21 @@ export default function ExchangePage() {
             .catch(() => { if (alive) setFailed(true); });
         return () => { alive = false; };
     }, [reload]);
+    // Биржа меняется без нас: заявку сняли, удалили, взяли. Раньше список
+    // грузился один раз — открытая вкладка показывала удалённую заявку, пока
+    // её не обновят руками (шеф, 28.10.2026). Теперь — раз в минуту и при
+    // возвращении в окно; список меняется на месте, без мигания.
+    useEffect(() => {
+        const refresh = () => { if (document.visibilityState === 'visible') setReload((n) => n + 1); };
+        const timer = setInterval(refresh, 60_000);
+        document.addEventListener('visibilitychange', refresh);
+        window.addEventListener('focus', refresh);
+        return () => {
+            clearInterval(timer);
+            document.removeEventListener('visibilitychange', refresh);
+            window.removeEventListener('focus', refresh);
+        };
+    }, []);
     // Открыли «Предложения» — запоминаем, что было новым (подсветка), и гасим
     // значки в меню и на вкладке: человек их увидел.
     useEffect(() => {
