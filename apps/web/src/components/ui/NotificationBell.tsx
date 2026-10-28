@@ -208,7 +208,7 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                         <div style={{ marginBottom: 8 }}>
                             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '6px 8px 4px' }}>
                                 <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--nova-fg-3)', textTransform: 'uppercase' }}>
-                                    Отклики на биржу{newOffers.length > 0 ? ` · новых ${newOffers.length}` : ''}
+                                    Отклики на заявки{newOffers.length > 0 ? ` · новых ${newOffers.length}` : ''}
                                 </span>
                                 <button
                                     type="button"
@@ -230,8 +230,14 @@ export default function NotificationBell({ hasNewUpdates }: { hasNewUpdates: boo
                                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                                 >
                                     <i style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: newOffers.some((n) => n.id === o.id) ? 'var(--nova-accent)' : 'transparent' }} />
-                                    <span style={{ fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        <b style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{moneyShort(o.price)}</b> · {o.from} → {o.to} · {o.name}
+                                    {/* Как уведомление: кто откликнулся и на какую заявку, ниже — сумма и маршрут. */}
+                                    <span style={{ flex: 1, minWidth: 0 }}>
+                                        <span style={{ display: 'block', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <b style={{ fontWeight: 600 }}>{o.name}</b> — заявка №{o.orderNumber}
+                                        </span>
+                                        <span style={{ display: 'block', fontSize: 12, color: 'var(--nova-fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <b style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{moneyShort(o.price)}</b> · {o.from} → {o.to}
+                                        </span>
                                     </span>
                                     <span style={{ fontSize: 11, color: 'var(--nova-fg-3)', whiteSpace: 'nowrap' }}>
                                         {ценаИзменена(o) ? 'цена изменена ' : ''}{dayjs(откликИзменён(o)).format('DD.MM HH:mm')}
