@@ -9,6 +9,7 @@ describe('Удаление заявки', () => {
             payment: count('payment'), paymentOrderShare: count('share'), income: count('income'), expense: count('expense'),
             financeOperation: count('op'), accountingDocumentOrder: count('doc'), accountingDocumentLine: count('line'),
             bonus: count('bonus'), payrollAccrual: count('accrual'), driverPayoutItem: count('payout'),
+            exchangeFuelIssue: count('given'), exchangeFuelReceipt: count('receipt'),
             document: count('file'), gpsPoint: count('gps'), warehouseQueueItem: count('queue'),
             $transaction: jest.fn(async (ops: any[]) => ops),
         };
@@ -25,6 +26,12 @@ describe('Удаление заявки', () => {
     it('есть платёж или счёт — удалить нельзя, только отменить', async () => {
         const { service, prisma } = build(undefined, { payment: 1, doc: 1 });
         await expect(service.delete('o-1', 'мы', 'COMPANY_ADMIN')).rejects.toThrow(/платежи, счета или акты — удалить её нельзя.*отменить/);
+        expect(prisma.order.delete).not.toHaveBeenCalled();
+    });
+
+    it('парк выдал водителю топливо или предоплату, есть чек — удалить нельзя: деньги водителя пропали бы из расчёта', async () => {
+        const { service, prisma } = build(undefined, { given: 2, receipt: 1 });
+        await expect(service.delete('o-1', 'мы', 'COMPANY_ADMIN')).rejects.toThrow(/выдачи водителю \(топливо, предоплата\), чеки на топливо/);
         expect(prisma.order.delete).not.toHaveBeenCalled();
     });
 

@@ -7,7 +7,8 @@ import { PrismaService } from '../prisma/prisma.service';
  *
  * Удаляется только заявка, по которой ещё не было денег и учётных
  * документов: платежей, долей платежа, приходов и расходов, счетов и актов,
- * начислений зарплаты, бонусов, выплат водителю. Такую заявку можно
+ * начислений зарплаты, бонусов, выплат водителю, выдач водителю парка
+ * (топливо, предоплата) и чеков на топливо. Такую заявку можно
  * отменить — удаление сбило бы взаиморасчёты, отчёты и зарплату задним
  * числом. Ошибочную или тестовую заявку без денег удаляет её хозяин:
  * экспедитор, а если экспедитора нет — заказчик, который её завёл.
@@ -21,7 +22,7 @@ export class OrderDeleteService {
 
     /** Что мешает удалить — словами; пусто — можно. */
     async blockers(orderId: string): Promise<string[]> {
-        const [payments, shares, incomes, expenses, operations, docs, lines, bonuses, accruals, payouts] = await Promise.all([
+        const [payments, shares, incomes, expenses, operations, docs, lines, bonuses, accruals, payouts, fuelIssues, fuelReceipts] = await Promise.all([
             this.prisma.payment.count({ where: { orderId } }),
             this.prisma.paymentOrderShare.count({ where: { orderId } }),
             this.prisma.income.count({ where: { orderId } }),
@@ -32,6 +33,10 @@ export class OrderDeleteService {
             this.prisma.bonus.count({ where: { orderId } }),
             this.prisma.payrollAccrual.count({ where: { orderId } }),
             this.prisma.driverPayoutItem.count({ where: { orderId } }),
+            // Парк выдал водителю топливо или предоплату, водитель прислал чеки —
+            // это тоже деньги: удаление стёрло бы их из расчёта с водителем.
+            this.prisma.exchangeFuelIssue.count({ where: { orderId } }),
+            this.prisma.exchangeFuelReceipt.count({ where: { orderId, status: { not: 'REJECTED' } } }),
         ]);
         const why: string[] = [];
         if (payments + shares) why.push('платежи');
@@ -39,6 +44,8 @@ export class OrderDeleteService {
         if (docs + lines) why.push('счета или акты');
         if (bonuses + accruals) why.push('начисления зарплаты');
         if (payouts) why.push('выплата водителю');
+        if (fuelIssues) why.push('выдачи водителю (топливо, предоплата)');
+        if (fuelReceipts) why.push('чеки на топливо');
         return why;
     }
 
