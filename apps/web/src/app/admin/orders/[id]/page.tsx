@@ -38,6 +38,7 @@ type Details = {
     cancel: { companiesCan: boolean; adminCan: boolean; blockers: Blocker[]; note: string | null };
     delete: { can: boolean; blockers: Blocker[] };
 };
+type ForceResult = { orderNumber: string; documentsShared: string[]; paymentsUnlinked: number; payoutsReduced: number };
 
 const день = (d: string | null) => (d ? dayjs(d).format('DD.MM.YYYY') : '—');
 const POINT: Record<string, string> = { PICKUP: 'Погрузка', ADDITIONAL_PICKUP: 'Догруз', DELIVERY: 'Выгрузка' };
@@ -52,8 +53,9 @@ export default function AdminOrderPage() {
     const router = useRouter();
     const [d, setD] = useState<Details | null>(null);
     const [failed, setFailed] = useState<string | null>(null);
-    const [ask, setAsk] = useState<'cancel' | 'delete' | null>(null);
+    const [ask, setAsk] = useState<'cancel' | 'delete' | 'force' | null>(null);
     const [comment, setComment] = useState('');
+    const [confirmNo, setConfirmNo] = useState('');
     const [busy, setBusy] = useState(false);
 
     const load = useCallback(() => {
@@ -72,6 +74,15 @@ export default function AdminOrderPage() {
                 toast.success(`Заявка ${d.order.orderNumber} отменена`);
                 setAsk(null); setComment('');
                 load();
+            } else if (ask === 'force') {
+                const r: ForceResult = (await api.post(`/admin/orders/${id}/force-delete`, { confirm: confirmNo.trim() })).data;
+                const осталось = [
+                    r.documentsShared.length ? `документы ${r.documentsShared.join(', ')} общие с другими заявками — суммы в них поправьте` : '',
+                    r.paymentsUnlinked ? `платежей, общих с другими заявками: ${r.paymentsUnlinked} — остались` : '',
+                    r.payoutsReduced ? `выплат водителю с другими рейсами: ${r.payoutsReduced} — уменьшены на этот рейс` : '',
+                ].filter(Boolean).join('; ');
+                toast.success(`Заявка ${r.orderNumber} удалена вместе с деньгами`, осталось ? { description: осталось, duration: 12000 } : undefined);
+                router.push('/admin/orders');
             } else {
                 await api.delete(`/orders/${id}`);
                 toast.success(`Заявка ${d.order.orderNumber} удалена`);
@@ -87,6 +98,15 @@ export default function AdminOrderPage() {
     if (failed) return <div className={styles.empty}>{failed}</div>;
     if (!d) return <div className="h-64 animate-pulse rounded-2xl bg-muted/60" />;
     const { order: o, money: m } = d;
+    const вСписке = ([
+        ['Выплата водителю', m.payouts.length],
+        ['Платежи', m.payments.length],
+        ['Счета и акты', m.documents.length],
+        ['Приходы и расходы', m.incomes.length + m.expenses.length],
+        ['Зарплата менеджеров', m.payroll.length],
+        ['Выдачи водителю и чеки', m.given.length + m.fuelReceipts.length],
+    ] as [string, number][]).filter(([, n]) => n > 0);
+    const в1С = m.payments.some((p) => p.in1C) || m.documents.some((x) => x.in1C);
     const пусто = !m.payments.length && !m.incomes.length && !m.expenses.length && !m.documents.length && !m.payroll.length && !m.payouts.length
         && !m.given.length && !m.fuelReceipts.length;
 
@@ -120,9 +140,16 @@ export default function AdminOrderPage() {
                     title="Удаление"
                     ok={d.delete.can}
                     okText="Денег и учётных документов нет — удалить можно."
-                    noText="Удалить нельзя, пока по заявке есть деньги или документы."
+                    noText="Обычным удалением нельзя: по заявке есть деньги или документы."
                     blockers={d.delete.blockers}
-                    action={d.delete.can ? <Button variant="destructive" onClick={() => setAsk('delete')}><Trash2 className="h-4 w-4" /> Удалить заявку</Button> : null}
+                    action={d.delete.can
+                        ? <Button variant="destructive" onClick={() => setAsk('delete')}><Trash2 className="h-4 w-4" /> Удалить заявку</Button>
+                        : (
+                            <div className="space-y-2 border-0 border-t border-solid border-border pt-3">
+                                <p className="m-0 text-muted-foreground">Тестовая или ошибочная заявка — удалите её вместе с деньгами и документами.</p>
+                                <Button variant="destructive" onClick={() => { setConfirmNo(''); setAsk('force'); }}><Trash2 className="h-4 w-4" /> Удалить вместе с деньгами</Button>
+                            </div>
+                        )}
                 />
             </div>
 
@@ -206,19 +233,43 @@ export default function AdminOrderPage() {
             <Dialog open={!!ask} onOpenChange={(v) => { if (!v) setAsk(null); }}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>{ask === 'cancel' ? `Отменить заявку ${o.orderNumber}?` : `Удалить заявку ${o.orderNumber}?`}</DialogTitle>
+                        <DialogTitle>
+                            {ask === 'cancel' ? `Отменить заявку ${o.orderNumber}?` : ask === 'force' ? `Удалить заявку ${o.orderNumber} вместе с деньгами?` : `Удалить заявку ${o.orderNumber}?`}
+                        </DialogTitle>
                         <DialogDescription>
                             {ask === 'cancel'
                                 ? 'Заявка станет «Отменена» у всех сторон, деньги и документы по ней останутся. Причину увидят в истории заявки.'
-                                : 'Заявка удалится вместе с маршрутом, историей и файлами рейса. Вернуть её будет нельзя.'}
+                                : ask === 'force'
+                                    ? 'Удалится заявка и всё, что относится только к ней. Платёж или документ, общий с другими заявками, останется — из него уберётся только эта заявка. Вернуть будет нельзя.'
+                                    : 'Заявка удалится вместе с маршрутом, историей и файлами рейса. Вернуть её будет нельзя.'}
                         </DialogDescription>
                     </DialogHeader>
                     {ask === 'cancel' && (
                         <Input aria-label="Причина отмены" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Причина, например: тестовая заявка" />
                     )}
+                    {ask === 'force' && (
+                        <div className="space-y-3 text-[13px]">
+                            {вСписке.length > 0 && (
+                                <div className="divide-y divide-border rounded-lg border border-solid border-border px-3">
+                                    {вСписке.map(([what, n]) => (
+                                        <div key={what} className="flex justify-between py-1.5"><span>{what}</span><span className="font-semibold tabular-nums">{n}</span></div>
+                                    ))}
+                                </div>
+                            )}
+                            {в1С && <p className="m-0 font-medium text-amber-700 dark:text-amber-400">Часть уже выгружена в 1С — там удалите её сами.</p>}
+                            <label className="block">
+                                <span className="mb-1 block text-muted-foreground">Для подтверждения впишите номер заявки: <b className="text-foreground">{o.orderNumber}</b></span>
+                                <Input aria-label="Номер заявки" value={confirmNo} onChange={(e) => setConfirmNo(e.target.value)} autoComplete="off" />
+                            </label>
+                        </div>
+                    )}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setAsk(null)}>Нет</Button>
-                        <Button variant={ask === 'delete' ? 'destructive' : 'default'} onClick={act} disabled={busy}>
+                        <Button
+                            variant={ask === 'cancel' ? 'default' : 'destructive'}
+                            onClick={act}
+                            disabled={busy || (ask === 'force' && confirmNo.trim() !== o.orderNumber)}
+                        >
                             {busy && <Loader2 className="h-4 w-4 animate-spin" />} {ask === 'cancel' ? 'Отменить' : 'Удалить навсегда'}
                         </Button>
                     </DialogFooter>

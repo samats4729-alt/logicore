@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Fuel, Route } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Fuel, Hand, Route } from 'lucide-react';
 import { api } from '@/lib/api';
 import { moneyShort } from '@/lib/money-format';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
-import { ParkTrip, ParkTripFilter, день } from '@/lib/exchange';
+import { ParkOffer, ParkTrip, ParkTripFilter, день } from '@/lib/exchange';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusPill from '@/components/ui/StatusPill';
 import { TripFuelDialog } from '@/components/park/TripFuelDialog';
 import { ParkStaff, TripResponsibleSelect } from '@/components/park/TripResponsibleSelect';
+import { ParkOffersTable } from '@/components/park/ParkOffersTable';
+import { useParkOffersFeed } from '@/lib/park-offers-feed';
 import styles from '@/components/nova/nova.module.css';
 
 const FILTERS: { key: ParkTripFilter; label: string }[] = [
@@ -36,10 +38,15 @@ const EMPTY: Record<ParkTripFilter, string> = {
  * По расчёту «на руки» (12.10.2026) под суммой — сколько водителю на руки
  * и доля парка, а кнопка «Топливо» открывает, что дали на топливо, и чеки
  * водителя на проверку.
+ *
+ * Вкладка «Отклики» (владелец, 29.10.2026): на какие заявки откликнулись
+ * водители парка и что решила компания — до того, как рейс стал рейсом.
  */
 export default function ParkTripsPage() {
     const router = useRouter();
-    const [filter, setFilter] = useState<ParkTripFilter>('active');
+    const [filter, setFilter] = useState<ParkTripFilter | 'offers'>('active');
+    const [offers, setOffers] = useState<ParkOffer[] | null>(null);
+    const [offersFailed, setOffersFailed] = useState(false);
     const [trips, setTrips] = useState<ParkTrip[] | null>(null);
     const [failed, setFailed] = useState(false);
     const [fuelTrip, setFuelTrip] = useState<ParkTrip | null>(null);
@@ -58,10 +65,21 @@ export default function ParkTripsPage() {
 
     useEffect(() => {
         const wanted = new URLSearchParams(window.location.search).get('status');
-        if (wanted && FILTERS.some((f) => f.key === wanted)) setFilter(wanted as ParkTripFilter);
+        if (wanted === 'offers' || (wanted && FILTERS.some((f) => f.key === wanted))) setFilter(wanted as ParkTripFilter | 'offers');
     }, []);
 
+    // Отклики грузим сразу: на вкладке — сколько ждут решения.
     useEffect(() => {
+        api.get('/exchange/park/offers')
+            .then((r) => setOffers(r.data))
+            .catch(() => setOffersFailed(true));
+    }, [reload]);
+    const waiting = (offers ?? []).filter((o) => o.status === 'ACTIVE').length;
+    // Открыли отклики — в колокольчике они больше не новые.
+    useEffect(() => { if (filter === 'offers') useParkOffersFeed.getState().markSeen(); }, [filter]);
+
+    useEffect(() => {
+        if (filter === 'offers') return;
         let alive = true;
         setTrips(null);
         setFailed(false);
@@ -89,6 +107,15 @@ export default function ParkTripsPage() {
             </div>
 
             <div className={styles.pills} role="tablist" style={{ marginBottom: 12 }}>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === 'offers'}
+                    className={`${styles.pill} ${filter === 'offers' ? styles.pillActive : ''}`}
+                    onClick={() => setFilter('offers')}
+                >
+                    Отклики{waiting > 0 ? ` · ${waiting}` : ''}
+                </button>
                 {FILTERS.map((f) => (
                     <button
                         key={f.key}
@@ -103,95 +130,116 @@ export default function ParkTripsPage() {
                 ))}
             </div>
 
-            <section className={styles.card}>
-                <div className={styles.cardHead}>
-                    <Route size={14} />
-                    <h2 className={styles.cardTitle}>{FILTERS.find((f) => f.key === filter)?.label}</h2>
-                    {trips && trips.length > 0 && <span className={styles.cardCount}>{trips.length} · {moneyShort(total)}</span>}
-                </div>
-                {failed ? (
-                    <div className={styles.empty}>Не удалось загрузить рейсы — обновите страницу.</div>
-                ) : !trips ? (
-                    <div className="space-y-2 p-4" aria-label="Загрузка">
-                        {[0, 1, 2].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/60" />)}
+            {filter === 'offers' ? (
+                <section className={styles.card}>
+                    <div className={styles.cardHead}>
+                        <Hand size={14} />
+                        <h2 className={styles.cardTitle}>Отклики водителей</h2>
+                        {offers && offers.length > 0 && <span className={styles.cardCount}>Ждут решения: {waiting}</span>}
                     </div>
-                ) : trips.length === 0 ? (
-                    <div className={styles.empty}>{EMPTY[filter]}</div>
-                ) : (
-                    <>
-                        <Table className="hidden border-collapse text-[13px] md:table">
-                            <TableHeader>
-                                <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
-                                    <TableHead className="h-9 text-[12.5px]">Маршрут</TableHead>
-                                    <TableHead className="h-9 text-[12.5px]">Водитель</TableHead>
-                                    <TableHead className="h-9 text-[12.5px]">Погрузка</TableHead>
-                                    <TableHead className="h-9 text-[12.5px]">Для компании</TableHead>
-                                    <TableHead className="h-9 text-[12.5px]">Статус</TableHead>
-                                    <TableHead className="h-9 text-right text-[12.5px]">За рейс</TableHead>
-                                    <TableHead className="h-9 text-[12.5px]">Налоги по рейсу</TableHead>
-                                    <TableHead className="h-9 text-right text-[12.5px]">Топливо и предоплата</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {trips.map((t) => (
-                                    <TableRow key={t.id} className="border-0 border-b border-solid border-border">
-                                        <TableCell className="py-2.5">
-                                            <div className="flex items-center gap-1.5 font-semibold">{t.from} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /> {t.to}</div>
-                                            <div className="text-[12px] text-muted-foreground">заявка {t.orderNumber}</div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div>{t.driverName ?? '—'}</div>
-                                            {t.vehiclePlate && <div className="text-[12px] text-muted-foreground">{t.vehiclePlate}</div>}
-                                            {t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && (
-                                                <div className="mt-1">
-                                                    <TripResponsibleSelect orderId={t.id} current={t.responsible ?? null} staff={staff} onChanged={assigned(t.id)} />
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="whitespace-nowrap">{день(t.loadingDate)}</TableCell>
-                                        <TableCell className="text-muted-foreground">{t.customerName ?? '—'}</TableCell>
-                                        <TableCell><StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} /></TableCell>
-                                        <TableCell className="text-right tabular-nums">
-                                            <div className="font-semibold">{t.price != null ? moneyShort(t.price) : '—'}</div>
-                                            {t.settlement && (
-                                                <div className="text-[11.5px] text-muted-foreground">
-                                                    водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-[12px]"><TaxBreakdown s={t.settlement} /></TableCell>
-                                        <TableCell className="text-right">
-                                            {t.settlement ? <FuelButton trip={t} onOpen={setFuelTrip} /> : <span className="text-muted-foreground">—</span>}
-                                        </TableCell>
+                    {offersFailed ? (
+                        <div className={styles.empty}>Не удалось загрузить отклики — обновите страницу.</div>
+                    ) : !offers ? (
+                        <div className="space-y-2 p-4" aria-label="Загрузка">
+                            {[0, 1].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/60" />)}
+                        </div>
+                    ) : offers.length === 0 ? (
+                        <div className={styles.empty}>Откликов нет. Когда водитель парка откликнется на заявку на бирже, отклик появится здесь.</div>
+                    ) : (
+                        <ParkOffersTable offers={offers} />
+                    )}
+                </section>
+            ) : (
+                <section className={styles.card}>
+                    <div className={styles.cardHead}>
+                        <Route size={14} />
+                        <h2 className={styles.cardTitle}>{FILTERS.find((f) => f.key === filter)?.label}</h2>
+                        {trips && trips.length > 0 && <span className={styles.cardCount}>{trips.length} · {moneyShort(total)}</span>}
+                    </div>
+                    {failed ? (
+                        <div className={styles.empty}>Не удалось загрузить рейсы — обновите страницу.</div>
+                    ) : !trips ? (
+                        <div className="space-y-2 p-4" aria-label="Загрузка">
+                            {[0, 1, 2].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/60" />)}
+                        </div>
+                    ) : trips.length === 0 ? (
+                        <div className={styles.empty}>{EMPTY[filter as ParkTripFilter]}</div>
+                    ) : (
+                        <>
+                            <Table className="hidden border-collapse text-[13px] md:table">
+                                <TableHeader>
+                                    <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
+                                        <TableHead className="h-9 text-[12.5px]">Маршрут</TableHead>
+                                        <TableHead className="h-9 text-[12.5px]">Водитель</TableHead>
+                                        <TableHead className="h-9 text-[12.5px]">Погрузка</TableHead>
+                                        <TableHead className="h-9 text-[12.5px]">Для компании</TableHead>
+                                        <TableHead className="h-9 text-[12.5px]">Статус</TableHead>
+                                        <TableHead className="h-9 text-right text-[12.5px]">За рейс</TableHead>
+                                        <TableHead className="h-9 text-[12.5px]">Налоги по рейсу</TableHead>
+                                        <TableHead className="h-9 text-right text-[12.5px]">Топливо и предоплата</TableHead>
                                     </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {trips.map((t) => (
+                                        <TableRow key={t.id} className="border-0 border-b border-solid border-border">
+                                            <TableCell className="py-2.5">
+                                                <div className="flex items-center gap-1.5 font-semibold">{t.from} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /> {t.to}</div>
+                                                <div className="text-[12px] text-muted-foreground">заявка {t.orderNumber}</div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div>{t.driverName ?? '—'}</div>
+                                                {t.vehiclePlate && <div className="text-[12px] text-muted-foreground">{t.vehiclePlate}</div>}
+                                                {t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && (
+                                                    <div className="mt-1">
+                                                        <TripResponsibleSelect orderId={t.id} current={t.responsible ?? null} staff={staff} onChanged={assigned(t.id)} />
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="whitespace-nowrap">{день(t.loadingDate)}</TableCell>
+                                            <TableCell className="text-muted-foreground">{t.customerName ?? '—'}</TableCell>
+                                            <TableCell><StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} /></TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                                <div className="font-semibold">{t.price != null ? moneyShort(t.price) : '—'}</div>
+                                                {t.settlement && (
+                                                    <div className="text-[11.5px] text-muted-foreground">
+                                                        водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-[12px]"><TaxBreakdown s={t.settlement} /></TableCell>
+                                            <TableCell className="text-right">
+                                                {t.settlement ? <FuelButton trip={t} onOpen={setFuelTrip} /> : <span className="text-muted-foreground">—</span>}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                            <ul className="m-0 list-none divide-y divide-border p-0 md:hidden">
+                                {trips.map((t) => (
+                                    <li key={t.id} className="flex flex-col gap-1 px-4 py-3">
+                                        <div className="flex items-baseline justify-between gap-3">
+                                            <span className="flex flex-wrap items-center gap-1.5 text-[15px] font-semibold">{t.from} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /> {t.to}</span>
+                                            <span className="shrink-0 text-[15px] font-bold tabular-nums">{t.price != null ? moneyShort(t.price) : '—'}</span>
+                                        </div>
+                                        <div className="text-[12px] text-muted-foreground">{t.driverName ?? '—'}{t.vehiclePlate ? ` · ${t.vehiclePlate}` : ''} · {день(t.loadingDate)}</div>
+                                        {t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && (
+                                            <TripResponsibleSelect orderId={t.id} current={t.responsible ?? null} staff={staff} onChanged={assigned(t.id)} />
+                                        )}
+                                        {t.settlement && (
+                                            <div className="text-[12px] text-muted-foreground">водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}</div>
+                                        )}
+                                        {t.settlement && <div className="text-[12px]"><TaxBreakdown s={t.settlement} /></div>}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} />
+                                            {t.settlement && <FuelButton trip={t} onOpen={setFuelTrip} />}
+                                        </div>
+                                    </li>
                                 ))}
-                            </TableBody>
-                        </Table>
-                        <ul className="m-0 list-none divide-y divide-border p-0 md:hidden">
-                            {trips.map((t) => (
-                                <li key={t.id} className="flex flex-col gap-1 px-4 py-3">
-                                    <div className="flex items-baseline justify-between gap-3">
-                                        <span className="flex flex-wrap items-center gap-1.5 text-[15px] font-semibold">{t.from} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /> {t.to}</span>
-                                        <span className="shrink-0 text-[15px] font-bold tabular-nums">{t.price != null ? moneyShort(t.price) : '—'}</span>
-                                    </div>
-                                    <div className="text-[12px] text-muted-foreground">{t.driverName ?? '—'}{t.vehiclePlate ? ` · ${t.vehiclePlate}` : ''} · {день(t.loadingDate)}</div>
-                                    {t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && (
-                                        <TripResponsibleSelect orderId={t.id} current={t.responsible ?? null} staff={staff} onChanged={assigned(t.id)} />
-                                    )}
-                                    {t.settlement && (
-                                        <div className="text-[12px] text-muted-foreground">водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}</div>
-                                    )}
-                                    {t.settlement && <div className="text-[12px]"><TaxBreakdown s={t.settlement} /></div>}
-                                    <div className="flex items-center justify-between gap-2">
-                                        <StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} />
-                                        {t.settlement && <FuelButton trip={t} onOpen={setFuelTrip} />}
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    </>
-                )}
-            </section>
+                            </ul>
+                        </>
+                    )}
+                </section>
+            )}
 
             <TripFuelDialog
                 orderId={fuelTrip?.id ?? null}

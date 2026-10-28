@@ -41,12 +41,15 @@ export function AddressPicker({
     valueLabel,
     onSelect,
     onCreateNew,
+    emptyText,
 }: {
     groups: AddressGroup[];
     valueId?: string;
     valueLabel?: string;
     onSelect: (id: string | null) => void;
     onCreateNew: () => void;
+    /** Текст, когда адресов нет совсем (а не «ничего не нашлось по поиску»). */
+    emptyText?: string;
 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -158,7 +161,9 @@ export function AddressPicker({
                     <div className={styles.list}>
                         {total === 0 ? (
                             <div className={styles.empty}>
-                                Ничего не нашлось. Проверьте фильтры или заведите новый адрес.
+                                {emptyText && groups.length === 0
+                                    ? emptyText
+                                    : 'Ничего не нашлось. Проверьте фильтры или заведите новый адрес.'}
                             </div>
                         ) : (
                             visible.map((group) => (

@@ -48,6 +48,7 @@ interface Partner {
 import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEmails';
 import { CargoComposition } from '@/components/orders/CargoComposition';
 import { AddressPicker } from '@/components/orders/AddressPicker';
+import { customerAddressGroups, useCustomerAddressIds } from '@/lib/customer-addresses';
 import { cn } from '@/lib/utils';
 import { EMPTY_CARGO, totalPallets, type CargoState } from '@/lib/cargo';
 import { toast } from 'sonner';
@@ -290,6 +291,10 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     // Parties
     const [selectedCustomer, setSelectedCustomer] = useState<string>('');
     const [selectedCarrier, setSelectedCarrier] = useState<string>('');
+    /** Адреса из заявок выбранного заказчика — в окне адреса только его адреса (владелец, 29.10.2026). */
+    const customerAddressIds = useCustomerAddressIds(
+        selectedCustomer === MY_COMPANY_VALUE ? selectedMyCompanyId : selectedCustomer || null,
+    );
 
     // Ответственный менеджер от нашей компании: SELF — я, NONE — не назначать, иначе userId
     const [responsibleChoice, setResponsibleChoice] = useState<string>('SELF');
@@ -867,6 +872,21 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
         const customerCompanyId = selectedCustomer === MY_COMPANY_VALUE ? selectedMyCompanyId : selectedCustomer;
         const carrierCompanyId = selectedCarrier === MY_COMPANY_VALUE ? selectedMyCompanyId : 
             (selectedCarrier === MARKETPLACE_VALUE || !selectedCarrier) ? undefined : selectedCarrier;
+
+        const currentMyName = myCompanies.find(c => c.id === selectedMyCompanyId)?.name?.trim() || myCompanyName;
+        const customerName = selectedCustomer === MY_COMPANY_VALUE ? currentMyName : partners.find(p => p.id === selectedCustomer)?.name || 'Заказчик';
+        const carrierName = selectedCarrier === MY_COMPANY_VALUE ? currentMyName : partners.find(p => p.id === selectedCarrier)?.name || 'Перевозчик';
+
+        // Заказчик выбран — только его адреса: привязанные к нему и из его
+        // заявок. Адресов других заказчиков здесь нет (владелец, 29.10.2026).
+        if (customerCompanyId) {
+            return customerAddressGroups(
+                locations,
+                { id: customerCompanyId, name: customerName },
+                customerAddressIds ?? [],
+                carrierCompanyId ? { id: carrierCompanyId, name: carrierName } : null,
+            );
+        }
 
         const customerLocs = locations.filter(l => customerCompanyId && (l as any).companyId === customerCompanyId);
         const carrierLocs = locations.filter(l => carrierCompanyId && (l as any).companyId === carrierCompanyId);
@@ -1777,6 +1797,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                     groups={getLocationOptions()}
                                     valueId={pt.id}
                                     valueLabel={label}
+                                    emptyText={selectedCustomer ? 'У заказчика пока нет адресов. Добавьте новый — он сохранится за этим заказчиком.' : undefined}
                                     onCreateNew={() => {
                                         setActiveRoutePointIndex(i);
                                         setQuickLocationModalOpen(true);

@@ -31,12 +31,14 @@ const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
 import { заменаНаРейсе, type ЗаменаНаРейсе } from '@/lib/driver-pool';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
+import { customerAddressGroups, useCustomerAddressIds } from '@/lib/customer-addresses';
 import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
 import PillTabs from '@/components/ui/PillTabs';
 import OrderDetails, { OrderSideCards } from '@/components/orders/OrderDetails';
 import { OrderStageBar } from '@/components/orders/OrderStageBar';
 import DeleteOrderDialog from '@/components/orders/DeleteOrderDialog';
+import DeleteRequestBanner from '@/components/orders/DeleteRequestBanner';
 import { NO_ATTACHMENTS, type PoaAttachments } from '@/components/orders/PoaAttachmentsPicker';
 import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
@@ -141,6 +143,8 @@ export default function OrderDetailPage() {
     const [cancelAsk, setCancelAsk] = useState(false);
     /** «Удалить заявку» (A12) — окно само скажет, если удалить нельзя. */
     const [deleteAsk, setDeleteAsk] = useState(false);
+    /** Отправили запрос на удаление — плашка перечитывает его. */
+    const [deleteRequestTick, setDeleteRequestTick] = useState(0);
     const [invoiceLoading, setInvoiceLoading] = useState(false);
     /** Меняется, когда оплата по рейсу изменилась и цепочку надо перечитать. */
     const [documentChainKey, setDocumentChainKey] = useState(0);
@@ -267,6 +271,8 @@ export default function OrderDetailPage() {
     const [cargoState, setCargoState] = useState<CargoState>(EMPTY_CARGO);
     const [selectedCustomer, setSelectedCustomer] = useState<string>('');
     const [selectedCarrier, setSelectedCarrier] = useState<string>('');
+    /** Адреса из заявок заказчика — при правке маршрута только его адреса (владелец, 29.10.2026). */
+    const customerAddressIds = useCustomerAddressIds(selectedCustomer === MY_COMPANY_VALUE ? user?.companyId : selectedCustomer || null);
     const [myCompanyName, setMyCompanyName] = useState('');
     const [routePointsState, setRoutePointsState] = useState<Array<LocationState & { pointType: string }>>([]);
 
@@ -589,6 +595,15 @@ export default function OrderDetailPage() {
         const customerCompanyId = selectedCustomer === MY_COMPANY_VALUE ? user?.companyId : selectedCustomer;
         const carrierCompanyId = selectedCarrier === MY_COMPANY_VALUE ? user?.companyId : 
             (selectedCarrier === MARKETPLACE_VALUE || !selectedCarrier) ? undefined : selectedCarrier;
+        if (customerCompanyId) {
+            const nameOf = (value: string, fallback: string) => value === MY_COMPANY_VALUE ? myCompanyName : partners.find(p => p.id === value)?.name || fallback;
+            return customerAddressGroups(
+                locations,
+                { id: customerCompanyId, name: nameOf(selectedCustomer, 'Заказчик') },
+                customerAddressIds ?? [],
+                carrierCompanyId ? { id: carrierCompanyId, name: nameOf(selectedCarrier, 'Перевозчик') } : null,
+            );
+        }
 
         const customerLocs = locations.filter(l => customerCompanyId && (l as any).companyId === customerCompanyId);
         const carrierLocs = locations.filter(l => carrierCompanyId && (l as any).companyId === carrierCompanyId);
@@ -1722,7 +1737,13 @@ export default function OrderDetailPage() {
             {/* Где рейс сейчас — полосой этапов, как в макете. */}
             <OrderStageBar status={order.status} />
 
-            <DeleteOrderDialog orderId={orderId} orderNumber={order.orderNumber} open={deleteAsk} onOpenChange={setDeleteAsk} />
+            <DeleteOrderDialog
+                orderId={orderId}
+                orderNumber={order.orderNumber}
+                open={deleteAsk}
+                onOpenChange={setDeleteAsk}
+                onRequested={() => setDeleteRequestTick((t) => t + 1)}
+            />
 
             <Dialog open={cancelAsk} onOpenChange={setCancelAsk}>
                 <DialogContent className="max-w-sm">
@@ -1738,6 +1759,8 @@ export default function OrderDetailPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <DeleteRequestBanner orderId={orderId} refreshKey={deleteRequestTick} />
 
             {/* =================== PENDING COMPLETION BANNER =================== */}
             {hasPendingCompletion && isCompletionApprover && (
