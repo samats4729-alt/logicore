@@ -1,9 +1,11 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { AdminOrdersService } from './admin-orders.service';
+import { OrderForceDeleteService } from './order-force-delete.service';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * Заявки в админке платформы (владелец, 28.10.2026): поиск по всем
@@ -17,7 +19,11 @@ import { AdminOrdersService } from './admin-orders.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class AdminOrdersController {
-    constructor(private readonly service: AdminOrdersService) {}
+    constructor(
+        private readonly service: AdminOrdersService,
+        private readonly forceDelete: OrderForceDeleteService,
+        private readonly audit: AuditService,
+    ) {}
 
     @Get()
     @Roles(UserRole.ADMIN)
@@ -31,5 +37,19 @@ export class AdminOrdersController {
     @ApiOperation({ summary: 'Разбор заявки: данные, деньги, что мешает отменить или удалить' })
     details(@Param('id') id: string) {
         return this.service.details(id);
+    }
+
+    @Post(':id/force-delete')
+    @HttpCode(HttpStatus.OK)
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Удалить тестовую или ошибочную заявку вместе с её деньгами (подтверждение — номер заявки)' })
+    async remove(@Param('id') id: string, @Body() body: { confirm?: string }, @Request() req: any) {
+        const r = await this.forceDelete.delete(id, body?.confirm ?? '');
+        await this.audit.log({
+            companyId: req.user.companyId ?? null, user: req.user, action: 'DELETE', entity: 'order', entityId: id,
+            entityLabel: `Заявка №${r.orderNumber} удалена администратором вместе с деньгами`,
+            details: { ...r },
+        });
+        return r;
     }
 }

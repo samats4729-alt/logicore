@@ -43,6 +43,27 @@ const TRIP_SELECT = {
 
 export type ParkTripFilter = 'active' | 'done' | 'all';
 
+/** Отклики водителей парка: решённые показываем ещё две недели. */
+const OFFERS_DAYS = 14;
+
+const OFFER_SELECT = {
+    id: true, status: true, price: true, calc: true, agreed: true, readyDate: true, comment: true,
+    createdAt: true, updatedAt: true, decidedAt: true,
+    driver: { select: { id: true, lastName: true, firstName: true, middleName: true, phone: true, vehiclePlate: true } },
+    order: {
+        select: {
+            id: true, orderNumber: true, status: true, cargoType: true, cargoDescription: true, cargoWeight: true,
+            forwarder: { select: { name: true } },
+            subForwarder: { select: { name: true } },
+            customerCompany: { select: { name: true } },
+            routePoints: {
+                select: { pointType: true, expectedDate: true, location: { select: { city: true, cityRecord: { select: { name: true } } } } },
+                orderBy: { sequence: 'asc' as const },
+            },
+        },
+    },
+} satisfies Prisma.ExchangeOfferSelect;
+
 /**
  * Кабинет парка: сколько водителей ждут проверки и работают, какие рейсы
  * идут, сколько заработали за месяц, и приглашение водителя кодом.
@@ -136,6 +157,62 @@ export class ExchangeParkService {
                 })(),
                 createdAt: r.createdAt,
                 completedAt: r.completedAt,
+            };
+        });
+    }
+
+    /**
+     * Отклики водителей парка на бирже (владелец, 29.10.2026: «в парке тоже
+     * должно быть видно, что водитель откликнулся на заявку»).
+     *
+     * Рейс появляется у парка, только когда компания выбрала водителя. До
+     * этого парк видит здесь, на какие заявки и за сколько откликнулись его
+     * водители и что решила компания. Ждущие решения — все, решённые — за
+     * две недели.
+     */
+    async offers(companyId: string) {
+        await this.drivers.assertPark(companyId);
+        const since = new Date(Date.now() - OFFERS_DAYS * 24 * 60 * 60 * 1000);
+        const rows = await this.prisma.exchangeOffer.findMany({
+            where: { driver: { parkCompanyId: companyId }, OR: [{ status: 'ACTIVE' }, { updatedAt: { gte: since } }] },
+            select: OFFER_SELECT,
+            orderBy: { updatedAt: 'desc' },
+            take: 100,
+        });
+        const city = (p?: { location: { city: string | null; cityRecord: { name: string } | null } }) =>
+            p ? p.location.cityRecord?.name || p.location.city || '—' : '—';
+        return rows.map((r) => {
+            const o = r.order;
+            const pickup = o.routePoints.find((p) => p.pointType !== 'DELIVERY');
+            const delivery = [...o.routePoints].reverse().find((p) => p.pointType === 'DELIVERY');
+            const calc = r.calc as { driverTotal?: number; fuel?: number } | null;
+            const d = r.driver;
+            return {
+                id: r.id,
+                status: r.status,
+                /** Цена для компании — с налогами, топливом и комиссиями, как у рейса «За рейс». */
+                price: Number(r.price),
+                /** Водителю на руки и топливо — из расчёта на момент отклика. */
+                driverTotal: calc?.driverTotal ?? null,
+                fuel: calc?.fuel ?? null,
+                agreed: r.agreed,
+                readyDate: r.readyDate,
+                comment: r.comment,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt,
+                decidedAt: r.decidedAt,
+                driverName: d ? [d.lastName, d.firstName, d.middleName].filter(Boolean).join(' ') || 'Водитель' : 'Водитель',
+                driverPhone: d?.phone ?? null,
+                vehiclePlate: d?.vehiclePlate ?? null,
+                orderId: o.id,
+                orderNumber: o.orderNumber,
+                orderStatus: o.status,
+                from: city(pickup),
+                to: city(delivery),
+                loadingDate: pickup?.expectedDate ?? null,
+                cargo: [o.cargoType || o.cargoDescription, o.cargoWeight ? `${Math.round(o.cargoWeight / 100) / 10} т` : null].filter(Boolean).join(' · ') || null,
+                /** Кто выставил заявку на биржу и решает, кого выбрать. */
+                customerName: o.subForwarder?.name || o.forwarder?.name || o.customerCompany?.name || null,
             };
         });
     }

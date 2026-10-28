@@ -15,6 +15,7 @@ function build(isPark = true) {
             findMany: jest.fn().mockResolvedValue([]),
         },
         driverPayout: { findMany: jest.fn().mockResolvedValue([{ net: 300000, toPay: null }]) },
+        exchangeOffer: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const drivers: any = {
         assertPark: jest.fn(async () => { if (!isPark) throw new ForbiddenException('Ваша компания не парк биржи'); }),
@@ -29,6 +30,37 @@ describe('Кабинет парка', () => {
             pendingDrivers: 2, approvedDrivers: 5, activeTrips: 1, monthTrips: 3, monthSum: 1200000, inviteCode: 'ABC234',
             pendingPayouts: { count: 1, net: 300000 },
         });
+    });
+
+    it('отклики водителей парка: на какую заявку, за сколько, водителю на руки; цены заказчика в выборке нет', async () => {
+        const { service, prisma } = build();
+        prisma.exchangeOffer.findMany.mockResolvedValue([{
+            id: 'of-1', status: 'ACTIVE', price: 559461.79, calc: { driverTotal: 340268, fuel: 71925 }, agreed: true,
+            readyDate: null, comment: null, createdAt: new Date('2026-10-29'), updatedAt: new Date('2026-10-29'), decidedAt: null,
+            driver: { id: 'd-1', lastName: 'Рулев', firstName: 'Нурлан', middleName: null, phone: '+77010001401', vehiclePlate: '999 PRK 14' },
+            order: {
+                id: 'o-3', orderNumber: '000000003', status: 'PENDING', cargoType: 'Стройматериалы', cargoDescription: null, cargoWeight: 20000,
+                forwarder: null, subForwarder: null, customerCompany: { name: 'ТОО «Заказчик»' },
+                routePoints: [
+                    { pointType: 'PICKUP', expectedDate: '2026-11-03', location: { city: 'Шымкент', cityRecord: null } },
+                    { pointType: 'DELIVERY', expectedDate: '2026-11-04', location: { city: null, cityRecord: { name: 'Алматы' } } },
+                ],
+            },
+        }]);
+        expect(await service.offers('park-1')).toEqual([expect.objectContaining({
+            status: 'ACTIVE', price: 559461.79, driverTotal: 340268, fuel: 71925, driverName: 'Рулев Нурлан', vehiclePlate: '999 PRK 14',
+            orderNumber: '000000003', from: 'Шымкент', to: 'Алматы', loadingDate: '2026-11-03', cargo: 'Стройматериалы · 20 т',
+            customerName: 'ТОО «Заказчик»',
+        })]);
+        const args = prisma.exchangeOffer.findMany.mock.calls[0][0];
+        expect(args.where.driver).toEqual({ parkCompanyId: 'park-1' });
+        expect(args.where.OR[0]).toEqual({ status: 'ACTIVE' });
+        expect(JSON.stringify(args.select)).not.toMatch(/customerPrice/);
+    });
+
+    it('отклики видит только парк', async () => {
+        const { service } = build(false);
+        await expect(service.offers('fwd-1')).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('рейсы парка — заявки, где парк перевозчик; цены заказчика в выборке нет', async () => {

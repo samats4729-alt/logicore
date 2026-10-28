@@ -390,6 +390,33 @@ export interface ParkTrip {
     completedAt: string | null;
 }
 
+/** Отклик водителя парка на бирже — как его видит парк (29.10.2026). */
+export interface ParkOffer {
+    id: string;
+    status: 'ACTIVE' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
+    /** Цена для компании — с налогами, топливом и комиссиями. */
+    price: number;
+    driverTotal: number | null;
+    fuel: number | null;
+    agreed: boolean;
+    readyDate: string | null;
+    comment: string | null;
+    createdAt: string;
+    updatedAt: string;
+    decidedAt: string | null;
+    driverName: string;
+    driverPhone: string | null;
+    vehiclePlate: string | null;
+    orderId: string;
+    orderNumber: string;
+    orderStatus: string;
+    from: string;
+    to: string;
+    loadingDate: string | null;
+    cargo: string | null;
+    customerName: string | null;
+}
+
 /** Топливо рейса водителя парка: сколько дали, чеки, сколько перечислить в конце. */
 export interface ParkTripFuel {
     orderId: string;

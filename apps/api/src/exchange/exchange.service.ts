@@ -154,6 +154,15 @@ export class ExchangeService {
         const blocker = this.blocker(order, companyId) ?? await soleTraderBlock(this.prisma, companyId);
         if (blocker) throw new BadRequestException(blocker);
 
+        // Расстояние по дорогам — до того, как заявка появится на бирже, и
+        // одной записью с выставлением (29.10.2026). Раньше оно считалось
+        // после: первые секунды лента и отклик водителя брали топливо по
+        // прямой, потом цифры в карточке менялись, и водитель соглашался на
+        // одну сумму «на руки», а в отклик записывалась другая. Сервис
+        // расстояний ждём не дольше 6 секунд; не ответил — оценка по прямой,
+        // и она уже не меняется.
+        const distanceKm = await this.settlement.roadKm(order.id);
+
         // Исполнителя могли назначить, пока открыта форма: обновляем, только
         // если заявка всё ещё свободна.
         const { count } = await this.prisma.order.updateMany({
@@ -165,12 +174,10 @@ export class ExchangeService {
                 exchangeNote: dto.note?.trim() || null,
                 exchangeClosedAt: null,
                 exchangeCloseReason: null,
+                exchangeDistanceKm: distanceKm,
             },
         });
         if (!count) throw new BadRequestException('У заявки уже появился исполнитель — обновите страницу');
-        // Расстояние по дорогам — для оценки топлива водителям парков. Не ждём:
-        // пока не посчиталось, лента берёт оценку по прямой.
-        void this.settlement.measure(order.id).catch(() => undefined);
         return this.state(companyId, orderId);
     }
 

@@ -41,7 +41,7 @@ describe('Админка: разбор заявки', () => {
         };
         // Обе стороны зарегистрированы — так у шефа: он и экспедитор, и водитель парка.
         const orders: any = { getRegisteredParticipants: jest.fn().mockResolvedValue(['fwd', 'park']) };
-        return { service: new AdminOrdersService(prisma, orders, new OrderDeleteService(prisma)), prisma };
+        return { service: new AdminOrdersService(prisma, orders, new OrderDeleteService(prisma, {} as any)), prisma };
     }
 
     it('случай шефа: удалить мешает запрошенная выплата водителю — сказано, кто и где её отклоняет', async () => {

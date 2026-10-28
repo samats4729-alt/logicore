@@ -41,10 +41,13 @@ export class LocationsController {
     /* Объявлено до `:id`, иначе адрес «recent» уедет в поиск точки с таким
        идентификатором и вернёт «не найдено». */
     @Get('recent')
-    @ApiOperation({ summary: 'Адреса из последних заявок компании — для «Недавних» в выборе адреса' })
-    async recent(@Request() req: any) {
+    @ApiOperation({ summary: 'Адреса из последних заявок компании — для «Недавних»; с customerId — все адреса из заявок этого заказчика' })
+    @ApiQuery({ name: 'customerId', required: false })
+    async recent(@Request() req: any, @Query('customerId') customerId?: string) {
         if (!req.user.companyId) return [];
-        return this.locationsService.recentIds(req.user.companyId);
+        return customerId
+            ? this.locationsService.recentIds(req.user.companyId, 500, customerId)
+            : this.locationsService.recentIds(req.user.companyId);
     }
 
     /* Объявлено до `:id`, иначе адрес «missing-coordinates» уедет в поиск

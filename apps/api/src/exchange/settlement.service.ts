@@ -164,13 +164,14 @@ export class ExchangeSettlementService {
         return this.contextFromRow(await this.driverBase(driver), row);
     }
 
-    /** Расстояние по дорогам — при выставлении на биржу; не вышло — по прямой. */
-    async measure(orderId: string): Promise<number | null> {
+    /**
+     * Расстояние по дорогам для выставления на биржу; не вышло — по прямой.
+     * Ничего не записывает: выставление пишет его вместе с заявкой.
+     */
+    async roadKm(orderId: string): Promise<number | null> {
         const row = await this.prisma.order.findUnique({ where: { id: orderId }, select: ROUTE_SELECT });
         if (!row) return null;
-        const km = await roadDistanceKm(row.routePoints.map((p) => pointOf(p.location)).filter((p): p is LngLat => !!p));
-        await this.prisma.order.update({ where: { id: orderId }, data: { exchangeDistanceKm: km } });
-        return km;
+        return roadDistanceKm(row.routePoints.map((p) => pointOf(p.location)).filter((p): p is LngLat => !!p));
     }
 
     /** Сумма заказчика на бирже → полный расчёт. Ошибку суммы — словами. */

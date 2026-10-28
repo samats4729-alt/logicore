@@ -155,9 +155,10 @@ export default function LocationForm({
             if (defaultCompanyId) {
                 form.setFieldsValue({ companyId: defaultCompanyId });
             }
-            form.setFieldsValue({ bindingType: 'none' });
+            // Адрес из заявки — за заказчиком (владелец, 29.10.2026).
+            form.setFieldsValue({ bindingType: customerCompany?.id ? 'customer' : 'none' });
         }
-    }, [editingLocation, defaultCompanyId]);
+    }, [editingLocation, defaultCompanyId, customerCompany?.id]);
 
     /**
      * Уходим из поля — приводим написанное в порядок.
@@ -623,16 +624,19 @@ export default function LocationForm({
                             : <><EnvironmentOutlined /> Координат пока нет. Адрес сохранится, а точку найдём, когда геокодер ответит — или укажите её на карте сами</>}
                     </div>
 
+                    {/* Адрес из заявки по умолчанию — за заказчиком: при следующей
+                        заявке этого заказчика он найдётся в его адресах, а у других
+                        заказчиков не появится (владелец, 29.10.2026). */}
                     { (customerCompany?.id || carrierCompany?.id) ? (
-                        <Form.Item name="bindingType" label="Привязать адрес к участнику заявки" initialValue="none">
+                        <Form.Item name="bindingType" label="Чей это адрес" initialValue={customerCompany?.id ? 'customer' : 'none'}>
                             <Radio.Group style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <Radio value="none">Без привязки (разовый общий адрес)</Radio>
                                 {customerCompany?.id && (
-                                    <Radio value="customer">Заказчик: {customerCompany.name}</Radio>
+                                    <Radio value="customer">Заказчика: {customerCompany.name}</Radio>
                                 )}
                                 {carrierCompany?.id && (
-                                    <Radio value="carrier">Исполнитель: {carrierCompany.name}</Radio>
+                                    <Radio value="carrier">Исполнителя: {carrierCompany.name}</Radio>
                                 )}
+                                <Radio value="none">Нашей компании</Radio>
                             </Radio.Group>
                         </Form.Item>
                     ) : showCompanySelect && (
