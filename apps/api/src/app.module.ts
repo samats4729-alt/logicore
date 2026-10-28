@@ -38,6 +38,7 @@ import { ExchangeModule } from './exchange/exchange.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { GeoModule } from './geo/geo.module';
 import { AdminStatsModule } from './admin-stats/admin-stats.module';
+import { AdminOrdersModule } from './admin-orders/admin-orders.module';
 import { IdentityModule } from './identity/identity.module';
 import { AccountingDocumentsModule } from './accounting-documents/accounting-documents.module';
 import { PaymentProofsModule } from './payment-proofs/payment-proofs.module';
@@ -98,6 +99,7 @@ import { ReportsModule } from './reports/reports.module';
         MonitoringModule,
         GeoModule,
         AdminStatsModule,
+        AdminOrdersModule,
         IdentityModule,
     ],
     providers: [
