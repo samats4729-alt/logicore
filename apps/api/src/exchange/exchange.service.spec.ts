@@ -53,7 +53,7 @@ function build(state = order()) {
         company: { findUnique: jest.fn().mockResolvedValue({ isPark: false }) },
         $transaction: jest.fn(async (ops: any[]) => ops),
     };
-    const settlement: any = { measure: jest.fn().mockResolvedValue(1200) };
+    const settlement: any = { roadKm: jest.fn().mockResolvedValue(1200) };
     return { service: new ExchangeService(prisma, settlement), prisma, settlement };
 }
 
@@ -73,6 +73,16 @@ describe('Биржа: кто выставляет заявку', () => {
         expect(call.where).toMatchObject({ id: 'order-1', partnerId: null, driverId: null, assignedDriverName: null });
         expect(call.data).toMatchObject({ exchangePrice: 450000, exchangeNote: 'Ремни', exchangePublishedById: USER, exchangeClosedAt: null });
         expect(state.onExchange).toBe(true);
+    });
+
+    it('расстояние по дорогам записывается вместе с выставлением: водитель с первой секунды видит те же цифры, что попадут в отклик', async () => {
+        const { service, prisma, settlement } = build();
+        let measuredBeforePublish = false;
+        settlement.roadKm.mockImplementation(async () => { measuredBeforePublish = prisma.order.updateMany.mock.calls.length === 0; return 686; });
+        await service.publish(OUR, USER, 'order-1', { price: 420000 });
+        expect(measuredBeforePublish).toBe(true);
+        expect(prisma.order.updateMany.mock.calls[0][0].data).toMatchObject({ exchangeDistanceKm: 686 });
+        expect(prisma.order.update).not.toHaveBeenCalled();
     });
 
     it('без цены (P4): на бирже договорная, исполнители предложат свою', async () => {
