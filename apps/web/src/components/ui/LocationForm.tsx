@@ -155,9 +155,10 @@ export default function LocationForm({
             if (defaultCompanyId) {
                 form.setFieldsValue({ companyId: defaultCompanyId });
             }
-            form.setFieldsValue({ bindingType: 'none' });
+            // Адрес из заявки — за заказчиком (владелец, 29.10.2026).
+            form.setFieldsValue({ bindingType: customerCompany?.id ? 'customer' : 'none' });
         }
-    }, [editingLocation, defaultCompanyId]);
+    }, [editingLocation, defaultCompanyId, customerCompany?.id]);
 
     /**
      * Уходим из поля — приводим написанное в порядок.
