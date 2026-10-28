@@ -1,4 +1,4 @@
-import { composeAddress, coordinateFields, numberOrNull, tidyAddressPart } from './locations.service';
+import { LocationsService, composeAddress, coordinateFields, numberOrNull, tidyAddressPart } from './locations.service';
 
 /**
  * Адрес без координат.
@@ -144,5 +144,30 @@ describe('Порядок в частях адреса', () => {
         // Так адрес приходит из быстрого ввода прямо в заявке.
         expect(composeAddress('г. Астана, ул. Бруно, 10', { city: 'Астана' }))
             .toBe('г. Астана, ул. Бруно, 10');
+    });
+});
+
+/**
+ * Адреса заказчика (владелец, 29.10.2026): при выбранном заказчике в заявке
+ * видны только адреса, которые уже были в его заявках, — чужие не попадают.
+ */
+describe('Адреса из заявок заказчика', () => {
+    function build(points: { locationId: string | null }[]) {
+        const prisma: any = { orderRoutePoint: { findMany: jest.fn().mockResolvedValue(points) } };
+        return { service: new LocationsService(prisma, {} as any), prisma };
+    }
+
+    it('берутся только заявки этого заказчика, где участвует сама компания; свежие первыми, без повторов', async () => {
+        const { service, prisma } = build([{ locationId: 'a' }, { locationId: 'b' }, { locationId: 'a' }, { locationId: null }, { locationId: 'c' }]);
+        expect(await service.recentIds('мы', 500, 'заказчик')).toEqual(['a', 'b', 'c']);
+        const where = prisma.orderRoutePoint.findMany.mock.calls[0][0].where.order;
+        expect(where.customerCompanyId).toBe('заказчик');
+        expect(where.OR).toEqual(expect.arrayContaining([{ forwarderId: 'мы' }, { customerCompanyId: 'мы' }]));
+    });
+
+    it('без заказчика — прежние «Недавние»: восемь адресов из любых заявок компании', async () => {
+        const { service, prisma } = build(Array.from({ length: 12 }, (_, i) => ({ locationId: `l${i}` })));
+        expect(await service.recentIds('мы')).toHaveLength(8);
+        expect(prisma.orderRoutePoint.findMany.mock.calls[0][0].where.order.customerCompanyId).toBeUndefined();
     });
 });

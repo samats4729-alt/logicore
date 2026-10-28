@@ -43,9 +43,25 @@ test('мастер заявки доходит до груза и показыв
         // На стенде с наполненными складами заказчика тест кликал в фильтр,
         // окно оставалось открытым, и падение выглядело как поломка окна.
         const option = окноАдреса.locator('[data-address-option]').first();
-        await expect(option).toBeVisible();
-        await option.click();
-        await expect(окноАдреса).toBeHidden();
+        // При выбранном заказчике в окне только его адреса (владелец,
+        // 29.10.2026). У заказчика без заявок их нет — заводим новый: он
+        // привязывается к заказчику и сразу встаёт в точку маршрута.
+        await expect(option.or(окноАдреса.getByText(/У заказчика пока нет адресов/))).toBeVisible();
+        if (await option.count()) {
+            await option.click();
+            await expect(окноАдреса).toBeHidden();
+            continue;
+        }
+        await окноАдреса.getByRole('button', { name: 'Добавить новый адрес' }).click();
+        const форма = page.getByRole('dialog').filter({ hasText: 'Новый адрес' });
+        await expect(форма).toBeVisible();
+        await expect(форма.getByRole('radio', { name: /Заказчика:/ })).toBeChecked();
+        await форма.getByLabel('Название точки', { exact: true }).fill(`E2E склад заказчика ${Date.now()}`);
+        await форма.getByLabel('Город или посёлок', { exact: true }).fill('Алматы');
+        await форма.getByLabel('Улица', { exact: true }).fill('Абая');
+        await форма.getByLabel('Дом', { exact: true }).fill(String(i + 1));
+        await page.getByRole('button', { name: 'Сохранить адрес' }).click();
+        await expect(форма).toBeHidden({ timeout: 15_000 });
     }
 
     await page.getByRole('button', { name: /Далее/ }).first().click();

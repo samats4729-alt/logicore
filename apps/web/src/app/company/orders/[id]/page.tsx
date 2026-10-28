@@ -31,6 +31,7 @@ const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
 import { заменаНаРейсе, type ЗаменаНаРейсе } from '@/lib/driver-pool';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
+import { customerAddressGroups, useCustomerAddressIds } from '@/lib/customer-addresses';
 import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
 import PillTabs from '@/components/ui/PillTabs';
@@ -267,6 +268,8 @@ export default function OrderDetailPage() {
     const [cargoState, setCargoState] = useState<CargoState>(EMPTY_CARGO);
     const [selectedCustomer, setSelectedCustomer] = useState<string>('');
     const [selectedCarrier, setSelectedCarrier] = useState<string>('');
+    /** Адреса из заявок заказчика — при правке маршрута только его адреса (владелец, 29.10.2026). */
+    const customerAddressIds = useCustomerAddressIds(selectedCustomer === MY_COMPANY_VALUE ? user?.companyId : selectedCustomer || null);
     const [myCompanyName, setMyCompanyName] = useState('');
     const [routePointsState, setRoutePointsState] = useState<Array<LocationState & { pointType: string }>>([]);
 
@@ -589,6 +592,15 @@ export default function OrderDetailPage() {
         const customerCompanyId = selectedCustomer === MY_COMPANY_VALUE ? user?.companyId : selectedCustomer;
         const carrierCompanyId = selectedCarrier === MY_COMPANY_VALUE ? user?.companyId : 
             (selectedCarrier === MARKETPLACE_VALUE || !selectedCarrier) ? undefined : selectedCarrier;
+        if (customerCompanyId) {
+            const nameOf = (value: string, fallback: string) => value === MY_COMPANY_VALUE ? myCompanyName : partners.find(p => p.id === value)?.name || fallback;
+            return customerAddressGroups(
+                locations,
+                { id: customerCompanyId, name: nameOf(selectedCustomer, 'Заказчик') },
+                customerAddressIds ?? [],
+                carrierCompanyId ? { id: carrierCompanyId, name: nameOf(selectedCarrier, 'Перевозчик') } : null,
+            );
+        }
 
         const customerLocs = locations.filter(l => customerCompanyId && (l as any).companyId === customerCompanyId);
         const carrierLocs = locations.filter(l => carrierCompanyId && (l as any).companyId === carrierCompanyId);

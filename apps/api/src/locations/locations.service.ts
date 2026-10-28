@@ -249,8 +249,13 @@ export class LocationsService {
      * чаще всего грузит там же, где на прошлой неделе. Только идентификаторы:
      * сами адреса окно уже получило общим списком, и видно из них ровно то,
      * что компании и так открыто.
+     *
+     * С заказчиком — адреса, которые уже были в заявках этого заказчика
+     * (владелец, 29.10.2026: «при выборе заказчика — только адреса, которые
+     * уже использовались с ним, чужие не попадают»). Заявки — только те, где
+     * участвует сама компания: чужие рейсы заказчика сюда не попадут.
      */
-    async recentIds(companyId: string, limit = 8): Promise<string[]> {
+    async recentIds(companyId: string, limit = 8, customerCompanyId?: string): Promise<string[]> {
         const points = await this.prisma.orderRoutePoint.findMany({
             where: {
                 order: {
@@ -260,11 +265,12 @@ export class LocationsService {
                         { partnerId: companyId },
                         { subForwarderId: companyId },
                     ],
+                    ...(customerCompanyId ? { customerCompanyId } : {}),
                 },
             },
             orderBy: { order: { createdAt: 'desc' } },
             select: { locationId: true },
-            take: 200,
+            take: customerCompanyId ? 2000 : 200,
         });
         const ids: string[] = [];
         for (const p of points) {
