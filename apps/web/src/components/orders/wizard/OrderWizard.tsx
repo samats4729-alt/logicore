@@ -45,7 +45,7 @@ import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEma
 import { moneyShort } from '@/lib/money-format';
 import { AddressCombo, адресСтрокой } from '@/components/orders/new-order/AddressCombo';
 import { BodySection, fmtT } from '@/components/orders/new-order/BodySection';
-import { PackagingField, SpecialConditions } from '@/components/orders/new-order/CargoExtras';
+import { PackagingField, PlacesAndSize, SpecialConditions } from '@/components/orders/new-order/CargoExtras';
 import { Header } from '@/components/orders/new-order/Header';
 import { InlineCombo } from '@/components/orders/new-order/InlineCombo';
 import { Summary, SubmitBlock, type SummaryItem, type SummaryStatus } from '@/components/orders/new-order/Summary';
@@ -1343,6 +1343,26 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
         });
     };
 
+    /**
+     * Передумал с водителем — назначит позже. Данные водителя из формы
+     * убираем; госномера — только если их подставила его карточка: вписанные
+     * руками или взятые из автопарка остаются.
+     */
+    const убратьВодителя = () => {
+        const d = drivers.find((x) => x.id === selectedDriverId);
+        const сброс: Record<string, unknown> = {
+            driverId: undefined,
+            lastName: '', firstName: '', middleName: '', phone: '', iin: '',
+            vehicleType: undefined, vehicleModel: '',
+            docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: '',
+        };
+        if (d && (form.getFieldValue('vehiclePlate') || '') === (d.vehiclePlate || '')) сброс.vehiclePlate = '';
+        if (d && (form.getFieldValue('trailerNumber') || '') === (d.trailerNumber || '')) сброс.trailerNumber = '';
+        setSelectedDriverId('');
+        setАнкетаОткрыта(false);
+        form.setFieldsValue(сброс);
+    };
+
     const выбратьПеревозчика = (val: string) => {
         setSelectedCarrier(val);
         setSelectedDriverId('');
@@ -1447,10 +1467,16 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     const ставкаЗаказчика = Number(watchedCustomerPrice) || 0;
     const ставкаПеревозчику = Number(searchingOnExchange ? watchedExchangePrice : watchedDriverCost) || 0;
     const главнаяСтавка = showCustomerPriceField ? ставкаЗаказчика : ставкаПеревозчику;
-    const маржа = showCustomerPriceField && ставкаЗаказчика > 0 && ставкаПеревозчику > 0 && (watchedCurrency || 'KZT') === (watchedDriverCurrency || 'KZT')
-        ? ставкаЗаказчика - ставкаПеревозчику : null;
+    // Маржа в сводке — та же, что в расчёте по рейсу под ставками: без НДС
+    // сторон. Две разные цифры маржи на одном экране сбивают с толку. При
+    // разных валютах её считают по курсу только там — в сводке не пишем.
+    const безНдс = (сумма: number, terms: typeof customerTerms) => (terms?.vatPayer ? сумма / (1 + Number(terms.vatRate ?? 0) / 100) : сумма);
+    const заказчикуБезНдс = безНдс(ставкаЗаказчика, customerTerms);
+    const маржа = showCustomerPriceField && showDriverCostField && !exchangeActive && ставкаЗаказчика > 0 && ставкаПеревозчику > 0
+        && (watchedCurrency || 'KZT') === (watchedDriverCurrency || 'KZT')
+        ? Math.round((заказчикуБезНдс - безНдс(ставкаПеревозчику, carrierTerms)) * 100) / 100 : null;
     const маржаТекст = маржа != null
-        ? `${маржа < 0 ? '−' : ''}${moneyShort(Math.abs(маржа))} · ${(Math.abs(маржа) / ставкаЗаказчика * 100).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} %`
+        ? `${маржа < 0 ? '−' : ''}${moneyShort(Math.abs(маржа))} · ${маржа < 0 ? '−' : ''}${Math.abs(Math.round(маржа / заказчикуБезНдс * 100))} %`
         : null;
     const первая = routePointsState.find((p) => p.pointType === 'PICKUP');
     const последняя = [...routePointsState].reverse().find((p) => p.pointType === 'DELIVERY');
@@ -2074,6 +2100,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     </Field>
                 </div>
                 <PackagingField cargo={cargo} onCargo={setCargo} />
+                <PlacesAndSize cargo={cargo} onCargo={setCargo} onShowDims={setShowDims} />
             </section>
 
             {/* ===== Кузов и загрузка ===== */}
@@ -2154,6 +2181,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                                 directoryLabel={(q) => (q ? `Не нашли «${q}» — открыть базу водителей` : (api.count ? `Открыть базу водителей · ${api.count} ${склон(api.count, 'водитель', 'водителя', 'водителей')}` : 'Открыть базу водителей'))}
                                                 onOpenDirectory={api.open}
                                                 onSelect={(v) => { form.setFieldValue('driverId', v); handleDriverSelect(v); setАнкетаОткрыта(false); }}
+                                                onClear={убратьВодителя}
+                                                clearLabel="Убрать водителя — назначить позже"
                                             />
                                         )}
                                     />
@@ -2189,7 +2218,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
             {/* ===== Особые условия ===== */}
             <section id="no-sec-extra" data-section="extra" className={s.section} aria-labelledby="no-h-extra">
                 <SectionHead id="no-h-extra" title="Особые условия" optional />
-                <SpecialConditions cargo={cargo} onCargo={setCargo} showDims={showDims} onShowDims={setShowDims} />
+                <SpecialConditions cargo={cargo} onCargo={setCargo} />
             </section>
         </Form>
     );

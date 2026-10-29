@@ -249,7 +249,8 @@ test.describe('Журнал заявок', () => {
             .filter({ has: page.locator('#no-customer-price') })
             .locator('.ant-select-selector').click();
         await page.keyboard.type('RUB');
-        await page.keyboard.press('Enter');
+        // Список валют приходит с сервера — ждём строку, а не жмём Enter вслепую.
+        await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: 'RUB' }).first().click();
         // Перевозчику — 40% рублёвой ставки в тенге. «1000 − 2000» без курса
         // был бы убыток, по курсу — маржа даже за вычетом НДС.
         const вТенге = Math.round(1000 * Number(рубль.rate) * 0.4);

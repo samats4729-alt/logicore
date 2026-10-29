@@ -107,19 +107,6 @@ export function PackagingField({ cargo, onCargo }: { cargo: CargoState; onCargo:
                             <Plus className="size-3.5" /> Ещё вид паллет
                         </button>
                         {pallets.length > 1 && <span className={s.hint}>Всего {totalPallets(pallets)} шт</span>}
-                        <span className="flex items-center gap-2">
-                            <span className={s.hint}>Грузовых мест</span>
-                            <span className={s.smallBox}>
-                                <input
-                                    aria-label="Грузовых мест"
-                                    className={s.smallInput}
-                                    inputMode="numeric"
-                                    placeholder="0"
-                                    value={cargo.placesCount ?? ''}
-                                    onChange={(e) => onCargo({ ...cargo, placesCount: num(e.target.value) })}
-                                />
-                            </span>
-                        </span>
                     </div>
                 </div>
             )}
@@ -127,40 +114,84 @@ export function PackagingField({ cargo, onCargo }: { cargo: CargoState; onCargo:
     );
 }
 
-type ExtraKey = 'value' | 'dims' | 'desc' | 'note';
+/**
+ * Места и габариты — для любого груза, не только для паллет: коробок,
+ * мешков, бочек тоже бывает сколько-то мест, и машину под них подбирают по
+ * длине и высоте. Поля те же, что были: `placesCount` и габариты заявки в
+ * метрах (`cargoLength` × `cargoWidth` × `cargoHeight`).
+ */
+export function PlacesAndSize({ cargo, onCargo, onShowDims }: {
+    cargo: CargoState;
+    onCargo: (next: CargoState) => void;
+    onShowDims: (on: boolean) => void;
+}) {
+    // Габариты уходят в заявку, только когда их вписали (как раньше по галочке).
+    const dim = () => onShowDims(true);
+    return (
+        <div className={s.gridPlaces}>
+            <div className={s.field}>
+                <label htmlFor="no-places" className={s.label}>Грузовых мест</label>
+                <InputNumber<number>
+                    id="no-places"
+                    min={0}
+                    precision={0}
+                    placeholder="0"
+                    suffix="шт"
+                    value={cargo.placesCount ?? null}
+                    onChange={(v) => onCargo({ ...cargo, placesCount: v == null ? undefined : Number(v) })}
+                />
+            </div>
+            <div className={s.field}>
+                <label htmlFor="no-dims" className={s.label}>
+                    Габариты груза <span className={s.labelNote}>· длина × ширина × высота, м</span>
+                </label>
+                <div className={s.dimsRow}>
+                    <Form.Item name="cargoLength" noStyle>
+                        <InputNumber id="no-dims" min={0} step={0.1} decimalSeparator="," placeholder="Длина" aria-label="Длина, м" onChange={dim} />
+                    </Form.Item>
+                    <span className={s.suffix}>×</span>
+                    <Form.Item name="cargoWidth" noStyle>
+                        <InputNumber min={0} step={0.1} decimalSeparator="," placeholder="Ширина" aria-label="Ширина, м" onChange={dim} />
+                    </Form.Item>
+                    <span className={s.suffix}>×</span>
+                    <Form.Item name="cargoHeight" noStyle>
+                        <InputNumber min={0} step={0.1} decimalSeparator="," placeholder="Высота" aria-label="Высота, м" onChange={dim} />
+                    </Form.Item>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+type ExtraKey = 'value' | 'desc' | 'note';
 
 /**
  * «Особые условия» (ТЗ, §5.7): переключатели и поля, которые добавляют
  * по ссылке «+ …». Поля формы заявки — те же, что были (`cargoLength`,
  * `cargoDescription`, `requirements`…); заполненное показывается сразу.
  */
-export function SpecialConditions({ cargo, onCargo, showDims, onShowDims }: {
+export function SpecialConditions({ cargo, onCargo }: {
     cargo: CargoState;
     onCargo: (next: CargoState) => void;
-    showDims: boolean;
-    onShowDims: (on: boolean) => void;
 }) {
     const form = Form.useFormInstance();
     const description = Form.useWatch('cargoDescription', { form, preserve: true });
     const requirements = Form.useWatch('requirements', { form, preserve: true });
-    const [opened, setOpened] = useState<Record<ExtraKey, boolean>>({ value: false, dims: false, desc: false, note: false });
+    const [opened, setOpened] = useState<Record<ExtraKey, boolean>>({ value: false, desc: false, note: false });
 
     const shown: Record<ExtraKey, boolean> = {
         value: opened.value || cargo.cargoValue != null,
-        dims: opened.dims || showDims,
         desc: opened.desc || !!description,
         note: opened.note || !!requirements,
     };
     const add = (k: ExtraKey) => {
         setOpened((o) => ({ ...o, [k]: true }));
-        if (k === 'dims') onShowDims(true);
         // Фокус — в добавленное поле, когда оно появится.
         requestAnimationFrame(() => document.getElementById(`no-extra-${k}`)?.focus());
     };
     const remove = (k: ExtraKey) => {
         setOpened((o) => ({ ...o, [k]: false }));
         if (k === 'value') onCargo({ ...cargo, cargoValue: undefined });
-        if (k === 'dims') { onShowDims(false); form.setFieldsValue({ cargoLength: undefined, cargoWidth: undefined, cargoHeight: undefined }); }
         if (k === 'desc') form.setFieldsValue({ cargoDescription: undefined });
         if (k === 'note') form.setFieldsValue({ requirements: undefined });
     };
@@ -175,7 +206,6 @@ export function SpecialConditions({ cargo, onCargo, showDims, onShowDims }: {
 
     const links: { k: ExtraKey; label: string }[] = [
         { k: 'value', label: 'Объявленная стоимость' },
-        { k: 'dims', label: 'Габариты' },
         { k: 'desc', label: 'Описание груза' },
         { k: 'note', label: 'Комментарий водителю' },
     ];
@@ -216,24 +246,6 @@ export function SpecialConditions({ cargo, onCargo, showDims, onShowDims }: {
                                 onChange={(v) => onCargo({ ...cargo, cargoValue: v == null || v === '' ? undefined : Number(v) })}
                                 placeholder="Сумма"
                             />
-                        </div>
-                    )}
-                    {shown.dims && (
-                        <div className={s.field}>
-                            {head('Габариты, м', 'dims')}
-                            <div className="flex items-center gap-1.5">
-                                <Form.Item name="cargoLength" noStyle>
-                                    <InputNumber id="no-extra-dims" min={0} step={0.1} placeholder="Длина" aria-label="Длина, м" />
-                                </Form.Item>
-                                <span className={s.suffix}>×</span>
-                                <Form.Item name="cargoWidth" noStyle>
-                                    <InputNumber min={0} step={0.1} placeholder="Ширина" aria-label="Ширина, м" />
-                                </Form.Item>
-                                <span className={s.suffix}>×</span>
-                                <Form.Item name="cargoHeight" noStyle>
-                                    <InputNumber min={0} step={0.1} placeholder="Высота" aria-label="Высота, м" />
-                                </Form.Item>
-                            </div>
                         </div>
                     )}
                     {shown.desc && (

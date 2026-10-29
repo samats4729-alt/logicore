@@ -67,6 +67,23 @@ test('окно заявки: стороны, маршрут и груз на о�
     await окно.getByRole('button', { name: /Ещё вид паллет/ }).click();
     await expect(окно.getByLabel('Тип паллет')).toHaveCount(2);
 
+    // Места и габариты — для любой упаковки, не только для паллет
+    // (владелец, 29.10.2026: у коробок их негде было указать).
+    await окно.getByRole('group', { name: 'Упаковка', exact: true }).getByRole('button', { name: 'Коробки' }).click();
+    await окно.locator('#no-places').fill('120');
+    await окно.getByLabel('Высота, м').fill('2,5');
+    await expect(окно.locator('#no-places')).toHaveValue('120');
+
+    // Водителя можно убрать — человек передумал и назначит позже.
+    if (await окно.locator('#no-driver').count()) {
+        await окно.locator('#no-driver').click();
+        await окно.locator('#no-driver-list').getByRole('option', { name: /Новый водитель/ }).click();
+        await expect(окно.getByLabel('Фамилия')).toBeVisible();
+        await окно.getByRole('button', { name: 'Убрать водителя — назначить позже' }).click();
+        await expect(окно.getByLabel('Фамилия')).toHaveCount(0);
+        await expect(окно.locator('#no-driver')).toContainText('Выберите водителя');
+    }
+
     // Сводка справа видит выбранное: стороны и маршрут готовы.
     await expect(окно.getByRole('navigation', { name: 'Разделы заявки' })).toBeVisible();
     await expect(окно.getByRole('heading', { name: 'Сводка' })).toBeVisible();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ChevronsUpDown, List, Loader2, Plus, Search } from 'lucide-react';
+import { ArrowRight, ChevronsUpDown, List, Loader2, Plus, Search, X } from 'lucide-react';
 import { readRecent, rememberRecent } from '@/components/pickers/ListPicker';
 import { cn } from '@/lib/utils';
 import { initials } from './ui';
@@ -62,6 +62,8 @@ export function InlineCombo({
     describedBy,
     dataGuide,
     loading,
+    onClear,
+    clearLabel,
 }: {
     id: string;
     value?: string;
@@ -87,6 +89,9 @@ export function InlineCombo({
     dataGuide?: string;
     /** Список ещё грузится: строка «Загружаем…» вместо пустоты. */
     loading?: boolean;
+    /** Необязательное поле: «×» у выбранного — передумал, оставить пустым. */
+    onClear?: () => void;
+    clearLabel?: string;
 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -146,29 +151,45 @@ export function InlineCombo({
     };
 
     if (!open) {
+        const можноУбрать = !!(onClear && value);
         return (
-            <button
-                ref={buttonRef}
-                id={id}
-                type="button"
-                className={cn(s.box, invalid && s.boxErr)}
-                onClick={() => setOpen(true)}
-                aria-describedby={describedBy}
-                aria-haspopup="listbox"
-                data-guide={dataGuide}
-                data-combo-field={id}
-            >
-                {value && valueTitle ? (
-                    <>
-                        <span className={round ? s.avatarRound : s.avatarSq}>{initials(valueTitle)}</span>
-                        <span className={s.boxText} title={valueTitle}>{valueTitle}</span>
-                        {valueSub && <span className={s.optSub}>{valueSub}</span>}
-                    </>
-                ) : (
-                    <span className={s.boxPlaceholder}>{placeholder}</span>
+            <div className={s.anchor}>
+                <button
+                    ref={buttonRef}
+                    id={id}
+                    type="button"
+                    className={cn(s.box, invalid && s.boxErr)}
+                    onClick={() => setOpen(true)}
+                    aria-describedby={describedBy}
+                    aria-haspopup="listbox"
+                    data-guide={dataGuide}
+                    data-combo-field={id}
+                >
+                    {value && valueTitle ? (
+                        <>
+                            <span className={round ? s.avatarRound : s.avatarSq}>{initials(valueTitle)}</span>
+                            <span className={s.boxText} title={valueTitle}>{valueTitle}</span>
+                            {valueSub && <span className={s.optSub}>{valueSub}</span>}
+                        </>
+                    ) : (
+                        <span className={s.boxPlaceholder}>{placeholder}</span>
+                    )}
+                    {/* Место под «×»: он лежит поверх кнопки, рядом со стрелками. */}
+                    {можноУбрать && <span className={s.boxClearSlot} aria-hidden />}
+                    <ChevronsUpDown className={cn('size-4', s.boxIcon)} aria-hidden />
+                </button>
+                {можноУбрать && (
+                    <button
+                        type="button"
+                        className={s.boxClear}
+                        aria-label={clearLabel}
+                        title={clearLabel}
+                        onClick={() => { onClear?.(); requestAnimationFrame(() => buttonRef.current?.focus()); }}
+                    >
+                        <X className="size-3.5" />
+                    </button>
                 )}
-                <ChevronsUpDown className={cn('size-4', s.boxIcon)} aria-hidden />
-            </button>
+            </div>
         );
     }
 
