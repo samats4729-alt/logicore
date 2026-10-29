@@ -44,6 +44,8 @@ import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
 import OrderOriginalsCard from '@/components/orders/OrderOriginalsCard';
+import { ParkFinanceTiles, ParkOrderCalcCard, ParkTripGivenCard, useParkOrderCalc } from '@/components/park/ParkOrderCalc';
+import { TripFuelDialog } from '@/components/park/TripFuelDialog';
 import { canAccounting } from '@/lib/permissions';
 import type { OrderSettlements } from '@/lib/settlement-terms';
 import OrderOperationModals from '@/components/orders/OrderOperationModals';
@@ -1408,6 +1410,11 @@ export default function OrderDetailPage() {
     // Биржа заявки — для вкладки «Предложения» (перечитывается, когда заявка изменилась).
     const exchangeState = useOrderExchange(orderId, data?.order?.updatedAt);
 
+    // Парк: расчёт водителя без ИП по этому рейсу и выдачи водителю (владелец, 29.10.2026).
+    const parkCalc = useParkOrderCalc(orderId, data?.order?.updatedAt);
+    const [parkFuelOpen, setParkFuelOpen] = useState(false);
+    const [parkFuelReload, setParkFuelReload] = useState(0);
+
     // =================== RENDER ===================
 
     if (loading) return <div style={{ textAlign: 'center', padding: 80 }}><Loader size="large" /></div>;
@@ -2044,18 +2051,30 @@ export default function OrderDetailPage() {
                                                 <h3 className={nova.cardTitle}>{title}</h3>
                                             </div>
                                             <div className={nova.cardBody} style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span style={{ color: 'var(--nova-fg-3)' }}>Всего с НДС</span>
-                                                    <b>{fmt(gross)} ₸</b>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span style={{ color: 'var(--nova-fg-3)' }}>Без НДС</span>
-                                                    <span>{fmt(net)} ₸</span>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span style={{ color: 'var(--nova-fg-3)' }}>НДС ({vatRate}%)</span>
-                                                    <span>{fmt(vat)} ₸</span>
-                                                </div>
+                                                {/* Без НДС — одна строка: три одинаковые суммы
+                                                    «с НДС», «без НДС» и «НДС 0 %» сбивали с толку
+                                                    (владелец, 29.10.2026). */}
+                                                {!Number(vat) && !Number(vatRate) ? (
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                        <span style={{ color: 'var(--nova-fg-3)' }}>Сумма без НДС</span>
+                                                        <b>{fmt(gross)} ₸</b>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--nova-fg-3)' }}>Всего с НДС</span>
+                                                            <b>{fmt(gross)} ₸</b>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--nova-fg-3)' }}>Без НДС</span>
+                                                            <span>{fmt(net)} ₸</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--nova-fg-3)' }}>НДС ({vatRate}%)</span>
+                                                            <span>{fmt(vat)} ₸</span>
+                                                        </div>
+                                                    </>
+                                                )}
                                                 {/* Красным — только непогашенный остаток. Ноль долга
                                                     красить не за что: это как раз хорошая новость. */}
                                                 <div style={{
@@ -2129,6 +2148,12 @@ export default function OrderDetailPage() {
                                             {/* У экспедитора показателей пять, у заказчика
                                                 четыре — сетка под своё число, чтобы маржа не
                                                 висела одна во второй строке. */}
+                                            {/* Парк везёт своим водителем: вместо «ставки
+                                                исполнителю» и «маржи» — топливо, на руки,
+                                                налоги по ГПХ и что остаётся парку. */}
+                                            {parkCalc?.calc ? (
+                                                <ParkFinanceTiles data={parkCalc} customerGross={customerGross} customerPaid={!!order.isCustomerPaid} />
+                                            ) : (
                                             <div className={`${nova.tiles}${isClient ? '' : ` ${nova.tiles5}`}`}>
                                                 {isClient ? (
                                                     <>
@@ -2175,16 +2200,43 @@ export default function OrderDetailPage() {
                                                     </>
                                                 )}
                                             </div>
+                                            )}
+                                            {parkCalc && (
+                                                <ParkOrderCalcCard
+                                                    data={parkCalc}
+                                                    onOpenFuel={parkCalc.source === 'TRIP' ? () => setParkFuelOpen(true) : undefined}
+                                                />
+                                            )}
                                             <div className={nova.duo}>
-                                                {isClient ? (
+                                                {/* Расчёт парка приходит только экспедитору или
+                                                    перевозчику рейса — даже если заказчиком в
+                                                    заявке стоит сам парк. */}
+                                                {isClient && !parkCalc ? (
                                                     <Breakdown title="Расчёты с экспедитором" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
                                                 ) : (
                                                     <>
                                                         <Breakdown title="Расчёты с заказчиком" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
-                                                        <Breakdown title="Расчёты с исполнителем" gross={executorGross} net={summary.executorCostNet || 0} vat={summary.executorCostVat || 0} vatRate={order.executorVatRate || 0} debt={executorDebt || 0} />
+                                                        {/* У парка исполнитель — свой водитель: вместо пустых
+                                                            «расчётов с исполнителем» — что ему уже выдали. */}
+                                                        {parkCalc ? (
+                                                            parkCalc.source === 'TRIP' && (
+                                                                <ParkTripGivenCard orderId={orderId} reloadKey={parkFuelReload} onOpen={() => setParkFuelOpen(true)} />
+                                                            )
+                                                        ) : (
+                                                            <Breakdown title="Расчёты с исполнителем" gross={executorGross} net={summary.executorCostNet || 0} vat={summary.executorCostVat || 0} vatRate={order.executorVatRate || 0} debt={executorDebt || 0} />
+                                                        )}
                                                     </>
                                                 )}
                                             </div>
+                                            {parkCalc?.source === 'TRIP' && (
+                                                <TripFuelDialog
+                                                    orderId={orderId}
+                                                    orderNumber={order.orderNumber}
+                                                    open={parkFuelOpen}
+                                                    onOpenChange={setParkFuelOpen}
+                                                    onChanged={() => setParkFuelReload((n) => n + 1)}
+                                                />
+                                            )}
                                         </div>
                                     );
                                 })()}
@@ -2335,6 +2387,7 @@ export default function OrderDetailPage() {
                         openAssignModal={openAssignModal}
                         openTransferModal={openTransferModal}
                         onOpenDocuments={() => setActiveTab('documents')}
+                        parkCalc={parkCalc}
                     />
                 </aside>
             )}
