@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Form } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import LocationForm from './LocationForm';
@@ -14,6 +14,8 @@ interface QuickCreateLocationModalProps {
     defaultCompanyId?: string;
     customerCompany?: { id: string; name: string };
     carrierCompany?: { id: string; name: string };
+    /** Что уже набрали в поиске адреса — подставить названием. */
+    initialName?: string;
 }
 
 export default function QuickCreateLocationModal({
@@ -22,10 +24,19 @@ export default function QuickCreateLocationModal({
     onSuccess,
     defaultCompanyId,
     customerCompany,
-    carrierCompany
+    carrierCompany,
+    initialName,
 }: QuickCreateLocationModalProps) {
     const [form] = Form.useForm();
     const [submitting, setSubmitting] = useState(false);
+
+    // Набранное в поиске — сразу в название: форма при открытии сбрасывает
+    // поля, поэтому подставляем после неё.
+    useEffect(() => {
+        if (!open || !initialName) return;
+        const t = window.setTimeout(() => form.setFieldsValue({ name: initialName }), 0);
+        return () => window.clearTimeout(t);
+    }, [open, initialName, form]);
 
     const handleSubmit = async (values: any) => {
         setSubmitting(true);

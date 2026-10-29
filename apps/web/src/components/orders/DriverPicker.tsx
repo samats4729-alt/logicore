@@ -29,6 +29,7 @@ export function DriverPicker({
     loading,
     value,
     onChange,
+    renderField,
 }: {
     id?: string;
     drivers: PoolDriver[];
@@ -39,8 +40,11 @@ export function DriverPicker({
     loading?: boolean;
     value?: string;
     onChange?: (value: string) => void;
+    /** Своё поле вместо кнопки (окно «Новая заявка», 29.10.2026); это окно — справочник. */
+    renderField?: (api: { open: (query?: string) => void; groups: PickerGroup[]; count: number }) => React.ReactNode;
 }) {
     const [open, setOpen] = useState(false);
+    const [initialQuery, setInitialQuery] = useState<string | undefined>();
 
     const { groups, byId } = useMemo(() => {
         const пункт = (в: PoolDriver): PickerItem => ({
@@ -75,16 +79,23 @@ export function DriverPicker({
 
     return (
         <>
-            <PickerField
-                id={id}
-                label="Водитель"
-                placeholder={loading && !drivers.length ? 'Загружаем базу водителей…' : 'Выберите водителя из базы'}
-                value={подпись}
-                onOpen={() => setOpen(true)}
-            />
+            {renderField ? renderField({
+                open: (q) => { setInitialQuery(q || undefined); setOpen(true); },
+                groups,
+                count: drivers.length,
+            }) : (
+                <PickerField
+                    id={id}
+                    label="Водитель"
+                    placeholder={loading && !drivers.length ? 'Загружаем базу водителей…' : 'Выберите водителя из базы'}
+                    value={подпись}
+                    onOpen={() => { setInitialQuery(undefined); setOpen(true); }}
+                />
+            )}
             <ListPicker
                 open={open}
                 onOpenChange={setOpen}
+                initialQuery={initialQuery}
                 title="Водитель"
                 description="Вся база компании: сверху — кто уже ездил за этого перевозчика"
                 searchPlaceholder="Фамилия, телефон или госномер"

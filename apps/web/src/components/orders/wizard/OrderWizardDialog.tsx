@@ -22,11 +22,13 @@ export interface WizardRequest {
  * Design, их списки и календари рисуются поверх страницы, вне окна, — в
  * запертой странице они бы не нажимались.
  */
-export function OrderWizardDialog({ request, onClose, onCreated, onSaved }: {
+export function OrderWizardDialog({ request, onClose, onCreated, onSaved, onRefresh }: {
     request: WizardRequest | null;
     onClose: () => void;
     onCreated: () => void;
     onSaved: (orderId: string) => void;
+    /** Заявка создана, окно ещё открыто — обновить журнал. */
+    onRefresh?: () => void;
 }) {
     // Сброс: тот же запрос, но мастер собирается заново — с пустой формой.
     const [restart, setRestart] = useState(0);
@@ -35,8 +37,14 @@ export function OrderWizardDialog({ request, onClose, onCreated, onSaved }: {
             open={!!request}
             onOpenChange={(open) => { if (!open) onClose(); }}
             modal={false}
-            width="min(820px, calc(100vw - 32px))"
-            height="min(880px, calc(100svh - 32px))"
+            // Размер — из макета окна «Новая заявка» (ТЗ, §3): 1240 × 940.
+            width="min(1240px, calc(100vw - 32px))"
+            height="min(940px, calc(100svh - 32px))"
+            // Esc в раскрытой выпадашке окна (заказчик, адрес, меню шапки)
+            // закрывает выпадашку, а не окно с набранной заявкой.
+            onEscapeKeyDown={(e) => {
+                if (document.querySelector('[data-order-wizard] [role="listbox"], [data-order-wizard] [role="menu"]')) e.preventDefault();
+            }}
             data-order-wizard-dialog
         >
             {request && (
@@ -49,6 +57,7 @@ export function OrderWizardDialog({ request, onClose, onCreated, onSaved }: {
                     onCreated={onCreated}
                     onSaved={onSaved}
                     onRestart={() => setRestart((n) => n + 1)}
+                    onRefresh={onRefresh}
                 />
             )}
         </FocusDialog>

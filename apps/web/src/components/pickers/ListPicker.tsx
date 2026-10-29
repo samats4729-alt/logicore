@@ -45,7 +45,7 @@ const RECENT = 5;
 
 const recentStorageKey = (key: string) => `lc:picker-recent:v1:${key}`;
 
-function readRecent(key?: string): string[] {
+export function readRecent(key?: string): string[] {
     if (!key) return [];
     try {
         const raw = localStorage.getItem(recentStorageKey(key));
@@ -56,7 +56,7 @@ function readRecent(key?: string): string[] {
     }
 }
 
-function rememberRecent(key: string | undefined, id: string) {
+export function rememberRecent(key: string | undefined, id: string) {
     if (!key) return;
     try {
         const next = [id, ...readRecent(key).filter((v) => v !== id)].slice(0, 20);
@@ -96,6 +96,7 @@ export function ListPicker({
     recentKey,
     footer,
     emptyText = 'Ничего не нашлось. Проверьте поиск и фильтры.',
+    initialQuery,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -113,6 +114,8 @@ export function ListPicker({
     /** Внизу окна: «Добавить контрагента», «Добавить нового водителя». */
     footer?: React.ReactNode;
     emptyText?: string;
+    /** С чего начать поиск: то, что уже набрали в поле заявки (окно «Новая заявка», 29.10.2026). */
+    initialQuery?: string;
 }) {
     const [query, setQuery] = useState('');
     const [active, setActive] = useState<Record<number, string | null>>({});
@@ -123,7 +126,7 @@ export function ListPicker({
     // Каждое открытие — с чистого поиска и свежих «недавних».
     useEffect(() => {
         if (!open) return;
-        setQuery('');
+        setQuery(initialQuery ?? '');
         setActive({});
         setCursor(0);
         setRecentIds(readRecent(recentKey));

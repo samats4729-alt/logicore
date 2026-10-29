@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, pickFromList } from './helpers';
+import { login, pickInCombo } from './helpers';
 
 /**
  * Пути, по которым в компании ходят каждый день. Ломается любой — работа
@@ -11,48 +11,40 @@ test('вход в кабинет работает', async ({ page }) => {
     await expect(page.getByText('Создать заявку').first()).toBeVisible();
 });
 
-test('мастер заявки доходит до груза и показывает состав', async ({ page }) => {
+test('окно заявки: стороны, маршрут и груз на одной странице', async ({ page }) => {
     await login(page);
     await page.goto('/company/orders/create');
+    const окно = page.locator('[data-order-wizard]');
+    await expect(окно.getByRole('heading', { name: 'Новая заявка' })).toBeVisible();
+    // Остался черновик с прошлого прогона — начинаем с чистой формы.
+    const черновик = окно.getByTestId('order-draft-restored');
+    if (await черновик.isVisible()) await черновик.getByRole('button', { name: 'Начать заново' }).click();
 
-    // Шаг 1: без сторон сделки дальше не пускает.
-    await pickFromList(page, 'Выберите заказчика', 1);
-    await pickFromList(page, 'Выберите перевозчика', 1);
-    await page.getByRole('button', { name: /Далее/ }).first().click();
+    // Стороны: выпадашка под полем, строка 1 — первый контрагент после своей компании.
+    expect(await pickInCombo(page, 'no-customer', 1)).toBe(true);
+    expect(await pickInCombo(page, 'no-carrier', 1)).toBe(true);
 
-    // Шаг 2: маршрут. Дата погрузки обязательна — без неё шага «Груз» не будет.
-    await expect(page.getByText('Точки маршрута')).toBeVisible();
-    // Именно #pickupDate: шаги мастера отрисованы все сразу, и общий
-    // селектор ловит скрытое поле оплаты с первого шага.
-    await page.locator('#pickupDate').click();
+    // Дата погрузки — в строке первой точки, календарь прежний.
+    await page.locator('#no-pickup-date').click();
     await page.locator('.ant-picker-cell-today').first().click();
-    // Кнопка подтверждения времени живёт в своём контейнере antd.
     await page.locator('.ant-picker-ok button').first().click();
 
-    // Без адресов погрузки и выгрузки шаг не пропускает.
-    // После выбора подпись кнопки меняется на адрес, поэтому каждый раз
-    // берём первую ещё не заполненную.
+    // Адреса — выпадашкой в строке точки. При выбранном заказчике в ней только
+    // его адреса (владелец, 29.10.2026). У заказчика без заявок их нет —
+    // заводим новый пунктом «Новый адрес»: он привязывается к заказчику и
+    // сразу встаёт в точку маршрута.
     for (let i = 0; i < 2; i++) {
-        await page.getByRole('button', { name: /Выберите адрес или склад/ }).first().click();
-        // Адрес выбирается в отдельном окне с поиском и фильтрами — поверх
-        // окна мастера, поэтому целимся в него по названию.
-        const окноАдреса = page.getByRole('dialog', { name: 'Адрес точки маршрута' });
-        await expect(окноАдреса).toBeVisible();
-        // Целимся в строку адреса, а не «в кнопку с подходящим словом»: в окне
-        // есть фильтры по группе и городу, и их подписи содержат те же слова.
-        // На стенде с наполненными складами заказчика тест кликал в фильтр,
-        // окно оставалось открытым, и падение выглядело как поломка окна.
-        const option = окноАдреса.locator('[data-address-option]').first();
-        // При выбранном заказчике в окне только его адреса (владелец,
-        // 29.10.2026). У заказчика без заявок их нет — заводим новый: он
-        // привязывается к заказчику и сразу встаёт в точку маршрута.
-        await expect(option.or(окноАдреса.getByText(/У заказчика пока нет адресов/))).toBeVisible();
-        if (await option.count()) {
-            await option.click();
-            await expect(окноАдреса).toBeHidden();
+        await page.locator(`#no-point-${i}`).click();
+        const список = page.locator(`#no-point-${i}-list`);
+        await expect(список).toBeVisible();
+        const адрес = список.locator('[data-address-option]').first();
+        await expect(адрес.or(список.getByText(/пока нет адресов|Адресов пока нет/))).toBeVisible();
+        if (await адрес.count()) {
+            await адрес.click();
+            await expect(список).toHaveCount(0);
             continue;
         }
-        await окноАдреса.getByRole('button', { name: 'Добавить новый адрес' }).click();
+        await список.getByRole('option', { name: /Новый адрес/ }).click();
         const форма = page.getByRole('dialog').filter({ hasText: 'Новый адрес' });
         await expect(форма).toBeVisible();
         await expect(форма.getByRole('radio', { name: /Заказчика:/ })).toBeChecked();
@@ -62,22 +54,39 @@ test('мастер заявки доходит до груза и показыв
         await форма.getByLabel('Дом', { exact: true }).fill(String(i + 1));
         await page.getByRole('button', { name: 'Сохранить адрес' }).click();
         await expect(форма).toBeHidden({ timeout: 15_000 });
+        await expect(page.locator(`#no-point-${i}`)).not.toContainText('Склад, город или улица');
     }
 
-    await page.getByRole('button', { name: /Далее/ }).first().click();
-
-    // Шаг 3: состав груза. Это то, чего в интерфейсе не было и что легко
-    // потерять при следующей правке формы.
-    await expect(page.getByText('Паллеты и места')).toBeVisible();
-    await expect(page.getByText('Способ погрузки')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Боковая' })).toBeVisible();
-    await expect(page.getByText('Упаковка')).toBeVisible();
+    // Состав груза и кузов — то, что легко потерять при следующей правке окна.
+    await expect(окно.getByRole('group', { name: 'Упаковка', exact: true })).toBeVisible();
+    await expect(окно.getByRole('button', { name: /^Боковая/ })).toBeVisible();
 
     // Комбинация паллет — ради неё задача и делалась.
-    await page.getByRole('button', { name: /Добавить вид паллет/ }).click();
-    // Видимый список вида паллет: у выбора «Тип оплаты» на шаге 1 есть
-    // скрытый служебный <select>, и «первый select на странице» — это он.
-    await expect(page.locator('select:not([aria-hidden="true"])').first()).toBeVisible();
+    await окно.getByRole('group', { name: 'Упаковка', exact: true }).getByRole('button', { name: /Паллет/ }).click();
+    await expect(окно.getByLabel('Тип паллет')).toHaveCount(1);
+    await окно.getByRole('button', { name: /Ещё вид паллет/ }).click();
+    await expect(окно.getByLabel('Тип паллет')).toHaveCount(2);
+
+    // Места и габариты — для любой упаковки, не только для паллет
+    // (владелец, 29.10.2026: у коробок их негде было указать).
+    await окно.getByRole('group', { name: 'Упаковка', exact: true }).getByRole('button', { name: 'Коробки' }).click();
+    await окно.locator('#no-places').fill('120');
+    await окно.getByLabel('Высота, м').fill('2,5');
+    await expect(окно.locator('#no-places')).toHaveValue('120');
+
+    // Водителя можно убрать — человек передумал и назначит позже.
+    if (await окно.locator('#no-driver').count()) {
+        await окно.locator('#no-driver').click();
+        await окно.locator('#no-driver-list').getByRole('option', { name: /Новый водитель/ }).click();
+        await expect(окно.getByLabel('Фамилия')).toBeVisible();
+        await окно.getByRole('button', { name: 'Убрать водителя — назначить позже' }).click();
+        await expect(окно.getByLabel('Фамилия')).toHaveCount(0);
+        await expect(окно.locator('#no-driver')).toContainText('Выберите водителя');
+    }
+
+    // Сводка справа видит выбранное: стороны и маршрут готовы.
+    await expect(окно.getByRole('navigation', { name: 'Разделы заявки' })).toBeVisible();
+    await expect(окно.getByRole('heading', { name: 'Сводка' })).toBeVisible();
 });
 
 test('список заявок открывается', async ({ page }) => {

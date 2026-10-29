@@ -3784,3 +3784,10 @@ a.mapboxgl-ctrl-logo,
         height: 28px;
     }
 }
+
+/* Окно «Новая заявка» (29.10.2026): кнопка «Создать заявку» — в правом
+   нижнем углу окна, там же, где всплывают уведомления. Пока окно открыто,
+   уведомления поднимаются над ней, а не закрывают её. */
+body:has([data-order-wizard]) [data-sonner-toaster][data-y-position='bottom'] {
+    bottom: calc(var(--offset-bottom) + 96px) !important;
+}

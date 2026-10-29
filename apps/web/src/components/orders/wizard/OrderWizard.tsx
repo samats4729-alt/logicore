@@ -1,18 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import dayjs from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import { Form, InputNumber, Modal, AutoComplete } from 'antd';
-import { ArrowLeft, ArrowRight, Check, CircleAlert, CircleCheck, Info, Loader2, Plus, RotateCcw, X } from 'lucide-react';
+import { Check, ChevronsUpDown, CircleAlert, CircleCheck, Globe, Info, Plus, Trash2, Users } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DialogClose, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input as UiInput } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { FormSelect } from './FormSelect';
-import styles from './OrderWizard.module.css';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { MarginPreview } from '@/components/orders/MarginSummary';
 import { TransportNumbers } from '@/components/orders/TransportNumbers';
@@ -46,8 +42,15 @@ interface Partner {
 }
 
 import { RoutePointEmails, parseEmails } from '@/components/orders/RoutePointEmails';
-import { CargoComposition } from '@/components/orders/CargoComposition';
-import { AddressPicker } from '@/components/orders/AddressPicker';
+import { moneyShort } from '@/lib/money-format';
+import { AddressCombo, адресСтрокой } from '@/components/orders/new-order/AddressCombo';
+import { BodySection, fmtT } from '@/components/orders/new-order/BodySection';
+import { PackagingField, PlacesAndSize, SpecialConditions } from '@/components/orders/new-order/CargoExtras';
+import { Header } from '@/components/orders/new-order/Header';
+import { InlineCombo } from '@/components/orders/new-order/InlineCombo';
+import { Summary, SubmitBlock, type SummaryItem, type SummaryStatus } from '@/components/orders/new-order/Summary';
+import { Field, FieldError, SectionHead, Segmented } from '@/components/orders/new-order/ui';
+import s from '@/components/orders/new-order/new-order.module.css';
 import { customerAddressGroups, useCustomerAddressIds } from '@/lib/customer-addresses';
 import { cn } from '@/lib/utils';
 import { EMPTY_CARGO, totalPallets, type CargoState } from '@/lib/cargo';
@@ -60,7 +63,7 @@ import { clearDraft, formValuesEmpty, readDraft, reviveFormValues, serializeForm
 import { NEW_DRIVER } from '@/components/orders/DriverPoolSelect';
 import { DriverPicker } from '@/components/orders/DriverPicker';
 import { PartnerPicker } from './PartnerPicker';
-import { ExchangeCarrierCheckbox, ExchangeCarrierSlot, ExchangeOnBoardNote, publishNewOrder, useExchangeForNewOrder, useOrderExchangeState } from './ExchangeOption';
+import { ExchangeOnBoardNote, publishNewOrder, useExchangeForNewOrder, useOrderExchangeState } from './ExchangeOption';
 import { ChoiceField } from './ChoiceField';
 
 /** Частые кузова — сверху окна выбора; остальные — поиском (M4). */
@@ -82,14 +85,21 @@ interface LocationState {
     longitude?: number;
     /** Почта, закреплённая за адресом: куда слать доверенность. */
     emails?: string[];
+    /**
+     * Дата точки (ISO) — у догрузок и выгрузок, необязательно (окно «Новая
+     * заявка», 29.10.2026). У первой погрузки дата — поле формы `pickupDate`.
+     */
+    date?: string | null;
 }
 
-/** Типы точек маршрута: их всего три, показываем пилюлями. */
-const POINT_TYPES = [
-    { key: 'PICKUP', label: 'Погрузка' },
-    { key: 'ADDITIONAL_PICKUP', label: 'Доп. погрузка' },
-    { key: 'DELIVERY', label: 'Выгрузка' },
-];
+/** «1 заказчик», «3 заказчика», «18 заказчиков». */
+const склон = (n: number, one: string, few: string, many: string) => {
+    const m10 = n % 10;
+    const m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+};
 
 const MARKETPLACE_VALUE = '__MARKETPLACE__';
 const MY_COMPANY_VALUE = '__MY_COMPANY__';
@@ -127,78 +137,11 @@ const когдаСохранён = (iso: string) => {
 
 // =================== ВИД ===================
 
-/**
- * Подпись поля — тёмная и плотная (владелец, 08.10.2026): серые подписи
- * сливались с подсказками в полях, и глазу не за что было зацепиться.
- */
-const LABEL = 'text-xs font-semibold text-foreground';
-/** Звёздочка обязательного поля — та же, что рисует antd у своих подписей. */
-const REQUIRED = <span aria-hidden className="mr-1 text-destructive">*</span>;
 /** Поле ввода shadcn в размер полей мастера. */
 const FIELD = 'lc-ui-field h-8 rounded-lg text-[13px] md:text-[13px]';
-/** Многострочное поле — тем же видом, что и поле ввода. */
-const TEXTAREA = 'lc-ui-field flex min-h-16 w-full rounded-lg border border-solid border-input bg-transparent px-3 py-2 text-[13px] text-foreground outline-none [font-family:inherit] placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring';
 
 type RoleTone = 'ok' | 'info' | 'warn' | 'muted';
-const ROLE_TONE: Record<RoleTone, string> = {
-    ok: 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200',
-    info: 'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200',
-    warn: 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200',
-    muted: 'border-border bg-muted/50 text-muted-foreground',
-};
 
-/**
- * Раздел шага: заголовок и поля под ним.
- *
- * Заголовок крупный — по нему глаз находит место на шаге. Пояснений под
- * заголовком больше нет: «Кто заказчик и кто выполняет перевозку» под
- * «Сторонами сделки» только добавляли серого текста. Короткая пометка
- * («необязательно», кто вы в сделке) — справа от заголовка.
- */
-function Section({ title, aside, first, children }: { title: string; aside?: React.ReactNode; first?: boolean; children: React.ReactNode }) {
-    return (
-        <section className={cn('grid gap-3', !first && 'mt-7')}>
-            <div className="flex min-h-6 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <h3 className="m-0 text-[15px] font-semibold tracking-[-0.01em] text-foreground">{title}</h3>
-                {aside}
-            </div>
-            {children}
-        </section>
-    );
-}
-
-/** Пометка справа от заголовка раздела: «необязательно». */
-function Optional() {
-    return <span className="text-xs text-muted-foreground">необязательно</span>;
-}
-
-function SubTitle({ children }: { children: React.ReactNode }) {
-    return <div className="mb-2 mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>;
-}
-
-/**
- * «Сбросить» — забыть набранное. Набранное не вернуть, поэтому с
- * подтверждением прямо на кнопке: первое нажатие спрашивает, второе
- * сбрасывает; через несколько секунд кнопка возвращается как была.
- */
-function ResetButton({ onConfirm }: { onConfirm: () => void }) {
-    const [armed, setArmed] = useState(false);
-    useEffect(() => {
-        if (!armed) return;
-        const t = window.setTimeout(() => setArmed(false), 4000);
-        return () => window.clearTimeout(t);
-    }, [armed]);
-    return (
-        <Button
-            variant="ghost"
-            size="sm"
-            className={cn('h-8 gap-1.5 rounded-lg px-2.5 text-[13px] font-normal', armed && 'text-destructive hover:text-destructive')}
-            onClick={() => (armed ? onConfirm() : setArmed(true))}
-        >
-            <RotateCcw className="size-3.5" /> {armed ? 'Сбросить всё?' : 'Сбросить'}
-        </Button>
-    );
-}
 
 export interface OrderWizardProps {
     /** Правка существующей заявки. */
@@ -215,6 +158,8 @@ export interface OrderWizardProps {
     onSaved: (orderId: string) => void;
     /** «Сбросить»: черновик стёрт — открыть мастер заново, с пустой формой. */
     onRestart: () => void;
+    /** Заявка создана, окно ещё открыто (экран «Заявка создана») — обновить журнал под ним. */
+    onRefresh?: () => void;
 }
 
 /**
@@ -228,7 +173,7 @@ export interface OrderWizardProps {
  * список длинный. Валюта, характер груза и даты пока на Ant Design:
  * выглядят они так же, как остальные.
  */
-export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteRequestId: quoteIdProp, onClose, onCreated, onSaved, onRestart }: OrderWizardProps) {
+export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteRequestId: quoteIdProp, onCreated, onSaved, onRestart, onRefresh }: OrderWizardProps) {
     const { user } = useAuthStore();
     const router = useRouter();
     const [form] = Form.useForm();
@@ -242,6 +187,9 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
     /** Адреса из последних заявок компании — в окне выбора первой группой. */
     const [recentLocationIds, setRecentLocationIds] = useState<string[]>([]);
     const [fetchedPartners, setFetchedPartners] = useState<Partner[]>([]);
+    // Пока список не пришёл, в выпадашке только своя компания — без
+    // подсказки это выглядит как «контрагентов нет».
+    const [партнёрыГрузятся, setПартнёрыГрузятся] = useState(true);
     /**
      * Стороны загруженной заявки — отдельно от справочника.
      *
@@ -487,7 +435,9 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 address: newLoc.address,
                 id: newLoc.id,
                 latitude: newLoc.latitude,
-                longitude: newLoc.longitude
+                longitude: newLoc.longitude,
+                // Почты, которые вписали в новый адрес, — сразу в точку (доверенность уйдёт туда).
+                emails: parseEmails(newLoc.emails),
             };
             setRoutePointsState(newPts);
 
@@ -595,6 +545,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                         longitude: rp.location?.longitude,
                         pointType: rp.pointType,
                         emails: parseEmails(rp.location?.emails),
+                        date: rp.pointType !== 'PICKUP' && rp.expectedDate ? dayjs(rp.expectedDate).toISOString() : null,
                     })));
                 }
 
@@ -851,6 +802,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 setMyCompanyName(profileRes.data.name);
             }
         } catch (e: any) { reportLoadFailure('список контрагентов', e); }
+        finally { setПартнёрыГрузятся(false); }
     };
 
     /**
@@ -999,64 +951,6 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
         return { text: 'Укажите стороны сделки', tone: 'muted' };
     };
 
-    // Validate current step before proceeding
-    const validateStep = async () => {
-        if (currentStep === 0) { // Parties
-            if (!selectedCustomer) {
-                toast.error('Укажите заказчика');
-                return false;
-            }
-            if (!selectedCarrier) {
-                toast.error('Укажите перевозчика');
-                return false;
-            }
-            if (exchangeActive) {
-                if (exchangeNoPrice) return true;
-                try {
-                    await form.validateFields(['exchangePrice']);
-                    return true;
-                } catch {
-                    return false;
-                }
-            }
-            if (isOwnOrExternalCarrier && selectedDriverId === NEW_DRIVER) {
-                try {
-                    await form.validateFields(['lastName', 'firstName', 'phone', 'vehiclePlate']);
-                    return true;
-                } catch {
-                    return false;
-                }
-            }
-            return true;
-        }
-        if (currentStep === 1) { // Route
-            // Validate route
-            const pickupDate = form.getFieldValue('pickupDate');
-            if (!pickupDate) {
-                toast.error('Укажите дату погрузки');
-                return false;
-            }
-            const hasPickup = routePointsState.some(p => p.pointType === 'PICKUP' && (p.id || p.city));
-            const hasDelivery = routePointsState.some(p => p.pointType === 'DELIVERY' && (p.id || p.city));
-            if (!hasPickup) { toast.error('Укажите точку погрузки'); return false; }
-            if (!hasDelivery) { toast.error('Укажите точку выгрузки'); return false; }
-            return true;
-        }
-        if (currentStep === 2) { // Cargo
-            try {
-                await form.validateFields(['natureOfCargo']);
-                return true;
-            } catch { return false; }
-        }
-        return true;
-    };
-
-    const goNext = async () => {
-        const valid = await validateStep();
-        if (valid) setCurrentStep(currentStep + 1);
-    };
-
-    const goBack = () => setCurrentStep(currentStep - 1);
 
     const handleSubmit = async () => {
         // Validate parties
@@ -1167,7 +1061,7 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     locationId: locId,
                     pointType: p.pointType,
                     sequence: routePoints.length + 1,
-                    expectedDate: p.pointType === 'PICKUP' ? pickupDateStr : undefined
+                    expectedDate: p.pointType === 'PICKUP' ? pickupDateStr : (p.date || undefined)
                 });
             }
 
@@ -1286,10 +1180,10 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                 if (черновикКлюч) clearDraft(черновикКлюч);
                 if (exchangeActive) {
                     await publishNewOrder(created, exchangeNoPrice ? null : Number(values.exchangePrice), (id) => router.push(`/company/orders/${id}`));
-                } else {
-                    toast.success('Заявка создана!');
                 }
-                onCreated();
+                // Экран «Заявка создана» (ТЗ, §9): журнал обновляем сразу, окно закрывает «Готово».
+                onRefresh?.();
+                setСоздано(итогСоздания(created));
             }
         } catch (error: any) {
             toast.error(error.response?.data?.message
@@ -1299,661 +1193,247 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
         }
     };
 
+    // =================== ОКНО «НОВАЯ ЗАЯВКА»: ВИД ===================
+
+    const mainRef = useRef<HTMLElement>(null);
+    /** Форма прокручена — под шапкой тень (ТЗ, §3). */
+    const [прокручено, setПрокручено] = useState(false);
+    /** Какой раздел сейчас на экране — подсвечен в сводке. */
+    const [текущийРаздел, setТекущийРаздел] = useState<string | null>('parties');
+    /** Ошибки показываем только после первой попытки создать (ТЗ, §8). */
+    const [попыткаОтправки, setПопыткаОтправки] = useState(false);
+    /** Ошибки полей формы меняются сами — перерисовываем сводку вместе с ними. */
+    const [, setПоляТик] = useState(0);
+    /** Паспорт, телефон и машина водителя — раскрыто у нового, по кнопке у выбранного. */
+    const [анкетаОткрыта, setАнкетаОткрыта] = useState(false);
+    /** Только что добавленная точка — сразу открыть её адрес. */
+    const [открытьТочку, setОткрытьТочку] = useState<number | null>(null);
+    /** Что набрали в поиске адреса — станет названием нового адреса. */
+    const [новыйАдрес, setНовыйАдрес] = useState('');
+    /** При открытии подставлен черновик — сначала спрашиваем, продолжить ли. */
+    const [черновикПринят, setЧерновикПринят] = useState(false);
+    /** Заявка создана — вместо формы экран с итогом. */
+    const [создано, setСоздано] = useState<{ published: boolean; rows: { k: string; v: string }[] } | null>(null);
+
+    const watchedCustomerPrice = Form.useWatch('customerPrice', form);
+    const watchedDriverCost = Form.useWatch('driverCost', form);
+    const watchedExchangePrice = Form.useWatch('exchangePrice', form);
+    const watchedCurrency = Form.useWatch('currency', form);
+    const watchedDriverCurrency = Form.useWatch('driverCostCurrency', form);
+    const watchedPickupDate = Form.useWatch('pickupDate', form);
+    const watchedNature = Form.useWatch('natureOfCargo', form);
+    const watchedWeight = Form.useWatch('cargoWeight', form);
+    const watchedVolume = Form.useWatch('cargoVolume', form);
+    const watchedBody = Form.useWatch('cargoType', form) as string | undefined;
+    const watchedPlate = Form.useWatch('vehiclePlate', form);
+    const watchedTrailer = Form.useWatch('trailerNumber', form);
+    const watchedNewDriver = [Form.useWatch('lastName', form), Form.useWatch('firstName', form), Form.useWatch('phone', form)];
+
+    type ОшибкаФормы = { key: string; section: string; message: string; target: string };
+    /**
+     * Чего не хватает — те же проверки, что были по шагам мастера, разом
+     * (заказчик, перевозчик, погрузка и выгрузка, дата, характер груза).
+     * Порядок — как на экране: к первой ошибке и прокручиваем.
+     */
+    const ошибкиФормы: ОшибкаФормы[] = (() => {
+        const list: ОшибкаФормы[] = [];
+        if (!selectedCustomer) list.push({ key: 'customer', section: 'parties', message: 'Выберите заказчика', target: 'no-customer' });
+        if (!selectedCarrier && !searchingOnExchange) {
+            list.push({
+                key: 'carrier',
+                section: 'parties',
+                message: exchangeAvailable ? 'Выберите перевозчика — или переключите на «На бирже»' : 'Выберите перевозчика',
+                target: 'no-carrier',
+            });
+        }
+        const есть = (type: string) => routePointsState.some((p) => p.pointType === type && (p.id || p.city));
+        if (!есть('PICKUP')) {
+            const idx = Math.max(0, routePointsState.findIndex((p) => p.pointType === 'PICKUP'));
+            list.push({ key: `point-${idx}`, section: 'route', message: 'Укажите, откуда забирать груз', target: `no-point-${idx}` });
+        }
+        if (!watchedPickupDate) list.push({ key: 'pickupDate', section: 'route', message: 'Укажите, когда забирать груз', target: 'no-pickup-date' });
+        if (!есть('DELIVERY')) {
+            let idx = routePointsState.length - 1;
+            for (let j = routePointsState.length - 1; j >= 0; j--) {
+                if (routePointsState[j].pointType === 'DELIVERY') { idx = j; break; }
+            }
+            list.push({ key: `point-${idx}`, section: 'route', message: 'Укажите, куда везти груз', target: `no-point-${idx}` });
+        }
+        if (!editingId && !String(watchedNature || '').trim()) {
+            list.push({ key: 'nature', section: 'cargo', message: 'Укажите, что везём', target: 'no-nature' });
+        }
+        return list;
+    })();
+    /** Ошибки полей, которые проверяет сама форма: цена биржи, новый водитель. */
+    const ошибкиПолей = попыткаОтправки
+        ? form.getFieldsError().filter((f) => f.errors.length > 0 && !['pickupDate', 'natureOfCargo'].includes(String(f.name[0]))).length
+        : 0;
+
+    const плавно = () => (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth') as ScrollBehavior;
+
+    /** Прокрутить форму к элементу так, чтобы над ним было место (ТЗ, §8: ~80 px). */
+    const прокрутитьК = (el: HTMLElement, отступ: number) => {
+        const main = mainRef.current;
+        if (!main) return;
+        const top = el.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop - отступ;
+        main.scrollTo({ top: Math.max(0, top), behavior: плавно() });
+    };
+
+    const перейтиК = (key: string) => {
+        const el = document.getElementById(`no-sec-${key}`);
+        if (el) прокрутитьК(el, 16);
+        setТекущийРаздел(key);
+    };
+
+    /** Какой раздел на экране: последний, чей верх уже выше трети окна. */
+    const обновитьРаздел = () => {
+        const main = mainRef.current;
+        if (!main) return;
+        const граница = main.getBoundingClientRect().top + main.clientHeight / 3;
+        let текущий: string | null = 'parties';
+        main.querySelectorAll<HTMLElement>('[data-section]').forEach((sec) => {
+            if (sec.getBoundingClientRect().top <= граница) текущий = sec.dataset.section ?? текущий;
+        });
+        if (main.scrollTop + main.clientHeight >= main.scrollHeight - 4) текущий = 'driver';
+        setТекущийРаздел(текущий);
+    };
+
+    const отправить = async () => {
+        if (submitting) return;
+        setПопыткаОтправки(true);
+        const поляФормы = [
+            'pickupDate',
+            ...(editingId ? [] : ['natureOfCargo']),
+            ...(exchangeActive && !exchangeNoPrice ? ['exchangePrice'] : []),
+            ...(isOwnOrExternalCarrier && selectedDriverId === NEW_DRIVER ? ['lastName', 'firstName', 'phone', 'vehiclePlate'] : []),
+        ];
+        let плохиеПоля: string[] = [];
+        try {
+            await form.validateFields(поляФормы);
+        } catch (e: any) {
+            плохиеПоля = (e?.errorFields || []).map((f: any) => String(f.name?.[0]));
+        }
+        setПоляТик((n) => n + 1);
+        if (ошибкиФормы.length || плохиеПоля.length) {
+            const ids = [
+                ...ошибкиФормы.map((e) => e.target),
+                ...плохиеПоля.map((n) => ({ exchangePrice: 'no-exchange-price', natureOfCargo: 'no-nature', pickupDate: 'no-pickup-date' } as Record<string, string>)[n] ?? n),
+            ];
+            const первый = ids
+                .map((id) => document.getElementById(id))
+                .filter((el): el is HTMLElement => !!el)
+                .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
+            if (первый) {
+                прокрутитьК(первый, 80);
+                первый.focus({ preventScroll: true });
+            }
+            return;
+        }
+        await handleSubmit();
+    };
+
+    const выбратьОрганизацию = (value: string) => {
+        setSelectedMyCompanyId(value || '');
+        setSelectedDriverId('');
+        form.setFieldsValue({
+            firstName: '', lastName: '', middleName: '', phone: '', iin: '',
+            vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
+            docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: '',
+            vehicleSelect: undefined, driverSelect: undefined,
+        });
+    };
+
+    /**
+     * Передумал с водителем — назначит позже. Данные водителя из формы
+     * убираем; госномера — только если их подставила его карточка: вписанные
+     * руками или взятые из автопарка остаются.
+     */
+    const убратьВодителя = () => {
+        const d = drivers.find((x) => x.id === selectedDriverId);
+        const сброс: Record<string, unknown> = {
+            driverId: undefined,
+            lastName: '', firstName: '', middleName: '', phone: '', iin: '',
+            vehicleType: undefined, vehicleModel: '',
+            docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: '',
+        };
+        if (d && (form.getFieldValue('vehiclePlate') || '') === (d.vehiclePlate || '')) сброс.vehiclePlate = '';
+        if (d && (form.getFieldValue('trailerNumber') || '') === (d.trailerNumber || '')) сброс.trailerNumber = '';
+        setSelectedDriverId('');
+        setАнкетаОткрыта(false);
+        form.setFieldsValue(сброс);
+    };
+
+    const выбратьПеревозчика = (val: string) => {
+        setSelectedCarrier(val);
+        setSelectedDriverId('');
+        setАнкетаОткрыта(false);
+        form.setFieldsValue({
+            driverId: undefined,
+            lastName: '', firstName: '', middleName: '', phone: '', iin: '',
+            vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
+            docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: '',
+        });
+    };
+
+    const выбратьАдрес = (i: number, val: string) => {
+        const newPts = [...routePointsState];
+        const loc = locations.find((l) => l.id === val);
+        if (!loc) return;
+        newPts[i] = {
+            ...newPts[i],
+            city: loc.city || '',
+            address: loc.address,
+            id: loc.id,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            // Подставляем почту, уже закреплённую за адресом.
+            emails: parseEmails((loc as any).emails),
+        };
+        const firstPickup = newPts.find((p) => p.pointType === 'PICKUP');
+        const lastDelivery = [...newPts].reverse().find((p) => p.pointType === 'DELIVERY');
+        if (firstPickup?.city && lastDelivery?.city) lookupTariff(firstPickup.city, lastDelivery.city);
+        setRoutePointsState(newPts);
+    };
+
+    /** «+ Добавить точку»: догрузка перед последней выгрузкой (ТЗ, §5.3), и сразу поиск адреса. */
+    const добавитьТочку = () => {
+        const next = [...routePointsState];
+        const at = next.length && next[next.length - 1].pointType === 'DELIVERY' ? next.length - 1 : next.length;
+        next.splice(at, 0, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' });
+        setRoutePointsState(next);
+        setОткрытьТочку(at);
+    };
+
+    /** Итог для экрана «Заявка создана» (ТЗ, §9). */
+    const итогСоздания = (created: { orderNumber?: string }) => {
+        const rows: { k: string; v: string }[] = [];
+        if (created?.orderNumber) rows.push({ k: 'Номер', v: created.orderNumber });
+        if (myCompanies.length > 1) rows.push({ k: 'Организация', v: myCompanyLabel });
+        const города = routePointsState.filter((p) => p.id || p.city).map((p) => {
+            const loc = p.id ? locations.find((l) => l.id === p.id) : undefined;
+            return loc?.city || p.city || loc?.name || '';
+        }).filter(Boolean);
+        const дата = form.getFieldValue('pickupDate');
+        rows.push({ k: 'Маршрут', v: [города.join(' → '), дата ? `погрузка ${dayjs(дата).format('DD.MM, HH:mm')}` : null].filter(Boolean).join(', ') });
+        const имя = (v: string) => (v === MY_COMPANY_VALUE ? myCompanyLabel : partners.find((p) => p.id === v)?.name || '');
+        rows.push({ k: 'Заказчик', v: имя(selectedCustomer) });
+        rows.push({ k: 'Перевозчик', v: exchangeActive ? 'Ищем на бирже' : имя(selectedCarrier) });
+        const cp = Number(form.getFieldValue('customerPrice')) || 0;
+        const dc = Number(exchangeActive ? form.getFieldValue('exchangePrice') : form.getFieldValue('driverCost')) || 0;
+        if (cp || dc) rows.push({ k: 'Ставки', v: [cp ? moneyShort(cp) : null, dc ? moneyShort(dc) : null].filter(Boolean).join(' → ') });
+        const груз = [String(form.getFieldValue('natureOfCargo') || '').trim(), form.getFieldValue('cargoWeight') ? `${form.getFieldValue('cargoWeight')} кг` : null].filter(Boolean).join(' · ');
+        if (груз) rows.push({ k: 'Груз', v: груз });
+        const d = selectedDriverId && selectedDriverId !== NEW_DRIVER ? drivers.find((x) => x.id === selectedDriverId) : undefined;
+        const фио = d ? [d.lastName, d.firstName].filter(Boolean).join(' ')
+            : selectedDriverId === NEW_DRIVER ? [form.getFieldValue('lastName'), form.getFieldValue('firstName')].filter(Boolean).join(' ') : '';
+        if (фио && !exchangeActive) rows.push({ k: 'Водитель', v: фио });
+        return { published: exchangeActive, rows };
+    };
+
     const roleInfo = getRoleDescription();
 
     // Название организации, от лица которой создаётся заявка (обновляется при смене организации)
     const myCompanyLabel = myCompanies.find(c => c.id === selectedMyCompanyId)?.name?.trim() || myCompanyName || 'Моя компания';
-
-    // =================== ШАГИ ===================
-
-    const stepParties = (
-        <div>
-            {myCompanies.length > 1 && (
-                <Section first title="От чьего лица заявка">
-                    <FormSelect
-                        aria-label="Организация"
-                        value={selectedMyCompanyId}
-                        onChange={(value) => {
-                            setSelectedMyCompanyId(value || '');
-                            setSelectedDriverId('');
-                            form.setFieldsValue({
-                                firstName: '', lastName: '', middleName: '', phone: '', iin: '',
-                                vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
-                                docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: '',
-                                vehicleSelect: undefined, driverSelect: undefined
-                            });
-                        }}
-                        options={myCompanies.map(c => ({ value: c.id, label: c.name?.trim() || 'Без названия' }))}
-                    />
-                </Section>
-            )}
-
-            <Section
-                first={myCompanies.length <= 1}
-                title="Стороны сделки"
-                // Кто я в этой сделке — что получилось из выбора сторон.
-                // Пока стороны не выбраны, пилюли нет: «укажите стороны» и так
-                // видно по пустым полям.
-                aside={roleInfo.tone !== 'muted' && (
-                    <span className={cn('inline-flex items-center gap-1.5 rounded-full border border-solid px-2.5 py-0.5 text-xs font-medium', ROLE_TONE[roleInfo.tone])}>
-                        <CircleCheck className="size-3.5 shrink-0" />
-                        {roleInfo.text}
-                    </span>
-                )}
-            >
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                    {/* content-start: под перевозчиком бывает галочка биржи — колонка выше, а поля сторон должны стоять вровень. */}
-                    <div className="grid content-start gap-1.5" data-guide="wizard-customer">
-                        <Label className={LABEL}>{REQUIRED}Заказчик</Label>
-                        <PartnerPicker
-                            role="CUSTOMER"
-                            value={selectedCustomer || undefined}
-                            onChange={setSelectedCustomer}
-                            partners={partners}
-                            ownValue={MY_COMPANY_VALUE}
-                            ownLabel={myCompanyLabel}
-                            userId={user?.id}
-                            scope={user?.companyId}
-                            onAdd={() => открытьЗаведениеКонтрагента('CUSTOMER')}
-                        />
-                    </div>
-                    <div className="grid content-start gap-1.5" data-guide="wizard-carrier">
-                        <Label className={LABEL}>{REQUIRED}Перевозчик</Label>
-                        {searchingOnExchange ? <ExchangeCarrierSlot placeholder={alreadyOnExchange ? 'Ищем на бирже — выберете из откликов' : undefined} /> : (
-                        <PartnerPicker
-                            role="CARRIER"
-                            value={selectedCarrier || undefined}
-                            onChange={(val) => {
-                                setSelectedCarrier(val);
-                                setSelectedDriverId('');
-                                form.setFieldsValue({
-                                    driverId: undefined,
-                                    lastName: '', firstName: '', middleName: '', phone: '', iin: '',
-                                    vehicleType: undefined, vehicleModel: '', vehiclePlate: '', trailerNumber: '',
-                                    docType: undefined, docNumber: '', docIssuedAt: null, docExpiresAt: null, docIssuedBy: ''
-                                });
-                            }}
-                            partners={partners}
-                            ownValue={MY_COMPANY_VALUE}
-                            ownLabel={myCompanyLabel}
-                            userId={user?.id}
-                            scope={user?.companyId}
-                            onAdd={() => открытьЗаведениеКонтрагента('CARRIER')}
-                        />
-                        )}
-                        {exchangeAvailable && <ExchangeCarrierCheckbox checked={exchangeActive} onChange={toggleExchange} />}
-                        {alreadyOnExchange && editingId && <ExchangeOnBoardNote orderId={editingId} price={editExchange?.price ?? null} />}
-                    </div>
-                </div>
-
-                <div className="grid gap-1.5">
-                    <Label className={LABEL}>Ответственный менеджер</Label>
-                    {/* Сотрудников пять — выпадающий список, пятьдесят — окно с поиском. */}
-                    <ChoiceField
-                        aria-label="Ответственный менеджер"
-                        title="Ответственный менеджер"
-                        placeholder="Выберите менеджера"
-                        searchPlaceholder="Фамилия или имя"
-                        value={responsibleChoice}
-                        onChange={(v) => setResponsibleChoice(v ?? 'SELF')}
-                        pinned={[
-                            {
-                                id: 'SELF',
-                                title: user?.firstName
-                                    ? `${user.lastName || ''} ${user.firstName}`.trim()
-                                    : 'Текущий пользователь',
-                                subtitle: 'Это вы',
-                                emphasis: true,
-                            },
-                            { id: 'NONE', title: 'Не назначать — заявку возьмёт любой менеджер' },
-                        ]}
-                        groups={[{
-                            label: 'Сотрудники',
-                            items: officeUsers
-                                .filter(u => u.id !== user?.id)
-                                .map(u => ({ id: u.id, title: `${u.lastName} ${u.firstName}${u.role === 'LOGISTICIAN' ? '' : ' (админ)'}` })),
-                        }]}
-                        chipSets={[[
-                            { id: 'logist', label: 'Логисты', test: (item) => officeUsers.find(u => u.id === item.id)?.role === 'LOGISTICIAN' },
-                            { id: 'admin', label: 'Администраторы', test: (item) => officeUsers.find(u => u.id === item.id)?.role !== 'LOGISTICIAN' },
-                        ]]}
-                    />
-                    {responsibleChoice !== 'SELF' && responsibleChoice !== 'NONE' && (
-                        <p className="m-0 text-xs text-muted-foreground">
-                            Заявка будет закреплена за выбранным менеджером, вы останетесь её создателем и сохраните доступ
-                        </p>
-                    )}
-                </div>
-
-                <Form.Item noStyle dependencies={['ttnNumber', 'customerRefNumber']}>
-                    {({ getFieldValue }) => (
-                        <TransportNumbers
-                            ttnNumber={getFieldValue('ttnNumber')}
-                            refNumber={getFieldValue('customerRefNumber')}
-                            refLabel={customerRefLabel}
-                            counterpartyId={selectedCustomer && selectedCustomer !== MY_COMPANY_VALUE ? selectedCustomer : null}
-                            canRename={!!selectedCustomerIsExternal}
-                            onRenamed={(label) => setFetchedPartners((prev) => prev.map((p: any) => (
-                                p.id === selectedCustomer ? { ...p, customerRefLabel: label } : p
-                            )))}
-                        />
-                    )}
-                </Form.Item>
-            </Section>
-
-            <Section title="Ставки">
-                {/* Ставки и тип оплаты — одной строкой: тип оплаты короткий
-                    список, по умолчанию «за рейс» (владелец, 08.10.2026). */}
-                <div className="flex flex-wrap items-start gap-x-3">
-                    {showCustomerPriceField && (
-                        <div className="min-w-[200px] flex-1">
-                            <Form.Item name="customerPrice" label={customerPriceLabel}>
-                                <MoneyInput
-                                    addonAfter={(
-                                        <Form.Item name="currency" noStyle initialValue="KZT">
-                                            <CurrencySelect />
-                                        </Form.Item>
-                                    )}
-                                />
-                            </Form.Item>
-                            {appliedTariff && (
-                                <div className="-mt-2 mb-3 inline-flex items-center gap-1.5 rounded-md border border-solid border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11.5px] text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                    <CircleCheck className="size-3.5" /> Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    {exchangeActive && (
-                        <div className="min-w-[200px] flex-1">
-                            {/* Та же цена, что спрашивает кнопка «Выставить на биржу» в карточке. */}
-                            {!exchangeNoPrice && (
-                                <Form.Item
-                                    name="exchangePrice"
-                                    label="Цена для исполнителя на бирже"
-                                    // Экспедитору две цены рядом путались (P4): говорим, чем они разные.
-                                    extra={showCustomerPriceField
-                                        ? 'Сколько получит исполнитель. «Ставка от заказчика» — сколько заказчик платит вам; на бирже её не видно.'
-                                        : undefined}
-                                    rules={[{
-                                        validator: (_, v) => (Number(v) > 0
-                                            ? Promise.resolve()
-                                            : Promise.reject(new Error('Укажите цену — исполнители согласятся на неё или предложат свою'))),
-                                    }]}
-                                >
-                                    <MoneyInput addonAfter="KZT" aria-label="Цена для исполнителя на бирже" />
-                                </Form.Item>
-                            )}
-                            <label className="-mt-2 mb-3 flex cursor-pointer items-center gap-2 text-[12.5px] text-muted-foreground">
-                                <Checkbox checked={exchangeNoPrice} onCheckedChange={(c) => setExchangeNoPrice(c === true)} />
-                                Без цены — пусть исполнители предложат свою
-                            </label>
-                        </div>
-                    )}
-                    {showDriverCostField && (
-                        <div className="min-w-[200px] flex-1">
-                            <Form.Item name="driverCost" label={driverCostLabel}>
-                                <MoneyInput
-                                    addonAfter={(
-                                        // Валюта перевозчика своя: рейс, где клиент платит
-                                        // рублями, а перевозчик получает тенге, — обычное дело.
-                                        <Form.Item name="driverCostCurrency" noStyle initialValue="KZT">
-                                            <CurrencySelect />
-                                        </Form.Item>
-                                    )}
-                                />
-                            </Form.Item>
-                        </div>
-                    )}
-                    <div className="w-36 shrink-0">
-                        <Form.Item name="customerPriceType" label="Оплата" initialValue="FIXED">
-                            <FormSelect
-                                aria-label="Тип оплаты"
-                                options={[
-                                    { value: 'FIXED', label: 'За рейс' },
-                                    { value: 'PER_KM', label: 'За км' },
-                                    { value: 'PER_TON', label: 'За тонну' },
-                                ]}
-                            />
-                        </Form.Item>
-                    </div>
-                </div>
-
-                {/* Плановые даты оплаты платформа считает сама — по срокам из
-                    карточек сторон. Условия показываем строкой: логисту они
-                    нужны, чтобы разговаривать с перевозчиком, а менять их он
-                    не может. */}
-                {(customerTerms || carrierTerms) && (
-                    <div className="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-[12.5px]">
-                        <span className="shrink-0 font-semibold">Расчёты</span>
-                        <div className="min-w-0 flex-1 text-muted-foreground">
-                            {[
-                                customerTerms && `заказчик — ${vatLabel(customerTerms.vatPayer, customerTerms.vatRate)}`
-                                    + (paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom, customerTerms.customerPaymentBanking)
-                                        ? `, оплата ${paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom, customerTerms.customerPaymentBanking)}`
-                                        : ', срок оплаты не указан'),
-                                carrierTerms && `перевозчик — ${vatLabel(carrierTerms.vatPayer, carrierTerms.vatRate)}`
-                                    + (paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom, carrierTerms.carrierPaymentBanking)
-                                        ? `, платим ${paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom, carrierTerms.carrierPaymentBanking)}`
-                                        : ', срок оплаты не указан'),
-                            ].filter(Boolean).join(' · ')}
-                        </div>
-                        <TooltipProvider delayDuration={150}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button type="button" aria-label="Откуда условия расчётов" className="grid size-5 shrink-0 cursor-help place-items-center rounded-full border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground">
-                                        <Info className="size-3.5" />
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="max-w-xs text-xs">
-                                    Берутся из карточки контрагента, раздел «Расчёты». Не заполнены —
-                                    рейс дождётся бухгалтера, заводить его это не мешает.
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    </div>
-                )}
-
-                {/* Маржа по введённым ставкам — в одной валюте: ставки в разных
-                    переводятся по курсу на дату погрузки, как на сервере. */}
-                <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'currency', 'driverCostCurrency', 'pickupDate']}>
-                    {({ getFieldValue }) => {
-                        const cp = getFieldValue('customerPrice') || 0;
-                        const dc = getFieldValue('driverCost') || 0;
-                        // НДС берём из карточек сторон — там же, откуда его возьмёт
-                        // сервер при сохранении. Иначе маржа в мастере и маржа в
-                        // карточке рейса расходились бы на сумму налога.
-                        const hasVat = !!customerTerms?.vatPayer;
-                        const vatRate = Number(customerTerms?.vatRate ?? 0);
-                        const executorHasVat = !!carrierTerms?.vatPayer;
-                        const executorVatRate = Number(carrierTerms?.vatRate ?? 0);
-
-                        if (cp && dc && showCustomerPriceField && showDriverCostField) {
-                            return (
-                                <MarginPreview
-                                    customerPrice={cp}
-                                    driverCost={dc}
-                                    customerCurrency={getFieldValue('currency')}
-                                    carrierCurrency={getFieldValue('driverCostCurrency')}
-                                    date={getFieldValue('pickupDate')}
-                                    customerVatRate={hasVat ? vatRate : null}
-                                    carrierVatRate={executorHasVat ? executorVatRate : null}
-                                    customerLabel={customerPriceLabel}
-                                    carrierLabel={driverCostLabel}
-                                />
-                            );
-                        }
-                        return null;
-                    }}
-                </Form.Item>
-            </Section>
-
-            {isOwnOrExternalCarrier && !searchingOnExchange && (
-                <Section title="Водитель и транспорт" aside={<Optional />}>
-                    {selectedCarrier === MY_COMPANY_VALUE && vehicles.length > 0 && (
-                        <Form.Item label="Машина из автопарка">
-                            <ChoiceField
-                                aria-label="Машина из автопарка"
-                                title="Машина из автопарка"
-                                placeholder={vehiclesLoading ? 'Загружаем автопарк…' : 'Выберите транспортное средство'}
-                                searchPlaceholder="Модель или госномер"
-                                value={машинаИзПарка}
-                                onChange={(v) => { setМашинаИзПарка(v); if (v) handleVehicleSelect(v); }}
-                                allowClear
-                                clearLabel="Не выбрана"
-                                groups={[{
-                                    label: 'Автопарк',
-                                    items: vehicles.map(v => ({
-                                        id: v.id,
-                                        title: `${v.model} (${v.plate})`,
-                                        subtitle: v.trailerNumber ? `прицеп ${v.trailerNumber}` : undefined,
-                                    })),
-                                }]}
-                            />
-                        </Form.Item>
-                    )}
-
-                    {/* Вся база водителей, а не только водители этого ИП:
-                        сверху — кто уже ездил за него, ниже — остальные. */}
-                    <Form.Item name="driverId" label="Водитель">
-                        <DriverPicker
-                            drivers={drivers}
-                            carrierId={selectedCarrier === MY_COMPANY_VALUE ? (user?.companyId ?? null) : selectedCarrier}
-                            ownTransport={selectedCarrier === MY_COMPANY_VALUE}
-                            loading={driversLoading}
-                            onChange={handleDriverSelect}
-                        />
-                    </Form.Item>
-
-                    {selectedDriverId && (
-                        <div className="rounded-lg border border-solid border-border p-3 pb-0">
-                            <SubTitle>Данные водителя</SubTitle>
-                            <div className="grid gap-x-3 sm:grid-cols-3">
-                                <Form.Item name="lastName" label="Фамилия" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите фамилию' }]}>
-                                    <UiInput className={FIELD} placeholder="Иванов" />
-                                </Form.Item>
-                                <Form.Item name="firstName" label="Имя" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите имя' }]}>
-                                    <UiInput className={FIELD} placeholder="Иван" />
-                                </Form.Item>
-                                <Form.Item name="middleName" label="Отчество">
-                                    <UiInput className={FIELD} placeholder="Иванович" />
-                                </Form.Item>
-                            </div>
-
-                            <SubTitle>Документ</SubTitle>
-                            <div className="grid gap-x-3 sm:grid-cols-2">
-                                <Form.Item name="docType" label="Тип документа">
-                                    <FormSelect
-                                        placeholder="Выберите документ"
-                                        options={[
-                                            { value: 'ID_CARD', label: 'Удостоверение личности' },
-                                            { value: 'PASSPORT', label: 'Паспорт' },
-                                        ]}
-                                    />
-                                </Form.Item>
-                                <Form.Item name="docNumber" label="Номер документа">
-                                    <UiInput className={FIELD} placeholder="012345678" />
-                                </Form.Item>
-                            </div>
-                            <div className="grid gap-x-3 sm:grid-cols-3">
-                                <Form.Item name="docIssuedAt" label="Дата выдачи">
-                                    <DateField style={{ width: '100%' }} />
-                                </Form.Item>
-                                <Form.Item name="docIssuedBy" label="Кем выдан">
-                                    <UiInput className={FIELD} placeholder="МВД РК" />
-                                </Form.Item>
-                                <Form.Item name="docExpiresAt" label="Срок действия">
-                                    <DateField style={{ width: '100%' }} />
-                                </Form.Item>
-                            </div>
-
-                            {/* Порядок, как просил шеф (E1): ФИО → удостоверение → телефон → машина. */}
-                            <SubTitle>Связь</SubTitle>
-                            <div className="grid gap-x-3 sm:grid-cols-2">
-                                <Form.Item name="phone" label="Телефон" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите телефон' }]}>
-                                    <UiInput className={FIELD} placeholder="+77001234567" />
-                                </Form.Item>
-                                <Form.Item name="iin" label="ИИН">
-                                    <UiInput className={FIELD} placeholder="123456789012" maxLength={12} />
-                                </Form.Item>
-                            </div>
-
-                            <SubTitle>Машина</SubTitle>
-                            <div className="grid gap-x-3 sm:grid-cols-2">
-                                <Form.Item name="vehicleType" label="Тип транспорта">
-                                    <ChoiceField
-                                        aria-label="Тип транспорта"
-                                        title="Тип кузова"
-                                        placeholder="Выберите тип кузова"
-                                        searchPlaceholder="Например: тент, реф, борт"
-                                        recentKey="body-type"
-                                        onChange={() => undefined}
-                                                    groups={BODY_TYPE_GROUPS}
-                                    />
-                                </Form.Item>
-                                <Form.Item name="vehicleModel" label="Модель автомобиля">
-                                    <UiInput className={FIELD} placeholder="Volvo FH12" />
-                                </Form.Item>
-                            </div>
-                            <div className="grid gap-x-3 sm:grid-cols-2">
-                                <Form.Item name="vehiclePlate" label="Госномер автомобиля" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите госномер' }]}>
-                                    <UiInput className={FIELD} placeholder="123 ABC 01" />
-                                </Form.Item>
-                                <Form.Item name="trailerNumber" label="Госномер прицепа">
-                                    <UiInput className={FIELD} placeholder="1234 XX 01" />
-                                </Form.Item>
-                            </div>
-                        </div>
-                    )}
-                </Section>
-            )}
-
-            {isCarrierOnPlatform && (
-                <div className="mt-6 flex items-start gap-2.5 rounded-lg border border-solid border-emerald-300 bg-emerald-50 px-3 py-2.5 text-[12.5px] font-medium text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                    <CircleCheck className="mt-px size-4 shrink-0" />
-                    Перевозчик зарегистрирован на платформе. Он самостоятельно назначит водителя на эту заявку. Дальнейший ввод водителя не требуется.
-                </div>
-            )}
-        </div>
-    );
-
-    const stepRoute = (
-        <div>
-            <Section first title="Дата и время погрузки">
-                <Form.Item name="pickupDate" rules={[{ required: true, message: 'Укажите дату' }]} data-guide="wizard-pickup-date" className="max-w-xs" style={{ marginBottom: 0 }}>
-                    <DateField
-                        style={{ width: '100%' }}
-                        format="DD.MM.YYYY HH:mm"
-                        showTime={{ format: 'HH:mm' }}
-                        placeholder="Выберите дату и время"
-                    />
-                </Form.Item>
-            </Section>
-
-            <Section title="Точки маршрута">
-                <div className="grid gap-2">
-                    {routePointsState.map((pt, i) => {
-                        const selected = locations.find((l) => l.id === pt.id);
-                        const label = selected
-                            ? `${selected.name}${selected.city ? `, ${selected.city}` : ''}, ${selected.address}`
-                            : pt.address
-                                ? `${pt.city ? `${pt.city}, ` : ''}${pt.address}`
-                                : '';
-                        return (
-                            <div key={i} className="rounded-lg border border-solid border-border p-3">
-                                <div className="mb-2 flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <span className={cn(
-                                            'flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold',
-                                            i === 0 ? 'bg-foreground text-background' : 'border-2 border-solid border-foreground',
-                                        )}>
-                                            {i + 1}
-                                        </span>
-                                        {/* Тип точки — переключателем: вариантов три, выпадающий список тут лишний. */}
-                                        <div className="inline-flex items-center rounded-lg bg-muted p-0.5">
-                                            {POINT_TYPES.map((type) => {
-                                                const active = pt.pointType === type.key;
-                                                return (
-                                                    <button
-                                                        key={type.key}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const next = [...routePointsState];
-                                                            next[i].pointType = type.key;
-                                                            setRoutePointsState(next);
-                                                        }}
-                                                        className={cn(
-                                                            'h-6 cursor-pointer rounded-md border-0 px-2.5 text-[12px] [font-family:inherit] transition-colors',
-                                                            active
-                                                                ? 'bg-card font-medium text-foreground shadow-sm'
-                                                                : 'bg-transparent text-muted-foreground hover:text-foreground',
-                                                        )}
-                                                    >
-                                                        {type.label}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    {routePointsState.length > 2 && (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            aria-label="Убрать точку"
-                                            className="size-7 rounded-md text-muted-foreground hover:text-foreground"
-                                            onClick={() => {
-                                                const next = [...routePointsState];
-                                                next.splice(i, 1);
-                                                setRoutePointsState(next);
-                                            }}
-                                        >
-                                            <X className="size-4" />
-                                        </Button>
-                                    )}
-                                </div>
-
-                                <AddressPicker
-                                    groups={getLocationOptions()}
-                                    valueId={pt.id}
-                                    valueLabel={label}
-                                    emptyText={selectedCustomer ? 'У заказчика пока нет адресов. Добавьте новый — он сохранится за этим заказчиком.' : undefined}
-                                    onCreateNew={() => {
-                                        setActiveRoutePointIndex(i);
-                                        setQuickLocationModalOpen(true);
-                                    }}
-                                    onSelect={(val) => {
-                                        const newPts = [...routePointsState];
-                                        if (!val) {
-                                            newPts[i] = {
-                                                ...newPts[i], city: '', address: '', id: undefined,
-                                                latitude: undefined, longitude: undefined, emails: [],
-                                            };
-                                        } else {
-                                            const loc = locations.find((l) => l.id === val);
-                                            if (loc) {
-                                                newPts[i] = {
-                                                    ...newPts[i],
-                                                    city: loc.city || '',
-                                                    address: loc.address,
-                                                    id: loc.id,
-                                                    latitude: loc.latitude,
-                                                    longitude: loc.longitude,
-                                                    // Подставляем почту, уже закреплённую за адресом.
-                                                    emails: parseEmails((loc as any).emails),
-                                                };
-                                                const firstPickup = newPts.find((p) => p.pointType === 'PICKUP');
-                                                const lastDelivery = [...newPts].reverse().find((p) => p.pointType === 'DELIVERY');
-                                                if (firstPickup?.city && lastDelivery?.city) {
-                                                    lookupTariff(firstPickup.city, lastDelivery.city);
-                                                }
-                                            }
-                                        }
-                                        setRoutePointsState(newPts);
-                                    }}
-                                />
-
-                                <RoutePointEmails
-                                    locationId={pt.id}
-                                    value={pt.emails ?? []}
-                                    onChange={(emails) => {
-                                        const newPts = [...routePointsState];
-                                        newPts[i] = { ...newPts[i], emails };
-                                        setRoutePointsState(newPts);
-                                    }}
-                                />
-                            </div>
-                        );
-                    })}
-                </div>
-
-                <Button
-                    variant="outline"
-                    className="h-8 w-full gap-1.5 rounded-lg border-dashed text-[13px] font-normal"
-                    onClick={() => setRoutePointsState([...routePointsState, { city: '', address: '', pointType: 'ADDITIONAL_PICKUP' }])}
-                >
-                    <Plus className="size-3.5" /> Добавить точку
-                </Button>
-            </Section>
-        </div>
-    );
-
-    const stepCargo = (
-        <div>
-            <Section first title="Груз">
-                <div className="grid gap-x-3 sm:grid-cols-2">
-                    <Form.Item
-                        name="natureOfCargo"
-                        label="Характер груза"
-                        /**
-                         * У новой заявки характер груза спрашиваем, у правки —
-                         * нет. Поле появилось позже самих заявок, на сервере
-                         * оно необязательное, и ни в одной заведённой заявке
-                         * его нет. Требовать его при правке значило бы: чтобы
-                         * поправить ставку, придумай задним числом характер
-                         * груза, которого никто не спрашивал.
-                         */
-                        rules={editingId ? [] : [{ required: true, message: 'Выберите из списка или впишите свой вариант' }]}
-                    >
-                        <AutoComplete
-                            placeholder="Выберите или впишите свой вариант..."
-                            options={cargoCategories.map(cat => ({
-                                label: cat.name,
-                                options: (cat.types || []).map((t: any) => ({ value: t.name, label: t.name })),
-                            }))}
-                            filterOption={(input, option: any) =>
-                                String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())
-                            }
-                        />
-                    </Form.Item>
-                    <Form.Item name="cargoType" label="Тип кузова">
-                        {/* Кузовов полсотни — окно с поиском и частыми сверху (задачи шефа, M4). */}
-                        <ChoiceField
-                            aria-label="Тип кузова"
-                            title="Тип кузова"
-                            placeholder="Тент, реф…"
-                            searchPlaceholder="Например: тент, реф, борт"
-                            allowClear
-                            clearLabel="Не указан"
-                            recentKey="body-type"
-                            onChange={() => undefined}
-                            groups={BODY_TYPE_GROUPS}
-                        />
-                    </Form.Item>
-                </div>
-                <Form.Item name="cargoDescription" label="Описание груза" data-guide="wizard-cargo">
-                    <textarea rows={2} className={TEXTAREA} placeholder="Мебель, 20 коробок, палеты..." />
-                </Form.Item>
-                <div className="grid grid-cols-2 gap-x-3 sm:grid-cols-3">
-                    <Form.Item name="cargoWeight" label="Вес, кг">
-                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                    </Form.Item>
-                    <Form.Item name="cargoVolume" label="Объём, м³">
-                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                    </Form.Item>
-                    <Form.Item name="palletCount" label="Количество палет" hidden>
-                        <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
-                    </Form.Item>
-                </div>
-
-                <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px]">
-                    <Checkbox checked={showDims} onCheckedChange={(c) => setShowDims(c === true)} />
-                    Указать габариты груза (длина × ширина × высота, м)
-                </label>
-                {showDims && (
-                    <div className="grid grid-cols-3 gap-x-3">
-                        <Form.Item name="cargoLength" label="Длина, м">
-                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" />
-                        </Form.Item>
-                        <Form.Item name="cargoWidth" label="Ширина, м">
-                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" />
-                        </Form.Item>
-                        <Form.Item name="cargoHeight" label="Высота, м">
-                            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0" />
-                        </Form.Item>
-                    </div>
-                )}
-            </Section>
-
-            <Section title="Состав груза">
-                <div className="rounded-lg border border-solid border-border p-3">
-                    <CargoComposition value={cargo} onChange={setCargo} />
-                </div>
-            </Section>
-
-            <Section title="Дополнительно">
-                <Form.Item name="requirements" label="Что ещё важно водителю">
-                    <textarea rows={2} className={TEXTAREA} placeholder="Ремни, коники, гидроборт, особые пожелания..." />
-                </Form.Item>
-            </Section>
-        </div>
-    );
-
-    const steps = [
-        { title: 'Стороны и ставки', content: stepParties },
-        { title: 'Маршрут', content: stepRoute },
-        { title: 'Груз', content: stepCargo },
-    ];
 
     const currentCustomerCompany = selectedCustomer === MY_COMPANY_VALUE
         ? { id: selectedMyCompanyId, name: myCompanies.find(c => c.id === selectedMyCompanyId)?.name || myCompanyName || 'Моя компания' }
@@ -1967,135 +1447,871 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
             ? { id: selectedCarrier, name: partners.find(p => p.id === selectedCarrier)?.name || 'Исполнитель' }
             : undefined;
 
-    return (
-        <div className={cn(styles.wizard, 'flex min-h-0 flex-1 flex-col')} data-order-wizard>
-            {/* ===== Шапка: что за заявка и на каком шаге ===== */}
-            <div className="border-0 border-b border-solid border-border px-5 pb-3 pt-4">
-                <div className="flex items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                        <DialogTitle className="m-0 text-base font-semibold tracking-normal">
-                            {editingId ? `Правка заявки ${editingNumber}`.trim() : 'Новая заявка'}
-                        </DialogTitle>
-                        <DialogDescription className="m-0 mt-0.5 text-[13px]">
-                            Шаг {currentStep + 1} из {steps.length}
-                            {/* Чтобы знали, что закрыть можно: набранное не пропадёт. */}
-                            {!editingId && черновикСохранён && (
-                                <span data-testid="order-draft-saved"> · черновик сохранён</span>
+    // =================== ОКНО «НОВАЯ ЗАЯВКА» (вариант B, 29.10.2026) ===================
+
+    const ошибка = (key: string) => (попыткаОтправки ? ошибкиФормы.find((e) => e.key === key)?.message ?? null : null);
+    const имяСтороны = (value: string) => (value === MY_COMPANY_VALUE ? myCompanyLabel : partners.find((p) => p.id === value)?.name || '');
+    const короткоеИмя = (name: string) => name.replace(/^(ТОО|АО|ИП|ООО)\s+/i, '').replace(/[«»"]/g, '');
+    const точкаАдрес = (pt: LocationState) => {
+        const loc = pt.id ? locations.find((l) => l.id === pt.id) : undefined;
+        return {
+            title: loc?.name || pt.city || pt.address || '',
+            sub: loc ? адресСтрокой(loc.city, loc.address) : (pt.city ? pt.address : ''),
+            city: loc?.city || pt.city || '',
+        };
+    };
+    const числоТ = (kg?: number | null) => (kg ? `${(Math.round(kg / 100) / 10).toLocaleString('ru-RU')} т` : null);
+
+    // Сводка (ТЗ, §6): чего не хватает — первой строкой.
+    const сторонаГотова = !!selectedCustomer && (!!selectedCarrier || searchingOnExchange);
+    const ставкаЗаказчика = Number(watchedCustomerPrice) || 0;
+    const ставкаПеревозчику = Number(searchingOnExchange ? watchedExchangePrice : watchedDriverCost) || 0;
+    const главнаяСтавка = showCustomerPriceField ? ставкаЗаказчика : ставкаПеревозчику;
+    // Маржа в сводке — та же, что в расчёте по рейсу под ставками: без НДС
+    // сторон. Две разные цифры маржи на одном экране сбивают с толку. При
+    // разных валютах её считают по курсу только там — в сводке не пишем.
+    const безНдс = (сумма: number, terms: typeof customerTerms) => (terms?.vatPayer ? сумма / (1 + Number(terms.vatRate ?? 0) / 100) : сумма);
+    const заказчикуБезНдс = безНдс(ставкаЗаказчика, customerTerms);
+    const маржа = showCustomerPriceField && showDriverCostField && !exchangeActive && ставкаЗаказчика > 0 && ставкаПеревозчику > 0
+        && (watchedCurrency || 'KZT') === (watchedDriverCurrency || 'KZT')
+        ? Math.round((заказчикуБезНдс - безНдс(ставкаПеревозчику, carrierTerms)) * 100) / 100 : null;
+    const маржаТекст = маржа != null
+        ? `${маржа < 0 ? '−' : ''}${moneyShort(Math.abs(маржа))} · ${маржа < 0 ? '−' : ''}${Math.abs(Math.round(маржа / заказчикуБезНдс * 100))} %`
+        : null;
+    const первая = routePointsState.find((p) => p.pointType === 'PICKUP');
+    const последняя = [...routePointsState].reverse().find((p) => p.pointType === 'DELIVERY');
+    const маршрутГотов = !!(первая && (первая.id || первая.city)) && !!(последняя && (последняя.id || последняя.city)) && !!watchedPickupDate;
+    const характер = String(watchedNature || '').trim();
+    const грузГотов = !!характер || !!editingId;
+    const водитель = selectedDriverId && selectedDriverId !== NEW_DRIVER ? drivers.find((d) => d.id === selectedDriverId) : undefined;
+    const статус = (готов: boolean, начат: boolean, key: string): SummaryStatus => {
+        if (готов) return 'done';
+        if (попыткаОтправки && ошибкиФормы.some((e) => e.section === key)) return 'error';
+        return начат || попыткаОтправки ? 'warn' : 'empty';
+    };
+    // Новый водитель: без ФИО, телефона и госномера заявку не создать — сводка говорит об этом заранее.
+    const новыйВодительЗаполнен = watchedNewDriver.every((v) => String(v ?? '').trim()) && !!String(watchedPlate ?? '').trim();
+    const тон = (k: string) => (попыткаОтправки && ошибкиФормы.some((e) => e.section === k) ? 'error' as const : 'warn' as const);
+    const summaryItems: SummaryItem[] = [
+        {
+            key: 'parties',
+            title: 'Стороны',
+            status: статус(сторонаГотова, !!selectedCustomer || !!selectedCarrier, 'parties'),
+            lines: сторонаГотова
+                ? [{ text: `${короткоеИмя(имяСтороны(selectedCustomer))} → ${searchingOnExchange ? 'на бирже' : короткоеИмя(имяСтороны(selectedCarrier))}` }]
+                : [{ text: !selectedCustomer ? 'Не выбран заказчик' : 'Не выбран перевозчик', tone: тон('parties') }],
+        },
+        {
+            key: 'rates',
+            title: 'Ставки',
+            status: главнаяСтавка > 0 ? 'done' : (попыткаОтправки || ставкаПеревозчику > 0 ? 'warn' : 'empty'),
+            lines: главнаяСтавка > 0
+                ? [
+                    { text: showCustomerPriceField && ставкаПеревозчику > 0
+                        ? `${moneyShort(ставкаЗаказчика)} → ${searchingOnExchange ? 'до ' : ''}${moneyShort(ставкаПеревозчику)}`
+                        : moneyShort(главнаяСтавка) },
+                    ...(маржаТекст ? [{ text: `Маржа ${маржаТекст}` }] : []),
+                ]
+                : [{ text: showCustomerPriceField ? 'Нет ставки заказчика' : 'Нет ставки перевозчику', tone: 'warn' as const }],
+        },
+        {
+            key: 'route',
+            title: 'Маршрут',
+            status: статус(маршрутГотов, routePointsState.some((p) => p.id || p.city) || !!watchedPickupDate, 'route'),
+            lines: маршрутГотов
+                ? [
+                    { text: routePointsState.filter((p) => p.id || p.city).map((p) => точкаАдрес(p).city || точкаАдрес(p).title).filter(Boolean).join(' → ') },
+                    { text: `Погрузка ${dayjs(watchedPickupDate).format('DD.MM, HH:mm')}` },
+                ]
+                : [{
+                    text: !(первая && (первая.id || первая.city)) ? 'Нет адреса погрузки'
+                        : !(последняя && (последняя.id || последняя.city)) ? 'Нет адреса выгрузки' : 'Нет даты погрузки',
+                    tone: тон('route'),
+                }],
+        },
+        {
+            key: 'cargo',
+            title: 'Груз и транспорт',
+            status: статус(грузГотов, !!watchedWeight || !!watchedBody || cargo.packagingTypes.length > 0, 'cargo'),
+            lines: грузГотов
+                ? [
+                    { text: [характер || 'Груз', числоТ(watchedWeight), watchedVolume ? `${watchedVolume} м³` : null].filter(Boolean).join(' · ') },
+                    {
+                        text: [
+                            watchedBody ? watchedBody.charAt(0).toUpperCase() + watchedBody.slice(1) : 'Любой кузов',
+                            (watchedBody === 'рефрижератор' || watchedBody === 'изотерм') && cargo.tempMin != null && cargo.tempMax != null
+                                ? `${fmtT(cargo.tempMin)}…${fmtT(cargo.tempMax)} °C` : null,
+                            totalPallets(cargo.pallets) ? `${totalPallets(cargo.pallets)} палл.` : null,
+                        ].filter(Boolean).join(' · '),
+                    },
+                ]
+                : [{ text: 'Не указан характер груза', tone: тон('cargo') }],
+        },
+        {
+            key: 'driver',
+            title: 'Водитель',
+            // Выбрали «Новый водитель» — его данные обязательны, и счётчик готовности их ждёт.
+            optional: selectedDriverId !== NEW_DRIVER,
+            status: searchingOnExchange || водитель ? 'done'
+                : selectedDriverId === NEW_DRIVER ? (новыйВодительЗаполнен ? 'done' : 'warn')
+                    : 'empty',
+            lines: searchingOnExchange
+                ? [{ text: 'Укажет перевозчик с биржи', tone: 'muted' }]
+                : водитель
+                    ? [
+                        { text: [водитель.lastName, водитель.firstName, водитель.middleName].filter(Boolean).join(' ') },
+                        ...((watchedPlate || watchedTrailer) ? [{ text: [watchedPlate, watchedTrailer].filter(Boolean).join(' + ') }] : []),
+                    ]
+                    : selectedDriverId === NEW_DRIVER
+                        ? [новыйВодительЗаполнен
+                            ? { text: [watchedNewDriver[0], watchedNewDriver[1]].filter(Boolean).join(' ') }
+                            : { text: 'Заполните данные водителя', tone: 'warn' }]
+                        : [{ text: isCarrierOnPlatform ? 'Назначит перевозчик' : 'Необязательно', tone: 'muted' }],
+        },
+    ];
+    const числоОшибок = ошибкиФормы.length + ошибкиПолей;
+    const ctaText = editingId ? 'Сохранить заявку' : exchangeActive ? 'Создать и опубликовать' : 'Создать заявку';
+
+    // Водитель числится у другого перевозчика — предупреждаем, не мешаем (ТЗ, §5.6).
+    const перевозчикId = selectedCarrier === MY_COMPANY_VALUE ? (user?.companyId ?? null) : selectedCarrier || null;
+    const водительЧужой = !!водитель && !!перевозчикId && водитель.carrierIds.length > 0 && !водитель.carrierIds.includes(перевозчикId)
+        ? `Водитель числится у «${короткоеИмя(водитель.lastTrip?.carrierName || водитель.companyName || 'другого перевозчика')}», а перевозчик в заявке — «${короткоеИмя(имяСтороны(selectedCarrier))}»`
+        : null;
+
+    const кузов = (
+        <BodySection
+            bodyType={watchedBody || undefined}
+            onBodyType={(v) => { form.setFieldValue('cargoType', v); setПравкаФормы((n) => n + 1); }}
+            cargo={cargo}
+            onCargo={setCargo}
+        />
+    );
+
+    const данныеВодителя = selectedDriverId && (selectedDriverId === NEW_DRIVER || анкетаОткрыта) && (
+        <div className={s.driverCard}>
+            <div className={s.driverCardHead}>
+                <span className={s.label}>{selectedDriverId === NEW_DRIVER ? 'Новый водитель' : 'Данные водителя'}</span>
+                {selectedDriverId !== NEW_DRIVER && (
+                    <button type="button" className={s.linkBtn} onClick={() => setАнкетаОткрыта(false)}>Свернуть</button>
+                )}
+            </div>
+            <div className={s.subTitle}>ФИО</div>
+            <div className={s.grid3}>
+                <Form.Item name="lastName" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите фамилию' }]}>
+                    <UiInput className={FIELD} placeholder="Фамилия" aria-label="Фамилия" />
+                </Form.Item>
+                <Form.Item name="firstName" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите имя' }]}>
+                    <UiInput className={FIELD} placeholder="Имя" aria-label="Имя" />
+                </Form.Item>
+                <Form.Item name="middleName">
+                    <UiInput className={FIELD} placeholder="Отчество" aria-label="Отчество" />
+                </Form.Item>
+            </div>
+            {/* Порядок, как просил шеф (E1): ФИО → удостоверение → телефон → машина. */}
+            <div className={s.subTitle}>Документ</div>
+            <div className={s.grid3}>
+                <Form.Item name="docType">
+                    <FormSelect
+                        aria-label="Тип документа"
+                        className={s.shadSelect}
+                        placeholder="Тип документа"
+                        options={[
+                            { value: 'ID_CARD', label: 'Удостоверение личности' },
+                            { value: 'PASSPORT', label: 'Паспорт' },
+                        ]}
+                    />
+                </Form.Item>
+                <Form.Item name="docNumber">
+                    <UiInput className={FIELD} placeholder="Номер документа" aria-label="Номер документа" />
+                </Form.Item>
+                <Form.Item name="docIssuedBy">
+                    <UiInput className={FIELD} placeholder="Кем выдан, например МВД РК" aria-label="Кем выдан" />
+                </Form.Item>
+                <Form.Item name="docIssuedAt">
+                    <DateField style={{ width: '100%' }} placeholder="Дата выдачи" aria-label="Дата выдачи" />
+                </Form.Item>
+                <Form.Item name="docExpiresAt">
+                    <DateField style={{ width: '100%' }} placeholder="Срок действия" aria-label="Срок действия" />
+                </Form.Item>
+            </div>
+            <div className={s.subTitle}>Связь и машина</div>
+            <div className={s.grid3}>
+                <Form.Item name="phone" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите телефон' }]}>
+                    <UiInput className={FIELD} placeholder="Телефон +77001234567" aria-label="Телефон" />
+                </Form.Item>
+                <Form.Item name="iin">
+                    <UiInput className={FIELD} placeholder="ИИН" aria-label="ИИН" maxLength={12} />
+                </Form.Item>
+                <Form.Item name="vehicleModel">
+                    <UiInput className={FIELD} placeholder="Модель машины, например Volvo FH12" aria-label="Модель автомобиля" />
+                </Form.Item>
+                <Form.Item name="vehicleType">
+                    <ChoiceField
+                        aria-label="Тип транспорта"
+                        title="Тип кузова"
+                        placeholder="Тип кузова машины"
+                        searchPlaceholder="Например: тент, реф, борт"
+                        recentKey="body-type"
+                        onChange={() => undefined}
+                        groups={BODY_TYPE_GROUPS}
+                    />
+                </Form.Item>
+            </div>
+        </div>
+    );
+
+    const форма = (
+        <Form form={form} layout="vertical" onValuesChange={() => setПравкаФормы((n) => n + 1)} component={false}>
+            {/* Поля без своего вида: значение держит форма, выбирают плитками и шапкой. */}
+            <Form.Item name="cargoType" hidden><input /></Form.Item>
+            <Form.Item name="palletCount" hidden><input /></Form.Item>
+
+            {!profileComplete && (
+                <div className={s.note}>
+                    <CircleAlert className="mt-px size-4 shrink-0" aria-hidden />
+                    <span>
+                        Для доверенностей и счетов заполните{' '}
+                        <button type="button" className={s.linkInline} onClick={() => router.push('/company/settings')}>профиль компании</button>
+                    </span>
+                </div>
+            )}
+
+            {/* ===== Стороны ===== */}
+            <section id="no-sec-parties" data-section="parties" className={s.section} aria-labelledby="no-h-parties">
+                <SectionHead
+                    id="no-h-parties"
+                    title="Стороны"
+                    aside={roleInfo.tone !== 'muted' && (
+                        <span className={cn(s.pill, roleInfo.tone === 'ok' && s.pillOk, roleInfo.tone === 'warn' && s.pillWarn, roleInfo.tone === 'info' && s.pillInfo)}>
+                            <CircleCheck className="size-3.5 shrink-0" aria-hidden />{roleInfo.text}
+                        </span>
+                    )}
+                />
+                <div className={s.grid2}>
+                    <Field id="no-customer" label="Заказчик" error={ошибка('customer')}>
+                        <PartnerPicker
+                            role="CUSTOMER"
+                            value={selectedCustomer || undefined}
+                            onChange={setSelectedCustomer}
+                            partners={partners}
+                            ownValue={MY_COMPANY_VALUE}
+                            ownLabel={myCompanyLabel}
+                            userId={user?.id}
+                            scope={user?.companyId}
+                            onAdd={() => открытьЗаведениеКонтрагента('CUSTOMER')}
+                            renderField={(api) => (
+                                <InlineCombo
+                                    id="no-customer"
+                                    dataGuide="wizard-customer"
+                                    value={selectedCustomer || undefined}
+                                    valueTitle={api.label}
+                                    placeholder="Выберите заказчика"
+                                    searchPlaceholder="Название, БИН или город"
+                                    items={[{ ...api.own, pinned: true }, ...api.items]}
+                                    recentKey={api.recentKey}
+                                    loading={партнёрыГрузятся}
+                                    directoryLabel={(q) => (q ? `Не нашли «${q}» — открыть справочник` : (api.count ? `Открыть справочник · ${api.count} ${склон(api.count, 'заказчик', 'заказчика', 'заказчиков')}` : 'Справочник пуст — добавить заказчика'))}
+                                    onOpenDirectory={api.open}
+                                    onSelect={setSelectedCustomer}
+                                    invalid={!!ошибка('customer')}
+                                    describedBy={ошибка('customer') ? 'no-customer-err' : undefined}
+                                />
                             )}
-                        </DialogDescription>
-                    </div>
-                    <DialogClose asChild>
-                        <Button variant="ghost" size="icon" className="-mr-1.5 size-8 shrink-0 rounded-lg text-muted-foreground hover:text-foreground" aria-label="Закрыть">
-                            <X className="size-4" />
-                        </Button>
-                    </DialogClose>
+                        />
+                    </Field>
+                    <Field
+                        id="no-carrier"
+                        label="Перевозчик"
+                        error={ошибка('carrier')}
+                        aside={exchangeAvailable && (
+                            <Segmented
+                                ariaLabel="Кто повезёт"
+                                value={exchangeActive ? 'exchange' : 'own'}
+                                options={[{ value: 'own', label: 'Свой' }, { value: 'exchange', label: 'На бирже' }]}
+                                onChange={(v) => toggleExchange(v === 'exchange')}
+                            />
+                        )}
+                    >
+                        {searchingOnExchange ? (
+                            <div className={cn(s.dashed, s.dashedSm)} data-guide="wizard-carrier">
+                                <Globe className="size-4 shrink-0" aria-hidden />
+                                <span>{alreadyOnExchange ? 'Ищем на бирже — выберете из откликов' : 'Опубликуем на бирже сразу после создания'}</span>
+                            </div>
+                        ) : (
+                            <PartnerPicker
+                                role="CARRIER"
+                                value={selectedCarrier || undefined}
+                                onChange={выбратьПеревозчика}
+                                partners={partners}
+                                ownValue={MY_COMPANY_VALUE}
+                                ownLabel={myCompanyLabel}
+                                userId={user?.id}
+                                scope={user?.companyId}
+                                onAdd={() => открытьЗаведениеКонтрагента('CARRIER')}
+                                renderField={(api) => (
+                                    <InlineCombo
+                                        id="no-carrier"
+                                        dataGuide="wizard-carrier"
+                                        value={selectedCarrier || undefined}
+                                        valueTitle={api.label}
+                                        placeholder="Выберите перевозчика"
+                                        searchPlaceholder="Название, БИН или город"
+                                        items={[{ ...api.own, pinned: true }, ...api.items]}
+                                        recentKey={api.recentKey}
+                                        loading={партнёрыГрузятся}
+                                        directoryLabel={(q) => (q ? `Не нашли «${q}» — открыть справочник` : (api.count ? `Открыть справочник · ${api.count} ${склон(api.count, 'перевозчик', 'перевозчика', 'перевозчиков')}` : 'Справочник пуст — добавить перевозчика'))}
+                                        onOpenDirectory={api.open}
+                                        onSelect={выбратьПеревозчика}
+                                        invalid={!!ошибка('carrier')}
+                                        describedBy={ошибка('carrier') ? 'no-carrier-err' : undefined}
+                                    />
+                                )}
+                            />
+                        )}
+                        {alreadyOnExchange && editingId && <ExchangeOnBoardNote orderId={editingId} price={editExchange?.price ?? null} />}
+                    </Field>
                 </div>
 
-                {/* Шаги. Пройденные кликабельны: вернуться к сторонам сделки
-                    посреди груза — обычное дело. */}
-                <div role="tablist" aria-label="Шаги заявки" className="mt-3 flex items-center gap-2">
-                    {steps.map((step, idx) => {
-                        const done = idx < currentStep;
-                        const active = idx === currentStep;
-                        return (
-                            <div key={idx} className="flex min-w-0 flex-1 items-center gap-2 last:flex-none">
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={active}
-                                    disabled={idx > currentStep}
-                                    onClick={() => { if (idx < currentStep) setCurrentStep(idx); }}
-                                    // Якоря для ИИ-гида: он ведёт по мастеру шаг за шагом.
-                                    data-guide={`wizard-step-${idx}`}
-                                    className={cn(
-                                        'flex shrink-0 items-center gap-2 border-0 bg-transparent p-0 text-[13px] [font-family:inherit]',
-                                        done ? 'cursor-pointer text-foreground' : active ? 'cursor-default font-medium text-foreground' : 'cursor-default text-muted-foreground',
+                <div className="mt-3">
+                    <Form.Item noStyle dependencies={['ttnNumber', 'customerRefNumber']}>
+                        {({ getFieldValue }) => (
+                            <TransportNumbers
+                                ttnNumber={getFieldValue('ttnNumber')}
+                                refNumber={getFieldValue('customerRefNumber')}
+                                refLabel={customerRefLabel}
+                                counterpartyId={selectedCustomer && selectedCustomer !== MY_COMPANY_VALUE ? selectedCustomer : null}
+                                canRename={!!selectedCustomerIsExternal}
+                                onRenamed={(label) => setFetchedPartners((prev) => prev.map((p: any) => (
+                                    p.id === selectedCustomer ? { ...p, customerRefLabel: label } : p
+                                )))}
+                            />
+                        )}
+                    </Form.Item>
+                </div>
+            </section>
+
+            {/* ===== Ставки ===== */}
+            <section id="no-sec-rates" data-section="rates" className={s.section} aria-labelledby="no-h-rates">
+                <SectionHead id="no-h-rates" title="Ставки" />
+                <div className={s.gridRates} style={{ '--rates-cols': `${[showCustomerPriceField, exchangeActive || showDriverCostField].filter(Boolean).map(() => 'minmax(0, 1fr)').join(' ')} 180px` } as React.CSSProperties}>
+                    {showCustomerPriceField && (
+                        <Field id="no-customer-price" label={customerPriceLabel}>
+                            <Form.Item name="customerPrice">
+                                <MoneyInput
+                                    id="no-customer-price"
+                                    placeholder="Сумма"
+                                    addonAfter={(
+                                        <Form.Item name="currency" noStyle initialValue="KZT">
+                                            <CurrencySelect />
+                                        </Form.Item>
                                     )}
+                                />
+                            </Form.Item>
+                            {appliedTariff && (
+                                <span className={cn(s.pill, s.pillOk)} style={{ alignSelf: 'flex-start' }}>
+                                    <CircleCheck className="size-3.5" aria-hidden /> Тариф ДС №{appliedTariff.agreement?.agreementNumber || '—'}
+                                </span>
+                            )}
+                        </Field>
+                    )}
+                    {exchangeActive && (
+                        <Field id="no-exchange-price" label="Бюджет перевозчику" hint={(
+                            <label className="flex cursor-pointer items-start gap-2 text-[12.5px] leading-[18px]" style={{ color: 'var(--nova-fg-2)' }}>
+                                <Checkbox className="mt-px" checked={exchangeNoPrice} onCheckedChange={(c) => setExchangeNoPrice(c === true)} />
+                                Без цены — пусть исполнители предложат свою
+                            </label>
+                        )}>
+                            {!exchangeNoPrice ? (
+                                <Form.Item
+                                    name="exchangePrice"
+                                    rules={[{
+                                        validator: (_, v) => (Number(v) > 0
+                                            ? Promise.resolve()
+                                            : Promise.reject(new Error('Укажите цену — исполнители согласятся на неё или предложат свою'))),
+                                    }]}
                                 >
-                                    <span className={cn(
-                                        'grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold',
-                                        done ? 'bg-foreground text-background' : active ? 'border-2 border-solid border-foreground' : 'border border-solid border-border',
-                                    )}>
-                                        {done ? <Check className="size-3.5" /> : idx + 1}
-                                    </span>
-                                    <span className="whitespace-nowrap">{step.title}</span>
-                                </button>
-                                {idx < steps.length - 1 && <span className={cn('h-px min-w-4 flex-1', done ? 'bg-foreground' : 'bg-border')} />}
-                            </div>
+                                    <MoneyInput id="no-exchange-price" addonAfter="KZT" placeholder="Сумма" aria-label="Цена для исполнителя на бирже" />
+                                </Form.Item>
+                            ) : (
+                                <div className={cn(s.dashed, s.dashedSm)}>Исполнители предложат свою цену</div>
+                            )}
+                        </Field>
+                    )}
+                    {showDriverCostField && !exchangeActive && (
+                        <Field id="no-driver-cost" label={driverCostLabel}>
+                            <Form.Item name="driverCost">
+                                <MoneyInput
+                                    id="no-driver-cost"
+                                    placeholder="Сумма"
+                                    addonAfter={(
+                                        // Валюта перевозчика своя: клиент платит рублями, перевозчик получает тенге — обычное дело.
+                                        <Form.Item name="driverCostCurrency" noStyle initialValue="KZT">
+                                            <CurrencySelect />
+                                        </Form.Item>
+                                    )}
+                                />
+                            </Form.Item>
+                        </Field>
+                    )}
+                    <Field id="no-price-type" label="Тип ставки">
+                        <Form.Item name="customerPriceType" initialValue="FIXED">
+                            <FormSelect
+                                id="no-price-type"
+                                aria-label="Тип ставки"
+                                className={s.shadSelect}
+                                options={[
+                                    { value: 'FIXED', label: 'За рейс' },
+                                    { value: 'PER_TON', label: 'За тонну' },
+                                    { value: 'PER_KM', label: 'За км' },
+                                ]}
+                            />
+                        </Form.Item>
+                    </Field>
+                </div>
+
+                {/* Маржа: при разных валютах и НДС — по курсу и с налогом, как на сервере. */}
+                <Form.Item noStyle dependencies={['customerPrice', 'driverCost', 'currency', 'driverCostCurrency', 'pickupDate']}>
+                    {({ getFieldValue }) => {
+                        const cp = getFieldValue('customerPrice') || 0;
+                        const dc = getFieldValue('driverCost') || 0;
+                        if (cp && dc && showCustomerPriceField && showDriverCostField && !exchangeActive) {
+                            return (
+                                <div className="mt-2.5">
+                                    <MarginPreview
+                                        customerPrice={cp}
+                                        driverCost={dc}
+                                        customerCurrency={getFieldValue('currency')}
+                                        carrierCurrency={getFieldValue('driverCostCurrency')}
+                                        date={getFieldValue('pickupDate')}
+                                        customerVatRate={customerTerms?.vatPayer ? Number(customerTerms?.vatRate ?? 0) : null}
+                                        carrierVatRate={carrierTerms?.vatPayer ? Number(carrierTerms?.vatRate ?? 0) : null}
+                                        customerLabel={customerPriceLabel}
+                                        carrierLabel={driverCostLabel}
+                                    />
+                                </div>
+                            );
+                        }
+                        return showCustomerPriceField && (showDriverCostField || exchangeActive)
+                            ? <p className={s.margin} style={{ color: 'var(--nova-fg-3)' }}>Маржа посчитается, когда будут обе ставки</p>
+                            : null;
+                    }}
+                </Form.Item>
+
+                {/* Условия расчётов — из карточек сторон: логисту — чтобы говорить с перевозчиком, менять их здесь нельзя. */}
+                {(customerTerms || carrierTerms) && (
+                    <div className={s.note} style={{ marginTop: 10 }}>
+                        <span className="shrink-0 font-semibold" style={{ color: 'var(--nova-fg)' }}>Расчёты</span>
+                        <span className="min-w-0 flex-1">
+                            {[
+                                customerTerms && `заказчик — ${vatLabel(customerTerms.vatPayer, customerTerms.vatRate)}`
+                                    + (paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom, customerTerms.customerPaymentBanking)
+                                        ? `, оплата ${paymentTermsLabel(customerTerms.customerPaymentDays, customerTerms.customerPaymentFrom, customerTerms.customerPaymentBanking)}`
+                                        : ', срок оплаты не указан'),
+                                carrierTerms && `перевозчик — ${vatLabel(carrierTerms.vatPayer, carrierTerms.vatRate)}`
+                                    + (paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom, carrierTerms.carrierPaymentBanking)
+                                        ? `, платим ${paymentTermsLabel(carrierTerms.carrierPaymentDays, carrierTerms.carrierPaymentFrom, carrierTerms.carrierPaymentBanking)}`
+                                        : ', срок оплаты не указан'),
+                            ].filter(Boolean).join(' · ')}
+                        </span>
+                        <TooltipProvider delayDuration={150}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button type="button" aria-label="Откуда условия расчётов" className={s.removeX}>
+                                        <Info className="size-3.5" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                    Берутся из карточки контрагента, раздел «Расчёты». Не заполнены —
+                                    рейс дождётся бухгалтера, заводить его это не мешает.
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    </div>
+                )}
+            </section>
+
+            {/* ===== Маршрут ===== */}
+            <section id="no-sec-route" data-section="route" className={s.section} aria-labelledby="no-h-route">
+                <SectionHead
+                    id="no-h-route"
+                    title="Маршрут"
+                    aside={(
+                        <button type="button" className={s.addDashed} onClick={добавитьТочку}>
+                            <Plus className="size-3.5" aria-hidden /> Добавить точку
+                        </button>
+                    )}
+                />
+                <ol className={s.route}>
+                    {routePointsState.map((pt, i) => {
+                        const адрес = точкаАдрес(pt);
+                        const крайняя = i === 0 || i === routePointsState.length - 1;
+                        const погрузкаСДатой = pt.pointType === 'PICKUP' && routePointsState.findIndex((p) => p.pointType === 'PICKUP') === i;
+                        const errAddr = ошибка(`point-${i}`);
+                        const errDate = погрузкаСДатой && попыткаОтправки && !watchedPickupDate ? 'Укажите, когда забирать груз' : null;
+                        const вид = pt.pointType === 'PICKUP' ? 'Погрузка' : pt.pointType === 'DELIVERY' ? 'Выгрузка' : 'Догрузка';
+                        return (
+                            <li key={i} className={s.point}>
+                                {i < routePointsState.length - 1 && <span className={s.pointLine} aria-hidden />}
+                                <span className={cn(s.pointNum, i === 0 && s.pointNumFirst, !крайняя && s.pointNumMid)}>{i + 1}</span>
+                                <div className={s.pointKindCell}>
+                                    {крайняя
+                                        ? <span className={s.pointKind}>{вид}</span>
+                                        : (
+                                            <button
+                                                type="button"
+                                                className={s.pointKindBtn}
+                                                aria-label={`Точка ${i + 1}: ${вид.toLowerCase()} — сменить`}
+                                                onClick={() => {
+                                                    const next = [...routePointsState];
+                                                    next[i] = { ...next[i], pointType: pt.pointType === 'DELIVERY' ? 'ADDITIONAL_PICKUP' : 'DELIVERY' };
+                                                    setRoutePointsState(next);
+                                                }}
+                                            >
+                                                {вид}<ChevronsUpDown className="size-3.5" style={{ color: 'var(--nova-fg-3)' }} aria-hidden />
+                                            </button>
+                                        )}
+                                </div>
+                                <div className={s.pointAddr}>
+                                    <AddressCombo
+                                        id={`no-point-${i}`}
+                                        groups={getLocationOptions()}
+                                        value={pt.id}
+                                        valueTitle={адрес.title}
+                                        valueSub={адрес.sub}
+                                        ariaLabel={`Адрес точки ${i + 1}: ${вид.toLowerCase()}`}
+                                        emptyText={selectedCustomer ? 'У заказчика пока нет адресов. Добавьте новый — он сохранится за этим заказчиком.' : undefined}
+                                        invalid={!!errAddr}
+                                        describedBy={errAddr ? `no-point-${i}-err` : undefined}
+                                        autoOpen={открытьТочку === i}
+                                        onOpened={() => setОткрытьТочку(null)}
+                                        onCreateNew={(q) => {
+                                            setActiveRoutePointIndex(i);
+                                            setНовыйАдрес(q);
+                                            setQuickLocationModalOpen(true);
+                                        }}
+                                        onSelect={(val) => выбратьАдрес(i, val)}
+                                    />
+                                </div>
+                                {погрузкаСДатой ? (
+                                    <div className={cn(s.tallPicker, s.pointDate)} data-guide="wizard-pickup-date">
+                                        <Form.Item name="pickupDate" className={s.noHelp} rules={[{ required: true, message: 'Укажите, когда забирать груз' }]} validateStatus={errDate ? 'error' : undefined}>
+                                            <DateField
+                                                id="no-pickup-date"
+                                                style={{ width: '100%' }}
+                                                format="DD.MM.YYYY HH:mm"
+                                                showTime={{ format: 'HH:mm' }}
+                                                placeholder="Дата и время"
+                                                aria-label="Дата и время погрузки"
+                                            />
+                                        </Form.Item>
+                                    </div>
+                                ) : (
+                                    <div className={cn(s.tallPicker, s.pointDate)}>
+                                        <DateField
+                                            style={{ width: '100%' }}
+                                            format="DD.MM.YYYY HH:mm"
+                                            showTime={{ format: 'HH:mm' }}
+                                            placeholder="Дата · необязательно"
+                                            aria-label={`Дата точки ${i + 1}`}
+                                            value={pt.date ? dayjs(pt.date) : null}
+                                            onChange={(d: Dayjs | null) => {
+                                                const next = [...routePointsState];
+                                                next[i] = { ...next[i], date: d ? d.toISOString() : null };
+                                                setRoutePointsState(next);
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                                <div className={s.pointAct}>
+                                    {!крайняя && (
+                                        <button
+                                            type="button"
+                                            className={s.iconBtn}
+                                            aria-label={`Удалить точку ${i + 1}`}
+                                            onClick={() => setRoutePointsState(routePointsState.filter((_, j) => j !== i))}
+                                        >
+                                            <Trash2 className="size-4" />
+                                        </button>
+                                    )}
+                                </div>
+                                <div className={s.pointExtra}>
+                                    {(errAddr || errDate) && (
+                                        <div className={s.pointErr}>
+                                            <FieldError id={`no-point-${i}-err`}>{[errAddr, errDate].filter(Boolean).join(' · ')}</FieldError>
+                                        </div>
+                                    )}
+                                    {/* Почта, закреплённая за адресом: куда слать доверенность. */}
+                                    {pt.id && (
+                                        <div className={s.emails}>
+                                            <RoutePointEmails
+                                                locationId={pt.id}
+                                                value={pt.emails ?? []}
+                                                onChange={(emails) => {
+                                                    const next = [...routePointsState];
+                                                    next[i] = { ...next[i], emails };
+                                                    setRoutePointsState(next);
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </li>
                         );
                     })}
-                </div>
-            </div>
+                </ol>
+            </section>
 
-            {/* ===== Поля ===== */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-                {!editingId && черновикОт && (
-                    <div role="status" data-testid="order-draft-restored" className="mb-4 rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">
-                        <b className="font-medium text-foreground">Продолжаем незаконченную заявку</b> — черновик
-                        от {когдаСохранён(черновикОт)}.
-                    </div>
-                )}
-
-                {/* Только на первом шаге: на каждом шаге одна и та же плашка
-                    становилась фоном, который перестают читать. */}
-                {!profileComplete && currentStep === 0 && (
-                    <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] text-muted-foreground">
-                        <CircleAlert className="size-4 shrink-0" />
-                        <span>
-                            Для доверенностей и счетов заполните{' '}
-                            <button type="button" className="cursor-pointer border-0 bg-transparent p-0 font-medium text-foreground underline [font-family:inherit]" onClick={() => router.push('/company/settings')}>
-                                профиль компании
-                            </button>
-                        </span>
-                    </div>
-                )}
-
-                <Form form={form} layout="vertical" onValuesChange={() => setПравкаФормы((n) => n + 1)}>
-                    {steps.map((step, idx) => (
-                        <div key={idx} style={{ display: currentStep === idx ? 'block' : 'none' }}>
-                            {step.content}
-                        </div>
-                    ))}
-                </Form>
-            </div>
-
-            {/* ===== Кнопки ===== */}
-            <div className="flex items-center gap-2 border-0 border-t border-solid border-border px-5 py-3">
-                {/* Сбросить — забыть набранное и начать с пустой формы. Только у
-                    новой заявки: у правки источник — сама заявка. */}
-                {!editingId && <ResetButton onConfirm={начатьЗаново} />}
-                {/* Подсказка про клавиши (задачи шефа, E3). */}
-                <span className="hidden text-[12px] text-muted-foreground md:inline">Enter или Tab — к следующему полю</span>
-                <div className="ml-auto flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="h-8 rounded-lg px-3 text-[13px] font-normal" onClick={onClose}>
-                        Отмена
-                    </Button>
-                    {currentStep > 0 && (
-                        <Button variant="outline" size="sm" className="h-8 gap-1 rounded-lg px-3 text-[13px] font-normal" onClick={goBack} data-guide="wizard-back">
-                            <ArrowLeft className="size-3.5" /> Назад
-                        </Button>
-                    )}
-                    {currentStep < steps.length - 1 ? (
-                        <Button size="sm" className="h-8 gap-1 rounded-lg px-3 text-[13px]" onClick={goNext} data-guide="wizard-next">
-                            Далее <ArrowRight className="size-3.5" />
-                        </Button>
-                    ) : (
-                        <Button
-                            size="sm"
-                            className="h-8 gap-1.5 rounded-lg px-3 text-[13px]"
-                            onClick={handleSubmit}
-                            disabled={submitting || !selectedCustomer || !selectedCarrier}
-                            data-guide="wizard-submit"
+            {/* ===== Груз ===== */}
+            <section id="no-sec-cargo" data-section="cargo" className={s.section} aria-labelledby="no-h-cargo">
+                <SectionHead id="no-h-cargo" title="Груз" />
+                <div className={s.gridCargo}>
+                    <div className={s.field} data-guide="wizard-cargo">
+                        <div className={s.labelRow}><label htmlFor="no-nature" className={s.label}>Характер груза</label></div>
+                        <Form.Item
+                            name="natureOfCargo"
+                            /**
+                             * У новой заявки характер груза спрашиваем, у правки — нет: поле появилось позже
+                             * самих заявок, и требовать его задним числом значило бы мешать поправить ставку.
+                             */
+                            rules={editingId ? [] : [{ required: true, message: 'Укажите, что везём — например, «Продукты питания»' }]}
                         >
-                            {submitting && <Loader2 className="size-3.5 animate-spin" />}
-                            {editingId ? 'Сохранить заявку' : 'Создать заявку'}
-                        </Button>
-                    )}
+                            <AutoComplete
+                                id="no-nature"
+                                placeholder="Выберите или впишите свой"
+                                options={cargoCategories.map(cat => ({
+                                    label: cat.name,
+                                    options: (cat.types || []).map((t: any) => ({ value: t.name, label: t.name })),
+                                }))}
+                                filterOption={(input, option: any) =>
+                                    String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                            />
+                        </Form.Item>
+                    </div>
+                    <Field id="no-weight" label="Вес">
+                        <Form.Item name="cargoWeight">
+                            <InputNumber<number> id="no-weight" min={0} suffix="кг" placeholder="0" formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} parser={(v) => Number((v || '').replace(/\s/g, '')) || 0} />
+                        </Form.Item>
+                    </Field>
+                    <Field id="no-volume" label="Объём">
+                        <Form.Item name="cargoVolume">
+                            <InputNumber<number> id="no-volume" min={0} suffix="м³" placeholder="0" decimalSeparator="," />
+                        </Form.Item>
+                    </Field>
+                </div>
+                <PackagingField cargo={cargo} onCargo={setCargo} />
+                <PlacesAndSize cargo={cargo} onCargo={setCargo} onShowDims={setShowDims} />
+            </section>
+
+            {/* ===== Кузов и загрузка ===== */}
+            <section id="no-sec-truck" data-section="cargo" className={s.section} aria-labelledby="no-h-truck">
+                <SectionHead id="no-h-truck" title="Кузов и загрузка" />
+                {кузов}
+            </section>
+
+            {/* ===== Водитель и транспорт ===== */}
+            <section id="no-sec-driver" data-section="driver" className={s.section} aria-labelledby="no-h-driver">
+                <SectionHead id="no-h-driver" title="Водитель и транспорт" optional />
+                {searchingOnExchange ? (
+                    <div className={s.dashed}>
+                        <Users className="size-4 shrink-0" aria-hidden />
+                        <span>Водителя и машину укажет перевозчик, когда возьмёт заявку с биржи</span>
+                    </div>
+                ) : isCarrierOnPlatform ? (
+                    <div className={cn(s.note, s.notePos)}>
+                        <CircleCheck className="mt-px size-4 shrink-0" aria-hidden />
+                        Перевозчик зарегистрирован на платформе — водителя на заявку он назначит сам.
+                    </div>
+                ) : !selectedCarrier ? (
+                    <div className={s.dashed}>
+                        <Users className="size-4 shrink-0" aria-hidden />
+                        <span>Сначала выберите перевозчика — водители будут его</span>
+                    </div>
+                ) : (
+                    <>
+                        {selectedCarrier === MY_COMPANY_VALUE && vehicles.length > 0 && (
+                            <div className="mb-4">
+                                <Field id="no-fleet" label="Машина из автопарка" note="подставит госномера">
+                                    <ChoiceField
+                                        aria-label="Машина из автопарка"
+                                        title="Машина из автопарка"
+                                        placeholder={vehiclesLoading ? 'Загружаем автопарк…' : 'Выберите транспортное средство'}
+                                        searchPlaceholder="Модель или госномер"
+                                        value={машинаИзПарка}
+                                        onChange={(v) => { setМашинаИзПарка(v); if (v) handleVehicleSelect(v); }}
+                                        allowClear
+                                        clearLabel="Не выбрана"
+                                        groups={[{
+                                            label: 'Автопарк',
+                                            items: vehicles.map(v => ({
+                                                id: v.id,
+                                                title: `${v.model} (${v.plate})`,
+                                                subtitle: v.trailerNumber ? `прицеп ${v.trailerNumber}` : undefined,
+                                            })),
+                                        }]}
+                                    />
+                                </Field>
+                            </div>
+                        )}
+                        <div className={s.gridDriver}>
+                            <Field id="no-driver" label="Водитель">
+                                {/* Вся база водителей: сверху — кто уже ездил за этого перевозчика. */}
+                                <Form.Item name="driverId" noStyle>
+                                    <DriverPicker
+                                        drivers={drivers}
+                                        carrierId={перевозчикId}
+                                        ownTransport={selectedCarrier === MY_COMPANY_VALUE}
+                                        loading={driversLoading}
+                                        onChange={(v) => { handleDriverSelect(v); setАнкетаОткрыта(v === NEW_DRIVER); }}
+                                        renderField={(api) => (
+                                            <InlineCombo
+                                                id="no-driver"
+                                                round
+                                                value={selectedDriverId || undefined}
+                                                valueTitle={selectedDriverId === NEW_DRIVER ? 'Новый водитель' : водитель ? [водитель.lastName, водитель.firstName, водитель.middleName].filter(Boolean).join(' ') : undefined}
+                                                valueSub={водитель?.phone || undefined}
+                                                placeholder={driversLoading && !drivers.length ? 'Загружаем базу водителей…' : 'Выберите водителя из базы'}
+                                                searchPlaceholder="ФИО, телефон или госномер"
+                                                items={api.groups.flatMap((g) => g.items).map((it) => ({ id: it.id, title: it.title, subtitle: it.subtitle, keywords: it.keywords }))}
+                                                recentKey="driver"
+                                                loading={driversLoading && !drivers.length}
+                                                groupTitle={api.groups.length > 1 || перевозчикId ? api.groups[0]?.label : undefined}
+                                                groupItems={api.groups.length > 1 ? api.groups[0]?.items.map((it) => ({ id: it.id, title: it.title, subtitle: it.subtitle, keywords: it.keywords })) : undefined}
+                                                extra={{ label: 'Новый водитель — заполнить данные', onPick: () => { handleDriverSelect(NEW_DRIVER); form.setFieldValue('driverId', NEW_DRIVER); setАнкетаОткрыта(true); } }}
+                                                directoryLabel={(q) => (q ? `Не нашли «${q}» — открыть базу водителей` : (api.count ? `Открыть базу водителей · ${api.count} ${склон(api.count, 'водитель', 'водителя', 'водителей')}` : 'Открыть базу водителей'))}
+                                                onOpenDirectory={api.open}
+                                                onSelect={(v) => { form.setFieldValue('driverId', v); handleDriverSelect(v); setАнкетаОткрыта(false); }}
+                                                onClear={убратьВодителя}
+                                                clearLabel="Убрать водителя — назначить позже"
+                                            />
+                                        )}
+                                    />
+                                </Form.Item>
+                            </Field>
+                            <Field id="no-plate" label="Тягач">
+                                <Form.Item name="vehiclePlate" rules={[{ required: selectedDriverId === NEW_DRIVER, message: 'Введите госномер' }]}>
+                                    <UiInput id="no-plate" className={cn(FIELD, 'uppercase placeholder:normal-case')} placeholder="Госномер" />
+                                </Form.Item>
+                            </Field>
+                            <Field id="no-trailer" label="Прицеп">
+                                <Form.Item name="trailerNumber">
+                                    <UiInput id="no-trailer" className={cn(FIELD, 'uppercase placeholder:normal-case')} placeholder="Госномер" />
+                                </Form.Item>
+                            </Field>
+                        </div>
+                        {водитель && <p className={s.hint} style={{ marginTop: 8 }}>Номера тягача и прицепа подставлены из базы — их можно поправить</p>}
+                        {водительЧужой && (
+                            <p className={s.warning} style={{ marginTop: 6 }}>
+                                <CircleAlert className="size-3.5 shrink-0" aria-hidden />{водительЧужой}
+                            </p>
+                        )}
+                        {водитель && !анкетаОткрыта && (
+                            <button type="button" className={s.linkBtn} style={{ marginTop: 4 }} onClick={() => setАнкетаОткрыта(true)}>
+                                <Plus className="size-3.5" aria-hidden /> Паспорт, телефон и машина водителя
+                            </button>
+                        )}
+                        {данныеВодителя}
+                    </>
+                )}
+            </section>
+
+            {/* ===== Особые условия ===== */}
+            <section id="no-sec-extra" data-section="extra" className={s.section} aria-labelledby="no-h-extra">
+                <SectionHead id="no-h-extra" title="Особые условия" optional />
+                <SpecialConditions cargo={cargo} onCargo={setCargo} />
+            </section>
+        </Form>
+    );
+
+    const созданоЭкран = создано && (
+        <div className={s.screen}>
+            <div className={s.screenCard}>
+                <span className={s.screenIcon}><Check className="size-7" strokeWidth={2.5} aria-hidden /></span>
+                <h2 className={s.screenTitle}>{создано.published ? 'Заявка создана и опубликована на бирже' : 'Заявка создана'}</h2>
+                <dl className={s.screenDl}>
+                    {создано.rows.map((r) => (
+                        <Fragment key={r.k}><dt>{r.k}</dt><dd>{r.v}</dd></Fragment>
+                    ))}
+                </dl>
+                <div className={s.btnRow}>
+                    <button type="button" className={s.btn} onClick={onRestart}>Создать ещё одну</button>
+                    <button type="button" className={cn(s.btn, s.btnStrong)} onClick={onCreated}>Готово</button>
                 </div>
             </div>
+        </div>
+    );
+
+    const черновикЭкран = !editingId && черновикОт && !черновикПринят && (
+        <div className={s.screen} style={{ background: 'var(--nova-surface-2)' }}>
+            <div className={cn(s.screenCard, s.screenCardSm)} data-testid="order-draft-restored" role="status">
+                <h2 className={cn(s.screenTitle, s.screenTitleSm)}>Черновик сохранён</h2>
+                <p className={s.screenText}>Заявка от {когдаСохранён(черновикОт)} — всё, что вы ввели, на месте.</p>
+                <div className={s.btnRow}>
+                    <button type="button" className={s.btn} onClick={начатьЗаново}>Начать заново</button>
+                    <button type="button" className={cn(s.btn, s.btnStrong)} onClick={() => setЧерновикПринят(true)}>Продолжить черновик</button>
+                </div>
+            </div>
+        </div>
+    );
+
+    return (
+        <div
+            className={s.root}
+            data-order-wizard
+            onKeyDown={(e) => {
+                // Ctrl/Cmd + Enter — создать из любого поля (ТЗ, §10).
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !создано) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void отправить();
+                }
+            }}
+        >
+            <Header
+                title={editingId ? `Правка заявки ${editingNumber}`.trim() : 'Новая заявка'}
+                savedText={editingId ? undefined : создано ? 'Заявка создана' : черновикСохранён ? `Черновик сохранён · ${dayjs(черновикСохранён).format('HH:mm')}` : 'Черновик сохраняется автоматически'}
+                savedDot={!editingId && !создано && !!черновикСохранён}
+                scrolled={прокручено}
+                orgs={myCompanies.map((c) => ({ id: c.id, name: c.name?.trim() || 'Без названия', bin: c.bin }))}
+                orgId={selectedMyCompanyId}
+                onOrg={выбратьОрганизацию}
+                managerValue={responsibleChoice}
+                managerPinned={[
+                    { id: 'SELF', title: user?.firstName ? `${user.lastName || ''} ${user.firstName}`.trim() : 'Текущий пользователь', subtitle: 'Это вы' },
+                    { id: 'NONE', title: 'Не назначать', subtitle: 'Заявку возьмёт любой менеджер' },
+                ]}
+                managerUsers={officeUsers
+                    .filter((u) => u.id !== user?.id)
+                    .map((u) => ({ id: u.id, title: `${u.lastName} ${u.firstName}`.trim(), subtitle: u.role === 'LOGISTICIAN' ? 'логист' : 'администратор' }))}
+                onManager={setResponsibleChoice}
+                onReset={editingId ? undefined : начатьЗаново}
+            />
+
+            {созданоЭкран || черновикЭкран || (
+                <div className={s.body}>
+                    <main ref={mainRef} className={s.main} onScroll={(e) => { setПрокручено((e.target as HTMLElement).scrollTop > 4); обновитьРаздел(); }}>
+                        {форма}
+                    </main>
+                    <Summary
+                        items={summaryItems}
+                        current={текущийРаздел}
+                        onGo={перейтиК}
+                        errorsCount={числоОшибок}
+                        submitted={попыткаОтправки}
+                        ctaText={ctaText}
+                        onSubmit={() => void отправить()}
+                        busy={submitting}
+                        ctaNote={editingId ? undefined : 'Закроете окно — черновик останется'}
+                    />
+                    <div className={s.mobileBar}>
+                        <span className={s.counter}>{summaryItems.filter((i) => !i.optional && i.status === 'done').length} из {summaryItems.filter((i) => !i.optional).length}</span>
+                        <SubmitBlock compact errorsCount={числоОшибок} submitted={попыткаОтправки} ctaText={ctaText} onSubmit={() => void отправить()} busy={submitting} />
+                    </div>
+                </div>
+            )}
 
             {/*
-              * Заведение контрагента прямо из мастера заявки — то же окно,
+              * Заведение контрагента прямо из заявки — то же окно,
               * что в справочнике, чтобы не заводить фирму дважды.
               */}
             <Modal
@@ -2114,14 +2330,14 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     onFinish={handleCreateQuickPartner}
                     onValuesChange={(changed) => подставитьПоБин(changed, quickPartnerForm)}
                 >
-                    {/* Ответственного при заведении не показываем: им становится
-                        тот, кто завёл, — так решает сервер. */}
+                    {/* Ответственного при заведении не показываем: им становится тот, кто завёл, — так решает сервер. */}
                     <PartnerFormFields />
                 </Form>
             </Modal>
 
             <QuickCreateLocationModal
                 open={quickLocationModalOpen}
+                initialName={новыйАдрес}
                 onCancel={() => {
                     setQuickLocationModalOpen(false);
                     setActiveRoutePointIndex(null);
