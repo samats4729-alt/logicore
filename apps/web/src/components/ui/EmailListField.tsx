@@ -8,6 +8,23 @@ import { cn } from '@/lib/utils';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Добавить к списку набранное: можно сразу несколько через запятую или
+ * пробел. Повторы не добавляются. Не похоже на почту — `{ error }`.
+ */
+export function addEmails(raw: string, current: string[]): { next: string[] } | { error: string } {
+    // Разрешаем вставить сразу несколько через запятую или пробел: так их
+    // и присылают — списком из письма или таблицы.
+    const candidates = raw.split(/[,;\s]+/).map((e) => e.trim()).filter(Boolean);
+    const bad = candidates.find((e) => !EMAIL_RE.test(e));
+    if (bad) return { error: `«${bad}» не похоже на адрес почты` };
+    const next = [...current];
+    for (const email of candidates) {
+        if (!next.some((e) => e.toLowerCase() === email.toLowerCase())) next.push(email);
+    }
+    return { next };
+}
+
 /** Строка «a@b.kz, c@d.kz» из базы — в список. */
 export function parseEmails(raw?: string | null): string[] {
     if (!raw) return [];
@@ -41,23 +58,15 @@ export function EmailListField({
     const [error, setError] = useState('');
 
     const add = (raw: string) => {
-        // Разрешаем вставить сразу несколько через запятую или пробел: так их
-        // и присылают — списком из письма или таблицы.
-        const candidates = raw.split(/[,;\s]+/).map((e) => e.trim()).filter(Boolean);
-        if (!candidates.length) return;
-
-        const bad = candidates.find((e) => !EMAIL_RE.test(e));
-        if (bad) {
-            setError(`«${bad}» не похоже на адрес почты`);
+        if (!raw.trim()) return;
+        const result = addEmails(raw, value);
+        if ('error' in result) {
+            setError(result.error);
             return;
-        }
-        const next = [...value];
-        for (const email of candidates) {
-            if (!next.some((e) => e.toLowerCase() === email.toLowerCase())) next.push(email);
         }
         setDraft('');
         setError('');
-        if (next.length !== value.length) onChange(next);
+        if (result.next.length !== value.length) onChange(result.next);
     };
 
     const remove = (email: string) => onChange(value.filter((e) => e !== email));

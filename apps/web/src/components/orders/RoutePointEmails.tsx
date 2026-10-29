@@ -23,14 +23,25 @@ export { parseEmails } from '@/components/ui/EmailListField';
  * Сам список рисует общий `EmailListField`: то же окно отправки документа
  * правит те же самые почты, и выглядеть они обязаны одинаково.
  */
+/** Что получает свой вид списка: сами почты, сохранение за адресом и его состояние. */
+export interface RoutePointEmailsApi {
+    value: string[];
+    save: (emails: string[]) => void;
+    saving: boolean;
+    error: string;
+}
+
 export function RoutePointEmails({
     locationId,
     value,
     onChange,
+    render,
 }: {
     locationId?: string;
     value: string[];
     onChange: (emails: string[]) => void;
+    /** Свой вид списка (окно «Новая заявка»); сохранение — то же. */
+    render?: (api: RoutePointEmailsApi) => React.ReactNode;
 }) {
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
@@ -52,6 +63,8 @@ export function RoutePointEmails({
             setSaving(false);
         }
     };
+
+    if (render) return <>{render({ value, save: (next) => { void persist(next); }, saving, error })}</>;
 
     return (
         <div className="mt-2">
