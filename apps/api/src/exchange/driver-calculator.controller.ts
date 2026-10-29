@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, ForbiddenException, Get, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -24,7 +24,10 @@ function numberOf(value: unknown): number | null {
  * руки при такой сумме» или «во что обойдётся заказчику, если водитель
  * просит столько».
  *
- * Ставки — парка, если считает сам парк (его настройки), иначе стандартные.
+ * Считает только парк — по своим ставкам (владелец, 29.10.2026: «этот
+ * калькулятор должен видеть только та компания, у которой есть парк, а не
+ * все»). Экспедитору и заказчику он ни к чему: водителей без ИП зовёт и
+ * рассчитывает парк. Администратор платформы считает по стандартным ставкам.
  * Биржа для этого не нужна: это просто расчёт, он ничего не записывает.
  */
 @ApiTags('exchange')
@@ -50,8 +53,10 @@ export class DriverCalculatorController {
         const company = req.user.companyId
             ? await this.prisma.company.findUnique({ where: { id: req.user.companyId }, select: { isPark: true } })
             : null;
-        // Парк считает по своим ставкам; остальные — по стандартным.
         const isPark = !!company?.isPark;
+        if (!isPark && req.user.role !== UserRole.ADMIN) {
+            throw new ForbiddenException('Расчёт водителя без ИП доступен только парку');
+        }
         const base = await this.settlement.parkSettings(isPark ? req.user.companyId : null);
         const vat = query.vat === undefined ? (base.rates.vatPct ?? 0) > 0 : query.vat === 'true';
         const rates = { ...base.rates, vatPct: vat ? (base.rates.vatPct || 16) : 0 };

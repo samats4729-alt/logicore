@@ -51,6 +51,8 @@ export default function DriverCalculatorPage() {
     const [vat, setVat] = useState(false);
     const [result, setResult] = useState<CalcResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // Сервер считает только парку; по прямой ссылке остальным — объяснение вместо формы.
+    const [толькоПарку, setТолькоПарку] = useState(false);
 
     useEffect(() => {
         const sum = Number(parseMoneyInput(amount));
@@ -65,7 +67,12 @@ export default function DriverCalculatorPage() {
                 },
             })
                 .then((r) => { if (alive) { setResult(r.data); setError(null); } })
-                .catch((e) => { if (alive) { setResult(null); setError(e?.response?.data?.message || 'Не удалось посчитать'); } });
+                .catch((e) => {
+                    if (!alive) return;
+                    if (e?.response?.status === 403) { setТолькоПарку(true); return; }
+                    setResult(null);
+                    setError(e?.response?.data?.message || 'Не удалось посчитать');
+                });
         }, 300);
         return () => { alive = false; clearTimeout(timer); };
     }, [from, amount, fuelMode, km, fuel, deduction, vat]);
@@ -86,6 +93,20 @@ export default function DriverCalculatorPage() {
             className="h-10 text-[15px] font-semibold tabular-nums"
         />
     );
+
+    if (толькоПарку) {
+        return (
+            <div className={styles.page}>
+                <div className={styles.hero}>
+                    <div>
+                        <div className={styles.eyebrow}>Запросы</div>
+                        <h1 className={styles.title}>Расчёт водителя без ИП</h1>
+                        <p className={styles.subtitle}>Расчёт доступен только парку — компании, через которую работают водители без ИП.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={styles.page}>

@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calculator } from 'lucide-react';
+import { exchangeStatus } from '@/lib/exchange';
 import { QuoteRequestsPanel } from '@/components/quotes/QuoteRequestsPanel';
 import styles from '@/components/nova/nova.module.css';
 
@@ -15,6 +17,13 @@ import styles from '@/components/nova/nova.module.css';
  */
 export default function RequestsPage() {
     const router = useRouter();
+    // Расчёт водителя без ИП — только парку, по тому же признаку, что раздел «Управление парком».
+    const [isPark, setIsPark] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        exchangeStatus().then((st) => { if (alive) setIsPark(st.enabled && st.isPark); });
+        return () => { alive = false; };
+    }, []);
 
     return (
         <div className={`${styles.page} ${styles.pageWide}`}>
@@ -38,15 +47,17 @@ export default function RequestsPage() {
                         <Calculator size={15} />
                         Калькулятор
                     </button>
-                    {/* Расчёт водителя без ИП — чтобы звать водителей в парк (Q20). */}
-                    <button
-                        type="button"
-                        className={styles.action}
-                        onClick={() => router.push('/company/driver-calculator')}
-                    >
-                        <Calculator size={15} />
-                        Водитель без ИП
-                    </button>
+                    {/* Расчёт водителя без ИП — чтобы звать водителей в парк (Q20). Только парку. */}
+                    {isPark && (
+                        <button
+                            type="button"
+                            className={styles.action}
+                            onClick={() => router.push('/company/driver-calculator')}
+                        >
+                            <Calculator size={15} />
+                            Водитель без ИП
+                        </button>
+                    )}
                 </div>
             </div>
 

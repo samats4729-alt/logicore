@@ -1,10 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DriverCalculatorController } from './driver-calculator.controller';
 import { ExchangeSettlementService } from './settlement.service';
 
-/** Калькулятор водителя без ИП для логистов (задачи шефа, Q20). */
+/** Калькулятор водителя без ИП — только для парка (владелец, 29.10.2026). */
 describe('Калькулятор водителя без ИП', () => {
-    function build(isPark = false) {
+    function build(isPark = true) {
         const prisma: any = {
             company: { findUnique: jest.fn().mockResolvedValue({ isPark }) },
             parkPayoutRates: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -20,7 +20,7 @@ describe('Калькулятор водителя без ИП', () => {
         const r = await controller.driver(req, { amount: '100000', fuel: '27000', deduction: 'true', vat: 'false' });
         expect(r.calc.driverTotal).toBe(65700);
         expect(r.calc.customerPrice).toBe(115219.5);
-        expect(r.ratesFrom).toBe('DEFAULT');
+        expect(r.ratesFrom).toBe('PARK');
     });
 
     it('от суммы «на руки» — та же сумма водителю', async () => {
@@ -41,6 +41,18 @@ describe('Калькулятор водителя без ИП', () => {
         const r = await controller.driver(req, { amount: '100000', fuel: '0' });
         expect(r.ratesFrom).toBe('PARK');
         expect(prisma.parkPayoutRates.findUnique).toHaveBeenCalledWith({ where: { parkCompanyId: 'c-1' } });
+    });
+
+    it('компании без парка расчёт не отдаётся', async () => {
+        const { controller } = build(false);
+        await expect(controller.driver(req, { amount: '100000', fuel: '27000' })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('администратор платформы считает по стандартным ставкам', async () => {
+        const { controller } = build(false);
+        const r = await controller.driver({ user: { companyId: 'c-own', role: 'ADMIN' } }, { amount: '100000', fuel: '27000', deduction: 'true', vat: 'false' });
+        expect(r.ratesFrom).toBe('DEFAULT');
+        expect(r.calc.driverTotal).toBe(65700);
     });
 
     it('сумма меньше топлива — понятный отказ', async () => {
