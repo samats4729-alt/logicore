@@ -287,7 +287,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                 children: [
                     { key: '/company/requests', label: 'Запросы на расчёт' },
                     { key: '/company/calculator', label: 'Калькулятор рейса' },
-                    { key: '/company/driver-calculator', label: 'Расчёт водителя без ИП' },
+                    // Водителей без ИП рассчитывает парк — остальным пункт не нужен (владелец, 29.10.2026).
+                    ...(isPark ? [{ key: '/company/driver-calculator', label: 'Расчёт водителя без ИП' }] : []),
                 ],
             });
         }
