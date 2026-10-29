@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { OrderStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { kzCurrentMonth } from '../common/utils/business-date';
 import { LngLat, estimateRoadKm, pointOf, roadDistanceKm } from './route-distance';
-import { Settlement, SettlementRates, TaxPosition, fromBase, fromOnHand, fuelEstimate, fuelPerKmOf, money, monthlyDeduction, withPosition } from './settlement-calc';
+import { Settlement, SettlementRates, TaxPosition, fromBase, fromCustomerPrice, fromOnHand, fuelEstimate, fuelPerKmOf, money, monthlyDeduction, withPosition } from './settlement-calc';
 
 /** Доля LogiCore по умолчанию, % от суммы с налогами — меняется в админке (ключ платформы). */
 export const PLATFORM_FEE_KEY = 'exchange_platform_fee_pct';
@@ -36,6 +36,47 @@ export interface SettlementContext {
 
 /** Расчёт и то, из чего он получился, — замораживается в отклике и в рейсе. */
 export type SettlementCalc = Settlement & Omit<SettlementContext, 'position'>;
+
+/** Строки расчёта водителя без ИП, которые парк видит в заявке. */
+export interface ParkOrderLines {
+    /** Топливо + оплата за работу. */
+    base: number;
+    fuel: number;
+    gross: number;
+    opv: number;
+    driverTotal: number;
+    vosms: number;
+    so: number;
+    ipn: number;
+    commission: number;
+    platformFee: number;
+    parkFee: number;
+    vat: number;
+    customerPrice: number;
+    deductionAmount: number;
+}
+
+/**
+ * Расчёт водителя без ИП в заявке парка: TRIP — рейс с биржи, расчёт
+ * зафиксирован при выборе водителя; OWN — своя заявка парка, посчитано из
+ * цены для заказчика. `calc` нет — в `reason` словами, чего не хватает.
+ */
+export interface ParkOrderCalc {
+    source: 'TRIP' | 'OWN';
+    /** 1 — рейс по прежней схеме (до 16.10.2026): «на руки» вместе с топливом. */
+    scheme: 1 | 2;
+    driverName: string | null;
+    distanceKm: number | null;
+    preliminary: boolean;
+    rates: { opvPct: number; vosmsPct: number; soPct: number; ipnPct: number; parkPct: number; platformPct: number; vatPct: number };
+    calc: ParkOrderLines | null;
+    reason: string | null;
+}
+
+const ratesView = (r: SettlementRates): ParkOrderCalc['rates'] => ({
+    opvPct: r.opvPct, vosmsPct: r.vosmsPct, soPct: r.soPct, ipnPct: r.ipnPct,
+    parkPct: r.parkPct, platformPct: r.platformPct, vatPct: r.vatPct ?? 0,
+});
 
 export const ROUTE_SELECT = {
     id: true,
@@ -213,6 +254,96 @@ export class ExchangeSettlementService {
 
     private withContext(s: Settlement, ctx: SettlementContext): SettlementCalc {
         return { ...s, rates: ctx.rates, fuelPerKm: ctx.fuelPerKm, distanceKm: ctx.distanceKm, taxMonth: ctx.taxMonth, preliminary: ctx.preliminary };
+    }
+
+    /**
+     * Расчёт водителя без ИП внутри заявки — для парка (владелец, 29.10.2026:
+     * «перевозчик — их компания, водитель назначенный; все расчёты без ИП
+     * должны быть в заявке, в финансах»).
+     *
+     * Рейс с биржи — расчёт, зафиксированный при выборе водителя. Своя заявка
+     * парка с его водителем (через парк или штатным) — из цены для заказчика
+     * по ставкам парка, как в калькуляторе; НДС — как в заявке, то есть как в
+     * счёте заказчику. Остальным — null: парку здесь считать нечего, а чужой
+     * расчёт — не его сведения.
+     */
+    async forParkOrder(companyId: string | null | undefined, orderId: string): Promise<ParkOrderCalc | null> {
+        if (!companyId) return null;
+        const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { isPark: true } });
+        if (!company?.isPark) return null;
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: {
+                ...ROUTE_SELECT,
+                forwarderId: true, driverId: true, assignedDriverName: true,
+                customerPrice: true, customerPriceBase: true, currency: true, hasVat: true, vatRate: true,
+                exchangeSettlement: true,
+            },
+        });
+        if (!order) return null;
+
+        const trip = order.exchangeSettlement;
+        if (trip && trip.parkCompanyId === companyId) {
+            const fuel = num(trip.fuelEstimate);
+            const gross = num(trip.gross);
+            return {
+                source: 'TRIP',
+                scheme: trip.scheme === 2 ? 2 : 1,
+                driverName: order.assignedDriverName,
+                distanceKm: trip.distanceKm,
+                preliminary: trip.preliminary,
+                rates: ratesView(trip.rates as unknown as SettlementRates),
+                calc: {
+                    base: trip.base != null ? num(trip.base) : money(fuel + gross),
+                    fuel, gross, opv: num(trip.opv), driverTotal: num(trip.driverTotal),
+                    vosms: num(trip.vosms), so: num(trip.so), ipn: num(trip.ipn),
+                    commission: money(num(trip.platformFee) + num(trip.parkFee)),
+                    platformFee: num(trip.platformFee), parkFee: num(trip.parkFee),
+                    vat: num(trip.vat), customerPrice: num(trip.customerPrice),
+                    deductionAmount: trip.deductionApplied ? num(trip.deductionAmount) : 0,
+                },
+                reason: null,
+            };
+        }
+
+        if (order.forwarderId !== companyId || !order.driverId) return null;
+        const [viaPark, staff] = await Promise.all([
+            this.prisma.exchangeDriver.findFirst({ where: { userId: order.driverId, parkCompanyId: companyId, kind: 'PARK' }, select: { id: true } }),
+            this.prisma.user.findFirst({ where: { id: order.driverId, companyId, role: UserRole.DRIVER }, select: { id: true } }),
+        ]);
+        if (!viaPark && !staff) return null;
+
+        // Водитель через парк — с его заявлением на вычет и доходом за год;
+        // штатный — без вычета: заявления в программе у него нет.
+        const base = viaPark
+            ? await this.driverBase({ id: viaPark.id, parkCompanyId: companyId })
+            : { ...(await this.parkSettings(companyId)), deductionRequested: false, trips: [] };
+        const ctx = this.contextFromRow(base, order);
+        const rates = { ...ctx.rates, vatPct: order.hasVat ? num(order.vatRate) : 0 };
+        const view = {
+            source: 'OWN' as const, scheme: 2 as const, driverName: order.assignedDriverName,
+            distanceKm: ctx.distanceKm, preliminary: ctx.preliminary, rates: ratesView(rates),
+        };
+        const price = order.currency === 'KZT' ? order.customerPrice : order.customerPriceBase;
+        if (price == null || num(price) <= 0) {
+            return { ...view, calc: null, reason: 'Укажите цену для заказчика — расчёт появится здесь' };
+        }
+        try {
+            const s = fromCustomerPrice(num(price), ctx.fuel, rates, ctx.position);
+            return {
+                ...view,
+                calc: {
+                    base: s.base, fuel: s.fuel, gross: s.gross, opv: s.opv, driverTotal: s.driverTotal,
+                    vosms: s.vosms, so: s.so, ipn: s.ipn, commission: s.commission,
+                    platformFee: s.platformFee, parkFee: s.parkFee, vat: s.vat,
+                    customerPrice: s.customerPrice, deductionAmount: s.deductionAmount,
+                },
+                reason: null,
+            };
+        } catch (e) {
+            if (e instanceof RangeError) return { ...view, calc: null, reason: e.message };
+            throw e;
+        }
     }
 
     /** Зафиксировать расчёт рейса — когда компания выбрала водителя. */

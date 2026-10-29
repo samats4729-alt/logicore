@@ -19,6 +19,7 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { resolveCompanyName, shortenCompanyName } from '@/lib/company-helper';
 import { adrLabel, loadingLabel, packagingLabel, palletsSummary, totalPallets } from '@/lib/cargo';
+import type { ParkOrderCalc } from '@/lib/exchange';
 import styles from './order-details.module.css';
 
 /**
@@ -306,6 +307,8 @@ export interface OrderSideCardsProps {
     openAssignModal: () => void;
     openTransferModal: () => void;
     onOpenDocuments: () => void;
+    /** Парк везёт своим водителем без ИП — его расчёт по рейсу (`useParkOrderCalc`). */
+    parkCalc?: ParkOrderCalc | null;
 }
 
 /**
@@ -332,6 +335,7 @@ export function OrderSideCards({
     openAssignModal,
     openTransferModal,
     onOpenDocuments,
+    parkCalc,
 }: OrderSideCardsProps) {
     /**
      * Ставку перевозчику и маржу заказчику не показываем.
@@ -356,6 +360,16 @@ export function OrderSideCards({
     const margin = customerPrice != null && carrierPrice != null && sameCurrency
         ? customerPrice - carrierPrice
         : null;
+    /** Расчёт водителя парка: вместо «ставки перевозчику» — топливо, на руки и налоги. */
+    const park = parkCalc?.calc ?? null;
+    /**
+     * Перевозчик — своя компания (владелец, 29.10.2026: «перевозчик — их
+     * компания, водитель назначенный»). Рейс с биржи парк везёт для
+     * экспедитора — он здесь перевозчик, а не экспедитор.
+     */
+    const carrierIsMe = parkCalc?.source === 'TRIP';
+    const ownDriver = hasDriver && !!order.forwarderId && order.forwarderId === user?.companyId
+        && !order.subForwarder && !(order.partner && order.partnerId !== order.forwarderId);
 
     return (
         <div className={styles.stack}>
@@ -453,14 +467,42 @@ export function OrderSideCards({
                         <b>{customerPrice != null ? `${fmt(customerPrice)} ${sign(customerCurrency)}` : dash}</b>
                     </div>
 
-                    {!iAmCustomerOnly && (
+                    {park && (
+                        <>
+                            <div className={styles.money}>
+                                <span>Топливо</span>
+                                <b>{fmt(park.fuel)} ₸</b>
+                            </div>
+                            <div className={styles.money}>
+                                <span>Водителю на руки</span>
+                                <b>{fmt(park.driverTotal)} ₸</b>
+                            </div>
+                            <div className={styles.money}>
+                                <span>Налоги по ГПХ</span>
+                                <b>{fmt(park.opv + park.vosms + park.so + park.ipn)} ₸</b>
+                            </div>
+                            <div className={`${styles.money} ${styles.moneyBig}`}>
+                                <span>Остаётся парку</span>
+                                <b>
+                                    {fmt(park.parkFee)} ₸
+                                    {park.customerPrice ? (
+                                        <span className={styles.moneyPct}>
+                                            {' · '}{(park.parkFee / park.customerPrice * 100).toFixed(1).replace('.', ',')}%
+                                        </span>
+                                    ) : null}
+                                </b>
+                            </div>
+                        </>
+                    )}
+
+                    {!iAmCustomerOnly && !park && (
                         <div className={styles.money}>
                             <span>Ставка перевозчику</span>
                             <b>{carrierPrice != null ? `${fmt(carrierPrice)} ${sign(carrierCurrency)}` : dash}</b>
                         </div>
                     )}
 
-                    {!iAmCustomerOnly && margin != null && (
+                    {!iAmCustomerOnly && !park && margin != null && (
                         <div className={`${styles.money} ${styles.moneyBig}`}>
                             <span>Маржа</span>
                             <b>
@@ -474,7 +516,7 @@ export function OrderSideCards({
                         </div>
                     )}
 
-                    {!iAmCustomerOnly && margin == null && customerPrice != null && carrierPrice != null && (
+                    {!iAmCustomerOnly && !park && margin == null && customerPrice != null && carrierPrice != null && (
                         <div className={styles.note}>
                             Ставки в разных валютах — маржа считается по курсу на вкладке «Финансы».
                         </div>
@@ -504,9 +546,18 @@ export function OrderSideCards({
                             )}
                         </Row>
 
-                        <Row label="Экспедитор">
+                        <Row label={carrierIsMe ? 'Перевозчик' : 'Экспедитор'}>
                             <b>{resolveCompanyName(order.forwarderId || order.partnerId, partners, order.forwarder?.name || order.partner?.name)}</b>
+                            {carrierIsMe && driverName && <><br />водитель парка · {driverName}</>}
                         </Row>
+
+                        {/* Везёт свой водитель — перевозчик своя же компания, как в журнале заявок. */}
+                        {!carrierIsMe && ownDriver && (
+                            <Row label="Перевозчик">
+                                <b>{resolveCompanyName(order.forwarderId, partners, order.forwarder?.name)}</b>
+                                {driverName && <><br />свой водитель · {driverName}</>}
+                            </Row>
+                        )}
 
                         {order.subForwarder && (
                             <Row label="Перевозчик">

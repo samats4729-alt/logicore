@@ -218,7 +218,25 @@ export class ExchangeAdvanceRequestsService {
             orderBy: { createdAt: 'desc' },
             take: 300,
         });
-        return rows.map(view);
+        // По рейсу ждущего запроса — сколько выдано и сколько можно ещё,
+        // топливо и «на руки» отдельно, и налоги по ГПХ (шеф, 29.10.2026:
+        // «топливо и на руки — разделено, и расшифровка по ГПХ»).
+        const waiting = [...new Set(rows.filter((r) => OPEN.includes(r.status)).map((r) => r.orderId))];
+        const trips = new Map(await Promise.all(waiting.map(async (orderId) => [orderId, await this.tripFor(parkId, orderId)] as const)));
+        return rows.map((r) => ({ ...view(r), trip: trips.get(r.orderId) ?? null }));
+    }
+
+    /** Рейс глазами бухгалтера парка, который решает запрос: лимиты и налоги. */
+    private async tripFor(parkId: string, orderId: string) {
+        const [limit, s] = await Promise.all([
+            this.available({ id: orderId, partnerId: parkId }),
+            this.prisma.exchangeTripSettlement.findUnique({
+                where: { orderId },
+                select: { parkCompanyId: true, gross: true, opv: true, vosms: true, so: true, ipn: true },
+            }),
+        ]);
+        if (!limit || !s || s.parkCompanyId !== parkId) return null;
+        return { ...limit, gross: num(s.gross), taxes: { opv: num(s.opv), vosms: num(s.vosms), so: num(s.so), ipn: num(s.ipn) } };
     }
 
     async openCount(parkId: string) {

@@ -163,6 +163,40 @@ export function fromBase(base: number, fuel: number, r: SettlementRates, pos: Ta
 }
 
 /**
+ * Цена для заказчика уже есть → сколько из неё топливо, водителю, налоги и
+ * комиссия. Это своя заявка парка: логист договорился с заказчиком о сумме,
+ * а водитель парка везёт без ИП (владелец, 29.10.2026: «все расчёты без ИП
+ * должны быть в заявке»).
+ *
+ * Обратный ход `fromBase`: наибольшая оплата за работу, при которой цена не
+ * выше заданной. Остаток в тиын-другой от округления — доле парка, чтобы
+ * строки расчёта сходились с ценой заявки до тиына.
+ */
+export function fromCustomerPrice(price: number, fuel: number, r: SettlementRates, pos: TaxPosition): Settlement {
+    const total = toT(price);
+    const fuelT = toT(fuel);
+    if (total <= 0 || toT(costsT(0, fuelT, r, pos).customerPrice) > total) {
+        throw new RangeError(`Цена для заказчика меньше топлива с комиссией — топливо по расчёту ${Math.round(fuel).toLocaleString('ru-RU')} ₸`);
+    }
+    let lo = 0;
+    let hi = total;
+    while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (toT(costsT(mid, fuelT, r, pos).customerPrice) <= total) lo = mid;
+        else hi = mid - 1;
+    }
+    const s = costsT(lo, fuelT, r, pos);
+    const rest = total - toT(s.customerPrice);
+    if (!rest) return s;
+    return {
+        ...s,
+        commission: fromT(toT(s.commission) + rest),
+        parkFee: fromT(toT(s.parkFee) + rest),
+        customerPrice: fromT(total),
+    };
+}
+
+/**
  * Водитель назвал, сколько хочет на руки (без топлива — его оплачивает парк) →
  * оплата за работу такая, чтобы после ОПВ осталось ровно это.
  */

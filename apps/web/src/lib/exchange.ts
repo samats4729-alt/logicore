@@ -417,6 +417,40 @@ export interface ParkOffer {
     customerName: string | null;
 }
 
+/**
+ * Расчёт водителя без ИП в заявке парка (`/exchange/calculator/order/:id`):
+ * TRIP — рейс с биржи, расчёт зафиксирован при выборе водителя; OWN — своя
+ * заявка парка, посчитано из цены для заказчика. Не парк или не его водитель —
+ * сервер отдаёт пусто.
+ */
+export interface ParkOrderCalc {
+    source: 'TRIP' | 'OWN';
+    /** 1 — прежняя схема (до 16.10.2026): «на руки» вместе с топливом. */
+    scheme: 1 | 2;
+    driverName: string | null;
+    distanceKm: number | null;
+    preliminary: boolean;
+    rates: { opvPct: number; vosmsPct: number; soPct: number; ipnPct: number; parkPct: number; platformPct: number; vatPct: number };
+    calc: {
+        base: number;
+        fuel: number;
+        gross: number;
+        opv: number;
+        driverTotal: number;
+        vosms: number;
+        so: number;
+        ipn: number;
+        commission: number;
+        platformFee: number;
+        parkFee: number;
+        vat: number;
+        customerPrice: number;
+        deductionAmount: number;
+    } | null;
+    /** Почему расчёта нет — словами. */
+    reason: string | null;
+}
+
 /** Топливо рейса водителя парка: сколько дали, чеки, сколько перечислить в конце. */
 export interface ParkTripFuel {
     orderId: string;

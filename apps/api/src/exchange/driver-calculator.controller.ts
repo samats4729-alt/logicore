@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, ForbiddenException, Get, Query, Request, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, ForbiddenException, Get, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -84,5 +84,16 @@ export class DriverCalculatorController {
             if (error instanceof RangeError) throw new BadRequestException(error.message);
             throw error;
         }
+    }
+
+    /**
+     * Тот же расчёт внутри заявки — парку, во вкладке «Финансы»: рейс с биржи
+     * или своя заявка с водителем парка. Остальным — пусто, без ошибки:
+     * карточка заявки спрашивает это у каждой заявки.
+     */
+    @Get('order/:orderId')
+    @ApiOperation({ summary: 'Расчёт водителя без ИП в заявке парка' })
+    order(@Request() req: any, @Param('orderId') orderId: string) {
+        return this.settlement.forParkOrder(req.user.companyId, orderId);
     }
 }

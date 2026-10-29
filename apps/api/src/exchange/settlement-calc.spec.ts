@@ -1,4 +1,4 @@
-import { SettlementRates, TaxPosition, actualPayout, fromBase, fromOnHand, fuelEstimate, fuelPerKmOf, payoutOf, withPosition } from './settlement-calc';
+import { SettlementRates, TaxPosition, actualPayout, fromBase, fromCustomerPrice, fromOnHand, fuelEstimate, fuelPerKmOf, payoutOf, withPosition } from './settlement-calc';
 
 /** Ставки 2026 года по схеме шефа: комиссия 10 % (в ней 5 % LogiCore), ИПН 10 % / 15 % выше 8 500 МРП. */
 const RATES: SettlementRates = {
@@ -99,6 +99,32 @@ describe('Расчёт водителя без ИП — схема шефа (16.
         it('ничего не поменялось — расчёт отклика как был', () => {
             const offered = fromBase(100000, 27000, RATES, WITH_DEDUCTION);
             expect(withPosition(offered, RATES, WITH_DEDUCTION)).toBe(offered);
+        });
+    });
+
+    describe('от цены для заказчика — своя заявка парка', () => {
+        it('115 219,50 с топливом 27 000 — тот же расчёт, что от суммы 100 000', () => {
+            const s = fromCustomerPrice(115219.5, 27000, RATES, WITH_DEDUCTION);
+            const back = fromBase(100000, 27000, RATES, WITH_DEDUCTION);
+            expect(s).toEqual(back);
+            expect(s.driverTotal).toBe(65700);
+        });
+
+        it('строки сходятся с ценой до тиына — и с НДС, и без', () => {
+            for (const r of [RATES, { ...RATES, vatPct: 16 }]) {
+                for (const price of [150000, 400000, 87654.32]) {
+                    const s = fromCustomerPrice(price, 12000, r, NO_DEDUCTION);
+                    expect(t(s.customerPrice)).toBe(t(price));
+                    expect(t(s.fuel) + t(s.gross) + t(s.vosms) + t(s.so) + t(s.ipn) + t(s.commission) + t(s.vat)).toBe(t(price));
+                    expect(t(s.platformFee) + t(s.parkFee)).toBe(t(s.commission));
+                    expect(t(s.gross) - t(s.opv)).toBe(t(s.driverTotal));
+                }
+            }
+        });
+
+        it('цена не покрывает топливо — понятный отказ', () => {
+            expect(() => fromCustomerPrice(20000, 27000, RATES, NO_DEDUCTION)).toThrow(RangeError);
+            expect(() => fromCustomerPrice(29000, 27000, RATES, NO_DEDUCTION)).toThrow(/топлив/);
         });
     });
 
