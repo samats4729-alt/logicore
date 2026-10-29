@@ -46,6 +46,7 @@ import { moneyShort } from '@/lib/money-format';
 import { AddressCombo, адресСтрокой } from '@/components/orders/new-order/AddressCombo';
 import { BodySection, fmtT } from '@/components/orders/new-order/BodySection';
 import { PackagingField, PlacesAndSize, SpecialConditions } from '@/components/orders/new-order/CargoExtras';
+import { PointEmails } from '@/components/orders/new-order/PointEmails';
 import { Header } from '@/components/orders/new-order/Header';
 import { InlineCombo } from '@/components/orders/new-order/InlineCombo';
 import { Summary, SubmitBlock, type SummaryItem, type SummaryStatus } from '@/components/orders/new-order/Summary';
@@ -2042,17 +2043,16 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                                     )}
                                     {/* Почта, закреплённая за адресом: куда слать доверенность. */}
                                     {pt.id && (
-                                        <div className={s.emails}>
-                                            <RoutePointEmails
-                                                locationId={pt.id}
-                                                value={pt.emails ?? []}
-                                                onChange={(emails) => {
-                                                    const next = [...routePointsState];
-                                                    next[i] = { ...next[i], emails };
-                                                    setRoutePointsState(next);
-                                                }}
-                                            />
-                                        </div>
+                                        <RoutePointEmails
+                                            locationId={pt.id}
+                                            value={pt.emails ?? []}
+                                            onChange={(emails) => {
+                                                const next = [...routePointsState];
+                                                next[i] = { ...next[i], emails };
+                                                setRoutePointsState(next);
+                                            }}
+                                            render={(api) => <PointEmails {...api} />}
+                                        />
                                     )}
                                 </div>
                             </li>

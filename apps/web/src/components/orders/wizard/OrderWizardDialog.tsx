@@ -44,6 +44,8 @@ export function OrderWizardDialog({ request, onClose, onCreated, onSaved, onRefr
             // закрывает выпадашку, а не окно с набранной заявкой.
             onEscapeKeyDown={(e) => {
                 if (document.querySelector('[data-order-wizard] [role="listbox"], [data-order-wizard] [role="menu"]')) e.preventDefault();
+                // Поле, которое само закрывается по Esc (новая почта склада).
+                if (e.target instanceof Element && e.target.closest('[data-esc-local]')) e.preventDefault();
             }}
             data-order-wizard-dialog
         >
