@@ -1816,8 +1816,8 @@ export function OrderWizard({ editId: editIdProp, fromId: fromIdProp, quoteReque
                     )}
                     {exchangeActive && (
                         <Field id="no-exchange-price" label="Бюджет перевозчику" hint={(
-                            <label className="flex cursor-pointer items-center gap-2 text-[12.5px]" style={{ color: 'var(--nova-fg-2)' }}>
-                                <Checkbox checked={exchangeNoPrice} onCheckedChange={(c) => setExchangeNoPrice(c === true)} />
+                            <label className="flex cursor-pointer items-start gap-2 text-[12.5px] leading-[18px]" style={{ color: 'var(--nova-fg-2)' }}>
+                                <Checkbox className="mt-px" checked={exchangeNoPrice} onCheckedChange={(c) => setExchangeNoPrice(c === true)} />
                                 Без цены — пусть исполнители предложат свою
                             </label>
                         )}>

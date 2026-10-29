@@ -285,17 +285,34 @@ button.box:focus-visible { outline: none; border-color: var(--o-strong); box-sha
     border-radius: 0 10px 10px 0 !important;
     color: var(--o-text-2);
     font-size: 13px;
-    padding: 0 4px;
+    padding: 0 12px;
 }
+/* Плашка со списком валют — без отступов, список занимает её целиком. */
+.root :global(.ant-input-number-group-addon:has(.ant-select)) { padding: 0 !important; }
 /* antd сдвигает список валют отрицательными отступами, и он вылезал за правый край поля. */
-.root :global(.ant-input-number-group-addon .ant-select) { width: 100% !important; margin: 0 !important; }
-.root :global(.ant-input-number-group-addon .ant-select-selector) { border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.root :global(.ant-input-number-group-addon .ant-select) { display: block; width: 100% !important; height: 38px !important; margin: 0 !important; }
+/* Сам список валют — без своей рамки и белого фона: иначе поверх серой
+   плашки лежал белый прямоугольник, а «KZT» сидел ниже «Суммы». Вес
+   селектора выше общего правила для списков окна — оно бы перебило. */
+.root :global(.ant-input-number-group-addon .ant-select:not(.ant-select-customize-input) .ant-select-selector) {
+    height: 38px !important;
+    padding: 0 26px 0 12px !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.root :global(.ant-input-number-group-addon .ant-select-single .ant-select-selection-item),
+.root :global(.ant-input-number-group-addon .ant-select-single .ant-select-selection-search-input) { height: 38px !important; line-height: 38px !important; }
 .root :global(.ant-input-number-group-addon .ant-select-selection-item) { color: var(--o-text-2); }
+.root :global(.ant-input-number-group-addon .ant-select-arrow) { inset-inline-end: 10px; }
+/* Стрелки «больше/меньше» у чисел — не из макета: число набирают, а не крутят. */
+.root :global(.ant-input-number-handler-wrap) { display: none; }
 .root :global(.ant-input-number-group-wrapper:focus-within .ant-input-number-group) { box-shadow: 0 0 0 3px var(--o-ring); }
-.root :global(.ant-input-number-group-wrapper:focus-within .ant-input-number),
-.root :global(.ant-input-number-group-wrapper:focus-within .ant-input-number-group-addon) { border-color: var(--o-strong) !important; box-shadow: none !important; }
-.root :global(.ant-input-number-group-addon) { border-left: 1px solid var(--o-subtle) !important; }
-.root :global(.ant-input-number-group-wrapper:focus-within .ant-input-number-group-addon) { border-left-color: var(--o-subtle) !important; }
+.root :global(.ant-input-number-group-wrapper:focus-within .ant-input-number) { border-color: var(--o-strong) !important; box-shadow: none !important; }
+.root :global(.ant-input-number-group-wrapper:focus-within .ant-input-number-group-addon) { border-color: var(--o-strong) !important; }
+/* Шов между суммой и валютой — тенью внутри плашки, а не рамкой: рамка
+   вылезала тонкой чертой поверх верхнего и нижнего края поля. */
+.root :global(.ant-input-number-group-addon) { border-left-width: 0 !important; box-shadow: inset 1px 0 0 var(--o-subtle); }
 .root :global(.ant-input-number-focused),
 .root :global(.ant-picker-focused),
 .root :global(.ant-input-number:focus-within),
@@ -306,7 +323,7 @@ button.box:focus-visible { outline: none; border-color: var(--o-strong); box-sha
 .root :global(.ant-form-item-has-error .ant-input-number),
 .root :global(.ant-form-item-has-error .ant-picker),
 .root :global(.ant-form-item-has-error .ant-select-selector) { border-color: var(--o-neg) !important; }
-.root :global(.ant-form-item-has-error .ant-input-number-group-addon) { border-color: var(--o-neg) !important; border-left-color: var(--o-subtle) !important; }
+.root :global(.ant-form-item-has-error .ant-input-number-group-addon) { border-color: var(--o-neg) !important; }
 .root :global(.ant-form-item-has-error .ant-input-number-group-addon .ant-select-selector) { border-color: transparent !important; }
 .tallPicker :global(.ant-picker) { height: 44px; }
 /* Ошибку даты погрузки пишем одной строкой под точкой — у самого поля её нет. */
@@ -330,8 +347,6 @@ button.box:focus-visible { outline: none; border-color: var(--o-strong); box-sha
 .root :global(.ant-select-single .ant-select-selection-search-input) { height: 38px !important; }
 .root :global(.ant-select-single .ant-select-selection-placeholder),
 .root :global(.ant-select-single .ant-select-selection-item) { line-height: 38px !important; }
-.root :global(.ant-input-number-group-addon .ant-select-single .ant-select-selector) { height: 36px !important; padding: 0 6px !important; }
-.root :global(.ant-input-number-group-addon .ant-select-single .ant-select-selection-item) { line-height: 36px !important; }
 .root :global(.lc-ui-field) { height: 40px; border-radius: 10px; font-size: 14px; }
 .shadSelect { height: 40px !important; border-radius: 10px !important; font-size: 14px !important; }
 
