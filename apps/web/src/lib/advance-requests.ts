@@ -18,6 +18,27 @@ export interface AdvanceRequest {
     orderId: string;
     orderNumber: string;
     driver: { id: string; name: string; phone: string | null };
+    /** Рейс ждущего запроса (только у парка): топливо и «на руки» отдельно, налоги по ГПХ. */
+    trip?: AdvanceTrip | null;
+}
+
+/** Лимит одной части рейса: сколько всего, выдано, ждёт решения, можно ещё. */
+export interface AdvancePart {
+    cap: number;
+    issued: number;
+    pending: number;
+    available: number;
+}
+
+export interface AdvanceTrip {
+    /** Доля суммы на руки, которую можно выдать предоплатой, %. */
+    pct: number;
+    onHand: number;
+    /** Оплата водителю за работу — до ОПВ. */
+    gross: number;
+    fuel: AdvancePart;
+    advance: AdvancePart;
+    taxes: { opv: number; vosms: number; so: number; ipn: number };
 }
 
 export const ADVANCE_KIND: Record<AdvanceKind, string> = {

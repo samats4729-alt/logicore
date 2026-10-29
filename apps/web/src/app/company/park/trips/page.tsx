@@ -200,9 +200,12 @@ export default function ParkTripsPage() {
                                             <TableCell><StatusPill status={t.status} label={ORDER_STATUS_LABELS[t.status] ?? t.status} /></TableCell>
                                             <TableCell className="text-right tabular-nums">
                                                 <div className="font-semibold">{t.price != null ? moneyShort(t.price) : '—'}</div>
+                                                {/* На руки, топливо и доля парка — каждое своей строкой (шеф, 29.10.2026). */}
                                                 {t.settlement && (
-                                                    <div className="text-[11.5px] text-muted-foreground">
-                                                        водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}
+                                                    <div className="whitespace-nowrap text-[11.5px] text-muted-foreground">
+                                                        <div>на руки {moneyShort(t.settlement.driverTotal)}</div>
+                                                        {t.settlement.scheme === 2 && <div>топливо {moneyShort(t.settlement.fuelEstimate)}</div>}
+                                                        <div>парку {moneyShort(t.settlement.parkFee)}</div>
                                                     </div>
                                                 )}
                                             </TableCell>
@@ -226,7 +229,7 @@ export default function ParkTripsPage() {
                                             <TripResponsibleSelect orderId={t.id} current={t.responsible ?? null} staff={staff} onChanged={assigned(t.id)} />
                                         )}
                                         {t.settlement && (
-                                            <div className="text-[12px] text-muted-foreground">водителю на руки {moneyShort(t.settlement.driverTotal)} · парку {moneyShort(t.settlement.parkFee)}</div>
+                                            <div className="text-[12px] text-muted-foreground">водителю на руки {moneyShort(t.settlement.driverTotal)}{t.settlement.scheme === 2 ? ` · топливо ${moneyShort(t.settlement.fuelEstimate)}` : ''} · парку {moneyShort(t.settlement.parkFee)}</div>
                                         )}
                                         {t.settlement && <div className="text-[12px]"><TaxBreakdown s={t.settlement} /></div>}
                                         <div className="flex items-center justify-between gap-2">

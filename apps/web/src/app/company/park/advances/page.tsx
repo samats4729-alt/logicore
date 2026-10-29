@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import dayjs from 'dayjs';
 import { Fuel, Loader2, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ответСервера, телефонКрасиво } from '@/lib/exchange';
-import { ADVANCE_KIND, ADVANCE_STATUS, type AdvanceRequest } from '@/lib/advance-requests';
+import { ADVANCE_KIND, ADVANCE_STATUS, type AdvanceKind, type AdvancePart, type AdvanceRequest, type AdvanceTrip } from '@/lib/advance-requests';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -144,8 +144,10 @@ export default function ParkAdvancesPage() {
                                 {rows.map((r) => {
                                     const st = ADVANCE_STATUS[r.status] ?? { label: r.status, tone: 'muted' as const };
                                     const decidable = ['REQUESTED', 'CHECK', 'REUPLOAD'].includes(r.status);
+                                    const split = decidable && r.trip;
                                     return (
-                                        <TableRow key={r.id} className="border-0 border-b border-solid border-border align-top">
+                                        <Fragment key={r.id}>
+                                        <TableRow className={cn('border-0 border-solid border-border align-top', !split && 'border-b')}>
                                             <TableCell className="py-2.5">
                                                 <Link href={`/company/park/drivers/${r.driver.id}`} className="font-semibold text-foreground">{r.driver.name}</Link>
                                                 {r.driver.phone && (
@@ -184,6 +186,14 @@ export default function ParkAdvancesPage() {
                                                 )}
                                             </TableCell>
                                         </TableRow>
+                                        {split && (
+                                            <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
+                                                <TableCell colSpan={7} className="pb-3 pt-0">
+                                                    <TripSplit trip={r.trip!} kind={r.kind} />
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        </Fragment>
                                     );
                                 })}
                             </TableBody>
@@ -204,6 +214,7 @@ export default function ParkAdvancesPage() {
                             <p className="m-0 text-muted-foreground">
                                 Рейс {deciding.row.orderNumber}, просит {тенге(deciding.row.amount)}.
                             </p>
+                            {deciding.action === 'APPROVE' && deciding.row.trip && <TripSplit trip={deciding.row.trip} kind={deciding.row.kind} stacked />}
                             {deciding.action === 'APPROVE' && (
                                 <>
                                     <label className="flex flex-col gap-1">
@@ -246,6 +257,57 @@ export default function ParkAdvancesPage() {
                     )}
                 </DialogContent>
             </Dialog>
+        </div>
+    );
+}
+
+/**
+ * Рейс запроса: топливо и «на руки» — каждое со своим лимитом, выданным и
+ * остатком, и налоги по ГПХ (шеф, 29.10.2026: «топливо и на руки — разделено,
+ * и расшифровка по ГПХ»). Блок того, о чём просит водитель, выделен.
+ */
+function TripSplit({ trip, kind, stacked }: { trip: AdvanceTrip; kind: AdvanceKind; stacked?: boolean }) {
+    const t = trip.taxes;
+    return (
+        <div className={cn('grid gap-2 text-[12px] leading-[1.7]', !stacked && 'md:grid-cols-3')}>
+            <SplitBlock title="Топливо" active={kind === 'FUEL'} part={trip.fuel} capLabel="Лимит по километражу" />
+            <SplitBlock
+                title="На руки"
+                active={kind === 'ADVANCE'}
+                part={trip.advance}
+                capLabel={`Предоплата — до ${trip.pct} %`}
+                head={<SplitLine label="Водителю на руки за рейс" value={trip.onHand} />}
+            />
+            <div className="rounded-lg border border-solid border-border px-3 py-2">
+                <div className="mb-1 font-semibold">Налоги по ГПХ</div>
+                <SplitLine label="Оплата за работу" value={trip.gross} />
+                <SplitLine label="ОПВ — из оплаты водителя" value={t.opv} />
+                <SplitLine label="ОСМС, СО, ИПН — платит парк" value={t.vosms + t.so + t.ipn} />
+                <div className="text-muted-foreground tabular-nums">ОСМС {тенге(t.vosms)} · СО {тенге(t.so)} · ИПН {тенге(t.ipn)}</div>
+            </div>
+        </div>
+    );
+}
+
+function SplitBlock({ title, active, part, capLabel, head }: { title: string; active: boolean; part: AdvancePart; capLabel: string; head?: React.ReactNode }) {
+    return (
+        <div className={cn('rounded-lg border border-solid px-3 py-2', active ? 'border-foreground' : 'border-border')}>
+            <div className="mb-1 font-semibold">{title}{active && <span className="font-normal text-muted-foreground"> · просит водитель</span>}</div>
+            {head}
+            <SplitLine label={capLabel} value={part.cap} />
+            <SplitLine label="Уже выдано" value={part.issued} />
+            {/* У выделенного блока ждёт решения как раз этот запрос: после него лимита останется столько. */}
+            {part.pending > 0 && <SplitLine label={active ? 'Просит сейчас' : 'Ждёт решения'} value={part.pending} />}
+            <SplitLine label={active && part.pending > 0 ? 'Останется после выдачи' : 'Можно выдать ещё'} value={part.available} strong />
+        </div>
+    );
+}
+
+function SplitLine({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+    return (
+        <div className={cn('flex items-baseline justify-between gap-3', strong && 'font-semibold')}>
+            <span className={strong ? undefined : 'text-muted-foreground'}>{label}</span>
+            <span className="tabular-nums">{тенге(Math.round(value))}</span>
         </div>
     );
 }
