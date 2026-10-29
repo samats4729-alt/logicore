@@ -1673,6 +1673,7 @@ function OrdersJournal() {
                 onClose={() => setWizard(null)}
                 // Заявка заведена — окно закрывается, список показывает её первой строкой.
                 onCreated={() => { setWizard(null); setActiveTab('all'); mutateAll(); }}
+                onRefresh={() => mutateAll()}
                 // Правку сохранили — в карточку рейса, как и было.
                 onSaved={(id) => { setWizard(null); router.push(`/company/orders/${id}`); }}
             />

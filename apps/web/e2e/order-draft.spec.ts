@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, pickFromList } from './helpers';
+import { login, pickInCombo } from './helpers';
 
 /**
  * Черновик новой заявки.
@@ -31,13 +31,12 @@ test.describe('Черновик новой заявки', () => {
         await чистыйМастер(page);
         await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
 
-        await pickFromList(page, 'Выберите заказчика', 0);
-        await pickFromList(page, 'Выберите перевозчика', 0);
-        // Поле заказчика — по его якорю: над ним бывает поле «Организация»,
-        // и порядковый номер списка на разных стендах разный.
-        const полеЗаказчика = page.locator('[data-guide="wizard-customer"] [data-picker-field]');
+        await pickInCombo(page, 'no-customer', 0);
+        await pickInCombo(page, 'no-carrier', 0);
+        const полеЗаказчика = page.locator('#no-customer');
         const заказчик = await полеЗаказчика.innerText();
-        const ставка = page.locator('.ant-form-item').filter({ hasText: /Ставка от заказчика|^Ставка/ }).locator('input').first();
+        // Своя компания и заказчик, и перевозчик — поле одно: «Ставка».
+        const ставка = page.locator('#no-customer-price');
         await ставка.fill('515000');
         await expect(page.getByTestId('order-draft-saved')).toBeVisible();
 
@@ -45,14 +44,17 @@ test.describe('Черновик новой заявки', () => {
         await expect(page.getByRole('heading', { name: 'Водители' })).toBeVisible();
         await page.goto('/company/orders/create');
 
+        // Сначала экран «Черновик сохранён»: продолжить или начать заново.
         await expect(page.getByTestId('order-draft-restored')).toBeVisible();
-        await expect(полеЗаказчика).toHaveText(заказчик);
+        await page.getByRole('button', { name: 'Продолжить черновик' }).click();
+        await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
+        await expect.poll(() => полеЗаказчика.innerText()).toBe(заказчик);
         await expect(ставка).toHaveValue(/515/);
 
-        // «Сбросить» (с подтверждением на самой кнопке) — пустая форма и никакого черновика.
-        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
-        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
-        await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
+        // «⋯ → Начать заново» с подтверждением — пустая форма и никакого черновика.
+        await page.getByRole('button', { name: 'Действия с черновиком' }).click();
+        await page.getByRole('menuitem', { name: 'Начать заново' }).click();
+        await page.getByRole('button', { name: 'Стереть и начать заново' }).click();
         await expect(ставка).toHaveValue('');
         expect(await черновиков(page)).toBe(0);
     });
@@ -80,8 +82,8 @@ test.describe('Черновик новой заявки', () => {
 
         await page.goto(`/company/orders/create?edit=${заявка.id}`);
         await expect(page.getByRole('heading', { name: /Правка заявки/ })).toBeVisible();
-        // Правим видимое поле первого шага — ставку; сохранять заявку не будем.
-        await page.locator('.ant-form-item').filter({ hasText: /Ставка/ }).locator('input').first().fill('777');
+        // Правим ставку; сохранять заявку не будем.
+        await page.locator('#no-customer-price, #no-driver-cost').first().fill('777');
         await page.waitForTimeout(800);
         expect(await черновиков(page)).toBe(0);
         await expect(page.getByTestId('order-draft-saved')).toHaveCount(0);

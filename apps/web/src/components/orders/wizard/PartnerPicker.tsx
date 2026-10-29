@@ -38,6 +38,7 @@ export function PartnerPicker({
     userId,
     scope,
     onAdd,
+    renderField,
 }: {
     id?: string;
     role: 'CUSTOMER' | 'CARRIER';
@@ -52,8 +53,15 @@ export function PartnerPicker({
     scope?: string;
     /** «Добавить контрагента» — заведение без выхода из мастера. */
     onAdd: () => void;
+    /**
+     * Своё поле вместо кнопки (окно «Новая заявка», 29.10.2026): комбобокс
+     * с выпадашкой, а это окно — его справочник. `open(query)` открывает
+     * справочник с уже набранным текстом.
+     */
+    renderField?: (api: { open: (query?: string) => void; items: PickerItem[]; own: PickerItem; label?: string; recentKey: string; count: number }) => React.ReactNode;
 }) {
     const [open, setOpen] = useState(false);
+    const [initialQuery, setInitialQuery] = useState<string | undefined>();
     const заказчик = role === 'CUSTOMER';
 
     const { items, byId } = useMemo(() => {
@@ -77,18 +85,30 @@ export function PartnerPicker({
     const подпись = value === ownValue ? ownLabel : value ? byId.get(value)?.name : undefined;
     const что = заказчик ? 'заказчика' : 'перевозчика';
 
+    const recentKey = `${заказчик ? 'customer' : 'carrier'}:${scope ?? ''}`;
+
     return (
         <>
-            <PickerField
-                id={id}
-                label={заказчик ? 'Заказчик' : 'Перевозчик'}
-                placeholder={`Выберите ${что}`}
-                value={подпись}
-                onOpen={() => setOpen(true)}
-            />
+            {renderField ? renderField({
+                open: (q) => { setInitialQuery(q || undefined); setOpen(true); },
+                items,
+                own,
+                label: подпись,
+                recentKey,
+                count: items.length,
+            }) : (
+                <PickerField
+                    id={id}
+                    label={заказчик ? 'Заказчик' : 'Перевозчик'}
+                    placeholder={`Выберите ${что}`}
+                    value={подпись}
+                    onOpen={() => { setInitialQuery(undefined); setOpen(true); }}
+                />
+            )}
             <ListPicker
                 open={open}
                 onOpenChange={setOpen}
+                initialQuery={initialQuery}
                 title={заказчик ? 'Заказчик' : 'Перевозчик'}
                 searchPlaceholder="Название, БИН, телефон или адрес"
                 pinned={[own]}
@@ -102,7 +122,7 @@ export function PartnerPicker({
                 ]}
                 value={value}
                 onSelect={onChange}
-                recentKey={`${заказчик ? 'customer' : 'carrier'}:${scope ?? ''}`}
+                recentKey={recentKey}
                 emptyText={`Такого ${что} нет. Проверьте поиск или добавьте контрагента.`}
                 footer={(
                     <Button

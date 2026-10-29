@@ -7,8 +7,8 @@ import { login } from './helpers';
  * Проверка живая, потому что поломка здесь невидима для типов и сборки:
  * preflight у Tailwind выключен, вместо него в `globals.css` лежит
  * мини-сброс. Пока он был написан как `button:not([class*='ant-'])`, он
- * весил больше утилит Tailwind и обнулял им фон и рамку — «Далее»
- * превращалась в белый текст на белом. `tsc` и `next build` при этом
+ * весил больше утилит Tailwind и обнулял им фон и рамку — «Далее» мастера
+ * заявки превращалась в белый текст на белом. `tsc` и `next build` при этом
  * зелёные, разметка на месте, кнопка нажимается. Видно только в браузере.
  *
  * Поэтому смотрим не на разметку, а на вычисленный стиль.
@@ -23,26 +23,32 @@ test('заливка главной кнопки не съедается сбр�
     await login(page);
     await page.goto('/company/orders/create');
 
-    const next = page.getByRole('button', { name: /Далее/ }).first();
-    await expect(next).toBeVisible();
+    // «Создать заявку» в окне заявки. Тот же сброс однажды перекрасил её
+    // текст в цвет фона: кнопка залита, а надписи не видно.
+    const cta = page.locator('[data-guide="wizard-submit"]');
+    await expect(cta).toBeVisible();
 
-    const bg = await next.evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(isTransparent(bg), `у кнопки «Далее» прозрачный фон: ${bg}`).toBe(false);
+    const { bg, color } = await cta.evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return { bg: cs.backgroundColor, color: cs.color };
+    });
+    expect(isTransparent(bg), `у кнопки «Создать заявку» прозрачный фон: ${bg}`).toBe(false);
+    expect(color, 'текст кнопки «Создать заявку» того же цвета, что фон').not.toBe(bg);
 });
 
 test('у вторичной кнопки видна рамка', async ({ page }) => {
     await login(page);
-    await page.goto('/company/orders/create');
+    await page.goto('/company/orders');
 
-    const cancel = page.getByRole('button', { name: 'Отмена' }).first();
-    await expect(cancel).toBeVisible();
+    const refresh = page.getByRole('button', { name: 'Обновить список' }).first();
+    await expect(refresh).toBeVisible();
 
-    const border = await cancel.evaluate((el) => {
+    const border = await refresh.evaluate((el) => {
         const cs = getComputedStyle(el);
         return { width: cs.borderTopWidth, color: cs.borderTopColor };
     });
-    expect(border.width, 'у кнопки «Отмена» нулевая рамка').not.toBe('0px');
-    expect(isTransparent(border.color), `рамка «Отмены» прозрачная: ${border.color}`).toBe(false);
+    expect(border.width, 'у кнопки «Обновить список» нулевая рамка').not.toBe('0px');
+    expect(isTransparent(border.color), `рамка «Обновить список» прозрачная: ${border.color}`).toBe(false);
 });
 
 test('главная кнопка списка заявок сохранила фирменный вид', async ({ page }) => {

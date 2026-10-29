@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, pickFromList } from './helpers';
+import { login, pickInCombo } from './helpers';
 
 /**
  * Общая база водителей.
@@ -44,15 +44,18 @@ test.describe('Общая база водителей', () => {
         test.skip(!водители.length, 'на стенде нет водителей');
 
         await page.goto('/company/orders/create');
-        await pickFromList(page, 'Выберите заказчика', 0);
-        // Выбор — окном с поиском (владелец, 08.10.2026).
-        const окно = page.locator('[data-list-picker]');
-        await page.locator('[data-picker-field]').filter({ hasText: 'Выберите перевозчика' }).first().click();
-        await окно.getByRole('textbox', { name: 'Поиск' }).fill(перевозчик.name);
-        await окно.locator('[data-picker-option]').filter({ hasText: перевозчик.name }).first().click();
-        await expect(окно).toHaveCount(0);
+        await pickInCombo(page, 'no-customer', 0);
+        // Перевозчик — выпадашкой с поиском под полем (новое окно заявки, 29.10.2026).
+        await page.locator('#no-carrier').click();
+        await page.keyboard.type(перевозчик.name);
+        await page.locator('#no-carrier-list [data-combo-option]').filter({ hasText: перевозчик.name }).first().click();
+        await expect(page.locator('#no-carrier-list')).toHaveCount(0);
 
-        await page.locator('[data-picker-field]').filter({ hasText: 'Выберите водителя из базы' }).first().click();
+        // Водитель — та же выпадашка, а вся база — в справочнике (последний пункт).
+        await page.locator('#no-driver').click();
+        await page.locator('#no-driver-list').getByRole('option', { name: /базу водителей/ }).click();
+        const окно = page.locator('[data-list-picker]');
+        await expect(окно).toBeVisible();
         const поиск = окно.getByRole('textbox', { name: 'Поиск' });
 
         // Список длинный, поэтому ищем по фамилии — так же, как диспетчер.
@@ -144,16 +147,24 @@ test.describe('Общая база водителей', () => {
         test.skip(!сМашиной, 'на стенде нет водителя с госномером');
 
         await page.goto('/company/orders/create');
-        await pickFromList(page, 'Выберите заказчика', 0);
-        await pickFromList(page, 'Выберите перевозчика', 0);
-        const выбор = page.locator('[data-picker-field]').filter({ hasText: 'Выберите водителя из базы' });
+        await pickInCombo(page, 'no-customer', 0);
+        await pickInCombo(page, 'no-carrier', 0);
+        const выбор = page.locator('#no-driver');
         test.skip(await выбор.count() === 0, 'у первого перевозчика водителя назначают сами (он на платформе)');
 
-        await выбор.first().click();
-        const окно = page.locator('[data-list-picker]');
-        await окно.getByRole('textbox', { name: 'Поиск' }).fill(String(сМашиной.vehiclePlate).slice(0, 5));
-        await expect(
-            окно.locator('[data-picker-option]').filter({ hasText: сМашиной.lastName }).first(),
-        ).toBeVisible();
+        // Госномер набирают прямо в поле водителя — выпадашка ищет и по нему.
+        await выбор.click();
+        await page.keyboard.type(String(сМашиной.vehiclePlate).slice(0, 5));
+        const список = page.locator('#no-driver-list');
+        const нашёлся = список.locator('[data-combo-option]').filter({ hasText: сМашиной.lastName }).first();
+        // В выпадашке — шесть строк; если водителя там нет, он должен быть в справочнике.
+        if (!(await нашёлся.isVisible())) {
+            await список.getByRole('option', { name: /базу водителей/ }).click();
+            const окно = page.locator('[data-list-picker]');
+            await expect(окно.getByRole('textbox', { name: 'Поиск' })).toHaveValue(String(сМашиной.vehiclePlate).slice(0, 5));
+            await expect(окно.locator('[data-picker-option]').filter({ hasText: сМашиной.lastName }).first()).toBeVisible();
+            return;
+        }
+        await expect(нашёлся).toBeVisible();
     });
 });

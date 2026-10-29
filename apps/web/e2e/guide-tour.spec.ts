@@ -20,7 +20,8 @@ const ROUTE = [
     { selector: "[data-menu-id$='-/company/orders']", say: 'Откройте «Заявки»' },
     { selector: "[data-guide='orders-create']", say: 'Нажмите «Создать заявку»' },
     { selector: "[data-guide='wizard-customer']", say: 'Выберите заказчика', fill: true },
-    { selector: "[data-guide='wizard-next']", say: 'Нажмите «Далее»' },
+    { selector: "[data-guide='wizard-pickup-date']", say: 'Укажите дату погрузки', fill: true },
+    { selector: "[data-guide='wizard-submit']", say: 'Нажмите «Создать заявку»' },
 ];
 
 const REPLY = 'Заявка заводится мастером. Проведу по шагам.\n\n```steps\n'

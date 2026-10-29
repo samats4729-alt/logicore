@@ -114,29 +114,7 @@ describe('карта интерфейса ИИ-гида не разошлась 
         },
     };
 
-    /**
-     * Якоря, собранные из номера шага. Проверять «есть ли в файле '1'»
-     * бессмысленно, поэтому сверяем иначе: шаблон на месте, а номер не
-     * выходит за число шагов мастера. Иначе гид уверенно поведёт на
-     * четвёртый шаг там, где их три.
-     */
-    // Мастер с 08.10.2026 — окно поверх журнала; страница /company/orders/create
-    // только переводит в журнал с открытым окном, поэтому шаги ищем в самом окне.
-    const WIZARD = {
-        file: 'components/orders/wizard/OrderWizard.tsx',
-        pattern: 'data-guide={`wizard-step-',
-    };
-
     it.each(guideAnchors)('якорь data-guide="%s" есть в разметке', (anchor) => {
-        if (anchor.startsWith('wizard-step-')) {
-            const source = fs.readFileSync(path.join(WEB_SRC, WIZARD.file), 'utf8');
-            expect(source).toContain(WIZARD.pattern);
-            const steps = source.match(/const steps = \[([\s\S]*?)\];/)?.[1] ?? '';
-            const total = (steps.match(/\{\s*title:/g) || []).length;
-            expect(total).toBeGreaterThan(Number(anchor.slice('wizard-step-'.length)));
-            return;
-        }
-
         const prefix = Object.keys(COMPUTED).find((p) => anchor.startsWith(p));
 
         if (prefix) {
@@ -149,9 +127,16 @@ describe('карта интерфейса ИИ-гида не разошлась 
             return;
         }
 
-        const found = allWebSources(WEB_SRC).some((file) =>
-            fs.readFileSync(file, 'utf8').includes(`data-guide="${anchor}"`),
-        );
+        // Якорь пишут прямо (`data-guide="…"`), передают общему полю окна
+        // заявки свойством (`dataGuide="…"`) или ставят по условию
+        // (`data-guide={compact ? undefined : '…'}`).
+        const byCondition = new RegExp(`data-guide=\\{[^}]*'${anchor}'`);
+        const found = allWebSources(WEB_SRC).some((file) => {
+            const source = fs.readFileSync(file, 'utf8');
+            return source.includes(`data-guide="${anchor}"`)
+                || source.includes(`dataGuide="${anchor}"`)
+                || byCondition.test(source);
+        });
         expect(found).toBe(true);
     });
 

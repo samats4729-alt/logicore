@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, pickFromList } from './helpers';
+import { login, pickInCombo } from './helpers';
 
 /**
  * Журнал заявок по макету «shadcn Nova» (владелец, 08.10.2026).
@@ -133,11 +133,11 @@ test.describe('Журнал заявок', () => {
         await page.getByRole('button', { name: 'Создать заявку' }).click();
         const окно = page.locator('[data-order-wizard-dialog]');
         await expect(окно.getByRole('heading', { name: 'Новая заявка' })).toBeVisible();
-        await expect(окно.getByRole('combobox', { name: 'Тип оплаты' })).toContainText('За рейс');
+        await expect(окно.getByRole('combobox', { name: 'Тип ставки' })).toContainText('За рейс');
         // Список под окном на месте — мы не ушли со страницы.
         await expect(page).toHaveURL(/\/company\/orders$/);
 
-        const ставка = окно.locator('.ant-form-item').filter({ hasText: /Ставка от заказчика|^Ставка/ }).locator('input').first();
+        const ставка = окно.locator('#no-customer-price');
         await ставка.fill('321000');
         await expect(окно.getByTestId('order-draft-saved')).toBeVisible();
         await окно.getByRole('button', { name: 'Закрыть' }).click();
@@ -145,21 +145,24 @@ test.describe('Журнал заявок', () => {
 
         await page.getByRole('button', { name: 'Создать заявку' }).click();
         await expect(page.getByTestId('order-draft-restored')).toBeVisible();
-        await expect(page.locator('[data-order-wizard-dialog] .ant-form-item').filter({ hasText: /Ставка от заказчика|^Ставка/ }).locator('input').first()).toHaveValue(/321/);
+        await page.getByRole('button', { name: 'Продолжить черновик' }).click();
+        await expect(page.locator('[data-order-wizard-dialog] #no-customer-price')).toHaveValue(/321/);
 
-        // Сбросить — с подтверждением, и черновика больше нет.
-        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
-        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
-        await expect(page.getByTestId('order-draft-restored')).toHaveCount(0);
+        // Начать заново — с подтверждением, и черновика больше нет.
+        await page.getByRole('button', { name: 'Действия с черновиком' }).click();
+        await page.getByRole('menuitem', { name: 'Начать заново' }).click();
+        await page.getByRole('button', { name: 'Стереть и начать заново' }).click();
+        await expect(page.locator('[data-order-wizard-dialog] #no-customer-price')).toHaveValue('');
         await page.keyboard.press('Escape');
     });
 
     /**
-     * Заказчик, перевозчик, водитель — окном по центру с поиском, а не
-     * выпадающим списком (владелец, 08.10.2026): контрагентов сотни, и
-     * список прокручивался вместе со всем мастером.
+     * Заказчик, перевозчик, водитель — выпадашкой под полем с поиском
+     * (владелец, 29.10.2026, новое окно заявки): шесть строк, недавние
+     * сверху; кого нет среди них — последний пункт открывает справочник с
+     * поиском и фильтрами, и набранный текст переходит туда.
      */
-    test('заказчик выбирается окном с поиском, выбранный потом — в «Недавних»', async ({ page }) => {
+    test('заказчик ищется в выпадашке, выбранный потом — в «Недавних», справочник под рукой', async ({ page }) => {
         await page.setViewportSize({ width: 1920, height: 1080 });
         await открыть(page);
         await page.evaluate(() => Object.keys(localStorage)
@@ -167,38 +170,53 @@ test.describe('Журнал заявок', () => {
             .forEach((k) => localStorage.removeItem(k)));
         await page.getByRole('button', { name: 'Создать заявку' }).click();
         const мастер = page.locator('[data-order-wizard-dialog]');
-        const поле = мастер.getByRole('button', { name: 'Заказчик', exact: true });
+        const поле = мастер.locator('#no-customer');
+        const рамкаПоля = (await поле.boundingBox())!;
         await поле.click();
 
-        const окно = page.locator('[data-list-picker]');
-        await expect(окно).toBeVisible();
-        // По центру экрана, а не списком под полем.
-        const рамка = (await окно.boundingBox())!;
-        expect(Math.abs(рамка.x + рамка.width / 2 - 960), 'окно выбора не по центру').toBeLessThan(4);
+        const список = мастер.locator('#no-customer-list');
+        await expect(список).toBeVisible();
+        // Под полем, а не окном по центру.
+        const рамка = (await список.boundingBox())!;
+        expect(Math.abs(рамка.x - рамкаПоля.x), 'выпадашка не под полем').toBeLessThan(12);
+        expect(рамка.y).toBeGreaterThan(рамкаПоля.y);
 
-        const строки = окно.locator('[data-picker-option]');
+        await expect(список.locator('[data-combo-loading]')).toHaveCount(0);
+        const строки = список.locator('[data-combo-option]');
         const всего = await строки.count();
+        expect(всего).toBeLessThanOrEqual(6);
         test.skip(всего < 2, 'на стенде нет заказчиков-контрагентов');
         // Первая строка — своя компания, вторая — первый контрагент.
-        const имя = (await строки.nth(1).innerText()).split('\n')[0].trim();
+        const имя = (await строки.nth(1).locator('[data-combo-title]').innerText()).trim();
 
-        await окно.getByRole('textbox', { name: 'Поиск' }).fill(имя);
-        await expect(строки.filter({ hasText: имя }).first()).toBeVisible();
-        expect(await строки.count()).toBeLessThanOrEqual(всего);
+        await page.keyboard.type(имя);
+        await expect(список.getByText('Совпадения', { exact: true })).toBeVisible();
         await строки.filter({ hasText: имя }).first().click();
-        await expect(окно).toHaveCount(0);
+        await expect(список).toHaveCount(0);
         await expect(поле).toContainText(имя);
 
         // Снова открыл — выбранный уже наверху, в «Недавних».
         await поле.click();
-        await expect(окно.getByText('Недавние', { exact: true })).toBeVisible();
-        // Esc закрывает только окно выбора, мастер остаётся.
+        await expect(список.getByText('Недавние', { exact: true })).toBeVisible();
+        // Esc закрывает только выпадашку, мастер остаётся.
         await page.keyboard.press('Escape');
-        await expect(окно).toHaveCount(0);
+        await expect(список).toHaveCount(0);
         await expect(мастер).toBeVisible();
 
-        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
-        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
+        // Последний пункт — справочник: окно с поиском, набранное не теряется.
+        await поле.click();
+        await page.keyboard.type('нет-такого');
+        await список.getByRole('option', { name: /Не нашли «нет-такого» — открыть справочник/ }).click();
+        const справочник = page.locator('[data-list-picker]');
+        await expect(справочник).toBeVisible();
+        await expect(справочник.getByRole('textbox', { name: 'Поиск' })).toHaveValue('нет-такого');
+        await page.keyboard.press('Escape');
+        await expect(справочник).toHaveCount(0);
+        await expect(мастер).toBeVisible();
+
+        await page.getByRole('button', { name: 'Действия с черновиком' }).click();
+        await page.getByRole('menuitem', { name: 'Начать заново' }).click();
+        await page.getByRole('button', { name: 'Стереть и начать заново' }).click();
         await page.evaluate(() => Object.keys(localStorage)
             .filter((k) => k.startsWith('lc:picker-recent'))
             .forEach((k) => localStorage.removeItem(k)));
@@ -223,25 +241,27 @@ test.describe('Журнал заявок', () => {
         await page.getByRole('button', { name: 'Создать заявку' }).click();
         const мастер = page.locator('[data-order-wizard-dialog]');
         // Посредник: обе ставки на экране — нужен контрагент и с той, и с другой стороны.
-        await pickFromList(page, 'Выберите заказчика', 1);
-        await pickFromList(page, 'Выберите перевозчика', 1);
+        await pickInCombo(page, 'no-customer', 1);
+        await pickInCombo(page, 'no-carrier', 1);
 
-        const ставкаЗаказчика = мастер.locator('.ant-form-item').filter({ hasText: 'Ставка от заказчика' });
-        await ставкаЗаказчика.locator('input').first().fill('1000');
-        await ставкаЗаказчика.locator('.ant-select-selector').click();
+        await мастер.locator('#no-customer-price').fill('1000');
+        await мастер.locator('.ant-input-number-group-wrapper')
+            .filter({ has: page.locator('#no-customer-price') })
+            .locator('.ant-select-selector').click();
         await page.keyboard.type('RUB');
         await page.keyboard.press('Enter');
         // Перевозчику — 40% рублёвой ставки в тенге. «1000 − 2000» без курса
         // был бы убыток, по курсу — маржа даже за вычетом НДС.
         const вТенге = Math.round(1000 * Number(рубль.rate) * 0.4);
-        await мастер.locator('.ant-form-item').filter({ hasText: 'Ставка перевозчику' }).locator('input').first().fill(String(вТенге));
+        await мастер.locator('#no-driver-cost').fill(String(вТенге));
 
         await expect(мастер.getByText('В тенге по курсу', { exact: false })).toBeVisible();
         await expect(мастер.getByText('Маржа', { exact: true })).toBeVisible();
         await expect(мастер.getByText('Убыток', { exact: true })).toHaveCount(0);
 
-        await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
-        await page.getByRole('button', { name: 'Сбросить всё?' }).click();
+        await page.getByRole('button', { name: 'Действия с черновиком' }).click();
+        await page.getByRole('menuitem', { name: 'Начать заново' }).click();
+        await page.getByRole('button', { name: 'Стереть и начать заново' }).click();
         await page.evaluate(() => Object.keys(localStorage)
             .filter((k) => k.startsWith('lc:picker-recent'))
             .forEach((k) => localStorage.removeItem(k)));
