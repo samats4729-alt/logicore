@@ -33,6 +33,8 @@ export interface AdvancePart {
 export interface AdvanceTrip {
     /** Доля суммы на руки, которую можно выдать предоплатой, %. */
     pct: number;
+    /** Ставка водителя — до вычетов: топливо и оплата за работу до ОПВ. */
+    rate: number;
     onHand: number;
     /** Оплата водителю за работу — до ОПВ. */
     gross: number;

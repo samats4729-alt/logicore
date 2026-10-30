@@ -48,6 +48,13 @@ export class ParkContractService {
             select: { name: true, bin: true, address: true, directorName: true, bankAccount: true, bankName: true, bankBic: true, kbe: true, phone: true },
         });
         if (!park) return null;
+        // Машина не своя — в договоре с парком ссылка на договор водителя с её
+        // хозяином (31.10.2026): последний оформленный, подписанный — первым.
+        const сХозяином = driver.vehicleIsOwn ? null : await this.prisma.exchangeVehicleOwnerContract.findFirst({
+            where: { driverId: driver.id, lessee: 'DRIVER' },
+            orderBy: [{ signedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+            select: { ownerName: true, number: true, createdAt: true },
+        });
         return {
             number: contractNumber(driver.id, at),
             date: at,
@@ -61,6 +68,7 @@ export class ParkContractService {
             vehicle: {
                 model: driver.vehicleModel, plate: driver.vehiclePlate, regNumber: driver.vehicleRegNumber,
                 bodyType: driver.vehicleBodyType, capacityKg: driver.vehicleCapacityKg, isOwn: driver.vehicleIsOwn,
+                ownerContract: сХозяином ? { ownerName: сХозяином.ownerName, number: сХозяином.number, date: сХозяином.createdAt } : null,
             },
         };
     }

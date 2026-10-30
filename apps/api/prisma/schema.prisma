@@ -3239,6 +3239,9 @@ model ExchangeDriver {
   vehicleRegNumber  String?
   /// Машина записана на водителя. Нет — нужна доверенность от владельца.
   vehicleIsOwn      Boolean @default(true)
+  /// ИИН или БИН собственника машины — как в техпаспорте (владелец, 31.10.2026):
+  /// по нему система сама понимает, своя машина у водителя или нет.
+  vehicleOwnerIin   String?
 
   /// Договор с парком подписан в приложении. Подпись через eGov — позже.
   contractSignedAt     DateTime?
@@ -3440,6 +3443,9 @@ model ExchangeVehicleOwnerContract {
   version       String
   /// DRAFT — оформлен, ждёт подписи; SIGNED — приложен подписанный скан.
   status        String         @default("DRAFT")
+  /// Кто арендатор: PARK — парк (договоры до 31.10.2026); DRIVER — сам
+  /// водитель, парк в договоре не участвует (владелец, 31.10.2026).
+  lessee        String         @default("PARK")
 
   /// PERSON — человек, COMPANY — ТОО или ИП.
   ownerKind       String

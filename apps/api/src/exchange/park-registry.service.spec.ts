@@ -21,13 +21,13 @@ function settlementRow(overrides: Record<string, any> = {}) {
     };
 }
 
-function build(rows: any[] = [settlementRow()], confirmed = false) {
+function build(rows: any[] = [settlementRow()], confirmed = false, advances = 0) {
     const prisma: any = {
         exchangeTripSettlement: { findMany: jest.fn().mockResolvedValue(rows) },
         parkPayoutRates: { findUnique: jest.fn().mockResolvedValue(confirmed ? { ratesConfirmedAt: new Date() } : null) },
     };
     const drivers: any = { assertPark: jest.fn() };
-    const fuel: any = { totals: jest.fn(async (ids: string[]) => new Map(ids.map((id) => [id, { issued: 120000, receipts: 120000 }]))) };
+    const fuel: any = { totals: jest.fn(async (ids: string[]) => new Map(ids.map((id) => [id, { issued: 120000 + advances, receipts: 120000, advances }]))) };
     return { service: new ExchangeParkRegistryService(prisma, drivers, fuel), prisma };
 }
 
@@ -68,6 +68,16 @@ describe('Реестр бухгалтера парка за месяц', () => {
         // Расчёт 125 000, по чекам 120 000 — сэкономили 5 000.
         expect(r.lines[0]).toMatchObject({ fuelDiff: 5000, parkProfit: 10237.25 });
         expect(r.totals).toMatchObject({ fuelDiff: 5000, parkProfit: 10237.25 });
+    });
+
+    it('ставка водителя — до вычетов; топливо и предоплата — раздельно, предоплата уменьшает выплату (31.10.2026)', async () => {
+        const row = settlementRow({ scheme: 2, base: 100000, fuelEstimate: 27000, workNet: 65700, gross: 73000, opv: 7300, vosms: 1460, ipn: 0, so: 3285 });
+        const before = (await build([row]).service.month('park-1', '2026-10')).lines[0];
+        const r = await build([row], false, 30000).service.month('park-1', '2026-10');
+        expect(r.lines[0]).toMatchObject({ driverRate: 100000, fuelIssued: 120000, advanceIssued: 30000 });
+        // Предоплата — из суммы на руки: выплата меньше ровно на неё.
+        expect(r.lines[0].toPay).toBe(before.toPay - 30000);
+        expect(r.totals).toMatchObject({ driverRate: 100000, advanceIssued: 30000 });
     });
 
     it('рейс ещё идёт — разницу по топливу не считаем', async () => {

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { getDefaultContractTemplate, companyRequisitesText, строкиРеквизитов } from './contract-template';
+import { preambleOf } from './company-legal-name';
 
 @Injectable()
 export class ContractsService {
@@ -873,6 +874,8 @@ export class ContractsService {
             // свободным текстом, и для договоров, заведённых до полей.
             left: companyRequisitesText(contract.forwarderCompany),
             right: companyRequisitesText(contract.customerCompany),
+            // Вступление, как его собирает программа, — заготовка для правки руками.
+            preamble: preambleOf(contract.forwarderCompany?.name, contract.customerCompany?.name),
         };
     }
 

@@ -22,6 +22,7 @@ import { DRIVER_KINDS } from '@/lib/driver-kinds';
 import { BodyTypePicker } from '@/components/BodyTypePicker';
 import { ContractText, OpenContractPdf } from '@/components/ParkContract';
 import { CapturedPhoto, DocumentCapture } from '@/components/DocumentCapture';
+import { OwnerContractCard } from '@/components/OwnerContract';
 
 /** Адрес сайта платформы — для ссылки на политику конфиденциальности рядом с согласием. */
 const SITE_URL: string = (Constants.expoConfig?.extra?.siteUrl as string | undefined) || '';
@@ -68,7 +69,7 @@ export default function Onboarding() {
         lastName: '', firstName: '', middleName: '', iin: '', phone: '+7',
         ipName: '', ipIin: '', vehiclePlate: '', vehicleBodyType: '', capacityTons: '',
         idNumber: '', idIssuedBy: '', idIssuedAt: '', idExpiresAt: '',
-        registrationAddress: '', vehicleModel: '', vehicleRegNumber: '',
+        registrationAddress: '', vehicleModel: '', vehicleRegNumber: '', vehicleOwnerIin: '',
     });
     type FieldKey = keyof typeof form;
     // Ошибки показываем под полем, общую — плашкой над кнопками.
@@ -123,6 +124,7 @@ export default function Onboarding() {
                 idNumber: d.idNumber ?? '', idIssuedBy: d.idIssuedBy ?? '',
                 idIssuedAt: деньИзСервера(d.idIssuedAt), idExpiresAt: деньИзСервера(d.idExpiresAt),
                 registrationAddress: d.registrationAddress ?? '', vehicleModel: d.vehicleModel ?? '', vehicleRegNumber: d.vehicleRegNumber ?? '',
+                vehicleOwnerIin: d.vehicleOwnerIin ?? '',
             });
             // Исправление после отказа — сразу ко второму шагу: вид работы уже выбран.
             // Только если согласие уже дано: после экрана «Регистрация» вид работы
@@ -135,10 +137,13 @@ export default function Onboarding() {
     const steps = STEPS[driver?.kind ?? 'PARK'];
     const step = steps[Math.min(index, steps.length - 1)];
 
+    // Доверенность от хозяина — не обязательна: вместо неё можно договор с
+    // хозяином (31.10.2026). Чего не хватает — скажет сервер.
     const docs = useMemo(
         () => DOCUMENTS.filter((d) => d.kind !== 'POWER_OF_ATTORNEY' || driver?.vehicleIsOwn === false),
         [driver?.vehicleIsOwn],
     );
+    const requiredDocs = useMemo(() => docs.filter((d) => d.kind !== 'POWER_OF_ATTORNEY'), [docs]);
 
     const save = async (data: Record<string, unknown>) => {
         const updated = await exchangeApi.update(data);
@@ -177,6 +182,7 @@ export default function Onboarding() {
             if (driver?.kind === 'PARK') {
                 if (!form.vehicleModel.trim()) e.vehicleModel = 'Впишите марку и модель, например MAN TGX';
                 if (!form.vehicleRegNumber.trim()) e.vehicleRegNumber = 'Впишите номер техпаспорта — он на лицевой стороне';
+                if (!/^\d{12}$/.test(form.vehicleOwnerIin.replace(/\D/g, ''))) e.vehicleOwnerIin = 'Впишите ИИН или БИН собственника из техпаспорта — 12 цифр';
             }
         }
         return e;
@@ -220,12 +226,12 @@ export default function Onboarding() {
                 await save({
                     vehiclePlate: form.vehiclePlate,
                     vehicleBodyType: form.vehicleBodyType,
-                    ...(driver.kind === 'PARK' ? { vehicleModel: form.vehicleModel, vehicleRegNumber: form.vehicleRegNumber } : {}),
+                    ...(driver.kind === 'PARK' ? { vehicleModel: form.vehicleModel, vehicleRegNumber: form.vehicleRegNumber, vehicleOwnerIin: form.vehicleOwnerIin.replace(/\D/g, '') } : {}),
                     ...(form.capacityTons && Number.isFinite(tons) && tons > 0 ? { vehicleCapacityKg: Math.round(tons * 1000) } : {}),
                 });
             }
             if (step === 'park' && !driver.park) { setStepError('Выберите парк — через него вы будете работать'); return; }
-            const lacking = docs.filter((d) => !driver.documents.some((x) => x.kind === d.kind));
+            const lacking = requiredDocs.filter((d) => !driver.documents.some((x) => x.kind === d.kind));
             if (step === 'documents' && lacking.length) {
                 setStepError(`Не хватает фото: ${lacking.map((d) => d.title.toLowerCase()).join(', ')}. Без них парк не допустит к грузам.`);
                 return;
@@ -447,21 +453,24 @@ export default function Onboarding() {
                         <Field style={{ marginTop: 14 }} label="Грузоподъёмность, т" error={errors.capacityTons} hint="Сколько тонн берёте" placeholder="20" value={form.capacityTons} onChangeText={(v: string) => set('capacityTons', v)} keyboardType="decimal-pad" />
                         {driver.kind === 'PARK' && (
                             <>
-                                <Text style={[styles.label, { color: colors.textSecondary }]}>Чья машина</Text>
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                    {[{ own: true, label: 'Моя' }, { own: false, label: 'Не моя, есть доверенность' }].map((o) => (
-                                        <Pressable
-                                            key={String(o.own)}
-                                            onPress={() => save({ vehicleIsOwn: o.own }).catch((e) => Alert.alert('Ошибка', ответ(e, 'Не сохранилось')))}
-                                            style={[styles.toggle, {
-                                                backgroundColor: driver.vehicleIsOwn === o.own ? sel.bg : colors.card,
-                                                borderColor: driver.vehicleIsOwn === o.own ? sel.bg : colors.border,
-                                            }]}
-                                        >
-                                            <Text style={{ color: driver.vehicleIsOwn === o.own ? sel.fg : colors.text, fontFamily: FONT.semibold, fontSize: 13.5, textAlign: 'center' }}>{o.label}</Text>
-                                        </Pressable>
-                                    ))}
-                                </View>
+                                {/* Своя ли машина, решает сервер по ИИН собственника (владелец, 31.10.2026):
+                                    совпал с вашим — договор с хозяином не нужен. */}
+                                <Field
+                                    label="ИИН или БИН собственника"
+                                    error={errors.vehicleOwnerIin}
+                                    hint={
+                                        form.vehicleOwnerIin.replace(/\D/g, '').length === 12
+                                            ? (form.vehicleOwnerIin.replace(/\D/g, '') === form.iin.replace(/\D/g, '')
+                                                ? 'Машина записана на вас — договор с хозяином не нужен'
+                                                : 'Машина записана на другого человека — понадобится договор с хозяином или доверенность от него')
+                                            : 'Как в техпаспорте — графа «собственник»'
+                                    }
+                                    placeholder="12 цифр"
+                                    keyboardType="number-pad"
+                                    maxLength={12}
+                                    value={form.vehicleOwnerIin}
+                                    onChangeText={(v: string) => set('vehicleOwnerIin', v.replace(/\D/g, ''))}
+                                />
                             </>
                         )}
                     </>
@@ -540,6 +549,8 @@ export default function Onboarding() {
                                 </Card>
                             );
                         })}
+                        {/* Машина не своя — договор с хозяином; своя — блока нет. */}
+                        <OwnerContractCard onChanged={() => { exchangeApi.me().then(setDriver).catch(() => {}); }} />
                     </>
                 )}
 

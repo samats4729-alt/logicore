@@ -304,6 +304,8 @@ export interface ExchangeDriver {
     vehicleBodyType: string | null;
     vehicleCapacityKg: number | null;
     vehicleIsOwn: boolean;
+    /** ИИН или БИН собственника из техпаспорта — по нему сервер решает, своя ли машина (31.10.2026). */
+    vehicleOwnerIin?: string | null;
     contractSignedAt: string | null;
     submittedAt: string | null;
     reviewedAt: string | null;
@@ -377,6 +379,8 @@ export interface ParkTrip {
     /** Расчёт «на руки» (рейсы с 12.10.2026): итог водителю, топливо, доли парка и LogiCore. */
     settlement?: {
         driverTotal: number; fuelEstimate: number; parkFee: number; platformFee: number;
+        /** Ставка водителя до вычетов: топливо и оплата за работу до ОПВ; у прежних рейсов — нет. */
+        base?: number | null;
         /** 2 — схема шефа (16.10.2026), 1 — прежняя. Разбивка налогов по рейсу. */
         scheme?: number; gross?: number; opv?: number; vosms?: number; so?: number; ipn?: number; preliminary?: boolean;
     } | null;
@@ -563,9 +567,14 @@ export interface ParkRegistryLine {
     loadingDate: string | null;
     completedAt: string | null;
     driver: { id: string; name: string; iin: string | null };
+    /** Ставка водителя — до вычетов: топливо (ГСМ) и оплата за работу до ОПВ. */
+    driverRate: number;
     driverTotal: number;
     fuelEstimate: number;
+    /** Выдано на топливо — без предоплаты. */
     fuelIssued: number;
+    /** Предоплата водителю из суммы на руки. */
+    advanceIssued: number;
     fuelReceipts: number;
     gross: number;
     opv: number;
@@ -594,7 +603,7 @@ export interface ParkRegistryLine {
 }
 
 type RegistryTotals = Pick<ParkRegistryLine,
-    'driverTotal' | 'fuelIssued' | 'fuelReceipts' | 'gross' | 'opv' | 'vosms' | 'ipn' | 'withheld' | 'so' | 'toBudget'
+    'driverRate' | 'driverTotal' | 'fuelIssued' | 'advanceIssued' | 'fuelReceipts' | 'gross' | 'opv' | 'vosms' | 'ipn' | 'withheld' | 'so' | 'toBudget'
     | 'deductionAmount' | 'toPay' | 'paid' | 'customerPrice' | 'vat' | 'parkFee' | 'platformFee' | 'fuelDiff' | 'parkProfit'>;
 
 export interface ParkRegistry {

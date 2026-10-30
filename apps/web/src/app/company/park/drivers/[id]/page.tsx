@@ -187,7 +187,11 @@ export default function ParkDriverPage() {
                         <Row label="Техпаспорт" value={driver.vehicleRegNumber ? `№ ${driver.vehicleRegNumber}` : '—'} />
                         <Row label="Кузов" value={driver.vehicleBodyType || '—'} />
                         <Row label="Грузоподъёмность" value={driver.vehicleCapacityKg ? `${driver.vehicleCapacityKg / 1000} т` : '—'} />
-                        <Row label="Владелец" value={driver.vehicleIsOwn ? 'сам водитель' : 'другой человек — нужен договор с владельцем (ниже)'} />
+                        {/* Чья машина — по ИИН собственника из техпаспорта: сверьте с фото техпаспорта. */}
+                        <Row
+                            label="Владелец"
+                            value={`${driver.vehicleIsOwn ? 'сам водитель' : 'другой человек — договор с хозяином (ниже)'}${driver.vehicleOwnerIin ? ` · ИИН/БИН по техпаспорту ${driver.vehicleOwnerIin}` : ''}`}
+                        />
                         <DriverVehicles driverId={driver.id} />
                     </div>
                 </section>
@@ -231,7 +235,7 @@ export default function ParkDriverPage() {
             <section className={styles.card}>
                 <div className={styles.cardHead}>
                     <Truck size={14} />
-                    <h2 className={styles.cardTitle}>Договор с владельцем машины</h2>
+                    <h2 className={styles.cardTitle}>Договор с хозяином машины</h2>
                 </div>
                 <div className={styles.cardBody}>
                     <VehicleOwnerContracts driverId={driver.id} />

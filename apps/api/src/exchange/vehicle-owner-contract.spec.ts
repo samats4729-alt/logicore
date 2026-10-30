@@ -118,35 +118,44 @@ describe('Договор с владельцем машины: кто и что 
         return { service: new VehicleOwnerContractService(prisma, s3, stamps), rows, s3 };
     }
 
-    it('парк оформляет: черновик с текстом, госномер приведён к виду из анкеты', async () => {
+    /** Прежний черновик парка (до 31.10.2026): оформить новый уже нельзя, этот — дописать и подписать. */
+    function черновикПарка(rows: any[], over: Record<string, unknown> = {}) {
+        const row = {
+            id: 'oc-1', parkCompanyId: 'park-1', driverId: 'd-1', number: 'АТ-261026-B2C3D4', status: 'DRAFT', lessee: 'PARK',
+            createdAt: new Date('2026-10-26T08:00:00Z'), signedAt: null, signedFileUrl: null, content: {},
+            ...DTO, vehiclePlate: '777ABC09', ownerIdIssuedAt: new Date('2015-05-05T00:00:00Z'), rentAmount: new Prisma.Decimal(50000), ...over,
+        };
+        rows.push(row);
+        return row;
+    }
+
+    it('новый договор «парк арендует машину» не оформляется — его составляет водитель (31.10.2026)', async () => {
         const { service, rows } = build();
-        const c = await service.create('park-1', 'u-1', 'd-1', DTO);
-        expect(c).toMatchObject({ status: 'DRAFT', vehiclePlate: '777ABC09', rentAmount: 50000, gaps: [] });
-        expect(rows[0].rentAmount).toEqual(new Prisma.Decimal(50000));
-        expect(rows[0].content.title).toMatch(/^Договор аренды транспортного средства без экипажа № АТ-/);
+        await expect(service.create('park-1', 'u-1', 'd-1', DTO)).rejects.toThrow(/составляет сам водитель в приложении/);
+        expect(rows).toHaveLength(0);
     });
 
-    it('чужой парк не видит, не оформляет и не скачивает', async () => {
-        const { service } = build();
-        const c = await service.create('park-1', 'u-1', 'd-1', DTO);
+    it('чужой парк не видит и не скачивает', async () => {
+        const { service, rows } = build();
+        const c = черновикПарка(rows);
         await expect(service.list('park-2', 'd-1')).rejects.toThrow('Водитель не найден');
-        await expect(service.create('park-2', 'u-2', 'd-1', DTO)).rejects.toThrow('Водитель не найден');
         await expect(service.pdf('park-2', c.id)).rejects.toThrow('Договор не найден');
         await expect(service.update('park-2', c.id, DTO)).rejects.toThrow('Договор не найден');
     });
 
-    it('с пропусками PDF не печатается и скан не принимается', async () => {
-        const { service } = build();
-        const c = await service.create('park-1', 'u-1', 'd-1', { ...DTO, ownerIban: null });
-        expect(c.gaps).toEqual(['счёт владельца (IBAN) — на него платится аренда']);
+    it('прежний черновик парка с пропусками — PDF не печатается и скан не принимается', async () => {
+        const { service, rows } = build();
+        const c = черновикПарка(rows, { ownerIban: null });
+        const { items } = await service.list('park-1', 'd-1');
+        expect(items[0].gaps).toEqual(['счёт владельца (IBAN) — на него платится аренда']);
         await expect(service.pdf('park-1', c.id)).rejects.toThrow(/не хватает: счёт владельца/);
         const file: any = { originalname: 'scan.pdf', mimetype: 'application/pdf', size: 1000, buffer: Buffer.from('x') };
         await expect(service.attachSigned('park-1', c.id, file)).rejects.toThrow(/не готов к подписи/);
     });
 
-    it('подписанный скан приложен — договор подписан и больше не правится', async () => {
-        const { service } = build();
-        const c = await service.create('park-1', 'u-1', 'd-1', DTO);
+    it('прежний черновик парка: скан приложен — договор подписан и больше не правится', async () => {
+        const { service, rows } = build();
+        const c = черновикПарка(rows);
         const pdf = await service.pdf('park-1', c.id);
         expect(pdf.pdf.subarray(0, 5).toString()).toBe('%PDF-');
         await expect(service.attachSigned('park-1', c.id, { originalname: 'virus.exe', mimetype: 'application/x-msdownload', size: 10, buffer: Buffer.from('x') } as any))
@@ -155,5 +164,16 @@ describe('Договор с владельцем машины: кто и что 
         expect(signed.status).toBe('SIGNED');
         await expect(service.update('park-1', c.id, { ...DTO, rentAmount: 1 })).rejects.toThrow(/уже подписан/);
         await expect(service.signedFile('park-1', c.id)).resolves.toMatchObject({ fileName: 'scan.pdf', mimeType: 'application/pdf' });
+    });
+
+    it('договор водителя с хозяином: парк видит и печатает без своей печати, но не правит', async () => {
+        const { service, rows } = build();
+        const c = черновикПарка(rows, { rentAmount: new Prisma.Decimal(0) as any });
+        Object.assign(c, { lessee: 'DRIVER', rentBasis: 'NONE', content: buildVehicleOwnerContract(input()) });
+        const { items } = await service.list('park-1', 'd-1');
+        expect(items[0]).toMatchObject({ lessee: 'DRIVER', rentAmount: null, gaps: [] });
+        await expect(service.update('park-1', c.id, DTO)).rejects.toThrow(/парк его не правит/);
+        const pdf = await service.pdf('park-1', c.id);
+        expect(pdf.pdf.subarray(0, 5).toString()).toBe('%PDF-');
     });
 });

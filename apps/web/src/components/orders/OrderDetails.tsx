@@ -470,7 +470,11 @@ export function OrderSideCards({
                     {park && (
                         <>
                             <div className={styles.money}>
-                                <span>Топливо</span>
+                                <span>Ставка водителя</span>
+                                <b>{fmt(park.base)} ₸</b>
+                            </div>
+                            <div className={styles.money}>
+                                <span>Топливо (ГСМ)</span>
                                 <b>{fmt(park.fuel)} ₸</b>
                             </div>
                             <div className={styles.money}>

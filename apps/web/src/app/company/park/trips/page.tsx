@@ -203,6 +203,7 @@ export default function ParkTripsPage() {
                                                 {/* На руки, топливо и доля парка — каждое своей строкой (шеф, 29.10.2026). */}
                                                 {t.settlement && (
                                                     <div className="whitespace-nowrap text-[11.5px] text-muted-foreground">
+                                                        {t.settlement.base != null && <div>ставка водителя {moneyShort(t.settlement.base)}</div>}
                                                         <div>на руки {moneyShort(t.settlement.driverTotal)}</div>
                                                         {t.settlement.scheme === 2 && <div>топливо {moneyShort(t.settlement.fuelEstimate)}</div>}
                                                         <div>парку {moneyShort(t.settlement.parkFee)}</div>

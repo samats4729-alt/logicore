@@ -102,3 +102,72 @@ export class VehicleOwnerContractDto {
     @IsIn(['TRIP', 'MONTH'])
     rentBasis: 'TRIP' | 'MONTH';
 }
+
+/**
+ * Договор водителя с хозяином машины — водитель заполняет в приложении
+ * (владелец, 31.10.2026). Машина и сам водитель берутся из анкеты; плату
+ * за аренду можно не указывать — тогда в бланке пустое место для руки.
+ */
+export class DriverOwnerContractDto {
+    @ApiProperty({ enum: ['PERSON', 'COMPANY'], description: 'PERSON — человек, COMPANY — ТОО или ИП' })
+    @IsIn(['PERSON', 'COMPANY'])
+    ownerKind: 'PERSON' | 'COMPANY';
+
+    @ApiProperty({ description: 'ФИО хозяина или название организации' })
+    @IsString()
+    @IsNotEmpty({ message: 'Впишите, на кого записана машина' })
+    @MaxLength(300)
+    ownerName: string;
+
+    @ApiProperty({ required: false, description: 'ИИН или БИН — 12 цифр' })
+    @IsOptional()
+    @Matches(/^\d{12}$/, { message: 'ИИН или БИН хозяина — 12 цифр' })
+    ownerIinBin?: string | null;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsString()
+    @MaxLength(40)
+    ownerIdNumber?: string | null;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    ownerIdIssuedBy?: string | null;
+
+    @ApiProperty({ required: false, example: '2016-03-15' })
+    @IsOptional()
+    @IsDateString({}, { message: 'Дата выдачи удостоверения — в формате ГГГГ-ММ-ДД' })
+    ownerIdIssuedAt?: string | null;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    ownerAddress?: string | null;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsString()
+    @MaxLength(30)
+    ownerPhone?: string | null;
+
+    @ApiProperty({ required: false, description: 'Кто подписывает за организацию-хозяина' })
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    ownerSigner?: string | null;
+
+    @ApiProperty({ required: false, description: 'Плата за аренду, ₸; нет — пустое место в бланке' })
+    @IsOptional()
+    @IsNumber({}, { message: 'Плата — числом' })
+    @Min(0)
+    @Max(100_000_000)
+    rentAmount?: number | null;
+
+    @ApiProperty({ required: false, enum: ['TRIP', 'MONTH'] })
+    @IsOptional()
+    @IsIn(['TRIP', 'MONTH'])
+    rentBasis?: 'TRIP' | 'MONTH' | null;
+}

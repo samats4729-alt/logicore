@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
-import { Download, FilePlus2, Loader2, Pencil, Upload } from 'lucide-react';
+import { Download, Loader2, Pencil, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,8 @@ interface OwnerContract {
     id: string;
     number: string;
     status: 'DRAFT' | 'SIGNED';
+    /** PARK — прежний договор парка с владельцем; DRIVER — водитель с хозяином, парк не сторона (31.10.2026). */
+    lessee?: 'PARK' | 'DRIVER';
     ownerKind: OwnerKind;
     ownerName: string;
     ownerIinBin: string | null;
@@ -35,8 +37,9 @@ interface OwnerContract {
     vehicleModel: string | null;
     vehiclePlate: string;
     vehicleRegNumber: string | null;
-    rentAmount: number;
-    rentBasis: RentBasis;
+    /** Нет — плату не вписали, её впишут от руки при подписании. */
+    rentAmount: number | null;
+    rentBasis: RentBasis | 'NONE';
     signedFileName: string | null;
     signedAt: string | null;
     createdAt: string;
@@ -57,12 +60,14 @@ type Form = Record<
 const money = (n: number) => `${n.toLocaleString('ru-RU')} ₸`;
 
 /**
- * Договор парка с владельцем машины (задачи шефа, Q9).
+ * Договор с хозяином машины в карточке водителя.
  *
- * Машина водителя записана на другого — парк берёт её в аренду у владельца:
- * вносит данные, скачивает договор, подписывает с владельцем на бумаге и
- * прикладывает скан. Владельца в LogiCore нет, поэтому подписи в
- * приложении здесь не бывает. После скана договор не правится.
+ * С 31.10.2026 (владелец) машину у хозяина арендует сам водитель: договор
+ * составляет он в приложении, парк в нём не участвует и аренду не платит.
+ * Здесь парк видит, оформлен ли договор, печатает его и смотрит фото
+ * подписанного (может и приложить, если водитель принёс бумагу). Прежние
+ * договоры «парк арендует машину» остаются: их черновики правятся и
+ * подписываются как раньше, новые не заводятся.
  */
 export function VehicleOwnerContracts({ driverId }: { driverId: string }) {
     const [data, setData] = useState<ListResponse | null>(null);
@@ -128,16 +133,13 @@ export function VehicleOwnerContracts({ driverId }: { driverId: string }) {
     const needed = !data.vehicle.isOwn;
     return (
         <div className="space-y-3 text-[13px]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="max-w-[70ch] text-muted-foreground">
-                    {needed
-                        ? 'Машина записана не на водителя. Её парк берёт в аренду у владельца — без водителя, отдельным договором; с водителем — договор на услуги по управлению. Оформите договор, распечатайте, подпишите с владельцем и приложите скан.'
-                        : 'Машина записана на водителя — договор с владельцем не нужен. Если водитель ездит на чужом прицепе или машине, оформите договор здесь.'}
-                </span>
-                <Button variant={needed && !data.items.length ? 'default' : 'outline'} size="sm" onClick={() => setEditing('new')}>
-                    <FilePlus2 className="h-4 w-4" /> Оформить договор с владельцем
-                </Button>
-            </div>
+            <p className="m-0 max-w-[80ch] text-muted-foreground">
+                {needed
+                    ? (data.items.some((c) => c.lessee === 'DRIVER')
+                        ? 'Машина записана не на водителя. Договор аренды с хозяином составил сам водитель — парк в нём не участвует и аренду не платит.'
+                        : 'Машина записана не на водителя. Договор аренды с хозяином водитель составляет сам в приложении («Мои документы» → «Договор с хозяином машины»): парк в нём не участвует и аренду не платит. Вместо договора водитель может прислать фото доверенности от хозяина.')
+                    : 'Машина записана на водителя — ИИН собственника в техпаспорте совпадает с его ИИН. Договор с хозяином не нужен.'}
+            </p>
 
             {data.items.length > 0 && (
                 <div className="overflow-x-auto rounded-xl border border-solid border-border">
@@ -157,7 +159,9 @@ export function VehicleOwnerContracts({ driverId }: { driverId: string }) {
                                 <tr key={c.id} className="border-0 border-t border-solid border-border align-top">
                                     <td className="whitespace-nowrap px-3 py-2.5">
                                         <div className="font-medium tabular-nums">№ {c.number}</div>
-                                        <div className="text-[12px] text-muted-foreground">от {dayjs(c.createdAt).format('DD.MM.YYYY')}</div>
+                                        <div className="text-[12px] text-muted-foreground">
+                                            от {dayjs(c.createdAt).format('DD.MM.YYYY')} · {c.lessee === 'DRIVER' ? 'водитель с хозяином' : 'парк с владельцем, прежний'}
+                                        </div>
                                     </td>
                                     <td className="px-3 py-2.5">
                                         <div>{c.ownerName}</div>
@@ -168,8 +172,8 @@ export function VehicleOwnerContracts({ driverId }: { driverId: string }) {
                                         <div className="text-[12px] text-muted-foreground">{c.vehicleModel || '—'}</div>
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums">
-                                        {money(c.rentAmount)}
-                                        <div className="text-[12px] font-normal text-muted-foreground">{c.rentBasis === 'TRIP' ? 'за рейс' : 'в месяц'}</div>
+                                        {c.rentAmount != null ? money(c.rentAmount) : <span className="font-normal text-muted-foreground">впишут от руки</span>}
+                                        {c.rentAmount != null && <div className="text-[12px] font-normal text-muted-foreground">{c.rentBasis === 'TRIP' ? 'за рейс' : 'в месяц'}</div>}
                                     </td>
                                     <td className="px-3 py-2.5">
                                         <StatusPill status={c.status === 'SIGNED' ? 'APPROVED' : 'PENDING'} label={c.status === 'SIGNED' ? 'подписан' : 'ждёт подписи'} />
@@ -178,7 +182,8 @@ export function VehicleOwnerContracts({ driverId }: { driverId: string }) {
                                     </td>
                                     <td className="px-3 py-2.5">
                                         <div className="flex flex-wrap justify-end gap-1.5">
-                                            {c.status === 'DRAFT' && (
+                                            {/* Договор водителя правит только водитель: парк в нём не сторона. */}
+                                            {c.status === 'DRAFT' && c.lessee !== 'DRIVER' && (
                                                 <Button variant="outline" size="sm" onClick={() => setEditing(c)} disabled={busy === c.id}>
                                                     <Pencil className="h-3.5 w-3.5" /> Изменить
                                                 </Button>
@@ -241,7 +246,8 @@ function formOf(c: OwnerContract): Form {
         ownerIdIssuedBy: s(c.ownerIdIssuedBy), ownerIdIssuedAt: c.ownerIdIssuedAt ? c.ownerIdIssuedAt.slice(0, 10) : '',
         ownerAddress: s(c.ownerAddress), ownerPhone: s(c.ownerPhone), ownerIban: s(c.ownerIban), ownerBank: s(c.ownerBank),
         ownerBankBic: s(c.ownerBankBic), ownerSigner: s(c.ownerSigner), vehicleModel: s(c.vehicleModel), vehiclePlate: c.vehiclePlate,
-        vehicleRegNumber: s(c.vehicleRegNumber), rentAmount: String(c.rentAmount), rentBasis: c.rentBasis,
+        // Правятся только прежние договоры парка — у них плата вписана всегда.
+        vehicleRegNumber: s(c.vehicleRegNumber), rentAmount: String(c.rentAmount ?? ''), rentBasis: c.rentBasis === 'NONE' ? 'TRIP' : c.rentBasis,
     };
 }
 

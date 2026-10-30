@@ -112,6 +112,13 @@ export class UpdateDriverProfileDto {
     @IsOptional()
     vehicleIsOwn?: boolean;
 
+    /** ИИН или БИН собственника из техпаспорта: по нему сервер сам решает, своя ли машина. */
+    @ApiProperty({ required: false, description: '12 цифр; пустая строка — стереть' })
+    @IsString()
+    @IsOptional()
+    @MaxLength(20)
+    vehicleOwnerIin?: string;
+
     /** Удостоверение личности: номер — девять цифр, даты — «ГГГГ-ММ-ДД». */
     @ApiProperty({ required: false }) @IsString() @IsOptional() @MaxLength(20) idNumber?: string;
     @ApiProperty({ required: false }) @IsString() @IsOptional() @MaxLength(120) idIssuedBy?: string;

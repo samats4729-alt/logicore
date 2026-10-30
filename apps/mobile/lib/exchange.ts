@@ -36,6 +36,11 @@ export interface DriverProfile {
     vehicleBodyType: string | null;
     vehicleCapacityKg: number | null;
     vehicleIsOwn: boolean;
+    /**
+     * ИИН или БИН собственника из техпаспорта: по нему сервер сам решает,
+     * своя ли машина (31.10.2026). Старый сервер поля не знает.
+     */
+    vehicleOwnerIin?: string | null;
     contractSignedAt: string | null;
     rejectReason: string | null;
     blockedReason: string | null;
@@ -47,6 +52,39 @@ export interface DriverProfile {
     documents: { id: string; kind: DocumentKind; fileName: string; mimeType: string; createdAt: string }[];
     /** Чего не хватает, чтобы отправить анкету — словами. */
     missing: string[];
+}
+
+/** Что водитель вписывает о хозяине машины. Плату можно не указывать — впишут от руки. */
+export interface OwnerContractForm {
+    ownerKind: 'PERSON' | 'COMPANY';
+    ownerName: string;
+    ownerIinBin?: string | null;
+    ownerIdNumber?: string | null;
+    ownerIdIssuedBy?: string | null;
+    ownerIdIssuedAt?: string | null;
+    ownerAddress?: string | null;
+    ownerPhone?: string | null;
+    ownerSigner?: string | null;
+    rentAmount?: number | null;
+    rentBasis?: 'TRIP' | 'MONTH' | null;
+}
+
+export interface OwnerContract extends OwnerContractForm {
+    id: string;
+    number: string;
+    /** DRAFT — составлен, ждёт подписи; SIGNED — прислано фото подписанного. */
+    status: 'DRAFT' | 'SIGNED';
+    signedAt: string | null;
+    signedFileName: string | null;
+    /** Чего не хватает, чтобы распечатать, — словами. */
+    gaps: string[];
+}
+
+export interface OwnerContractState {
+    /** Машина не своя — договор нужен; своя — экран его не показывает. */
+    needed: boolean;
+    ownerIin: string | null;
+    contract: OwnerContract | null;
 }
 
 export type DocumentKind =
@@ -452,6 +490,18 @@ export const exchangeApi = {
     contract: () => api.get<ContractState>('/exchange/driver/me/contract').then((r) => r.data),
     /** Ссылка на PDF своего договора на десять минут — открыть в браузере телефона. */
     contractLink: () => api.post<{ path: string; expiresAt: string }>('/exchange/driver/me/contract/link').then((r) => r.data),
+    /** Договор с хозяином машины — когда машина не своя (31.10.2026). */
+    ownerContract: () => api.get<OwnerContractState>('/exchange/driver/me/owner-contract').then((r) => r.data),
+    saveOwnerContract: (data: OwnerContractForm) => api.put<OwnerContract>('/exchange/driver/me/owner-contract', data).then((r) => r.data),
+    ownerContractLink: () => api.post<{ path: string; expiresAt: string }>('/exchange/driver/me/owner-contract/link').then((r) => r.data),
+    uploadOwnerContractSigned: async (uri: string) => {
+        const form = new FormData();
+        await appendPhoto(form, uri, 'dogovor-s-hozyainom.jpg');
+        return api.post<OwnerContract>('/exchange/driver/me/owner-contract/signed', form, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 60000,
+        }).then((r) => r.data);
+    },
     signContract: (deviceId: string) =>
         api.post<DriverProfile>('/exchange/driver/me/sign-contract', {}, { headers: { 'X-Device-Id': deviceId } }).then((r) => r.data),
     submit: () => api.post<DriverProfile>('/exchange/driver/me/submit').then((r) => r.data),

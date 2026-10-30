@@ -327,11 +327,17 @@ export class OrderDocumentsService {
                 fileName: `${document.kind === 'CONTRACT' ? 'dogovor' : 'doverennost'}`
                     + `_${document.order?.orderNumber || document.orderId}_v${document.version}.pdf`,
             };
+            // Доверенность — тем же письмом, что из шапки заявки: откуда куда,
+            // машина, водитель (31.10.2026). Данные водителя — из этой версии.
+            const доверенность = document.kind === 'POWER_OF_ATTORNEY'
+                ? await this.poa.emailData(document.orderId, companyId, { snapshot: document.snapshot as any, senderUserId: userId })
+                : null;
             // Каждому своё письмо, а не одно на всех: получатели с разных
             // складов не должны видеть почты друг друга, а упавший адрес не
             // должен уносить с собой остальные.
             for (const адрес of адреса) {
-                await this.email.sendOrderDocumentEmail(адрес, письмо);
+                if (доверенность) await this.email.sendPowerOfAttorneyEmail(адрес, доверенность, pdf, [], письмо.fileName);
+                else await this.email.sendOrderDocumentEmail(адрес, письмо);
             }
             sentToEmail = address;
             deliveredTo = address;

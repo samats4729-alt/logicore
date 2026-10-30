@@ -276,7 +276,12 @@ function TripSplit({ trip, kind, stacked }: { trip: AdvanceTrip; kind: AdvanceKi
                 active={kind === 'ADVANCE'}
                 part={trip.advance}
                 capLabel={`Предоплата — до ${trip.pct} %`}
-                head={<SplitLine label="Водителю на руки за рейс" value={trip.onHand} />}
+                head={(
+                    <>
+                        <SplitLine label="Ставка водителя, до вычетов" value={trip.rate} />
+                        <SplitLine label="Водителю на руки за рейс" value={trip.onHand} />
+                    </>
+                )}
             />
             <div className="rounded-lg border border-solid border-border px-3 py-2">
                 <div className="mb-1 font-semibold">Налоги по ГПХ</div>

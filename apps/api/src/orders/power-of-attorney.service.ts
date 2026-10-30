@@ -3,6 +3,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StampImageService } from '../common/services/stamp-image.service';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
+import type { PoaEmailData, PoaEmailPoint } from '../email/poa-email';
+
+/**
+ * Документ водителя одной строкой для письма с доверенностью (задачи шефа,
+ * D5): «Удостоверение личности № 049…, выдано 12.03.2019 МВД РК, действительно
+ * до 12.03.2029». Нет номера — ничего: в письме строки не будет.
+ */
+export function driverDocumentLine(driver: { docType?: string | null; docNumber?: string | null; docIssuedAt?: Date | null; docIssuedBy?: string | null; docExpiresAt?: Date | null } | null | undefined): string | undefined {
+    if (!driver?.docNumber) return undefined;
+    const day = (d?: Date | null) => (d ? new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty' }) : null);
+    const kind = driver.docType === 'PASSPORT' ? 'Паспорт' : 'Удостоверение личности';
+    const issued = [day(driver.docIssuedAt), driver.docIssuedBy].filter(Boolean).join(' ');
+    return [`${kind} № ${driver.docNumber}`, issued ? `выдано ${issued}` : null, driver.docExpiresAt ? `действительно до ${day(driver.docExpiresAt)}` : null].filter(Boolean).join(', ');
+}
 
 /**
  * Снимок доверенности: ровно те значения, которые попадают в бланк.
@@ -181,6 +195,103 @@ export class PowerOfAttorneyService {
                 stampImage: issuerCompany.stampImage ?? null,
                 signatureImage: issuerCompany.signatureImage ?? null,
             },
+        };
+    }
+
+    /**
+     * Данные для письма с доверенностью (владелец, 31.10.2026: «откуда куда,
+     * какая машина, водитель, его контактные и паспортные данные»).
+     *
+     * Водитель, документ и машина — из снимка, как в самом PDF. Сверх бланка —
+     * то, что нужно охране склада: адреса и даты точек, телефон водителя,
+     * прицеп, ИИН и кто отправил. Отправляют сохранённую версию, а водителя с
+     * тех пор заменили — нынешнего в письмо не подмешиваем: только снимок.
+     */
+    async emailData(
+        orderId: string,
+        companyId: string,
+        opts: { snapshot?: PowerOfAttorneySnapshot; senderUserId?: string; extraFiles?: string[] } = {},
+    ): Promise<PoaEmailData> {
+        const snapshot = opts.snapshot ?? await this.snapshotFor(orderId, companyId);
+        const [order, sender] = await Promise.all([
+            this.prisma.order.findUnique({
+                where: { id: orderId },
+                select: {
+                    assignedDriverName: true, assignedDriverPhone: true, assignedDriverPlate: true, assignedDriverTrailer: true,
+                    driver: {
+                        select: {
+                            id: true, lastName: true, firstName: true, middleName: true, phone: true, iin: true,
+                            vehicleModel: true, vehiclePlate: true, trailerNumber: true,
+                            docType: true, docNumber: true, docIssuedAt: true, docIssuedBy: true, docExpiresAt: true,
+                        },
+                    },
+                    routePoints: {
+                        select: {
+                            pointType: true, expectedDate: true,
+                            location: { select: { name: true, city: true, address: true, cityRecord: { select: { name: true } } } },
+                        },
+                        orderBy: { sequence: 'asc' },
+                    },
+                },
+            }),
+            opts.senderUserId
+                ? this.prisma.user.findUnique({
+                    where: { id: opts.senderUserId },
+                    select: { lastName: true, firstName: true, phone: true, company: { select: { name: true } } },
+                })
+                : null,
+        ]);
+        if (!order) throw new NotFoundException('Заявка не найдена');
+
+        const driver = order.driver;
+        const живойИмя = driver ? `${driver.lastName} ${driver.firstName} ${driver.middleName || ''}`.trim() : (order.assignedDriverName ?? null);
+        // Водитель в заявке тот же, что в доверенности, — можно дополнить живыми данными.
+        const тотЖе = !opts.snapshot || живойИмя === snapshot.driverName;
+        const через = driver && тотЖе
+            ? await this.prisma.exchangeDriver.findUnique({ where: { userId: driver.id }, select: { iin: true, vehicleModel: true, phone: true } })
+            : null;
+
+        const точка = (p?: (typeof order.routePoints)[number]): PoaEmailPoint | null => p ? {
+            city: p.location?.cityRecord?.name || p.location?.city || p.location?.address || '—',
+            name: p.location?.name || null,
+            address: p.location?.address || null,
+            date: p.expectedDate ? p.expectedDate.toISOString() : null,
+        } : null;
+        const погрузка = order.routePoints.find((p) => p.pointType !== 'DELIVERY');
+        const выгрузка = [...order.routePoints].reverse().find((p) => p.pointType === 'DELIVERY');
+
+        const естьСнимок = !!order.assignedDriverPlate;
+        const госномер = (естьСнимок ? order.assignedDriverPlate : driver?.vehiclePlate) || null;
+        const прицеп = (естьСнимок ? order.assignedDriverTrailer : driver?.trailerNumber) || null;
+        const снимокДокумента = snapshot.driverDocNumber !== '—'
+            ? [`${snapshot.driverDocType} № ${snapshot.driverDocNumber}`,
+                snapshot.driverDocIssuedAt || snapshot.driverDocIssuedBy !== '—'
+                    ? `выдано ${[snapshot.driverDocIssuedAt ? new Date(snapshot.driverDocIssuedAt).toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty' }) : null, snapshot.driverDocIssuedBy !== '—' ? snapshot.driverDocIssuedBy : null].filter(Boolean).join(' ')}`
+                    : null].filter(Boolean).join(', ')
+            : null;
+
+        return {
+            orderNumber: snapshot.orderNumber,
+            // Отправляет компания того, кто нажал «Отправить», — её и называем.
+            senderCompany: sender?.company?.name || snapshot.issuer.name,
+            sender: sender ? { name: `${sender.lastName ?? ''} ${sender.firstName ?? ''}`.trim(), phone: sender.phone || null } : null,
+            validTo: snapshot.validTo,
+            from: точка(погрузка),
+            to: точка(выгрузка),
+            morePoints: Math.max(0, order.routePoints.length - 2),
+            cargo: [snapshot.cargoDescription !== '—' ? snapshot.cargoDescription : null, snapshot.cargoWeightKg ? `${snapshot.cargoWeightKg.toLocaleString('ru-RU')} кг` : null].filter(Boolean).join(', ') || null,
+            vehicle: тотЖе
+                ? [driver?.vehicleModel || через?.vehicleModel, госномер].filter(Boolean).join(' · ') || null
+                : (snapshot.vehicleInfo !== '—' ? snapshot.vehicleInfo : null),
+            trailer: тотЖе ? прицеп : null,
+            driver: {
+                name: snapshot.driverName,
+                phone: тотЖе ? (order.assignedDriverPhone || driver?.phone || через?.phone || null) : null,
+                // Номер и кем выдан — как в PDF; у водителя без номера документа в снимке стоит ИИН, его покажем строкой ИИН.
+                document: тотЖе ? (driverDocumentLine(driver) ?? null) : снимокДокумента,
+                iin: тотЖе ? (driver?.iin || через?.iin || null) : null,
+            },
+            extraFiles: opts.extraFiles,
         };
     }
 

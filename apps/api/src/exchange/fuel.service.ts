@@ -315,15 +315,26 @@ export class ExchangeFuelService {
     }
 
     /** Итоги по топливу рейсов — для выплаты: выдано и принято по чекам. */
-    async totals(orderIds: string[]): Promise<Map<string, { issued: number; receipts: number }>> {
-        const map = new Map<string, { issued: number; receipts: number }>();
+    /**
+     * Выдано по рейсам: `issued` — всё (топливо и предоплата, из этого
+     * считается выплата), `advances` — из них предоплата водителю: в реестре
+     * она отдельно от топлива (шеф, 29.10.2026).
+     */
+    async totals(orderIds: string[]): Promise<Map<string, { issued: number; receipts: number; advances: number }>> {
+        const map = new Map<string, { issued: number; receipts: number; advances: number }>();
         if (!orderIds.length) return map;
-        const [issues, receipts] = await Promise.all([
-            this.prisma.exchangeFuelIssue.groupBy({ by: ['orderId'], where: { orderId: { in: orderIds } }, _sum: { amount: true } }),
+        const [issues, receipts, links] = await Promise.all([
+            this.prisma.exchangeFuelIssue.findMany({ where: { orderId: { in: orderIds } }, select: { id: true, orderId: true, amount: true } }),
             this.prisma.exchangeFuelReceipt.groupBy({ by: ['orderId'], where: { orderId: { in: orderIds }, status: 'ACCEPTED' }, _sum: { amount: true } }),
+            this.prisma.driverAdvanceRequest.findMany({
+                where: { orderId: { in: orderIds }, fuelIssueId: { not: null } },
+                select: { orderId: true, fuelIssueId: true, kind: true, status: true },
+            }),
         ]);
-        for (const id of orderIds) map.set(id, { issued: 0, receipts: 0 });
-        for (const i of issues) map.get(i.orderId)!.issued = num(i._sum.amount);
+        for (const id of orderIds) {
+            const s = splitIssues(issues.filter((i) => i.orderId === id), links.filter((l) => l.orderId === id));
+            map.set(id, { issued: money(s.fuelTotal + s.advanceTotal), receipts: 0, advances: s.advanceTotal });
+        }
         for (const r of receipts) map.get(r.orderId)!.receipts = num(r._sum.amount);
         return map;
     }

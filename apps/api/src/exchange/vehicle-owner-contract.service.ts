@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { StampImageService } from '../common/services/stamp-image.service';
@@ -11,7 +10,7 @@ import { ParkContractContent } from './park-contract';
 import { renderParkContractPdf } from './park-contract-pdf';
 import { removeExchangeFile, safeExtension, storeExchangeFile } from './exchange-files';
 import {
-    buildVehicleOwnerContract, ownerContractGaps, ownerContractNumber, OwnerKind, RentBasis,
+    buildVehicleOwnerContract, ownerContractGaps, OwnerKind, RentBasis,
     VehicleOwnerContractInput, VEHICLE_OWNER_CONTRACT_VERSION,
 } from './vehicle-owner-contract';
 import { VehicleOwnerContractDto } from './dto/vehicle-owner-contract.dto';
@@ -22,7 +21,7 @@ const PARK_REQUISITES = {
 
 /** Что видит парк в списке: без текста договора — он нужен только для PDF. */
 const LIST_SELECT = {
-    id: true, number: true, version: true, status: true, driverId: true,
+    id: true, number: true, version: true, status: true, driverId: true, lessee: true,
     ownerKind: true, ownerName: true, ownerIinBin: true, ownerIdNumber: true, ownerIdIssuedBy: true, ownerIdIssuedAt: true,
     ownerAddress: true, ownerPhone: true, ownerIban: true, ownerBank: true, ownerBankBic: true, ownerSigner: true,
     vehicleModel: true, vehiclePlate: true, vehicleRegNumber: true, rentAmount: true, rentBasis: true,
@@ -107,7 +106,8 @@ export class VehicleOwnerContractService {
 
     /** Чего не хватает для подписи — пересчитывается по текущим реквизитам парка. */
     private async gapsOf(parkId: string, row: { content: unknown; status: string; driverId: string } & Record<string, any>) {
-        if (row.status === 'SIGNED') return [] as string[];
+        // Договор водителя с хозяином заполняет водитель — пробелы видит он в приложении.
+        if (row.status === 'SIGNED' || row.lessee === 'DRIVER') return [] as string[];
         const driver = await this.parkDriver(parkId, row.driverId);
         const input = await this.input(parkId, driver, row.number, row.createdAt, this.dtoOf(row));
         return ownerContractGaps(input);
@@ -133,8 +133,9 @@ export class VehicleOwnerContractService {
         });
         const items = await Promise.all(rows.map(async ({ content, ...row }) => ({
             ...row,
-            rentAmount: Number(row.rentAmount),
-            gaps: row.status === 'SIGNED' ? [] : ownerContractGaps(await this.input(parkId, driver, row.number, row.createdAt, this.dtoOf(row))),
+            // У договора водителя с хозяином плату могли не вписать — тогда её нет.
+            rentAmount: row.rentBasis === 'NONE' ? null : Number(row.rentAmount),
+            gaps: row.status === 'SIGNED' || row.lessee === 'DRIVER' ? [] : ownerContractGaps(await this.input(parkId, driver, row.number, row.createdAt, this.dtoOf(row))),
         })));
         return {
             // Машина из анкеты — чтобы форма открывалась уже с ней.
@@ -143,26 +144,23 @@ export class VehicleOwnerContractService {
         };
     }
 
-    async create(parkId: string, userId: string | null, driverId: string, dto: VehicleOwnerContractDto) {
-        const driver = await this.parkDriver(parkId, driverId);
-        const date = new Date();
-        const number = ownerContractNumber(randomBytes(4).toString('hex'), date);
-        const input = await this.input(parkId, driver, number, date, dto);
-        const row = await this.prisma.exchangeVehicleOwnerContract.create({
-            data: {
-                parkCompanyId: parkId, driverId, number, version: VEHICLE_OWNER_CONTRACT_VERSION, status: 'DRAFT',
-                ...this.fields(input),
-                content: buildVehicleOwnerContract(input) as unknown as Prisma.InputJsonValue,
-                createdById: userId,
-            },
-            select: LIST_SELECT,
-        });
-        return { ...row, rentAmount: Number(row.rentAmount), gaps: ownerContractGaps(input) };
+    /**
+     * Новый договор «парк арендует машину у хозяина» больше не заводится
+     * (владелец, 31.10.2026): машину у хозяина арендует сам водитель, парк в
+     * этом договоре не участвует и аренду не платит. Водитель составляет его в
+     * приложении (`DriverOwnerContractService`); прежние договоры парка
+     * остаются, их черновики правятся и подписываются как раньше.
+     */
+    async create(_parkId: string, _userId: string | null, _driverId: string, _dto: VehicleOwnerContractDto): Promise<never> {
+        throw new BadRequestException('Договор с хозяином машины теперь составляет сам водитель в приложении — парк в нём не участвует и аренду не платит.');
     }
 
     /** Правка до подписи: текст собирается заново, номер и дата оформления — прежние. */
     async update(parkId: string, id: string, dto: VehicleOwnerContractDto) {
         const row = await this.own(parkId, id);
+        if (row.lessee === 'DRIVER') {
+            throw new BadRequestException('Этот договор водитель составил с хозяином машины — парк его не правит.');
+        }
         if (row.status === 'SIGNED') {
             throw new BadRequestException('Договор уже подписан — его текст не меняется. Новые условия — новый договор.');
         }
@@ -188,6 +186,11 @@ export class VehicleOwnerContractService {
     async pdf(parkId: string, id: string) {
         const row = await this.own(parkId, id);
         let content = row.content as unknown as ParkContractContent;
+        // Договор водителя с хозяином — как его собрал водитель, без печати
+        // парка: парк не сторона.
+        if (row.lessee === 'DRIVER') {
+            return { number: row.number, pdf: await renderParkContractPdf(content, null, { stamp: null, signature: null }) };
+        }
         if (row.status !== 'SIGNED') {
             const driver = await this.parkDriver(parkId, row.driverId);
             const input = await this.input(parkId, driver, row.number, row.createdAt, this.dtoOf(row));
@@ -230,7 +233,7 @@ export class VehicleOwnerContractService {
             select: LIST_SELECT,
         });
         if (row.signedFileUrl) await removeExchangeFile(this.s3, row.signedFileUrl);
-        return { ...updated, rentAmount: Number(updated.rentAmount), gaps: [] as string[] };
+        return { ...updated, rentAmount: updated.rentBasis === 'NONE' ? null : Number(updated.rentAmount), gaps: [] as string[] };
     }
 
     async signedFile(parkId: string, id: string) {

@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { buildParkContract, contractGaps, contractNumber, DRIVING_SERVICES_VERSION, ParkContractInput, PARK_CONTRACT_VERSION } from './park-contract';
+import { buildParkContract, contractGaps, contractNumber, CREW_RENTAL_LEASED_VERSION, ParkContractInput, PARK_CONTRACT_VERSION } from './park-contract';
 import { renderParkContractPdf } from './park-contract-pdf';
 import { ParkContractService } from './park-contract.service';
 
@@ -49,22 +49,28 @@ describe('Договор водителя с парком: текст', () => {
         expect(c.sections[0].items.find((i) => i.n === '1.3.')?.text).toBe('Транспортное средство принадлежит Арендодателю на праве собственности.');
     });
 
-    it('машина не своя (Q9) — договор услуг водителя: машину парк арендует у владельца отдельно', () => {
+    it('машина не своя — тот же договор, машина у водителя по договору с хозяином, парк в нём не участвует (31.10.2026)', () => {
+        const своя = buildParkContract(input());
+        const c = buildParkContract(input({
+            vehicle: { ...input().vehicle, isOwn: false, ownerContract: { ownerName: 'Сериков Арман', number: 'ВА-261031-ABC123', date: new Date('2026-10-31T00:00:00Z') } },
+        }));
+        const текст = (k: typeof c) => k.sections.flatMap((s) => s.items).map((i) => `${i.n} ${i.text}`);
+        expect(c.kind).toBe('CREW_RENTAL');
+        expect(c.version).toBe(CREW_RENTAL_LEASED_VERSION);
+        expect(c.title).toMatch(/^Договор аренды транспортного средства с экипажем № /);
+        expect([c.lessee.role, c.lessor.role]).toEqual(['Арендатор', 'Арендодатель']);
+        const п13 = c.sections[0].items.find((i) => i.n === '1.3.')!.text;
+        expect(п13).toContain('на основании договора аренды с собственником (Сериков Арман, договор № ВА-261031-ABC123 от 31.10.2026)');
+        expect(п13).toContain('Арендатор стороной этого договора не является');
+        expect(п13).toContain('плату за пользование Транспортным средством собственнику не вносит');
+        // Отличаются только 1.3, 3.2 и 3.4 — деньги и остальное как со своей машиной.
+        const разные = текст(c).filter((t, i) => t !== текст(своя)[i]).map((t) => t.split(' ')[0]);
+        expect(разные).toEqual(['1.3.', '3.2.', '3.4.']);
+    });
+
+    it('машина не своя, договора с хозяином ещё нет — ссылка без номера', () => {
         const c = buildParkContract(input({ vehicle: { ...input().vehicle, isOwn: false } }));
-        const all = [c.preamble, ...c.sections.flatMap((s) => s.items.map((i) => i.text))].join('\n');
-        expect(c.kind).toBe('DRIVING_SERVICES');
-        expect(c.version).toBe(DRIVING_SERVICES_VERSION);
-        expect(c.title).toMatch(/^Договор возмездного оказания услуг по управлению транспортным средством № /);
-        expect([c.lessee.role, c.lessor.role]).toEqual(['Заказчик', 'Исполнитель']);
-        // Вид договора — и во вступлении: старая сборка приложения пишет шапку сама.
-        expect(c.preamble).toMatch(/договор возмездного оказания услуг по управлению транспортным средством/);
-        expect(all).toMatch(/отдельному договору аренды транспортного средства без экипажа/);
-        // Машину водитель не сдаёт: ни аренды с экипажем, ни доверенности.
-        expect(all).not.toMatch(/с экипажем|доверенност/);
-        // Деньги — как раньше (Q10 отложен): на руки, налоги сверху, топливо по чекам на БИН.
-        expect(all).toContain('сумма на руки');
-        expect(all).toContain('указывается БИН Заказчика');
-        expect(all).toContain('123ABC02');
+        expect(c.sections[0].items.find((i) => i.n === '1.3.')!.text).toContain('на основании договора аренды с собственником, допускающего');
     });
 
     it('чего не хватает для подписи — словами; всё есть — пусто', () => {

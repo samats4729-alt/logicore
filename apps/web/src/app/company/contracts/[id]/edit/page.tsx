@@ -10,6 +10,7 @@ import Loader from '@/components/ui/Loader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ContractCollabPanel, { type CollabState } from '@/components/contracts/ContractCollabPanel';
+import ContractPreamble from '@/components/contracts/ContractPreamble';
 import nova from '@/components/nova/nova.module.css';
 import RequisitesFields, {
     type ПравкиРеквизитов, type СтрокаРеквизитов,
@@ -50,6 +51,8 @@ interface ContractArticle {
     paragraphs: ContractParagraph[];
     /** Заполнено — статья печатается таблицей сторон, а не списком пунктов. */
     requisites?: ContractRequisites;
+    /** Вступление, поправленное руками: печатается вместо собранного программой, не статьёй. */
+    preamble?: boolean;
 }
 
 /** Организация холдинга — сторона договора. */
@@ -94,6 +97,8 @@ export default function EditContractContentPage() {
      * показывала бы только переписанное руками.
      */
     const [заготовка, setЗаготовка] = useState<СтрокаРеквизитов[]>([]);
+    /** Вступление, как его собирает программа, — заготовка для правки руками. */
+    const [автоВступление, setАвтоВступление] = useState('');
 
     /**
      * Обе стороны договора. Своя из них — та, что есть в списке моих
@@ -151,7 +156,7 @@ export default function EditContractContentPage() {
 
     useEffect(() => {
         api.get(`/contracts/${contractId}/requisites-draft`)
-            .then(res => setЗаготовка(res.data?.fields || []))
+            .then(res => { setЗаготовка(res.data?.fields || []); setАвтоВступление(res.data?.preamble || ''); })
             .catch(() => { /* Не подтянулось — таблица останется пустой, править можно. */ });
         api.get('/contracts/my-companies')
             .then(res => setОрганизации(res.data || []))
@@ -245,8 +250,33 @@ export default function EditContractContentPage() {
         setHasChanges(true);
     };
 
+    /** Сколько обычных статей — вступление в нумерацию не входит. */
+    const статей = articles.filter((a) => !a.preamble).length;
+
+    /**
+     * Вступление: своё лежит отдельной записью в тексте договора, чтобы
+     * правка шла в историю версий и согласовывалась, как остальной текст.
+     * null — убрать своё, печатать автоматическое.
+     */
+    const вступлениеIdx = articles.findIndex((a) => a.preamble);
+    const setВступление = (text: string | null) => {
+        if (text === null) {
+            if (вступлениеIdx < 0) return;
+            removeArticle(вступлениеIdx);
+            return;
+        }
+        if (вступлениеIdx >= 0) {
+            const updated = [...articles];
+            updated[вступлениеIdx] = { ...updated[вступлениеIdx], paragraphs: [{ number: '', text }] };
+            setArticles(updated);
+        } else {
+            setArticles([...articles, { title: 'Вступление', paragraphs: [{ number: '', text }], preamble: true }]);
+        }
+        setHasChanges(true);
+    };
+
     const addArticle = () => {
-        const num = articles.length + 1;
+        const num = статей + 1;
         setArticles([...articles, { title: `${num}. Новая статья`, paragraphs: [{ number: `${num}.1.`, text: '' }] }]);
         setOpenKeys([...openKeys, String(articles.length)]);
         setHasChanges(true);
@@ -254,6 +284,8 @@ export default function EditContractContentPage() {
 
     const removeArticle = (idx: number) => {
         setArticles(articles.filter((_, i) => i !== idx));
+        // Раскрытые панели — по номеру в списке: у статей ниже он сдвигается.
+        setOpenKeys(openKeys.filter((k) => k !== String(idx)).map((k) => (Number(k) > idx ? String(Number(k) - 1) : k)));
         setHasChanges(true);
     };
 
@@ -269,7 +301,7 @@ export default function EditContractContentPage() {
      */
     const addRequisites = () => {
         setArticles([...articles, {
-            title: `${articles.length + 1}. Юридические адреса и реквизиты сторон`,
+            title: `${статей + 1}. Юридические адреса и реквизиты сторон`,
             paragraphs: [],
             requisites: { mode: 'fields', overrides: {} },
         }]);
@@ -499,12 +531,17 @@ export default function EditContractContentPage() {
 
             {/* ===== EDITOR CARD ===== */}
             <div className="lc-card" style={{ padding: '24px', marginTop: 0 }}>
+            <ContractPreamble
+                text={вступлениеIdx >= 0 ? (articles[вступлениеIdx].paragraphs[0]?.text ?? '') : null}
+                auto={автоВступление}
+                onChange={setВступление}
+            />
             {/* Articles */}
             <Collapse
                 activeKey={openKeys}
                 onChange={(k) => setOpenKeys(Array.isArray(k) ? k as string[] : [k as string])}
             >
-                {articles.map((article, articleIdx) => (
+                {articles.map((article, articleIdx) => article.preamble ? null : (
                     <Panel
                         key={String(articleIdx)}
                         header={

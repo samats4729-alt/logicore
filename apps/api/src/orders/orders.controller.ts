@@ -28,19 +28,6 @@ import { BillingService } from '../billing/billing.service';
 import { AuditService } from '../audit/audit.service';
 import { OrderContractAutoService } from './order-contract-auto.service';
 
-/**
- * Документ водителя одной строкой для письма с доверенностью (задачи шефа,
- * D5): «Удостоверение личности № 049…, выдано 12.03.2019 МВД РК, действительно
- * до 12.03.2029». Нет номера — ничего: в письме строки не будет.
- */
-function driverDocumentLine(driver: { docType?: string | null; docNumber?: string | null; docIssuedAt?: Date | null; docIssuedBy?: string | null; docExpiresAt?: Date | null } | null | undefined): string | undefined {
-    if (!driver?.docNumber) return undefined;
-    const day = (d?: Date | null) => (d ? new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty' }) : null);
-    const kind = driver.docType === 'PASSPORT' ? 'Паспорт' : 'Удостоверение личности';
-    const issued = [day(driver.docIssuedAt), driver.docIssuedBy].filter(Boolean).join(' ');
-    return [`${kind} № ${driver.docNumber}`, issued ? `выдано ${issued}` : null, driver.docExpiresAt ? `действительно до ${day(driver.docExpiresAt)}` : null].filter(Boolean).join(', ');
-}
-
 @ApiTags('orders')
 @Controller('orders')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard, CompanyVerifiedGuard)
@@ -560,12 +547,6 @@ export class OrdersController {
             throw new NotFoundException('Заявка не найдена');
         }
 
-        // Fetch sender's company name
-        const company = req.user.companyId
-            ? await this.prisma.company.findUnique({ where: { id: req.user.companyId }, select: { name: true } })
-            : null;
-        const senderCompanyName = company?.name || 'LogiCore';
-
         // Доверенность уходит письмом заверенной.
         //
         // Раньше флажок сюда не передавался, и на почту улетал чистый бланк:
@@ -579,30 +560,6 @@ export class OrdersController {
         const pdfBuffer = await this.poaService.generatePdf(id, req.user.companyId, {
             withStamp: true,
         });
-
-        // Собираем ключевые данные водителя для отображения в письме
-        const driver = (order as any).driver;
-        const routePoints = (order as any).routePoints || [];
-        const pickupPoint = routePoints.find((p: any) => p.pointType === 'PICKUP' || p.pointType === 'ADDITIONAL_PICKUP');
-        const deliveryPoint = routePoints.find((p: any) => p.pointType === 'DELIVERY');
-        const pickupCity = pickupPoint?.location?.city || pickupPoint?.location?.address || '';
-        const deliveryCity = deliveryPoint?.location?.city || deliveryPoint?.location?.address || '';
-
-        // Машина и телефон — из рейса, как в самой доверенности и в карточке:
-        // снимок в заявке, иначе карточка водителя.
-        const снимок = !!(order as any).assignedDriverPlate;
-        const driverInfo = {
-            fullName: driver
-                ? `${driver.lastName || ''} ${driver.firstName || ''} ${driver.middleName || ''}`.trim()
-                : ((order as any).assignedDriverName || undefined),
-            // Документ водителя (задачи шефа, D5: «номер, дата и кем выдан» — так требует заказчик).
-            document: driverDocumentLine(driver),
-            vehicleModel: driver?.vehicleModel || undefined,
-            vehiclePlate: (снимок ? (order as any).assignedDriverPlate : driver?.vehiclePlate) || undefined,
-            trailer: (снимок ? (order as any).assignedDriverTrailer : driver?.trailerNumber) || undefined,
-            phone: (order as any).assignedDriverPhone || driver?.phone || undefined,
-            route: (pickupCity && deliveryCity) ? `${pickupCity} → ${deliveryCity}` : undefined,
-        };
 
         // Вложения: файлы рейса по выбору и файлы с компьютера.
         const attachments: { filename: string; content: Buffer }[] = [];
@@ -618,11 +575,14 @@ export class OrdersController {
         }
         for (const f of files ?? []) attachments.push({ filename: decodeUploadName(f.originalname) || 'документ', content: f.buffer });
 
-        // Send emails in parallel
+        // Тело письма — откуда куда, машина, водитель с телефоном и документом:
+        // охрана склада сверяет по нему, не открывая вложение (31.10.2026).
+        const письмо = await this.poaService.emailData(id, req.user.companyId, {
+            senderUserId: req.user.sub,
+            extraFiles: attachments.map((a) => a.filename),
+        });
         await Promise.all(
-            body.emails.map(email =>
-                this.emailService.sendPowerOfAttorneyEmail(email, order.orderNumber, senderCompanyName, pdfBuffer, driverInfo, attachments)
-            )
+            body.emails.map(email => this.emailService.sendPowerOfAttorneyEmail(email, письмо, pdfBuffer, attachments)),
         );
 
         // Журнал отправленных доверенностей (задачи шефа, D4): кому, когда, по
@@ -636,13 +596,13 @@ export class OrdersController {
             entity: 'power_of_attorney_sent',
             entityId: id,
             orderId: id,
-            entityLabel: `Доверенность по заявке № ${order.orderNumber} отправлена · водитель ${driverInfo.fullName || '—'} → ${адреса.join(', ')}`,
+            entityLabel: `Доверенность по заявке № ${order.orderNumber} отправлена · водитель ${письмо.driver.name || '—'} → ${адреса.join(', ')}`,
             details: {
                 kind: POA_SHARE_KIND,
                 orderNumber: order.orderNumber,
                 emails: адреса,
-                driver: driverInfo.fullName ?? null,
-                vehicle: [driverInfo.vehiclePlate, driverInfo.trailer].filter(Boolean).join(' / ') || null,
+                driver: письмо.driver.name ?? null,
+                vehicle: [письмо.vehicle, письмо.trailer].filter(Boolean).join(' / ') || null,
                 attachments: attachments.map((a) => a.filename),
             },
         });

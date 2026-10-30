@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import {
     getDefaultContractTemplate,
+    findPreambleArticle,
     findRequisitesArticle,
     реквизитыПолями,
     строкиРеквизитов,
     type ContractArticle,
     type СтрокаРеквизитов,
 } from './contract-template';
+import { legalNameOf, preambleOf } from './company-legal-name';
 import * as PDFDocument from 'pdfkit';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -117,9 +119,9 @@ export class ContractPdfService {
             const startDate = contract.startDate;
             const city = forwarder.address ? forwarder.address.split(',')[0] : 'г. Алматы';
 
-            // Убираем префикс ТОО/TOO из имён компаний (уже пишем "Товарищество с ограниченной ответственностью")
-            const forwarderCleanName = this.stripCompanyPrefix(forwarder.name);
-            const customerCleanName = this.stripCompanyPrefix(customer.name);
+            // Форма стороны — по названию: ИП не называем товариществом (31.10.2026).
+            const forwarderName = legalNameOf(forwarder.name);
+            const customerName = legalNameOf(customer.name);
 
             // ============ ШАПКА ============
             doc.fontSize(14).font('Roboto-Bold');
@@ -138,24 +140,19 @@ export class ContractPdfService {
             doc.text(`${dateStr} года`, doc.page.margins.left, headerRowY, { align: 'right' });
             doc.moveDown(1);
 
-            // ============ ПРЕАМБУЛА (с жирными названиями компаний) ============
-            doc.fontSize(10).font('Roboto');
-
-            // Экспедитор - жирное название
-            doc.font('Roboto-Bold').text('Товарищество с ограниченной ответственностью ', { continued: true, align: 'justify' });
-            doc.text(`«${forwarderCleanName}»`, { continued: true });
-            doc.font('Roboto').text(`, именуемое в дальнейшем «Экспедитор», в лице директора, действующего на основании Устава, с одной стороны, и`, { align: 'justify', lineGap: 2 });
-
-            // Заказчик - жирное название
-            doc.font('Roboto-Bold').text('Товарищество с ограниченной ответственностью ', { continued: true, align: 'justify' });
-            doc.text(`«${customerCleanName}»`, { continued: true });
-            doc.font('Roboto').text(`, именуемое в дальнейшем «Заказчик», в лице директора, действующего (-ей) на основании Устава, с другой стороны, далее совместно именуемые `, { continued: true, align: 'justify', lineGap: 2 });
-            doc.font('Roboto-Bold').text('«Стороны»', { continued: true });
-            doc.font('Roboto').text(',а по отдельности как указано выше, заключили настоящий Договор о нижеследующем:', { align: 'justify', lineGap: 2 });
-            doc.moveDown(1);
-
             // ============ СТАТЬИ ДОГОВОРА (из сохранённого содержимого или шаблона) ============
             const articles: any[] = (contract.content as any[]) || getDefaultContractTemplate();
+
+            // ============ ВСТУПЛЕНИЕ (с жирными названиями сторон) ============
+            // Поправленное руками — его; нет — собранное программой (31.10.2026).
+            doc.fontSize(10).font('Roboto');
+            const своёВступление = findPreambleArticle(articles as ContractArticle[])?.paragraphs[0].text.trim();
+            this.printPreamble(
+                doc,
+                своёВступление || preambleOf(forwarder.name, customer.name),
+                [forwarderName.full, customerName.full, '«Стороны»'],
+            );
+            doc.moveDown(1);
 
             // Своя статья с реквизитами, если экспедитор её завёл. Тогда
             // автоматический раздел 15 не печатается: две одинаковые таблицы
@@ -163,6 +160,8 @@ export class ContractPdfService {
             const своиРеквизиты = findRequisitesArticle(articles as ContractArticle[]);
 
             for (const article of articles) {
+                // Вступление напечатано выше, отдельной статьёй его нет.
+                if (article?.preamble) continue;
                 if (article === своиРеквизиты) {
                     // Реквизиты идут последней страницей вместе с подписями —
                     // печатаем их не здесь, а ниже, где бы они ни стояли в
@@ -280,8 +279,8 @@ export class ContractPdfService {
                 // Название идёт шапкой, без подписи поля: подпись «Название:»
                 // перед названием компании в договоре выглядит как анкета.
                 rows.push([
-                    строка.left ? `ТОО «${this.stripCompanyPrefix(строка.left)}»` : '',
-                    строка.right ? `ТОО «${this.stripCompanyPrefix(строка.right)}»` : '',
+                    строка.left ? legalNameOf(строка.left).short : '',
+                    строка.right ? legalNameOf(строка.right).short : '',
                 ]);
                 continue;
             }
@@ -461,10 +460,8 @@ export class ContractPdfService {
         // Названия компаний жирным
         const compNameY = signBlockY + 18;
         doc.fontSize(9).font('Roboto-Bold');
-        const fClean = this.stripCompanyPrefix(forwarder.name);
-        const cClean = this.stripCompanyPrefix(customer.name);
-        doc.text(`ТОО «${fClean}»`, signLeftX, compNameY, { width: signColWidth, align: 'center' });
-        doc.text(`ТОО «${cClean}»`, signRightX, compNameY, { width: signColWidth, align: 'center' });
+        doc.text(legalNameOf(forwarder.name).short, signLeftX, compNameY, { width: signColWidth, align: 'center' });
+        doc.text(legalNameOf(customer.name).short, signRightX, compNameY, { width: signColWidth, align: 'center' });
 
         // Строки подписи с ФИО директора (как в шаблоне: «Фамилия И.О. /____/»)
         const signLineY = compNameY + 50;
@@ -666,23 +663,19 @@ export class ContractPdfService {
         return months[date.getMonth()];
     }
 
-    /** Убирает префикс ТОО/TOO из названия компании */
     /**
-     * Имя компании без «ТОО» и без кавычек — его потом оборачивают в
-     * кавычки заново.
-     *
-     * Кавычки снимаются потому, что в карточке название обычно уже записано
-     * целиком: «ТОО «ЛогиКор Экспедиция»». Снимали только «ТОО», и в
-     * договоре под подписью директора выходило «ТОО ««ЛогиКор Экспедиция»»»
-     * — с двойными кавычками с обеих сторон.
+     * Вступление одним абзацем по ширине; названия сторон и «Стороны» —
+     * жирным, если они есть в тексте как есть. Своё вступление тоже: кто
+     * поправил «в лице директора», названия при этом обычно не трогает.
      */
-    private stripCompanyPrefix(name: string): string {
-        return name
-            .replace(/^(ТОО|TOO|тоо)\s+/i, '')
-            .trim()
-            .replace(/^[«"„]+/, '')
-            .replace(/[»"“]+$/, '')
-            .trim();
+    private printPreamble(doc: PDFKit.PDFDocument, text: string, bold: string[]) {
+        const части = bold.filter(Boolean).map((b) => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const куски = части.length ? text.split(new RegExp(`(${части.join('|')})`)) : [text];
+        const непустые = куски.filter((к) => к !== '');
+        непустые.forEach((кусок, i) => {
+            doc.font(bold.includes(кусок) ? 'Roboto-Bold' : 'Roboto')
+                .text(кусок, { continued: i < непустые.length - 1, align: 'justify', lineGap: 2 });
+        });
     }
 
     private async getImageBuffer(relativePath: string): Promise<Buffer | null> {

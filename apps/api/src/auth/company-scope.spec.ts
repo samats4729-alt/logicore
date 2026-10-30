@@ -38,6 +38,10 @@ const ALLOWED_WITHOUT_COMPANY: Record<string, string> = {
     'ExchangeDriverController.cancelAdvance': 'свои запросы на топливо и аванс по рейсу (Q17)',
     'ExchangeDriverController.resubmitAdvance': 'свои запросы на топливо и аванс по рейсу (Q17)',
     'ExchangeDriverController.setContacts': 'свои дополнительные номера и почта для документов (Q6)',
+    'ExchangeDriverController.ownerContractMine': 'свой договор с хозяином чужой машины (31.10.2026)',
+    'ExchangeDriverController.ownerContractSave': 'свой договор с хозяином чужой машины (31.10.2026)',
+    'ExchangeDriverController.ownerContractLink': 'свой договор с хозяином чужой машины — ссылка на PDF (31.10.2026)',
+    'ExchangeDriverController.ownerContractSigned': 'свой договор с хозяином чужой машины — фото подписанного (31.10.2026)',
     // Push-уведомления (вопрос 26): телефон записывает водитель, в том числе
     // водитель биржи без компании. Только свой — пользователь берётся из входа.
     'NotificationsController.register': 'свой телефон для push-уведомлений',

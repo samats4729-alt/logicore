@@ -11,7 +11,7 @@ const num = (d: Prisma.Decimal | number | null | undefined) => (d == null ? 0 : 
 
 const ROW_SELECT = {
     orderId: true, taxMonth: true, driverTotal: true, fuelEstimate: true, deductionAmount: true, rates: true,
-    scheme: true, workNet: true, gross: true, opv: true, vosms: true, ipn: true, so: true,
+    scheme: true, workNet: true, gross: true, opv: true, vosms: true, ipn: true, so: true, base: true,
     customerPrice: true, vat: true, parkFee: true, platformFee: true, preliminary: true, createdAt: true,
     driver: { select: { id: true, lastName: true, firstName: true, middleName: true, iin: true } },
     order: {
@@ -53,10 +53,19 @@ export interface RegistryLine {
     loadingDate: Date | null;
     completedAt: Date | null;
     driver: { id: string; name: string; iin: string | null };
-    /** Договорились: на руки с топливом. */
+    /**
+     * Ставка водителя — сколько он запросил до вычетов: топливо (ГСМ) и
+     * оплата за работу до ОПВ (владелец, 31.10.2026). По прежнему расчёту —
+     * сумма на руки с топливом: налоги там шли сверху.
+     */
+    driverRate: number;
+    /** Договорились на руки: по схеме шефа — без топлива, по прежней — с топливом. */
     driverTotal: number;
     fuelEstimate: number;
+    /** Выдано на топливо — без предоплаты. */
     fuelIssued: number;
+    /** Предоплата водителю из суммы на руки. */
+    advanceIssued: number;
     fuelReceipts: number;
     /** Начислено по ГПХ (вознаграждение до удержаний). */
     gross: number;
@@ -93,7 +102,7 @@ export interface RegistryLine {
     parkProfit: number;
 }
 
-const TOTAL_KEYS = ['driverTotal', 'fuelIssued', 'fuelReceipts', 'gross', 'opv', 'vosms', 'ipn', 'withheld', 'so', 'toBudget', 'deductionAmount', 'toPay', 'paid', 'customerPrice', 'vat', 'parkFee', 'platformFee', 'fuelDiff', 'parkProfit'] as const;
+const TOTAL_KEYS = ['driverRate', 'driverTotal', 'fuelIssued', 'advanceIssued', 'fuelReceipts', 'gross', 'opv', 'vosms', 'ipn', 'withheld', 'so', 'toBudget', 'deductionAmount', 'toPay', 'paid', 'customerPrice', 'vat', 'parkFee', 'platformFee', 'fuelDiff', 'parkProfit'] as const;
 type Totals = Record<typeof TOTAL_KEYS[number], number>;
 
 function sum(lines: RegistryLine[]): Totals {
@@ -141,7 +150,7 @@ export class ExchangeParkRegistryService {
         });
         const fuel = await this.fuel.totals(rows.map((r) => r.orderId));
         const confirmed = !!(await this.prisma.parkPayoutRates.findUnique({ where: { parkCompanyId: parkId }, select: { ratesConfirmedAt: true } }))?.ratesConfirmedAt;
-        const lines = rows.map((r) => this.line(r, fuel.get(r.orderId) ?? { issued: 0, receipts: 0 }, confirmed));
+        const lines = rows.map((r) => this.line(r, fuel.get(r.orderId) ?? { issued: 0, receipts: 0, advances: 0 }, confirmed));
 
         const byDriver = new Map<string, RegistryLine[]>();
         for (const l of lines) byDriver.set(l.driver.id, [...(byDriver.get(l.driver.id) ?? []), l]);
@@ -150,7 +159,7 @@ export class ExchangeParkRegistryService {
         return { month, preliminary: !confirmed || lines.some((l) => l.preliminary), lines, drivers, totals: { trips: lines.length, ...sum(lines) } };
     }
 
-    private line(r: Row, f: { issued: number; receipts: number }, confirmed: boolean): RegistryLine {
+    private line(r: Row, f: { issued: number; receipts: number; advances: number }, confirmed: boolean): RegistryLine {
         const item = r.order.driverPayoutItem;
         // Выплата запрошена — суммы из неё (их и выгружали в 1С); нет — оценка по текущим чекам.
         // Схема шефа: налоги зафиксированы при выборе исполнителя, топливо сводится чеками.
@@ -177,9 +186,14 @@ export class ExchangeParkRegistryService {
             loadingDate: pickup?.expectedDate ?? null,
             completedAt: r.order.completedAt,
             driver: { id: r.driver.id, name: nameOf(r.driver), iin: r.driver.iin },
+            driverRate: r.scheme === 2
+                ? (r.base != null ? num(r.base) : money(num(r.fuelEstimate) + num(r.gross)))
+                : num(r.driverTotal),
             driverTotal: num(r.driverTotal),
             fuelEstimate: num(r.fuelEstimate),
-            fuelIssued: a.fuelIssued,
+            // Выдано всего — топливо и предоплата; в реестре они раздельно.
+            fuelIssued: money(Math.max(0, a.fuelIssued - f.advances)),
+            advanceIssued: f.advances,
             fuelReceipts: a.fuelReceipts,
             gross: a.gross, opv: a.opv, vosms: a.vosms, ipn: a.ipn, withheld, so: a.so,
             toBudget: money(withheld + a.so),
@@ -213,8 +227,10 @@ export class ExchangeParkRegistryService {
             'Довезён': date(l.completedAt),
             'ФИО': l.driver.name,
             'ИИН': l.driver.iin ?? '',
-            'Договорились (на руки с топливом)': l.driverTotal,
+            'Ставка водителя (до ГСМ и ОПВ)': l.driverRate,
+            'На руки по договорённости': l.driverTotal,
             'Выдано на топливо': l.fuelIssued,
+            'Предоплата водителю': l.advanceIssued,
             'Топливо по чекам': l.fuelReceipts,
             'Начислено (ГПХ)': l.gross,
             'ОПВ': l.opv,

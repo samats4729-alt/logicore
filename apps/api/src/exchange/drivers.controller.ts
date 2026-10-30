@@ -26,6 +26,8 @@ import { ExchangeDriversService } from './drivers.service';
 import { sendExchangeFile } from './exchange-files';
 import { ParkContractService } from './park-contract.service';
 import { VehicleOwnerContractService } from './vehicle-owner-contract.service';
+import { DriverOwnerContractService } from './driver-owner-contract.service';
+import { DriverOwnerContractDto } from './dto/vehicle-owner-contract.dto';
 import { VehicleOwnerContractDto } from './dto/vehicle-owner-contract.dto';
 import { ExchangeFuelService } from './fuel.service';
 import { ExchangeSettlementService } from './settlement.service';
@@ -122,6 +124,7 @@ export class ExchangeDriverController {
         private readonly fuel: ExchangeFuelService,
         private readonly advances: ExchangeAdvanceRequestsService,
         private readonly vehicles: ExchangeDriverVehiclesService,
+        private readonly ownerContract: DriverOwnerContractService,
     ) {}
 
     // ==================== транспорт: тягачи и прицепы (R4) ====================
@@ -267,6 +270,35 @@ export class ExchangeDriverController {
         return this.contracts.driverLink(req.user.sub);
     }
 
+    // ===== Договор с хозяином машины: машина не своя (владелец, 31.10.2026) =====
+
+    @Get('me/owner-contract')
+    @ApiOperation({ summary: 'Договор с хозяином машины: нужен ли и что уже есть' })
+    ownerContractMine(@Request() req: any) {
+        return this.ownerContract.mine(req.user.sub);
+    }
+
+    @Put('me/owner-contract')
+    @ApiOperation({ summary: 'Вписать или поправить данные хозяина машины' })
+    ownerContractSave(@Request() req: any, @Body() dto: DriverOwnerContractDto) {
+        return this.ownerContract.save(req.user.sub, dto);
+    }
+
+    @Post('me/owner-contract/link')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Ссылка на PDF договора с хозяином на десять минут — распечатать' })
+    ownerContractLink(@Request() req: any) {
+        return this.ownerContract.link(req.user.sub);
+    }
+
+    @Post('me/owner-contract/signed')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE } }))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Фото подписанного договора с хозяином машины' })
+    ownerContractSigned(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
+        return this.ownerContract.attachSigned(req.user.sub, file);
+    }
+
     @Post('me/sign-contract')
     @ApiOperation({ summary: 'Подписать договор с парком' })
     signContract(@Request() req: any) {
@@ -397,6 +429,7 @@ export class ExchangePublicController {
     constructor(
         private readonly park: ExchangeParkService,
         private readonly contracts: ParkContractService,
+        private readonly ownerContracts: DriverOwnerContractService,
     ) {}
 
     /**
@@ -410,6 +443,19 @@ export class ExchangePublicController {
     @ApiOperation({ summary: 'PDF договора водителя по ссылке на десять минут (без входа)' })
     async contractPdf(@Param('token') token: string, @Res() res: Response) {
         sendContractPdf(res, await this.contracts.pdfByLink(token), true);
+    }
+
+    /**
+     * PDF договора водителя с хозяином машины по ссылке из приложения —
+     * распечатать и подписать. Замок тот же: подпись ссылки секретом
+     * сервера и десять минут (`DriverOwnerContractService.link`).
+     * Перечислен в auth/open-routes.spec.ts.
+     */
+    @Get('owner-contract-pdf/:token')
+    @UseGuards(ExchangeEnabledGuard)
+    @ApiOperation({ summary: 'PDF договора с хозяином машины по ссылке на десять минут (без входа)' })
+    async ownerContractPdf(@Param('token') token: string, @Res() res: Response) {
+        sendContractPdf(res, await this.ownerContracts.pdfByLink(token), true);
     }
 
     @Get('public-status')
@@ -747,15 +793,11 @@ export class ExchangeParkController {
         return this.ownerContracts.list(req.user.companyId, id);
     }
 
+    /** С 31.10.2026 не оформляется: договор с хозяином машины составляет водитель (сервис отвечает словами). */
     @Post('drivers/:id/owner-contracts')
-    @ApiOperation({ summary: 'Оформить договор аренды машины с её владельцем' })
-    async createOwnerContract(@Request() req: any, @Param('id') id: string, @Body() dto: VehicleOwnerContractDto) {
-        const created = await this.ownerContracts.create(req.user.companyId, req.user.sub ?? null, id, dto);
-        await this.audit.log({
-            companyId: req.user.companyId, user: req.user, action: 'CREATE', entity: 'vehicle_owner_contract', entityId: created.id,
-            entityLabel: `Договор аренды машины ${created.vehiclePlate} с владельцем «${created.ownerName}» № ${created.number}: оформлен`,
-        });
-        return created;
+    @ApiOperation({ summary: 'Оформить договор аренды машины с её владельцем — больше не оформляется' })
+    createOwnerContract(@Request() req: any, @Param('id') id: string, @Body() dto: VehicleOwnerContractDto) {
+        return this.ownerContracts.create(req.user.companyId, req.user.sub ?? null, id, dto);
     }
 
     @Put('owner-contracts/:contractId')
