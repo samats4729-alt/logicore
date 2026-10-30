@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { PoaEmailData, poaEmail } from './poa-email';
 
 @Injectable()
 export class EmailService {
@@ -55,6 +56,8 @@ export class EmailService {
         to: string;
         subject: string;
         html: string;
+        /** Простой текст рядом с разметкой: часть почтовых программ показывает только его. */
+        text?: string;
         attachments?: { filename: string; content: Buffer }[];
     }) {
         return this.resend!.emails.send({
@@ -62,6 +65,7 @@ export class EmailService {
             to: письмо.to,
             subject: письмо.subject,
             html: this.сПриписки(письмо.html),
+            ...(письмо.text ? { text: `${письмо.text}\n\n—\nСообщение создано и отправлено автоматически. Ответ на это письмо никто не получит.` } : {}),
             ...(письмо.attachments ? { attachments: письмо.attachments } : {}),
         });
     }
@@ -184,121 +188,23 @@ export class EmailService {
         }
     }
 
+    /**
+     * Доверенность на водителя — письмом складу или получателю груза. Тело —
+     * откуда куда, машина, водитель с телефоном и документом (`poa-email.ts`):
+     * охрана сверяет по нему, не открывая вложение (владелец, 31.10.2026).
+     */
     async sendPowerOfAttorneyEmail(
         to: string,
-        orderNumber: string,
-        senderCompanyName: string,
+        data: PoaEmailData,
         pdfBuffer: Buffer,
-        driverInfo?: {
-            fullName?: string;
-            /** Документ водителя одной строкой: вид, номер, кем и когда выдан, срок. */
-            document?: string;
-            vehicleModel?: string;
-            vehiclePlate?: string;
-            trailer?: string;
-            phone?: string;
-            route?: string;
-        },
         /** Дополнительные файлы к письму: документы водителя и др. (D3). */
         extraAttachments: { filename: string; content: Buffer }[] = [],
+        fileName = `doverennost_order_${data.orderNumber}.pdf`,
     ): Promise<void> {
-        const subject = `Доверенность к заявке № ${orderNumber} — LogiCore`;
-
-        // Формируем блок ключевых данных водителя
-        const driverRows: string[] = [];
-        if (driverInfo?.fullName) {
-            driverRows.push(`
-                <tr>
-                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">👤 Водитель</td>
-                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.fullName}</td>
-                </tr>`);
-        }
-        // Документ водителя, тягач и прицеп — отдельными строками: так требует
-        // заказчик (задачи шефа, D5), охрана склада сверяет их по одному.
-        if (driverInfo?.document) {
-            driverRows.push(`
-                <tr>
-                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🪪 Документ</td>
-                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.document}</td>
-                </tr>`);
-        }
-        if (driverInfo?.vehicleModel || driverInfo?.vehiclePlate) {
-            const vehicleText = [driverInfo.vehicleModel, driverInfo.vehiclePlate].filter(Boolean).join(' · ');
-            driverRows.push(`
-                <tr>
-                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚛 Тягач</td>
-                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${vehicleText}</td>
-                </tr>`);
-        }
-        if (driverInfo?.trailer) {
-            driverRows.push(`
-                <tr>
-                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">🚚 Прицеп</td>
-                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.trailer}</td>
-                </tr>`);
-        }
-        if (driverInfo?.phone) {
-            driverRows.push(`
-                <tr>
-                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">📞 Телефон</td>
-                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.phone}</td>
-                </tr>`);
-        }
-        if (driverInfo?.route) {
-            driverRows.push(`
-                <tr>
-                    <td style="padding: 8px 12px; color: #8c8c8c; font-size: 13px; white-space: nowrap; vertical-align: top;">📍 Маршрут</td>
-                    <td style="padding: 8px 12px; color: #1a1a1a; font-size: 14px; font-weight: 600;">${driverInfo.route}</td>
-                </tr>`);
-        }
-
-        const driverInfoBlock = driverRows.length > 0 ? `
-            <table cellpadding="0" cellspacing="0" style="width: 100%; background: #f0f5ff; border-radius: 8px; border: 1px solid #d6e4ff; margin: 0 0 20px;">
-                ${driverRows.join('')}
-            </table>` : '';
-
-        const html = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
-    <div style="max-width: 480px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
-        <!-- Header -->
-        <div style="background: linear-gradient(135deg, #1677ff 0%, #4096ff 100%); padding: 32px 24px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">LogiCore</h1>
-            <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 14px;">Система управления логистикой</p>
-        </div>
-        
-        <!-- Content -->
-        <div style="padding: 32px 24px;">
-            <h2 style="margin: 0 0 16px; font-size: 20px; color: #1a1a1a;">Доверенность на водителя</h2>
-
-            <!-- Ключевые данные рейса -->
-            ${driverInfoBlock}
-
-            <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-                Здравствуйте!
-            </p>
-            <p style="color: #595959; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-                Вам направлена доверенность на водителя от компании <strong>${senderCompanyName}</strong> по заявке <strong>№ ${orderNumber}</strong>. Документ прикреплен к этому письму в формате PDF${extraAttachments.length ? `, вместе с ним — ${extraAttachments.length} ${extraAttachments.length === 1 ? 'файл' : 'файла'}: ${extraAttachments.map((a) => a.filename).join(', ')}` : ''}.
-            </p>
-            
-            <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 24px 0;">
-            
-            <p style="color: #bfbfbf; font-size: 12px; line-height: 1.5; margin: 0;">
-                Это письмо отправлено автоматически из системы LogiCore.<br>
-                Пожалуйста, не отвечайте на него.
-            </p>
-        </div>
-    </div>
-</body>
-</html>`;
+        const { subject, html, text } = poaEmail(data);
 
         if (!this.resend) {
-            this.logger.log(`📧 [DEV] Power of Attorney email for ${to} (from: ${senderCompanyName}, Order: ${orderNumber}), attachment size: ${pdfBuffer.length} bytes`);
+            this.logger.log(`📧 [DEV] Power of Attorney email for ${to} (from: ${data.senderCompany}, Order: ${data.orderNumber}), attachment size: ${pdfBuffer.length} bytes`);
             return;
         }
 
@@ -307,7 +213,8 @@ export class EmailService {
                 to,
                 subject,
                 html,
-                attachments: [{ filename: `doverennost_order_${orderNumber}.pdf`, content: pdfBuffer }, ...extraAttachments],
+                text,
+                attachments: [{ filename: fileName, content: pdfBuffer }, ...extraAttachments],
             });
             this.logger.log(`📧 Power of Attorney email sent to ${to}, id: ${(result as any)?.data?.id}`);
         } catch (error: any) {

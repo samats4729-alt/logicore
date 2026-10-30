@@ -97,8 +97,12 @@ function build(options: {
         snapshotFor: jest.fn().mockResolvedValue({ order: {}, carrier: { id: 'cp-1' } }),
         renderFromSnapshot: jest.fn().mockResolvedValue(Buffer.from('pdf')),
         summaryOf: jest.fn(() => ({})),
+        emailData: jest.fn().mockResolvedValue({ orderNumber: 'ЗК-2606', senderCompany: 'ТОО', driver: { name: 'Иванов Иван' } }),
     };
-    const email: any = { sendOrderDocumentEmail: jest.fn().mockResolvedValue(undefined) };
+    const email: any = {
+        sendOrderDocumentEmail: jest.fn().mockResolvedValue(undefined),
+        sendPowerOfAttorneyEmail: jest.fn().mockResolvedValue(undefined),
+    };
 
     const redis: any = { delByPattern: jest.fn().mockResolvedValue(undefined) };
 
@@ -337,9 +341,12 @@ describe('Жизнь документа по рейсу', () => {
 
             await service.send('d-2', 'c-1', 'u-1', 'sklad@magnum.kz');
 
-            expect(email.sendOrderDocumentEmail).toHaveBeenCalledWith(
-                'sklad@magnum.kz', expect.objectContaining({ title: 'Доверенность' }),
+            // Доверенность — письмом с маршрутом, машиной и водителем (31.10.2026),
+            // данные — из этой версии документа.
+            expect(email.sendPowerOfAttorneyEmail).toHaveBeenCalledWith(
+                'sklad@magnum.kz', expect.objectContaining({ orderNumber: 'ЗК-2606' }), Buffer.from('pdf'), [], 'doverennost_ЗК-2606_v1.pdf',
             );
+            expect(email.sendOrderDocumentEmail).not.toHaveBeenCalled();
             expect(updates[0].data.status).toBe('SENT');
         });
 

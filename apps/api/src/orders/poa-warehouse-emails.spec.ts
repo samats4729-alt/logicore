@@ -54,9 +54,11 @@ function build(options: {
     const poa: any = {
         renderFromSnapshot: jest.fn().mockResolvedValue(Buffer.from('pdf')),
         summaryOf: jest.fn(() => ({})),
+        emailData: jest.fn().mockResolvedValue({ orderNumber: '1', senderCompany: 'ТОО', driver: { name: '—' } }),
     };
     const email: any = {
         sendOrderDocumentEmail: jest.fn(async (to: string) => { письма.push(to); }),
+        sendPowerOfAttorneyEmail: jest.fn(async (to: string) => { письма.push(to); }),
     };
     const redis: any = { delByPattern: jest.fn().mockResolvedValue(undefined) };
 

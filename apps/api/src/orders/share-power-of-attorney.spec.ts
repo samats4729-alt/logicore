@@ -15,10 +15,16 @@ import { OrdersController } from './orders.controller';
 
 describe('рассылка доверенности по почте', () => {
     const КОМПАНИЯ = 'company-1';
+    /** Тело письма собирает сервис доверенности — см. `poa-email-data.spec.ts`. */
+    const ПИСЬМО = {
+        orderNumber: 'ЗК-2601', senderCompany: 'ТОО «Экспедитор»',
+        driver: { name: 'Садыков Марат', phone: '+77051234567' }, vehicle: 'Volvo FH · 888 FRE 02', trailer: '45ПП02',
+    };
 
     const собрать = (заявка: any = {}) => {
         const poaService: any = {
             generatePdf: jest.fn().mockResolvedValue(Buffer.from('pdf')),
+            emailData: jest.fn().mockResolvedValue(ПИСЬМО),
         };
         const emailService: any = {
             sendPowerOfAttorneyEmail: jest.fn().mockResolvedValue(undefined),
@@ -82,8 +88,8 @@ describe('рассылка доверенности по почте', () => {
 
         expect(emailService.sendPowerOfAttorneyEmail).toHaveBeenCalledTimes(2);
         for (const вызов of emailService.sendPowerOfAttorneyEmail.mock.calls) {
-            // Четвёртым аргументом уходит PDF — он один на всех получателей.
-            expect(вызов[3]).toEqual(Buffer.from('pdf'));
+            // Третьим аргументом уходит PDF — он один на всех получателей.
+            expect(вызов[2]).toEqual(Buffer.from('pdf'));
         }
     });
 
@@ -99,34 +105,17 @@ describe('рассылка доверенности по почте', () => {
         expect(auditService.log).not.toHaveBeenCalled();
     });
 
-    it('в тексте письма — машина рейса, а не последняя из карточки водителя', async () => {
-        // Водитель сегодня едет на другой машине: в доверенности она, и в
-        // письме должна быть она же.
-        const { controller, emailService } = собрать({
-            driver: { lastName: 'Садыков', firstName: 'Марат', vehiclePlate: '111 OLD 02', phone: '+77050000000' },
-            assignedDriverPlate: '888 FRE 02',
-            assignedDriverPhone: '+77051234567',
-        });
+    it('тело письма — данные доверенности: маршрут, машина, водитель (31.10.2026)', async () => {
+        const { controller, poaService, emailService } = собрать();
 
         await controller.sharePowerOfAttorney('order-1', { emails: ['skl@example.kz'] }, запрос);
 
-        const водитель = emailService.sendPowerOfAttorneyEmail.mock.calls[0][4];
-        expect(водитель.vehiclePlate).toBe('888 FRE 02');
-        expect(водитель.phone).toBe('+77051234567');
-    });
-
-    it('у старого рейса без машины в заявке — номер из карточки, как раньше', async () => {
-        const { controller, emailService } = собрать({
-            driver: { lastName: 'Иванов', firstName: 'Иван', vehiclePlate: '777 AAA 02' },
-        });
-
-        await controller.sharePowerOfAttorney('order-1', { emails: ['skl@example.kz'] }, запрос);
-
-        expect(emailService.sendPowerOfAttorneyEmail.mock.calls[0][4].vehiclePlate).toBe('777 AAA 02');
+        expect(poaService.emailData).toHaveBeenCalledWith('order-1', КОМПАНИЯ, { senderUserId: 'user-1', extraFiles: [] });
+        expect(emailService.sendPowerOfAttorneyEmail.mock.calls[0][1]).toBe(ПИСЬМО);
     });
 
     it('отправка остаётся в истории рейса: кому и на какого водителя', async () => {
-        const { controller, auditService } = собрать({ assignedDriverName: 'Садыков Марат' });
+        const { controller, auditService } = собрать();
 
         await controller.sharePowerOfAttorney(
             'order-1',
@@ -173,18 +162,13 @@ describe('рассылка доверенности по почте', () => {
 
         expect(auditService.log).not.toHaveBeenCalled();
     });
-    it('в письме — документ водителя, тягач и прицеп отдельно (D5); отправка — в журнал (D4)', async () => {
-        const { controller, emailService, auditService } = собрать();
-        (controller as any).ordersService.findById.mockResolvedValue({
-            id: 'order-1', orderNumber: 'ЗК-2601', routePoints: [], assignedDriverPlate: '123ABC02', assignedDriverTrailer: '45ПП02',
-            driver: { lastName: 'Иванов', firstName: 'Иван', middleName: null, phone: '+77010000000', vehicleModel: 'Volvo FH',
-                docType: 'ID_CARD', docNumber: '049123456', docIssuedAt: new Date('2019-03-12T00:00:00Z'), docIssuedBy: 'МВД РК', docExpiresAt: new Date('2029-03-12T00:00:00Z') },
-        });
+    it('в журнале — водитель, тягач и прицеп из письма (D4)', async () => {
+        const { controller, auditService } = собрать();
         await controller.sharePowerOfAttorney('order-1', { emails: ['skl@example.kz'] }, запрос);
-        const info = emailService.sendPowerOfAttorneyEmail.mock.calls[0][4];
-        expect(info).toMatchObject({ vehiclePlate: '123ABC02', trailer: '45ПП02', vehicleModel: 'Volvo FH' });
-        expect(info.document).toBe('Удостоверение личности № 049123456, выдано 12.03.2019 МВД РК, действительно до 12.03.2029');
-        expect(auditService.log.mock.calls[0][0]).toMatchObject({ entity: 'power_of_attorney_sent', orderId: 'order-1', details: { emails: ['skl@example.kz'] } });
+        expect(auditService.log.mock.calls[0][0]).toMatchObject({
+            entity: 'power_of_attorney_sent', orderId: 'order-1',
+            details: { emails: ['skl@example.kz'], driver: 'Садыков Марат', vehicle: 'Volvo FH · 888 FRE 02 / 45ПП02' },
+        });
     });
 
     it('с формы с файлами адреса приходят строкой, файлы — вложениями (D3)', async () => {
@@ -192,6 +176,6 @@ describe('рассылка доверенности по почте', () => {
         const file: any = { originalname: 'udostoverenie.pdf', mimetype: 'application/pdf', size: 10, buffer: Buffer.from('%PDF-1.4') };
         await controller.sharePowerOfAttorney('order-1', { emails: '["a@x.kz","b@x.kz"]' } as any, запрос, [file]);
         expect(emailService.sendPowerOfAttorneyEmail).toHaveBeenCalledTimes(2);
-        expect(emailService.sendPowerOfAttorneyEmail.mock.calls[0][5]).toEqual([{ filename: 'udostoverenie.pdf', content: file.buffer }]);
+        expect(emailService.sendPowerOfAttorneyEmail.mock.calls[0][3]).toEqual([{ filename: 'udostoverenie.pdf', content: file.buffer }]);
     });
 });
