@@ -129,6 +129,13 @@ export interface ContractArticle {
      * появления реквизитов, остаются как были.
      */
     requisites?: ContractRequisites;
+    /**
+     * Вступление договора, поправленное руками (владелец, 31.10.2026): кто
+     * с кем, в лице кого, на основании чего. Печатается вместо собранного
+     * программой, а не статьёй. Лежит в тексте договора, чтобы правка шла
+     * в историю версий и согласовывалась со второй стороной, как остальной текст.
+     */
+    preamble?: boolean;
 }
 
 /** Компания в том виде, в каком её реквизиты попадают в договор. */
@@ -184,6 +191,11 @@ export function companyRequisitesText(company: CompanyRequisitesSource): string 
  * адреса и реквизиты сторон»: две одинаковые таблицы подряд — это не
  * подстраховка, а брак.
  */
+/** Своё вступление, если его правили и оно не пустое. */
+export function findPreambleArticle(articles: ContractArticle[]): ContractArticle | undefined {
+    return articles.find((статья) => статья?.preamble && статья.paragraphs?.[0]?.text?.trim());
+}
+
 export function findRequisitesArticle(articles: ContractArticle[]): ContractArticle | undefined {
     return articles.find((статья) => статья?.requisites
         && (реквизитыПолями(статья.requisites)
