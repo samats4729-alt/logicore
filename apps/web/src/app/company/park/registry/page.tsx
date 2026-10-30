@@ -191,8 +191,10 @@ export default function ParkRegistryPage() {
                                     <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
                                         <TableHead className="h-9">Рейс</TableHead>
                                         <TableHead className="h-9">Водитель</TableHead>
-                                        <TableHead className="h-9 text-right">Договорились</TableHead>
+                                        <TableHead className="h-9 text-right" title="Сколько водитель запросил — до вычетов ГСМ и ОПВ">Ставка водителя</TableHead>
+                                        <TableHead className="h-9 text-right">На руки</TableHead>
                                         <TableHead className="h-9 text-right">Топливо</TableHead>
+                                        <TableHead className="h-9 text-right">Предоплата</TableHead>
                                         <TableHead className="h-9 text-right">Начислено</TableHead>
                                         <TableHead className="h-9 text-right">ОПВ</TableHead>
                                         <TableHead className="h-9 text-right">ВОСМС</TableHead>
@@ -283,11 +285,13 @@ function Line({ l }: { l: ParkRegistryLine }) {
                 <div>{l.driver.name}</div>
                 <div className="text-[11.5px] text-muted-foreground">ИИН {иинКрасиво(l.driver.iin)}</div>
             </TableCell>
+            <TableCell className="text-right font-semibold tabular-nums">{sum(l.driverRate)}</TableCell>
             <TableCell className="text-right tabular-nums">{sum(l.driverTotal)}</TableCell>
             <TableCell className="text-right tabular-nums">
                 <div>{sum(l.fuelIssued)}</div>
                 <div className="text-[11px] text-muted-foreground">чеки {sum(l.fuelReceipts)}</div>
             </TableCell>
+            <TableCell className="text-right tabular-nums">{l.advanceIssued ? sum(l.advanceIssued) : '—'}</TableCell>
             <TableCell className="text-right tabular-nums">
                 <div>{sum(l.gross)}</div>
                 {l.deductionAmount > 0 && <div className="text-[11px] text-muted-foreground">вычет {sum(l.deductionAmount)}</div>}

@@ -24,7 +24,7 @@ const TRIP_SELECT = {
     // Расчёт «на руки»: итог водителю, топливо по оценке, доля парка и LogiCore.
     exchangeSettlement: {
         select: {
-            scheme: true, driverTotal: true, fuelEstimate: true, parkFee: true, platformFee: true,
+            scheme: true, driverTotal: true, fuelEstimate: true, parkFee: true, platformFee: true, base: true,
             gross: true, opv: true, vosms: true, so: true, ipn: true, preliminary: true,
         },
     },
@@ -134,6 +134,8 @@ export class ExchangeParkService {
                 /** Расчёт «на руки» — у рейсов после 12.10.2026; у прежних — пусто. */
                 settlement: r.exchangeSettlement ? {
                     driverTotal: Number(r.exchangeSettlement.driverTotal),
+                    /** Ставка водителя до вычетов — топливо и оплата за работу до ОПВ (31.10.2026). */
+                    base: r.exchangeSettlement.base != null ? Number(r.exchangeSettlement.base) : null,
                     fuelEstimate: Number(r.exchangeSettlement.fuelEstimate),
                     parkFee: Number(r.exchangeSettlement.parkFee),
                     platformFee: Number(r.exchangeSettlement.platformFee),

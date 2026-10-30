@@ -33,6 +33,8 @@ const налоги = (c: NonNullable<ParkOrderCalc['calc']>) => c.opv + c.vosms 
  * Плитки «Финансов» заявки парка вместо «ставки исполнителю» и «маржи»:
  * у парка исполнитель — свой водитель, и деньги рейса — это топливо, сумма
  * на руки и налоги по ГПХ, каждое отдельно (владелец и шеф, 29.10.2026).
+ * Ставка водителя — сколько он запросил до вычетов ГСМ и ОПВ (31.10.2026).
+ * Два ряда по три: сверху — договорённости, снизу — из чего ставка.
  */
 export function ParkFinanceTiles({ data, customerGross, customerPaid }: {
     data: ParkOrderCalc;
@@ -42,16 +44,17 @@ export function ParkFinanceTiles({ data, customerGross, customerPaid }: {
     const c = data.calc;
     if (!c) return null;
     return (
-        <div className={`${nova.tiles} ${nova.tiles5}`}>
+        <div className={`${nova.tiles} ${nova.tiles3}`}>
             <Tile
                 label="От заказчика"
                 value={customerGross}
                 sub={<span className={cn(nova.chip, !customerPaid && nova.chipWarn)}>{customerPaid ? 'Оплачено' : 'Не оплачено'}</span>}
             />
-            <Tile label="Топливо" value={c.fuel} sub={data.distanceKm ? `≈ ${Math.round(data.distanceKm).toLocaleString('ru-RU')} км` : 'нет расстояния'} />
-            <Tile label="Водителю на руки" value={c.driverTotal} sub={data.scheme === 2 ? 'без топлива' : 'с топливом'} />
-            <Tile label="Налоги ГПХ" value={налоги(c)} sub="ОПВ·ОСМС·СО·ИПН" />
+            <Tile label="Ставка водителя" value={c.base} sub="до вычетов ГСМ и ОПВ" />
             <Tile label="Остаётся парку" value={c.parkFee} tone={c.parkFee >= 0 ? 'pos' : 'neg'} sub="из комиссии" />
+            <Tile label="Топливо (ГСМ)" value={c.fuel} sub={data.distanceKm ? `по расчёту, ≈ ${Math.round(data.distanceKm).toLocaleString('ru-RU')} км` : 'нет расстояния'} />
+            <Tile label="Водителю на руки" value={c.driverTotal} sub={data.scheme === 2 ? 'без топлива, после ОПВ' : 'с топливом'} />
+            <Tile label="Налоги по ГПХ" value={налоги(c)} sub="ОПВ, ОСМС, СО, ИПН" />
         </div>
     );
 }
@@ -117,7 +120,10 @@ export function ParkCalcLines({ data }: { data: ParkOrderCalc }) {
                         : 'Не посчитано: у точек маршрута нет координат или адрес погрузки и выгрузки один. Вся сумма без налогов и комиссии ушла в оплату водителю.'}
                 </p>
             </Group>
-            <Group title="Водителю">
+            <Group title="Ставка водителя">
+                {/* Сколько водитель запросил — и что из этого вычитается до суммы на руки. */}
+                <Line label="Ставка водителя, до вычетов" value={c.base} strong />
+                <Line label="Топливо (ГСМ) — оплачивает парк" value={-c.fuel} />
                 <Line label="Оплата за работу по договору ГПХ" value={c.gross} />
                 <Line label={`ОПВ ${r.opvPct}% — удерживается`} value={-c.opv} />
                 <Line label={data.scheme === 2 ? 'На руки водителю' : 'На руки водителю, с топливом'} value={c.driverTotal} strong />
