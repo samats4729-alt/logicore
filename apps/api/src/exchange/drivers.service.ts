@@ -39,9 +39,11 @@ const DRIVER_SELECT = {
     idNumber: true, idIssuedBy: true, idIssuedAt: true, idExpiresAt: true, registrationAddress: true,
     consentAt: true, consentVersion: true,
     ipName: true, ipIin: true,
-    vehiclePlate: true, vehicleBodyType: true, vehicleCapacityKg: true, vehicleIsOwn: true,
+    vehiclePlate: true, vehicleBodyType: true, vehicleCapacityKg: true, vehicleIsOwn: true, vehicleOwnerIin: true,
     vehicleModel: true, vehicleRegNumber: true,
     contractSignedAt: true,
+    // Подписанный договор с хозяином чужой машины — вместо доверенности (31.10.2026).
+    vehicleOwnerContracts: { where: { lessee: 'DRIVER', status: 'SIGNED' }, select: { id: true }, take: 1 },
     submittedAt: true, reviewedAt: true, rejectReason: true, blockedAt: true, blockedReason: true,
     tripsCompleted: true, createdAt: true,
     deductionRequested: true, deductionRequestedAt: true, deletionRequestedAt: true,
@@ -68,6 +70,7 @@ export function missingFor(d: Pick<DriverRow, 'kind' | 'parkCompanyId' | 'lastNa
     | 'ipName' | 'ipIin' | 'vehiclePlate' | 'vehicleBodyType' | 'vehicleIsOwn' | 'contractSignedAt'
     | 'idNumber' | 'idIssuedBy' | 'consentAt' | 'registrationAddress' | 'vehicleModel' | 'vehicleRegNumber'> & {
     documents: { kind: ExchangeDriverDocumentKind }[];
+    vehicleOwnerContracts?: { id: string }[];
 }): string[] {
     const missing: string[] = [];
     if (!d.kind) return ['выберите: свой ИП или через парк'];
@@ -92,8 +95,12 @@ export function missingFor(d: Pick<DriverRow, 'kind' | 'parkCompanyId' | 'lastNa
     if (!d.parkCompanyId) missing.push('парк');
     const has = new Set(d.documents.map((x) => x.kind));
     const needed: ExchangeDriverDocumentKind[] = ['ID_FRONT', 'ID_BACK', 'SELFIE_WITH_ID', 'LICENSE', 'VEHICLE_REGISTRATION'];
-    if (!d.vehicleIsOwn) needed.push('POWER_OF_ATTORNEY');
     for (const kind of needed) if (!has.has(kind)) missing.push(`фото: ${DOCUMENT_TITLES[kind]}`);
+    // Машина не своя — право ездить на ней: подписанный договор с хозяином
+    // или доверенность от него (владелец, 31.10.2026).
+    if (!d.vehicleIsOwn && !has.has('POWER_OF_ATTORNEY') && !d.vehicleOwnerContracts?.length) {
+        missing.push('договор с хозяином машины или фото доверенности от него');
+    }
     if (!d.contractSignedAt) missing.push('подпись договора с парком');
     return missing;
 }
@@ -437,7 +444,18 @@ export class ExchangeDriversService {
         if (dto.vehiclePlate !== undefined) data.vehiclePlate = normalizePlate(dto.vehiclePlate) || null;
         if (dto.vehicleBodyType !== undefined) data.vehicleBodyType = text(dto.vehicleBodyType);
         if (dto.vehicleCapacityKg !== undefined) data.vehicleCapacityKg = dto.vehicleCapacityKg;
-        if (dto.vehicleIsOwn !== undefined) data.vehicleIsOwn = dto.vehicleIsOwn;
+        if (dto.vehicleOwnerIin !== undefined) {
+            const ownerIin = digitsOnly(dto.vehicleOwnerIin);
+            if (ownerIin && ownerIin.length !== 12) throw new BadRequestException('ИИН или БИН собственника — 12 цифр, как в техпаспорте');
+            data.vehicleOwnerIin = ownerIin || null;
+        }
+        // Своя ли машина, система понимает сама — по ИИН собственника из
+        // техпаспорта, а не со слов водителя (владелец, 31.10.2026). Старое
+        // приложение ИИН собственника не шлёт — тогда, как раньше, отметка.
+        const ownerIin = dto.vehicleOwnerIin !== undefined ? (data.vehicleOwnerIin as string | null) : driver.vehicleOwnerIin;
+        const myIin = data.iin !== undefined ? (data.iin as string | null) : driver.iin;
+        if (ownerIin) data.vehicleIsOwn = !!myIin && ownerIin === myIin;
+        else if (dto.vehicleIsOwn !== undefined) data.vehicleIsOwn = dto.vehicleIsOwn;
         if (dto.idNumber !== undefined) {
             const idNumber = normalizeIdNumber(dto.idNumber);
             if (dto.idNumber.trim() && !idNumber) throw new BadRequestException('Номер удостоверения — девять цифр, как на карточке');

@@ -9,6 +9,7 @@ import { ContractState, DOCUMENTS, DriverProfile, documentPath, exchangeApi, в�
 import { BRAND, FONT } from '@/lib/theme';
 import { Badge, Button, Card, Empty } from '@/components/kit';
 import { ContractText, OpenContractPdf } from '@/components/ParkContract';
+import { OwnerContractCard } from '@/components/OwnerContract';
 
 type Doc = DriverProfile['documents'][number];
 type Tone = 'green' | 'orange' | 'red' | 'gray';
@@ -63,8 +64,9 @@ export default function MyDocuments() {
     const review = REVIEW[me.status];
     const titleOf = (kind: Doc['kind']) => DOCUMENTS.find((d) => d.kind === kind)?.title ?? 'Документ';
     // Обязательные для работы через парк — показываем и те, что ещё не сняты.
+    // Доверенность от хозяина — вместо договора с ним, не в дополнение (31.10.2026).
     const required = me.kind === 'PARK'
-        ? DOCUMENTS.filter((d) => d.kind !== 'POWER_OF_ATTORNEY' || !me.vehicleIsOwn).map((d) => d.kind)
+        ? DOCUMENTS.filter((d) => d.kind !== 'POWER_OF_ATTORNEY').map((d) => d.kind)
         : [];
     const missing = required.filter((kind) => !me.documents.some((d) => d.kind === kind));
 
@@ -121,6 +123,13 @@ export default function MyDocuments() {
                             </View>
                         </Card>
                     ))}
+                </>
+            )}
+
+            {me.kind === 'PARK' && !me.vehicleIsOwn && (
+                <>
+                    <Text style={[styles.section, { color: colors.textTertiary }]}>ДОГОВОР С ХОЗЯИНОМ МАШИНЫ</Text>
+                    <OwnerContractCard onChanged={load} showTitle={false} />
                 </>
             )}
 

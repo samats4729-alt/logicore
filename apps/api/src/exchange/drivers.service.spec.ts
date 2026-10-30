@@ -95,9 +95,14 @@ describe('Биржа: чего не хватает в анкете', () => {
         expect(missingFor({ ...filled, ...withId, kind: 'PARK', parkCompanyId: 'park-1', documents: allDocs, contractSignedAt: new Date() as any })).toEqual([]);
     });
 
-    it('машина не своя — нужна доверенность от владельца', () => {
-        const m = missingFor({ ...filled, ...withId, kind: 'PARK', parkCompanyId: 'park-1', documents: allDocs, contractSignedAt: new Date() as any, vehicleIsOwn: false });
-        expect(m).toEqual(['фото: доверенность от владельца машины']);
+    it('машина не своя — договор с хозяином или доверенность от него (31.10.2026)', () => {
+        const base = { ...filled, ...withId, kind: 'PARK' as const, parkCompanyId: 'park-1', contractSignedAt: new Date() as any, vehicleIsOwn: false };
+        const безДоверенности = allDocs.filter((d: any) => d.kind !== 'POWER_OF_ATTORNEY');
+        expect(missingFor({ ...base, documents: безДоверенности })).toEqual(['договор с хозяином машины или фото доверенности от него']);
+        // Подписанный договор с хозяином — доверенность не нужна.
+        expect(missingFor({ ...base, documents: безДоверенности, vehicleOwnerContracts: [{ id: 'oc-1' }] })).toEqual([]);
+        // Доверенность есть — договор не нужен.
+        expect(missingFor({ ...base, documents: [...безДоверенности, { kind: 'POWER_OF_ATTORNEY' }] as any })).toEqual([]);
     });
 
     it('без согласия на обработку данных анкету не отправить — ни с ИП, ни через парк', () => {
@@ -266,6 +271,19 @@ describe('Биржа: анкета', () => {
         prisma.exchangeDriver.findFirst.mockResolvedValue(null);
         await service.update('u-1', { iin: GOOD_IIN });
         expect(prisma.exchangeDriver.update.mock.calls[0][0].data.birthDate.toISOString().slice(0, 10)).toBe('1990-01-01');
+    });
+
+    it('своя ли машина — система решает сама по ИИН собственника из техпаспорта (31.10.2026)', async () => {
+        const { service, prisma } = build(driverRow({ vehicleOwnerIin: null, contractSignedAt: null }));
+        const data = () => prisma.exchangeDriver.update.mock.calls.at(-1)[0].data;
+        await service.update('u-1', { vehicleOwnerIin: GOOD_IIN });
+        expect(data()).toMatchObject({ vehicleOwnerIin: GOOD_IIN, vehicleIsOwn: true });
+        await service.update('u-1', { vehicleOwnerIin: '850101 300111' });
+        expect(data()).toMatchObject({ vehicleOwnerIin: '850101300111', vehicleIsOwn: false });
+        // ИИН собственника вписан — отметка «моя» из старого приложения его не перебивает.
+        await service.update('u-1', { vehicleOwnerIin: '850101300111', vehicleIsOwn: true });
+        expect(data().vehicleIsOwn).toBe(false);
+        await expect(service.update('u-1', { vehicleOwnerIin: '12345' })).rejects.toThrow(/12 цифр/);
     });
 
     it('удостоверение: номер — девять цифр, просроченное не принимаем, пустое — стираем', async () => {

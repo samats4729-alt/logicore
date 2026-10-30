@@ -304,6 +304,8 @@ export interface ExchangeDriver {
     vehicleBodyType: string | null;
     vehicleCapacityKg: number | null;
     vehicleIsOwn: boolean;
+    /** ИИН или БИН собственника из техпаспорта — по нему сервер решает, своя ли машина (31.10.2026). */
+    vehicleOwnerIin?: string | null;
     contractSignedAt: string | null;
     submittedAt: string | null;
     reviewedAt: string | null;
