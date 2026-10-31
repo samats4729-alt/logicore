@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Skeleton } from 'antd';
+import { Tooltip } from 'antd';
 import {
     AccountingDocumentListItem,
     OrderChainDocumentType,
@@ -10,10 +10,10 @@ import {
     fetchAccountingDocuments,
     fetchIncomingDelivered,
 } from '@/lib/accounting-documents';
-import { Route } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import StatusPill from '@/components/ui/StatusPill';
-import nova from '@/components/nova/nova.module.css';
-import styles from './order-document-chain.module.css';
+import { cn } from '@/lib/utils';
+import card from './order-card.module.css';
 import { toast } from 'sonner';
 
 const money = (value: number) =>
@@ -28,6 +28,8 @@ interface OrderDocumentChainProps {
     creating?: OrderChainDocumentType | null;
     /** Перезагрузка извне — после создания документа или оплаты. */
     reloadKey?: number;
+    /** Предпросмотр акта по текущим данным заявки. */
+    onPreview?: () => void;
 }
 
 const STEP_TITLES: Record<OrderChainDocumentType, string> = {
@@ -36,7 +38,7 @@ const STEP_TITLES: Record<OrderChainDocumentType, string> = {
 };
 
 /**
- * Цепочка документов рейса: заявка → счёт → акт → оплата.
+ * «Счёт и акт заказчику»: счёт → акт → оплата, строками (вариант 5).
  *
  * Отвечает на вопрос бухгалтера «что по этому рейсу уже оформлено, а что
  * нет» — раньше это выяснялось обходом трёх журналов. Оплата показана по
@@ -46,11 +48,10 @@ const STEP_TITLES: Record<OrderChainDocumentType, string> = {
  */
 export default function OrderDocumentChain({
     orderId,
-    orderNumber,
-    orderStatus,
     onCreate,
     creating = null,
     reloadKey = 0,
+    onPreview,
 }: OrderDocumentChainProps) {
     const router = useRouter();
     const [documents, setDocuments] = useState<AccountingDocumentListItem[]>([]);
@@ -103,118 +104,109 @@ export default function OrderDocumentChain({
     const invoice = active('PAYMENT_INVOICE');
     const act = active('SERVICE_ACT');
 
-    const documentStep = (type: OrderChainDocumentType) => {
+    /**
+     * Строка документа: точка, название, номер со статусом и суммой — или
+     * «не выставлен» и «Выставить». Черновик ждёт проведения — оранжевая
+     * точка; проведённый — чёрная.
+     */
+    const documentRow = (type: OrderChainDocumentType) => {
         const document = active(type);
         return (
-            <div className={nova.tile} style={cardStyle}>
-                <div style={stepHeadStyle}>
-                    <span className={nova.tileLabel}>{STEP_TITLES[type]}</span>
-                    {document && <StatusPill status={document.status} />}
-                </div>
+            <div className={card.task}>
+                <span className={cn(card.dot, document ? (document.status === 'DRAFT' ? card.dotNeed : card.dotOk) : card.dotNone)} aria-hidden />
+                <span style={{ fontWeight: 500 }}>{STEP_TITLES[type]}</span>
                 {document ? (
-                    <>
+                    <span>
                         <button
                             type="button"
-                            className={styles.docLink}
+                            className={card.lnk}
+                            style={{ fontSize: 14 }}
                             onClick={() => router.push(accountingDocumentHref({ id: document.id, type }))}
                         >
-                            {document.number}
+                            № {document.number}
                         </button>
-                        <div className={styles.amount}>{money(document.total)}</div>
-                    </>
+                        {' '}
+                        <StatusPill status={document.status} />
+                        <span className={card.muted}> · {money(document.total)}</span>
+                    </span>
                 ) : (
-                    <>
-                        <div className={nova.tileSub}>Не выставлен</div>
+                    <span className={card.muted}>Не выставлен</span>
+                )}
+                <span>
+                    {!document && (
                         <button
                             type="button"
-                            className={nova.action}
-                            style={{ marginTop: 8, height: 28 }}
+                            className={card.lnk}
                             disabled={creating === type}
                             onClick={() => onCreate(type)}
                         >
-                            {creating === type ? 'Создаём…' : 'Создать'}
+                            {creating === type && <Loader2 size={13} className="animate-spin" />}
+                            {creating === type ? 'Создаём…' : 'Выставить'}
                         </button>
-                    </>
-                )}
+                    )}
+                </span>
             </div>
         );
     };
 
-    if (loading) {
-        return (
-            <section className={nova.card}>
-                <div className={nova.cardBody}>
-                    <Skeleton active paragraph={{ rows: 2 }} />
-                </div>
-            </section>
-        );
-    }
-
     return (
-        <section className={nova.card}>
-            <div className={nova.cardHead}>
-                <Route size={14} />
-                <h3 className={nova.cardTitle}>Документы по рейсу</h3>
-            </div>
-            <div className={nova.cardBody}>
-            <div style={chainStyle}>
-                <div className={nova.tile} style={cardStyle}>
-                    <div style={stepHeadStyle}>
-                        <span className={nova.tileLabel}>Рейс</span>
-                        <StatusPill status={orderStatus} />
+        <section className={card.section} aria-label="Счёт и акт заказчику">
+            <h2 className={card.head}>
+                Счёт и акт заказчику
+                {onPreview && (
+                    <span className={card.headRight}>
+                        <Tooltip title="Расчёт по текущим данным заявки — меняется вместе с ней">
+                            <button type="button" className={card.lnk} onClick={onPreview}>Предпросмотр акта</button>
+                        </Tooltip>
+                    </span>
+                )}
+            </h2>
+            {loading ? (
+                <div className="h-24 animate-pulse rounded-lg bg-muted/60" />
+            ) : (
+                <div className={card.list}>
+                    {documentRow('PAYMENT_INVOICE')}
+                    {documentRow('SERVICE_ACT')}
+                    <div className={card.task}>
+                        <span className={cn(card.dot, invoice && invoice.balanceDue <= 0 ? card.dotOk : card.dotNone)} aria-hidden />
+                        <span style={{ fontWeight: 500 }}>Оплата по счёту</span>
+                        {invoice ? (
+                            <span>
+                                {money(invoice.amountPaid)}
+                                <span className={card.muted}>
+                                    {invoice.balanceDue > 0 ? ` · остаток ${money(invoice.balanceDue)}` : ' · счёт закрыт'}
+                                </span>
+                            </span>
+                        ) : (
+                            <span className={card.muted}>Ждёт счёта</span>
+                        )}
+                        <span />
                     </div>
-                    <div className={styles.docNumber}>{orderNumber}</div>
-                </div>
-
-                <span style={arrowStyle}>→</span>
-                {documentStep('PAYMENT_INVOICE')}
-                <span style={arrowStyle}>→</span>
-                {documentStep('SERVICE_ACT')}
-                <span style={arrowStyle}>→</span>
-
-                <div className={nova.tile} style={cardStyle}>
-                    <div style={stepHeadStyle}>
-                        <span className={nova.tileLabel}>Оплата</span>
-                    </div>
-                    {invoice ? (
-                        <>
-                            <div className={styles.amount}>{money(invoice.amountPaid)}</div>
-                            <div className={nova.tileSub}>
-                                {invoice.balanceDue > 0
-                                    ? `остаток ${money(invoice.balanceDue)}`
-                                    : 'счёт закрыт'}
-                            </div>
-                        </>
-                    ) : (
-                        <div className={nova.tileSub}>Ждёт счёта</div>
-                    )}
-                </div>
-            </div>
-            {fromCarrier.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                    <div className={nova.tileLabel} style={{ marginBottom: 6 }}>От перевозчика</div>
                     {fromCarrier.map((d) => (
-                        <div key={d.id} style={carrierRowStyle}>
-                            <button
-                                type="button"
-                                className={styles.docLink}
-                                onClick={() => router.push(`/company/accounting/invoices/${d.id}`)}
-                            >
-                                {d.type === 'SERVICE_ACT' ? 'Акт' : 'Счёт'} № {d.number}
-                            </button>
-                            <span className={nova.tileSub} style={{ flex: 1 }}>{d.from}</span>
-                            <span className={nova.tileSub}>{d.note}</span>
-                            <span className={styles.amount} style={{ fontSize: 14 }}>{money(d.total)}</span>
+                        <div key={d.id} className={card.task}>
+                            <span aria-hidden />
+                            <span className={card.muted}>От перевозчика</span>
+                            <span>
+                                <button
+                                    type="button"
+                                    className={card.lnk}
+                                    style={{ fontSize: 14 }}
+                                    onClick={() => router.push(`/company/accounting/invoices/${d.id}`)}
+                                >
+                                    {d.type === 'SERVICE_ACT' ? 'Акт' : 'Счёт'} № {d.number}
+                                </button>
+                                <span className={card.muted}>
+                                    {d.from ? ` · ${d.from}` : ''} · {d.note}
+                                </span>
+                            </span>
+                            <span className={card.n}>{money(d.total)}</span>
                         </div>
                     ))}
                 </div>
             )}
             {(invoice?.status === 'DRAFT' || act?.status === 'DRAFT') && (
-                <div className={nova.itemDesc} style={{ marginTop: 10, whiteSpace: 'normal' }}>
-                    Черновик не проведён — контрагенту такой документ не отдан.
-                </div>
+                <p className={card.note}>Черновик не проведён — контрагенту такой документ не отдан.</p>
             )}
-            </div>
         </section>
     );
 }
@@ -228,37 +220,3 @@ interface CarrierDocument {
     from: string | null;
     note: string;
 }
-
-const carrierRowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 12,
-    padding: '6px 0',
-    borderTop: '1px solid var(--nova-border)',
-};
-
-const chainStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'stretch',
-    gap: 8,
-    flexWrap: 'wrap',
-};
-
-const cardStyle: React.CSSProperties = {
-    padding: 12,
-    minWidth: 168,
-    flex: '1 1 168px',
-};
-
-const stepHeadStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 6,
-};
-
-const arrowStyle: React.CSSProperties = {
-    alignSelf: 'center',
-    color: 'var(--nova-fg-3)',
-};

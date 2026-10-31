@@ -136,7 +136,8 @@ test.describe('Общая база водителей', () => {
         test.skip(!завершённый, 'на стенде нет завершённого рейса с водителем');
 
         await page.goto(`/company/orders/${завершённый.id}`);
-        await expect(page.getByText('Водитель и машина')).toBeVisible();
+        // Водитель — первой колонкой панели над вкладками (вариант 5, 31.10.2026).
+        await expect(page.getByRole('region', { name: 'Водитель, стороны и деньги рейса' })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Заменить водителя' })).toHaveCount(0);
     });
 

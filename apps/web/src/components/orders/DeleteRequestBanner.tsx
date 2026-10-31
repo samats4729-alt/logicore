@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { Clock, Loader2, Trash2, XCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import card from './order-card.module.css';
 
 type Named = { id: string; name: string };
 export type DeleteRequest = {
@@ -81,11 +82,11 @@ export default function DeleteRequestBanner({ orderId, refreshKey }: { orderId: 
 
     if (request.declined) {
         return (
-            <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-solid border-border bg-muted/50 px-4 py-3 text-[13px]">
-                <XCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                    <div className="font-semibold">Запрос на удаление заявки отклонён</div>
-                    <div className="text-muted-foreground">
+            <div className={card.ask} role="status">
+                <span className={`${card.dot} ${card.dotNone}`} aria-hidden />
+                <div className="min-w-0">
+                    <b>Запрос на удаление заявки отклонён</b>
+                    <div className={card.muted} style={{ fontSize: 13 }}>
                         {[
                             request.declined.by.name,
                             request.declined.reason ? `Причина: ${request.declined.reason}` : '',
@@ -100,13 +101,15 @@ export default function DeleteRequestBanner({ orderId, refreshKey }: { orderId: 
 
     return (
         <>
-            <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-solid border-amber-300 bg-amber-50 px-4 py-3 text-[13px] dark:border-amber-900 dark:bg-amber-950/40">
-                {request.mine ? <Clock className="h-4 w-4 shrink-0 text-amber-700" /> : <Trash2 className="h-4 w-4 shrink-0 text-amber-700" />}
-                <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-amber-900 dark:text-amber-200">
+            {/* Ждёт решения этой стороны — оранжевая точка, как у всего,
+                что нужно сделать; ждём другую сторону — пустая. */}
+            <div className={`${card.ask} ${request.canAnswer ? card.askNeed : ''}`} role={request.canAnswer ? 'alert' : 'status'}>
+                <span className={`${card.dot} ${request.canAnswer ? card.dotNeed : card.dotNone}`} aria-hidden />
+                <div className="min-w-0">
+                    <b>
                         {request.mine ? 'Запрос на удаление заявки отправлен' : `Запрос на удаление заявки от ${request.requestedBy.name}`}
-                    </div>
-                    <div className="text-amber-900/80 dark:text-amber-200/80">
+                    </b>
+                    <div className={card.muted} style={{ fontSize: 13 }}>
                         {[
                             request.mine || !request.canAnswer ? `Ожидается согласие: ${names(request.waitingFor)}` : '',
                             request.approved.length > 0 ? `Согласие получено: ${names(request.approved)}` : '',
@@ -116,7 +119,7 @@ export default function DeleteRequestBanner({ orderId, refreshKey }: { orderId: 
                     </div>
                 </div>
                 {request.canAnswer && (
-                    <div className="flex gap-2">
+                    <div className={card.askActs}>
                         <Button variant="destructive" size="sm" disabled={busy} onClick={() => run('approve')}>
                             {busy && <Loader2 className="h-4 w-4 animate-spin" />} Подтвердить удаление
                         </Button>
