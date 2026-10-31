@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { ORDER_STATUS_LABELS } from '@/lib/vocabulary';
-import { STATUS_PILL } from '@/components/ui/StatusPill';
 import { cn } from '@/lib/utils';
+import card from './order-card.module.css';
 
 /**
  * История рейса: кто что сделал и когда.
@@ -16,7 +16,10 @@ import { cn } from '@/lib/utils';
  *
  * Плотно намеренно: строка на событие. История — то, что просматривают
  * глазами сверху вниз в поисках одной записи, и разгонять её карточками
- * значит заставлять человека листать.
+ * значит заставлять человека листать. По дням (вариант 5, 31.10.2026):
+ * дата один раз над своими событиями, в строке — только время. Смена
+ * статуса — жирным и чёрной точкой, остальное — серой: цветные точки
+ * пестрили и ничего не различали.
  */
 
 type Entry =
@@ -105,41 +108,30 @@ export default function OrderHistory({ orderId }: { orderId: string }) {
     }
 
     return (
-        <div className="divide-y divide-border">
+        <div className={card.list} style={{ paddingTop: 4 }}>
             {items.map((entry, i) => {
                 const time = dayjs(entry.at);
                 const isStatus = entry.kind === 'STATUS';
-                const pill = isStatus ? STATUS_PILL[entry.status] : null;
+                const day = time.format('DD.MM.YYYY');
+                const newDay = i === 0 || dayjs(items[i - 1].at).format('DD.MM.YYYY') !== day;
+                const extra = isStatus ? entry.comment : actionDetails(entry);
 
                 return (
-                    <div key={i} className="flex items-baseline gap-3 py-2 text-[13px]">
-                        <span className="w-[104px] shrink-0 tabular-nums text-muted-foreground">
-                            {time.format('DD.MM.YY HH:mm')}
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                            {isStatus ? (
-                                <span
-                                    className="mr-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium"
-                                    style={pill ? { background: pill.bg, color: pill.fg } : undefined}
-                                >
-                                    {ORDER_STATUS_LABELS[entry.status] || entry.status}
-                                </span>
-                            ) : (
-                                <span className="text-foreground">{actionTitle(entry)}</span>
-                            )}
-
-                            {(() => {
-                                const extra = isStatus ? entry.comment : actionDetails(entry);
-                                return extra ? (
-                                    <span className="text-muted-foreground"> — {extra}</span>
-                                ) : null;
-                            })()}
-                        </span>
-
-                        <span className={cn('shrink-0 text-right text-muted-foreground', !entry.userName && 'italic')}>
-                            {entry.userName || 'система'}
-                        </span>
+                    <div key={i}>
+                        {newDay && <div className={card.day} style={i === 0 ? { marginTop: 4 } : undefined}>{day}</div>}
+                        <div className={card.event}>
+                            <span className={card.eventTime}>{time.format('HH:mm')}</span>
+                            <span className={cn(card.eventMark, isStatus && card.eventMarkStatus)} aria-hidden><span /></span>
+                            <span className="min-w-0">
+                                {isStatus
+                                    ? <b>{ORDER_STATUS_LABELS[entry.status] || entry.status}</b>
+                                    : actionTitle(entry)}
+                                {extra ? <span className={card.muted}> — {extra}</span> : null}
+                            </span>
+                            <span className={cn(card.eventWho, !entry.userName && card.eventWhoSystem)}>
+                                {entry.userName || 'система'}
+                            </span>
+                        </div>
                     </div>
                 );
             })}

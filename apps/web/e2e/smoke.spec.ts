@@ -121,7 +121,7 @@ test('карточка рейса открывается и предлагает
     await firstRow.locator('button').last().click();
 
     await page.waitForURL(/\/company\/orders\/[^/]+$/);
-    // «Рейс» — карточка с маршрутом и грузом, «Стороны сделки» — с кем
-    // работаем. Обе появляются только когда заявка загрузилась.
-    await expect(page.getByText(/Стороны сделки|Деньги рейса/).first()).toBeVisible();
+    // Панель «водитель · стороны · деньги» над вкладками появляется только
+    // когда заявка загрузилась.
+    await expect(page.getByText('Деньги рейса').first()).toBeVisible();
 });

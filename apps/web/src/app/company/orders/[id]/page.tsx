@@ -2,14 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Typography, Tag, Card, Row, Col, Table, Modal, Form, Input, InputNumber, Select, Space, Divider, Popconfirm, Upload, Checkbox, Radio, Tooltip, Alert, theme, AutoComplete, Dropdown } from 'antd';
+import { Modal, Form, Input, Popconfirm, theme, Dropdown } from 'antd';
 import {
-    WalletOutlined, ClockCircleOutlined, SwapOutlined, CarOutlined, ExclamationCircleOutlined, 
-} from '@ant-design/icons';
-import {
-    ArrowLeft, ArrowLeftRight, Banknote, CheckCircle2, ChevronDown, Copy, FileText,
-    History, Loader2, Mail, MoreHorizontal, Pencil, Plus, Receipt, Trash2, Wallet,
-    XCircle,
+    ArrowLeft, ArrowLeftRight, CheckCircle2, ChevronDown, Copy, FileText,
+    Loader2, Mail, MoreHorizontal, Pencil, Trash2, XCircle,
 } from 'lucide-react';
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -26,8 +22,6 @@ import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/auth';
 import { prepareCompanyOptions, resolveCompanyName } from '@/lib/company-helper';
 
-const { Title, Text } = Typography;
-const { TextArea } = Input;
 import AssignDriverModal from '@/components/AssignDriverModal';
 import { заменаНаРейсе, type ЗаменаНаРейсе } from '@/lib/driver-pool';
 import QuickCreateLocationModal from '@/components/ui/QuickCreateLocationModal';
@@ -36,7 +30,8 @@ import StatusPill from '@/components/ui/StatusPill';
 import OrderDocuments from '@/components/orders/OrderDocuments';
 import PillTabs from '@/components/ui/PillTabs';
 import OrderDetails, { OrderSideCards } from '@/components/orders/OrderDetails';
-import { OrderStageBar } from '@/components/orders/OrderStageBar';
+import { OrderStageText } from '@/components/orders/OrderStageBar';
+import card from '@/components/orders/order-card.module.css';
 import DeleteOrderDialog from '@/components/orders/DeleteOrderDialog';
 import DeleteRequestBanner from '@/components/orders/DeleteRequestBanner';
 import { NO_ATTACHMENTS, type PoaAttachments } from '@/components/orders/PoaAttachmentsPicker';
@@ -44,7 +39,8 @@ import nova from '@/components/nova/nova.module.css';
 import OrderFinanceModals from '@/components/orders/OrderFinanceModals';
 import OrderSettlementsCard from '@/components/orders/OrderSettlementsCard';
 import OrderOriginalsCard from '@/components/orders/OrderOriginalsCard';
-import { ParkFinanceTiles, ParkOrderCalcCard, ParkTripGivenCard, useParkOrderCalc } from '@/components/park/ParkOrderCalc';
+import { ParkOrderCalcCard, ParkPriceSplit, ParkTripGivenCard, useParkOrderCalc } from '@/components/park/ParkOrderCalc';
+import { OrderFinanceFigures, OrderMoneyList } from '@/components/orders/OrderFinance';
 import { TripFuelDialog } from '@/components/park/TripFuelDialog';
 import { canAccounting } from '@/lib/permissions';
 import type { OrderSettlements } from '@/lib/settlement-terms';
@@ -1427,146 +1423,6 @@ export default function OrderDetailPage() {
     // вовсе, поэтому нормализуем к списку и не полагаемся на форму записи.
     const palletLines: PalletLine[] = Array.isArray(order.pallets) ? order.pallets : [];
 
-    const paymentColumns = [
-        { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, render: (d: string) => dayjs(d).format('DD.MM.YY') },
-        {
-            title: 'Направление',
-            dataIndex: 'direction',
-            key: 'direction',
-            width: 150,
-            render: (dir: string, r: any) => {
-                /**
-                 * Записанные не в ту сторону платежи видно прямо в списке.
-                 *
-                 * Новые такими уже не заводятся — сторону проверяет сервер.
-                 * Но те, что успели записать раньше, лежат молча: строка
-                 * есть, сумма верная, а оплата не зачтена. Найти их иначе
-                 * можно только сверкой глазами.
-                 */
-                const wrongSide = r.counterpartyId
-                    && executorCounterpartyId
-                    && r.counterpartyId === executorCounterpartyId
-                    && dir === 'IN'
-                    && !r.refundOfId;
-                return (
-                    <>
-                        {dir === 'IN' ? (
-                            <span className={`${nova.chip} ${nova.valuePos}`}>Поступление</span>
-                        ) : (
-                            <span className={`${nova.chip} ${nova.valueNeg}`}>Расход</span>
-                        )}
-                        {wrongSide && (
-                            <Tooltip title="Этот контрагент по заявке — перевозчик, платим ему мы. Скорее всего, направление должно быть «Расход» — исправьте карандашом, удалять платёж не нужно.">
-                                <span className={`${nova.chip} ${nova.valueNeg}`} style={{ marginLeft: 6 }}>
-                                    не та сторона
-                                </span>
-                            </Tooltip>
-                        )}
-                    </>
-                );
-            },
-        },
-        {
-            title: 'Сумма ₸',
-            dataIndex: 'amount',
-            key: 'amount',
-            width: 150,
-            align: 'right' as const,
-            render: (a: number, r: any) => (
-                <>
-                    <Text strong style={{ color: r.direction === 'IN' ? '#389e0d' : '#cf1322' }}>
-                        {fmt(a)}
-                    </Text>
-                    {/* Доля общего платежа: по этой заявке пришло столько, а
-                        сам перевод больше. Без подписи цифра выглядит как
-                        отдельный платёж, и итог с выпиской не сходится. */}
-                    {r.isShare && (
-                        <div style={{ fontSize: 11, color: 'var(--nova-fg-3)', lineHeight: 1.3 }}>
-                            часть платежа на {fmt(r.paymentTotal)}
-                        </div>
-                    )}
-                </>
-            ),
-        },
-        {
-            title: 'Способ',
-            dataIndex: 'method',
-            key: 'method',
-            width: 100,
-            render: (m: string) => {
-                const labels: Record<string, string> = {
-                    CASH: 'Наличные',
-                    BANK: 'Банк',
-                    CARD: 'Карта',
-                    OTHER: 'Прочее',
-                };
-                return labels[m] || m;
-            },
-        },
-        {
-            title: 'Счёт / Касса',
-            dataIndex: 'account',
-            key: 'account',
-            width: 140,
-            render: (_: any, r: any) => r.account?.name || (r.method === 'CASH' ? 'Наличные' : 'Расчетный счёт'),
-        },
-        {
-            title: 'Статья',
-            dataIndex: 'category',
-            key: 'category',
-            width: 140,
-            render: (_: any, r: any) => r.category?.name || '—',
-        },
-        {
-            title: 'Контрагент',
-            dataIndex: 'counterparty',
-            key: 'counterparty',
-            width: 140,
-            render: (_: any, r: any) => r.counterparty?.name || '—',
-        },
-        {
-            title: 'Примечание',
-            dataIndex: 'note',
-            key: 'note',
-            ellipsis: true,
-        },
-        {
-            title: '',
-            key: 'actions',
-            width: 100,
-            render: (_: any, r: any) => {
-                if (!canEditFinance) return null;
-                // Доля правится и удаляется только вместе со всем платежом:
-                // он закрывает и другие рейсы, и трогать его из одной заявки
-                // значило бы менять чужие расчёты вслепую.
-                if (r.isShare) {
-                    return (
-                        <Tooltip title="Это часть общего платежа по нескольким заявкам. Правится он целиком — в разделе «Деньги».">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7"
-                                onClick={() => router.push(r.direction === 'IN'
-                                    ? '/company/accounting/cash-in'
-                                    : '/company/accounting/cash-out')}
-                            >
-                                Открыть платёж
-                            </Button>
-                        </Tooltip>
-                    );
-                }
-                return (
-                    <Space size={4}>
-                        <Button variant="outline" size="icon" aria-label="Изменить платёж" className="h-7 w-7" onClick={() => handleEditPaymentClick(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Popconfirm title="Удалить платёж?" onConfirm={() => handleDeletePayment(r.id)} okText="Да" cancelText="Нет">
-                            <Button variant="outline" size="icon" aria-label="Удалить платёж" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
-                        </Popconfirm>
-                    </Space>
-                );
-            },
-        },
-    ];
-
     const hasDriver = !!(order.assignedDriverName || order.driverId || order.driver);
     const driverName = order.assignedDriverName || (order.driver ? `${order.driver.lastName} ${order.driver.firstName} ${order.driver.middleName || ''}`.trim() : null);
     const driverPhone = order.assignedDriverPhone || order.driver?.phone;
@@ -1594,26 +1450,6 @@ export default function OrderDetailPage() {
 
     const pickupPt = order.routePoints?.find((p: any) => p.pointType === 'PICKUP');
 
-    const incomeColumns = [
-        { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{dayjs(d).format('DD.MM.YY')}</Text> },
-        { title: 'Категория', dataIndex: 'category', key: 'cat', width: 140, render: (c: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{incomeCategories.find(x => x.value === c)?.label || c}</Text> },
-        { title: 'Описание', dataIndex: 'description', key: 'desc', ellipsis: true, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{d}</Text> },
-        { title: 'Сумма ₸', dataIndex: 'amount', key: 'amount', width: 120, align: 'right' as const, render: (a: number, r: any) => <Text delete={r.isDeleted} strong style={{ color: r.isDeleted ? 'var(--lc-text-ter)' : '#389e0d' }}>{fmt(a)}</Text> },
-        { title: '', key: 'actions', width: 50, render: (_: any, r: any) => (
-            !r.isDeleted && <Popconfirm title="Удалить?" onConfirm={() => handleDeleteIncome(r.id)} okText="Да" cancelText="Нет"><Button variant="outline" size="icon" aria-label="Удалить поступление" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></Popconfirm>
-        )},
-    ];
-
-    const expenseColumns = [
-        { title: 'Дата', dataIndex: 'date', key: 'date', width: 100, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{dayjs(d).format('DD.MM.YY')}</Text> },
-        { title: 'Категория', dataIndex: 'category', key: 'cat', width: 140, render: (c: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{expenseCategories.find(x => x.value === c)?.label || c}</Text> },
-        { title: 'Описание', dataIndex: 'description', key: 'desc', ellipsis: true, render: (d: string, r: any) => <Text delete={r.isDeleted} type={r.isDeleted ? "secondary" : undefined}>{d}</Text> },
-        { title: 'Сумма ₸', dataIndex: 'amount', key: 'amount', width: 120, align: 'right' as const, render: (a: number, r: any) => <Text delete={r.isDeleted} strong style={{ color: r.isDeleted ? 'var(--lc-text-ter)' : '#cf1322' }}>{fmt(a)}</Text> },
-        { title: '', key: 'actions', width: 50, render: (_: any, r: any) => (
-            !r.isDeleted && <Popconfirm title="Удалить?" onConfirm={() => handleDeleteExpense(r.id)} okText="Да" cancelText="Нет"><Button variant="outline" size="icon" aria-label="Удалить расход" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></Popconfirm>
-        )},
-    ];
-
     return (
         <div className={`${nova.page} ${nova.pageWide}`}>
             {/* =================== ШАПКА ===================
@@ -1638,18 +1474,22 @@ export default function OrderDetailPage() {
                         <div className="flex flex-wrap items-center gap-2.5">
                             <h1 className={nova.title}>Заявка {order.orderNumber}</h1>
                             <StatusPill status={order.status} />
+                            <OrderStageText status={order.status} />
                             {isEditing && <span className={`${nova.chip} ${nova.chipWarn}`}>Режим редактирования</span>}
                         </div>
+                        {/* Заказчик и менеджер — в панели под шапкой, здесь
+                            только куда, когда и с какого дня рейс в системе. */}
                         <p className={nova.subtitle} style={{ maxWidth: 'none' }}>
                             {[
-                                order.customerCompanyId || order.customerCompany
-                                    ? resolveCompanyName(order.customerCompanyId, partners, order.customerCompany?.name)
-                                    : null,
                                 (order.routePoints || []).length
                                     ? `${order.routePoints[0]?.location?.city || order.routePoints[0]?.location?.name || '—'} → ${order.routePoints[order.routePoints.length - 1]?.location?.city || order.routePoints[order.routePoints.length - 1]?.location?.name || '—'}`
                                     : null,
-                                `создана ${dayjs(order.createdAt).format('DD.MM.YYYY в HH:mm')}`
-                                    + (order.responsibleManager ? `, менеджер ${order.responsibleManager.firstName || ''} ${order.responsibleManager.lastName || ''}`.trimEnd() : ''),
+                                [order.routePoints?.[0]?.expectedDate, order.routePoints?.[order.routePoints.length - 1]?.expectedDate]
+                                    .filter(Boolean)
+                                    .map((d: string) => dayjs(d).format('DD.MM'))
+                                    .filter((d: string, i: number, all: string[]) => all.indexOf(d) === i)
+                                    .join('–') || null,
+                                `создана ${dayjs(order.createdAt).format('DD.MM.YYYY в HH:mm')}`,
                             ].filter(Boolean).join(' · ')}
                         </p>
                     </div>
@@ -1741,9 +1581,6 @@ export default function OrderDetailPage() {
                 )}
             </div>
 
-            {/* Где рейс сейчас — полосой этапов, как в макете. */}
-            <OrderStageBar status={order.status} />
-
             <DeleteOrderDialog
                 orderId={orderId}
                 orderNumber={order.orderNumber}
@@ -1770,92 +1607,94 @@ export default function OrderDetailPage() {
             <DeleteRequestBanner orderId={orderId} refreshKey={deleteRequestTick} />
 
             {/* =================== PENDING COMPLETION BANNER =================== */}
+            {/* Решение за вами — одной строкой с оранжевой точкой, как всё,
+                что ждёт действия (вариант 5), а не жёлтой плашкой на всю ширину. */}
             {hasPendingCompletion && isCompletionApprover && (
-                <Alert
-                    type="warning"
-                    showIcon
-                    icon={<ExclamationCircleOutlined />}
-                    style={{ marginBottom: 20, borderRadius: 8 }}
-                    message={
-                        <span style={{ fontWeight: 600 }}>
-                            Компания «{getCompanyNameById(order.pendingStatusById)}» запросила завершение рейса
+                <div className={`${card.ask} ${card.askNeed}`} role="alert">
+                    <span className={`${card.dot} ${card.dotNeed}`} aria-hidden />
+                    <span>
+                        <b>Компания «{getCompanyNameById(order.pendingStatusById)}» запросила завершение рейса</b>
+                        <span className={card.muted}>
+                            {order.pendingStatusAt ? ` · ${dayjs(order.pendingStatusAt).format('DD.MM.YYYY в HH:mm')}` : ''}
+                            {' · подтвердите или отклоните'}
                         </span>
-                    }
-                    description={
-                        <div style={{ marginTop: 8 }}>
-                            <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                                Запрос создан {order.pendingStatusAt ? dayjs(order.pendingStatusAt).format('DD.MM.YYYY в HH:mm') : ''}.
-                                Подтвердите или отклоните завершение рейса.
-                            </Text>
-                            <Space>
-                                <Button
-                                    disabled={completionActionLoading}
-                                    onClick={handleConfirmCompletion}
-                                >
-                                    {completionActionLoading
-                                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                                        : <CheckCircle2 className="h-4 w-4" />}
-                                    Подтвердить завершение
-                                </Button>
-                                <Button
-                                    variant="destructive"
-                                    disabled={completionActionLoading}
-                                    onClick={() => setRejectReasonModalOpen(true)}
-                                >
-                                    {completionActionLoading
-                                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                                        : <XCircle className="h-4 w-4" />}
-                                    Отклонить
-                                </Button>
-                            </Space>
-                        </div>
-                    }
-                />
+                    </span>
+                    <span className={card.askActs}>
+                        <Button size="sm" disabled={completionActionLoading} onClick={handleConfirmCompletion}>
+                            {completionActionLoading
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <CheckCircle2 className="h-4 w-4" />}
+                            Подтвердить завершение
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive"
+                            disabled={completionActionLoading}
+                            onClick={() => setRejectReasonModalOpen(true)}
+                        >
+                            {completionActionLoading
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <XCircle className="h-4 w-4" />}
+                            Отклонить
+                        </Button>
+                    </span>
+                </div>
             )}
             {hasPendingCompletion && isCompletionInitiator && (
-                <Alert
-                    type="info"
-                    showIcon
-                    icon={<ClockCircleOutlined />}
-                    style={{ marginBottom: 20, borderRadius: 8 }}
-                    message={
-                        <span style={{ fontWeight: 600 }}>
-                            Ожидается подтверждение завершения рейса
+                <div className={card.ask} role="status">
+                    <span className={`${card.dot} ${card.dotNone}`} aria-hidden />
+                    <span>
+                        <b>Ожидается подтверждение завершения рейса</b>
+                        <span className={card.muted}>
+                            {' · запрос отправлен '}
+                            {order.pendingStatusAt ? dayjs(order.pendingStatusAt).format('DD.MM.YYYY в HH:mm') : ''}
+                            {', ждём другую сторону'}
                         </span>
-                    }
-                    description={
-                        <div style={{ marginTop: 8 }}>
-                            <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                                Запрос на завершение отправлен {order.pendingStatusAt ? dayjs(order.pendingStatusAt).format('DD.MM.YYYY в HH:mm') : ''}.
-                                Ожидаем подтверждения от другой стороны.
-                            </Text>
-                            <Popconfirm
-                                title="Отменить запрос на завершение?"
-                                onConfirm={handleCancelCompletionRequest}
-                                okText="Да, отменить"
-                                cancelText="Нет"
-                            >
-                                <Button
-                                    variant="outline"
-                                    disabled={completionActionLoading}
-                                >
-                                    {completionActionLoading
-                                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                                        : <XCircle className="h-4 w-4" />}
-                                    Отменить запрос
-                                </Button>
-                            </Popconfirm>
-                        </div>
-                    }
+                    </span>
+                    <span className={card.askActs}>
+                        <Popconfirm
+                            title="Отменить запрос на завершение?"
+                            onConfirm={handleCancelCompletionRequest}
+                            okText="Да, отменить"
+                            cancelText="Нет"
+                        >
+                            <Button size="sm" variant="outline" disabled={completionActionLoading}>
+                                {completionActionLoading
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : <XCircle className="h-4 w-4" />}
+                                Отменить запрос
+                            </Button>
+                        </Popconfirm>
+                    </span>
+                </div>
+            )}
+
+            {/* Водитель, стороны и деньги — одной панелью над вкладками, видна
+                с любой вкладки (вариант 5). Раньше это была колонка справа.
+                В режиме правки панель не нужна — форма на всю ширину. */}
+            {!isEditing && (
+                <OrderSideCards
+                    order={order}
+                    partners={partners}
+                    user={user}
+                    fmt={fmt}
+                    hasDriver={hasDriver}
+                    driverName={driverName}
+                    driverPhone={driverPhone}
+                    driverPlate={driverPlate}
+                    driverTrailer={driverTrailer}
+                    driverLinkLoading={driverLinkLoading}
+                    documentsCount={contracts.length + poaDocuments.length}
+                    openDriverLink={openDriverLink}
+                    openAssignModal={openAssignModal}
+                    openTransferModal={openTransferModal}
+                    onOpenDocuments={() => setActiveTab('documents')}
+                    parkCalc={parkCalc}
                 />
             )}
 
             {/* =================== MAIN TABS =================== */}
-            {/* Слева вкладки, справа — водитель, деньги и стороны сделки рядом
-                с любой вкладкой (по макету). В режиме правки форма — на всю
-                ширину: ей колонка справа только мешает. */}
-            <div className={isEditing ? undefined : 'grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]'}>
-            <div className="min-w-0">
             <PillTabs
                 active={activeTab}
                 onChange={setActiveTab}
@@ -1918,403 +1757,211 @@ export default function OrderDetailPage() {
                     mayAccount && {
                         key: 'finances',
                         label: 'Финансы',
-                        children: (
-                            <div>
-                                {/* Первое на вкладке — условия расчётов: с них
-                                    начинается и счёт, и печать на договоре. */}
+                        children: (() => {
+                            const isClient = order.customerCompanyId === user?.companyId;
+                            // Расчёт парка приходит только экспедитору или
+                            // перевозчику рейса — даже если заказчиком в
+                            // заявке стоит сам парк.
+                            const asClient = isClient && !parkCalc;
+                            const isExecutorPaid = order.subForwarderId ? order.isSubForwarderPaid : order.isDriverPaid;
+                            const executorDebt = summary.executorDebt !== undefined
+                                ? summary.executorDebt
+                                : (order.subForwarderId
+                                    ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
+                                    : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses));
+
+                            /**
+                             * Всё, что подписано знаком тенге, показывается в тенге.
+                             *
+                             * Ставка заказчика может быть в рублях, и «100 000 ₸» рядом с
+                             * тенговыми долгами читается как сто тысяч тенге — а это шестьсот.
+                             * Поэтому в суммах стоит пересчёт, а исходная сумма с её валютой
+                             * показана выше отдельной строкой.
+                             */
+                            const customerGross = summary.currency && summary.currency !== 'KZT'
+                                ? (summary.customerPriceBase ?? 0)
+                                : summary.customerPrice;
+                            const executorGross = summary.driverCostCurrency && summary.driverCostCurrency !== 'KZT'
+                                ? (summary.driverCostBase ?? 0)
+                                : summary.executorCost;
+                            const inCurrency = (summary.currency && summary.currency !== 'KZT')
+                                || (summary.driverCostCurrency && summary.driverCostCurrency !== 'KZT');
+                            // Счёт и акт выставляем мы — когда заказчик в рейсе другая компания.
+                            const weInvoice = order.customerCompanyId !== user?.companyId && !!order.customerCompanyId;
+                            const terms = (...xs: (string | null | undefined)[]) => xs.filter(Boolean) as string[];
+
+                            const money = {
+                                customer: {
+                                    // Заказчику строка про того, кому платит он сам.
+                                    title: asClient ? 'Экспедитор' : undefined,
+                                    name: asClient
+                                        ? resolveCompanyName(order.forwarderId, partners, order.forwarder?.name)
+                                        : resolveCompanyName(order.customerCompanyId, partners, order.customerCompany?.name),
+                                    gross: customerGross || 0,
+                                    net: summary.revenueNet || 0,
+                                    vat: summary.revenueVat || 0,
+                                    vatRate: order.vatRate || 0,
+                                    debt: summary.customerDebt || 0,
+                                    paid: !!order.isCustomerPaid,
+                                    sign: (asClient ? 'Кт' : 'Дт') as 'Дт' | 'Кт',
+                                    conditions: terms(order.customerPaymentCondition, order.customerPaymentForm),
+                                    onPay: canEditFinance && !asClient ? () => handleAddPaymentClick('IN') : undefined,
+                                },
+                                // У парка исполнитель — свой водитель: вместо строки
+                                // перевозчика ниже — расчёт водителя и выдачи.
+                                carrier: asClient || parkCalc ? undefined : {
+                                    name: order.subForwarder?.name || order.partner?.name || driverName || undefined,
+                                    gross: executorGross || 0,
+                                    net: summary.executorCostNet || 0,
+                                    vat: summary.executorCostVat || 0,
+                                    vatRate: order.executorVatRate || 0,
+                                    debt: executorDebt || 0,
+                                    paid: !!isExecutorPaid,
+                                    sign: 'Кт' as const,
+                                    conditions: terms(order.driverPaymentCondition, order.driverPaymentForm),
+                                    onPay: canEditFinance && executorCounterpartyId ? () => handleAddPaymentClick('OUT') : undefined,
+                                },
+                            };
+
+                            const settlementsCard = (
                                 <OrderSettlementsCard
                                     orderId={orderId}
                                     settlements={settlements}
                                     mayAccount={mayAccount}
                                     onChanged={() => { fetchSettlements(); fetchData(); }}
+                                    money={money}
+                                    title={parkCalc ? 'Расчёт с заказчиком' : 'Расчёты по рейсу'}
                                 />
-                                {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
-                                    <div className={nova.heroActions} style={{ justifyContent: 'flex-end', marginBottom: 12 }}>
-                                        <button
-                                            type="button"
-                                            className={`${nova.action} ${nova.actionPrimary}`}
-                                            disabled={invoiceLoading}
-                                            onClick={() => openOrCreateOrderDocument('PAYMENT_INVOICE')}
-                                        >
-                                            {invoiceLoading
-                                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                : <FileText className="h-3.5 w-3.5" />}
-                                            Выставить счёт
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className={nova.action}
-                                            disabled={actLoading}
-                                            onClick={() => openOrCreateOrderDocument('SERVICE_ACT')}
-                                        >
-                                            {actLoading
-                                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                : <FileText className="h-3.5 w-3.5" />}
-                                            Акт выполненных работ
-                                        </button>
-                                        <Tooltip title="Расчёт по текущим данным заявки — меняется вместе с ней">
-                                            <button
-                                                type="button"
-                                                className={nova.action}
-                                                onClick={() => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank')}
-                                            >
-                                                Предпросмотр
-                                            </button>
-                                        </Tooltip>
-                                    </div>
-                                )}
-                                {order.customerCompanyId !== user?.companyId && order.customerCompanyId && (
-                                    <OrderDocumentChain
-                                        orderId={orderId}
-                                        orderNumber={order.orderNumber}
-                                        orderStatus={order.status}
-                                        onCreate={openOrCreateOrderDocument}
-                                        creating={
-                                            invoiceLoading
-                                                ? 'PAYMENT_INVOICE'
-                                                : actLoading
-                                                    ? 'SERVICE_ACT'
-                                                    : null
-                                        }
-                                        reloadKey={documentChainKey}
-                                    />
-                                )}
-                                {/* Условия и формы оплаты */}
-                                {(order.customerPaymentCondition || order.customerPaymentForm || order.driverPaymentCondition || order.driverPaymentForm) && (
-                                    <section className={nova.card}>
-                                        <div className={nova.cardBody}>
-                                            <Row gutter={[16, 12]}>
-                                                {(order.customerPaymentCondition || order.customerPaymentForm) && (
-                                                    <Col xs={24} md={12}>
-                                                        <div className={nova.tileLabel} style={{ marginBottom: 6 }}>Оплата от заказчика</div>
-                                                        <Space size={6} wrap>
-                                                            {order.customerPaymentCondition && <span className={nova.chip}>{order.customerPaymentCondition}</span>}
-                                                            {order.customerPaymentForm && <span className={nova.chip}>{order.customerPaymentForm}</span>}
-                                                        </Space>
-                                                    </Col>
+                            );
+
+                            return (
+                                <div className={card.stack}>
+                                    {/* Суммы рейса в валюте: показываем и валюту, и пересчёт.
+                                        Без этого «100 000» рядом с тенговыми цифрами читается
+                                        как тенге, а это рубли. */}
+                                    {inCurrency ? (
+                                        <div className={card.ask} style={{ marginBottom: 0 }} role="note">
+                                            <span className={`${card.dot} ${card.dotNone}`} aria-hidden />
+                                            <span style={{ fontSize: 13 }}>
+                                                <b>Рейс в валюте</b>
+                                                {summary.currency !== 'KZT' && (
+                                                    <div>Ставка заказчика: {fmt(summary.customerPrice)} {summary.currency}
+                                                        {summary.customerPriceBase ? ` — это ${fmt(summary.customerPriceBase)} ₸ по курсу на дату погрузки` : ''}</div>
                                                 )}
-                                                {(order.driverPaymentCondition || order.driverPaymentForm) && (
-                                                    <Col xs={24} md={12}>
-                                                        <div className={nova.tileLabel} style={{ marginBottom: 6 }}>Оплата перевозчику</div>
-                                                        <Space size={6} wrap>
-                                                            {order.driverPaymentCondition && <span className={nova.chip}>{order.driverPaymentCondition}</span>}
-                                                            {order.driverPaymentForm && <span className={nova.chip}>{order.driverPaymentForm}</span>}
-                                                        </Space>
-                                                    </Col>
+                                                {summary.driverCostCurrency !== 'KZT' && (
+                                                    <div>Ставка перевозчику: {fmt(summary.driverCost)} {summary.driverCostCurrency}
+                                                        {summary.driverCostBase ? ` — это ${fmt(summary.driverCostBase)} ₸` : ''}</div>
                                                 )}
-                                            </Row>
-                                        </div>
-                                    </section>
-                                )}
-
-                                {/* Financial Summary */}
-                                {(() => {
-                                    const isClient = order.customerCompanyId === user?.companyId;
-                                    const isExecutorPaid = order.subForwarderId ? order.isSubForwarderPaid : order.isDriverPaid;
-                                    const executorDebt = summary.executorDebt !== undefined
-                                        ? summary.executorDebt
-                                        : (order.subForwarderId
-                                            ? (order.isSubForwarderPaid ? 0 : order.subForwarderPrice || 0)
-                                            : (order.isDriverPaid ? 0 : (order.driverCost || 0) - summary.totalExpenses));
-
-                                    /**
-                                     * Плитка показателя.
-                                     *
-                                     * Цвет — только там, где он что-то значит: убыток и долг,
-                                     * который ещё висит. Раньше каждая плитка красилась своим
-                                     * (синий, серый, оранжевый, зелёный) вместе с кружком-значком,
-                                     * и пять цветов подряд не выделяли ничего.
-                                     */
-                                    const Metric = ({ label, value, sub, tone }: any) => (
-                                        <div className={nova.tile}>
-                                            <div className={nova.tileLabel}>{label}</div>
-                                            <div className={`${nova.tileValue}${
-                                                tone === 'neg' ? ` ${nova.valueNeg}` : tone === 'pos' ? ` ${nova.valuePos}` : ''
-                                            }`}>
-                                                {fmt(value)} ₸
-                                            </div>
-                                            {sub && <div className={nova.tileSub}>{sub}</div>}
-                                        </div>
-                                    );
-
-                                    /** Плашка «оплачено / не оплачено» — не цветная метка antd. */
-                                    const PaidChip = ({ paid, label }: { paid: boolean; label?: string }) => (
-                                        <span className={`${nova.chip}${paid ? '' : ` ${nova.chipWarn}`}`}>
-                                            {paid ? (label || 'Оплачено') : 'Не оплачено'}
-                                        </span>
-                                    );
-
-                                    const Breakdown = ({ title, gross, net, vat, vatRate, debt }: any) => (
-                                        <section className={nova.card} style={{ marginBottom: 0, height: '100%' }}>
-                                            <div className={nova.cardHead}>
-                                                <Receipt size={14} />
-                                                <h3 className={nova.cardTitle}>{title}</h3>
-                                            </div>
-                                            <div className={nova.cardBody} style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                                                {/* Без НДС — одна строка: три одинаковые суммы
-                                                    «с НДС», «без НДС» и «НДС 0 %» сбивали с толку
-                                                    (владелец, 29.10.2026). */}
-                                                {!Number(vat) && !Number(vatRate) ? (
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                        <span style={{ color: 'var(--nova-fg-3)' }}>Сумма без НДС</span>
-                                                        <b>{fmt(gross)} ₸</b>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                            <span style={{ color: 'var(--nova-fg-3)' }}>Всего с НДС</span>
-                                                            <b>{fmt(gross)} ₸</b>
-                                                        </div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                            <span style={{ color: 'var(--nova-fg-3)' }}>Без НДС</span>
-                                                            <span>{fmt(net)} ₸</span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                            <span style={{ color: 'var(--nova-fg-3)' }}>НДС ({vatRate}%)</span>
-                                                            <span>{fmt(vat)} ₸</span>
-                                                        </div>
-                                                    </>
-                                                )}
-                                                {/* Красным — только непогашенный остаток. Ноль долга
-                                                    красить не за что: это как раз хорошая новость. */}
-                                                <div style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    borderTop: '1px solid var(--nova-border)',
-                                                    paddingTop: 6,
-                                                    marginTop: 2,
-                                                }}>
-                                                    <b className={debt > 0 ? nova.valueNeg : undefined}>Остаток долга</b>
-                                                    <b className={debt > 0 ? nova.valueNeg : undefined}>{fmt(debt)} ₸</b>
+                                                <div className={card.muted}>
+                                                    Прибыль и долги считаются в тенге: складывать разные валюты нельзя.
                                                 </div>
-                                            </div>
-                                        </section>
-                                    );
-
-                                    /**
-                                     * Всё, что подписано знаком тенге, показывается в тенге.
-                                     *
-                                     * Ставка заказчика может быть в рублях, и «100 000 ₸» рядом с
-                                     * тенговыми долгами читается как сто тысяч тенге — а это шестьсот.
-                                     * Поэтому в плитках и расчётах стоит пересчёт, а исходная сумма с
-                                     * её валютой показана выше отдельной подсказкой.
-                                     */
-                                    const customerGross = summary.currency && summary.currency !== 'KZT'
-                                        ? (summary.customerPriceBase ?? 0)
-                                        : summary.customerPrice;
-                                    const executorGross = summary.driverCostCurrency && summary.driverCostCurrency !== 'KZT'
-                                        ? (summary.driverCostBase ?? 0)
-                                        : summary.executorCost;
-
-                                    return (
-                                        <div style={{ marginBottom: 16 }}>
-                                            {/* Суммы рейса в валюте: показываем и валюту, и пересчёт.
-                                                Без этого «100 000» рядом с тенговыми цифрами читается
-                                                как тенге, а это рубли. */}
-                                            {(summary.currency && summary.currency !== 'KZT') || (summary.driverCostCurrency && summary.driverCostCurrency !== 'KZT') ? (
-                                                <Alert
-                                                    type="info"
-                                                    showIcon
-                                                    style={{ marginBottom: 12 }}
-                                                    message="Рейс в валюте"
-                                                    description={(
-                                                        <div style={{ fontSize: 12 }}>
-                                                            {summary.currency !== 'KZT' && (
-                                                                <div>Ставка заказчика: {fmt(summary.customerPrice)} {summary.currency}
-                                                                    {summary.customerPriceBase ? ` — это ${fmt(summary.customerPriceBase)} ₸ по курсу на дату погрузки` : ''}</div>
-                                                            )}
-                                                            {summary.driverCostCurrency !== 'KZT' && (
-                                                                <div>Ставка перевозчику: {fmt(summary.driverCost)} {summary.driverCostCurrency}
-                                                                    {summary.driverCostBase ? ` — это ${fmt(summary.driverCostBase)} ₸` : ''}</div>
-                                                            )}
-                                                            <div style={{ color: 'var(--lc-text-ter)', marginTop: 4 }}>
-                                                                Прибыль и долги считаются в тенге: складывать разные валюты нельзя.
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                />
-                                            ) : null}
-
-                                            {summary.unconvertedCurrencies?.length ? (
-                                                <Alert
-                                                    type="warning"
-                                                    showIcon
-                                                    style={{ marginBottom: 12 }}
-                                                    message={`Нет курса: ${summary.unconvertedCurrencies.join(', ')}`}
-                                                    description="Пока курс не загружен, эта сумма в прибыль и долги не входит — цифры ниже неполные. Загрузите курс в разделе «Кабинет → Курсы валют» и сохраните заявку."
-                                                />
-                                            ) : null}
-
-                                            {/* У экспедитора показателей пять, у заказчика
-                                                четыре — сетка под своё число, чтобы маржа не
-                                                висела одна во второй строке. */}
-                                            {/* Парк везёт своим водителем: вместо «ставки
-                                                исполнителю» и «маржи» — топливо, на руки,
-                                                налоги по ГПХ и что остаётся парку. */}
-                                            {parkCalc?.calc ? (
-                                                <ParkFinanceTiles data={parkCalc} customerGross={customerGross} customerPaid={!!order.isCustomerPaid} />
-                                            ) : (
-                                            <div className={`${nova.tiles}${isClient ? '' : ` ${nova.tiles5}`}`}>
-                                                {isClient ? (
-                                                    <>
-                                                        <Metric
-                                                            label="Стоимость перевозки"
-                                                            value={customerGross}
-                                                            sub={<PaidChip paid={!!order.isCustomerPaid} />}
-                                                        />
-                                                        <Metric label="Поступления" value={summary.totalIncomes} />
-                                                        <Metric label="Расходы" value={summary.totalExpenses} />
-                                                        <Metric
-                                                            label="Долг экспедитору"
-                                                            value={summary.customerDebt}
-                                                            tone={summary.customerDebt > 0 ? 'neg' : undefined}
-                                                        />
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Metric
-                                                            label="Стоимость от заказчика"
-                                                            value={customerGross}
-                                                            sub={<PaidChip paid={!!order.isCustomerPaid} label="Оплачено заказчиком" />}
-                                                        />
-                                                        <Metric
-                                                            label="Ставка исполнителю"
-                                                            value={executorGross}
-                                                            sub={<PaidChip paid={!!isExecutorPaid} />}
-                                                        />
-                                                        <Metric
-                                                            label="Долг заказчика"
-                                                            value={summary.customerDebt}
-                                                            tone={summary.customerDebt > 0 ? 'neg' : undefined}
-                                                        />
-                                                        <Metric
-                                                            label="Наш долг исполнителю"
-                                                            value={executorDebt}
-                                                            tone={executorDebt > 0 ? 'neg' : undefined}
-                                                        />
-                                                        <Metric
-                                                            label="Ожидаемая маржа"
-                                                            value={summary.margin}
-                                                            tone={summary.margin >= 0 ? 'pos' : 'neg'}
-                                                        />
-                                                    </>
-                                                )}
-                                            </div>
-                                            )}
-                                            {parkCalc && (
-                                                <ParkOrderCalcCard
-                                                    data={parkCalc}
-                                                    onOpenFuel={parkCalc.source === 'TRIP' ? () => setParkFuelOpen(true) : undefined}
-                                                />
-                                            )}
-                                            <div className={nova.duo}>
-                                                {/* Расчёт парка приходит только экспедитору или
-                                                    перевозчику рейса — даже если заказчиком в
-                                                    заявке стоит сам парк. */}
-                                                {isClient && !parkCalc ? (
-                                                    <Breakdown title="Расчёты с экспедитором" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
-                                                ) : (
-                                                    <>
-                                                        <Breakdown title="Расчёты с заказчиком" gross={customerGross} net={summary.revenueNet || 0} vat={summary.revenueVat || 0} vatRate={order.vatRate || 0} debt={summary.customerDebt || 0} />
-                                                        {/* У парка исполнитель — свой водитель: вместо пустых
-                                                            «расчётов с исполнителем» — что ему уже выдали. */}
-                                                        {parkCalc ? (
-                                                            parkCalc.source === 'TRIP' && (
-                                                                <ParkTripGivenCard orderId={orderId} reloadKey={parkFuelReload} onOpen={() => setParkFuelOpen(true)} />
-                                                            )
-                                                        ) : (
-                                                            <Breakdown title="Расчёты с исполнителем" gross={executorGross} net={summary.executorCostNet || 0} vat={summary.executorCostVat || 0} vatRate={order.executorVatRate || 0} debt={executorDebt || 0} />
-                                                        )}
-                                                    </>
-                                                )}
-                                            </div>
-                                            {parkCalc?.source === 'TRIP' && (
-                                                <TripFuelDialog
-                                                    orderId={orderId}
-                                                    orderNumber={order.orderNumber}
-                                                    open={parkFuelOpen}
-                                                    onOpenChange={setParkFuelOpen}
-                                                    onChanged={() => setParkFuelReload((n) => n + 1)}
-                                                />
-                                            )}
+                                            </span>
+                                            <span />
                                         </div>
-                                    );
-                                })()}
+                                    ) : null}
 
-                                {/* Платежи по заявке */}
-                                <section className={nova.card}>
-                                    <div className={nova.cardHead}>
-                                        <Wallet size={14} />
-                                        <h3 className={nova.cardTitle}>Платежи по заявке</h3>
-                                        {payments.length > 0 && <span className={nova.cardCount}>{payments.length}</span>}
-                                        {/* Две кнопки вместо одной: одна кнопка «Зарегистрировать
-                                            платёж» всегда открывала форму под оплату от заказчика,
-                                            и оплату перевозчику записывали поступлением. Теперь
-                                            сторону выбирают до формы, а не в ней. */}
-                                        {canEditFinance && (
-                                            <button type="button" className={nova.action} onClick={() => handleAddPaymentClick('IN')}>
-                                                <Plus className="h-3.5 w-3.5" /> Оплата от заказчика
-                                            </button>
-                                        )}
-                                        {canEditFinance && executorCounterpartyId && (
-                                            <button type="button" className={nova.action} onClick={() => handleAddPaymentClick('OUT')}>
-                                                <Plus className="h-3.5 w-3.5" /> Оплата перевозчику
-                                            </button>
-                                        )}
-                                    </div>
-                                    {/* Чем блоки отличаются (задачи шефа, A7): их принимали за дубль. */}
-                                    <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
-                                        Деньги по банку и кассе: оплата от заказчика и оплата перевозчику. Только эти платежи закрывают долги и счета.
-                                    </p>
-                                    <Table columns={paymentColumns} dataSource={payments} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет зарегистрированных платежей' }} scroll={{ x: true }} />
-                                </section>
+                                    {summary.unconvertedCurrencies?.length ? (
+                                        <div className={`${card.ask} ${card.askNeed}`} style={{ marginBottom: 0 }} role="alert">
+                                            <span className={`${card.dot} ${card.dotNeed}`} aria-hidden />
+                                            <span style={{ fontSize: 13 }}>
+                                                <b>Нет курса: {summary.unconvertedCurrencies.join(', ')}</b>
+                                                <div className={card.muted}>
+                                                    Пока курс не загружен, эта сумма в прибыль и долги не входит — цифры ниже неполные.
+                                                    Загрузите курс в разделе «Кабинет → Курсы валют» и сохраните заявку.
+                                                </div>
+                                            </span>
+                                            <span />
+                                        </div>
+                                    ) : null}
 
-                                <div className={nova.duo}>
-                                    <section className={nova.card} style={{ marginBottom: 0 }}>
-                                        <div className={nova.cardHead}>
-                                            <Wallet size={14} />
-                                            <h3 className={nova.cardTitle}>Поступления</h3>
-                                            {incomes.length > 0 && <span className={nova.cardCount}>{incomes.length}</span>}
-                                            {canEditFinance && (
-                                                <button
-                                                    type="button"
-                                                    className={nova.action}
-                                                    onClick={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setIncomeModalOpen(true); }}
-                                                >
-                                                    <Plus className="h-3.5 w-3.5" /> Добавить
-                                                </button>
-                                            )}
-                                        </div>
-                                        <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
-                                            Прочие доходы рейса — возврат, компенсация. Прибавляются к марже, долг заказчика не закрывают: его оплату вносите в «Платежи».
-                                        </p>
-                                        <Table columns={incomeColumns} dataSource={incomes} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет поступлений' }} scroll={{ x: true }} />
-                                    </section>
-                                    <section className={nova.card} style={{ marginBottom: 0 }}>
-                                        <div className={nova.cardHead}>
-                                            <Banknote size={14} />
-                                            <h3 className={nova.cardTitle}>Расходы</h3>
-                                            {expenses.length > 0 && <span className={nova.cardCount}>{expenses.length}</span>}
-                                            {/* Кнопка обычная, а не красная: добавить расход —
-                                                рядовая запись, а не необратимое действие. */}
-                                            {canEditFinance && (
-                                                <button
-                                                    type="button"
-                                                    className={nova.action}
-                                                    onClick={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setExpenseModalOpen(true); }}
-                                                >
-                                                    <Plus className="h-3.5 w-3.5" /> Добавить
-                                                </button>
-                                            )}
-                                        </div>
-                                        <p className={nova.itemDesc} style={{ margin: '0 16px 8px', whiteSpace: 'normal' }}>
-                                            Затраты рейса кроме оплаты перевозчику — топливо, ремонт, штрафы. Уменьшают маржу; оплату перевозчику вносите в «Платежи».
-                                        </p>
-                                        <Table columns={expenseColumns} dataSource={expenses} rowKey="id" size="small" pagination={false} locale={{ emptyText: 'Нет расходов' }} scroll={{ x: true }} />
-                                    </section>
+                                    {/* Главная вещь вкладки — серой плашкой. У парка, который
+                                        везёт своим водителем, это «куда уходит цена рейса»:
+                                        топливо, на руки, налоги по ГПХ и что остаётся парку;
+                                        у остальных — сальдо со сторонами и маржа. */}
+                                    {parkCalc?.calc ? (
+                                        <>
+                                            {settlementsCard}
+                                            <ParkPriceSplit data={parkCalc} />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <OrderFinanceFigures
+                                                isClient={asClient}
+                                                customerGross={customerGross || 0}
+                                                executorGross={executorGross || 0}
+                                                summary={summary}
+                                                customerPaid={!!order.isCustomerPaid}
+                                                executorPaid={!!isExecutorPaid}
+                                                customerDue={settlements?.customer.dueDate}
+                                                executorDue={settlements?.carrier.dueDate}
+                                                fmt={fmt}
+                                            />
+                                            {settlementsCard}
+                                        </>
+                                    )}
+
+                                    {parkCalc && (
+                                        <ParkOrderCalcCard
+                                            data={parkCalc}
+                                            onOpenFuel={parkCalc.source === 'TRIP' ? () => setParkFuelOpen(true) : undefined}
+                                        />
+                                    )}
+                                    {parkCalc?.source === 'TRIP' && (
+                                        <ParkTripGivenCard orderId={orderId} reloadKey={parkFuelReload} onOpen={() => setParkFuelOpen(true)} />
+                                    )}
+
+                                    {weInvoice && (
+                                        <OrderDocumentChain
+                                            orderId={orderId}
+                                            orderNumber={order.orderNumber}
+                                            orderStatus={order.status}
+                                            onCreate={openOrCreateOrderDocument}
+                                            creating={
+                                                invoiceLoading
+                                                    ? 'PAYMENT_INVOICE'
+                                                    : actLoading
+                                                        ? 'SERVICE_ACT'
+                                                        : null
+                                            }
+                                            reloadKey={documentChainKey}
+                                            onPreview={() => window.open(`/company/accounting/act-of-work?order=${orderId}`, '_blank')}
+                                        />
+                                    )}
+
+                                    <OrderMoneyList
+                                        payments={payments}
+                                        incomes={incomes}
+                                        expenses={expenses}
+                                        incomeCategories={incomeCategories}
+                                        expenseCategories={expenseCategories}
+                                        customerCompanyId={order.customerCompanyId}
+                                        executorCounterpartyId={executorCounterpartyId}
+                                        canEdit={canEditFinance}
+                                        fmt={fmt}
+                                        onAddPayment={handleAddPaymentClick}
+                                        onAddIncome={() => { incomeForm.resetFields(); incomeForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setIncomeModalOpen(true); }}
+                                        onAddExpense={() => { expenseForm.resetFields(); expenseForm.setFieldsValue({ date: dayjs() }); loadFinanceSettings(); setExpenseModalOpen(true); }}
+                                        onEditPayment={handleEditPaymentClick}
+                                        onDeletePayment={handleDeletePayment}
+                                        onDeleteIncome={handleDeleteIncome}
+                                        onDeleteExpense={handleDeleteExpense}
+                                        onOpenSharedPayment={(direction) => router.push(direction === 'IN'
+                                            ? '/company/accounting/cash-in'
+                                            : '/company/accounting/cash-out')}
+                                    />
+
+                                    {parkCalc?.source === 'TRIP' && (
+                                        <TripFuelDialog
+                                            orderId={orderId}
+                                            orderNumber={order.orderNumber}
+                                            open={parkFuelOpen}
+                                            onOpenChange={setParkFuelOpen}
+                                            onChanged={() => setParkFuelReload((n) => n + 1)}
+                                        />
+                                    )}
                                 </div>
-                            </div>
-                        )
+                            );
+                        })(),
                     },
                     {
                         key: 'documents',
@@ -2323,7 +1970,7 @@ export default function OrderDetailPage() {
                         // версиями, счёт и акт, приложенные файлы. Раньше они
                         // жили в трёх разных местах карточки.
                         children: (
-                            <>
+                            <div className={card.stack}>
                             {/* Оригиналы накладных — первым: от их получения
                                 идёт отсрочка, и отметку ставит менеджер, а не
                                 бухгалтер. */}
@@ -2344,54 +1991,28 @@ export default function OrderDetailPage() {
                                 isChief={['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '')}
                                 onCreateAccounting={openOrCreateOrderDocument}
                             />
-                            </>
+                            </div>
                         )
                     },
                     {
                         key: 'history',
                         label: 'История',
                         children: (
-                            <section className={nova.card}>
-                                <div className={nova.cardHead}>
-                                    <History size={14} />
-                                    <h3 className={nova.cardTitle}>Что происходило с рейсом</h3>
-                                </div>
-                                <div className={nova.cardBody}>
-                                    {/* Смены статуса и действия людей — одной лентой.
-                                        Раньше здесь были только статусы, и даже они без
-                                        автора: «кто вложил этот документ» узнать было
-                                        негде. */}
-                                    <OrderHistory orderId={orderId} />
-                                </div>
+                            <section className={card.section} aria-label="История рейса">
+                                <h2 className={card.head}>
+                                    Что происходило с рейсом
+                                    <span className={card.headRight}>сверху свежее</span>
+                                </h2>
+                                {/* Смены статуса и действия людей — одной лентой.
+                                    Раньше здесь были только статусы, и даже они без
+                                    автора: «кто вложил этот документ» узнать было
+                                    негде. */}
+                                <OrderHistory orderId={orderId} />
                             </section>
                         )
                     }
                 ].filter(Boolean) as any}
             />
-            </div>
-            {!isEditing && (
-                <aside className="min-w-0" aria-label="Водитель, деньги и стороны">
-                    <OrderSideCards
-                        order={order}
-                        partners={partners}
-                        user={user}
-                        fmt={fmt}
-                        hasDriver={hasDriver}
-                        driverName={driverName}
-                        driverPhone={driverPhone}
-                        driverPlate={driverPlate}
-                        driverTrailer={driverTrailer}
-                        driverLinkLoading={driverLinkLoading}
-                        documentsCount={contracts.length + poaDocuments.length}
-                        openDriverLink={openDriverLink}
-                        openAssignModal={openAssignModal}
-                        openTransferModal={openTransferModal}
-                        onOpenDocuments={() => setActiveTab('documents')}
-                        parkCalc={parkCalc}
-                    />
-                </aside>
-            )}
-            </div>
 
             {/* =================== ASSIGN DRIVER MODAL =================== */}
             {data?.order && (

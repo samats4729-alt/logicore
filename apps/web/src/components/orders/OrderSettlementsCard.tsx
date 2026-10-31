@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { InputNumber, Select } from 'antd';
-import { BadgeCheck, CircleAlert, Loader2, Receipt } from 'lucide-react';
+import { BadgeCheck, Loader2 } from 'lucide-react';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -19,6 +19,8 @@ import {
 } from '@/lib/settlement-terms';
 import { VAT_RATES } from '@/lib/tax';
 import nova from '@/components/nova/nova.module.css';
+import { cn } from '@/lib/utils';
+import card from './order-card.module.css';
 
 /**
  * Расчёты по рейсу — рабочее место бухгалтера.
@@ -37,23 +39,87 @@ import nova from '@/components/nova/nova.module.css';
 
 const dateLabel = (iso?: string | null) => (iso ? dayjs(iso).format('DD.MM.YYYY') : null);
 
-/** Одна сторона: кто, с НДС или без, когда платит. */
-function SideRow({ title, side, payVerb }: { title: string; side: SettlementSide; payVerb: string }) {
-    const terms = paymentTermsLabel(side.days, side.from, side.banking);
-    const due = dateLabel(side.dueDate);
+const fmt = (n: number) => n.toLocaleString('ru-RU');
+
+/**
+ * Деньги стороны по рейсу — из сводки заявки: ставка с НДС и без, сальдо,
+ * отметка об оплате, условия и форма оплаты из самой заявки. Считает
+ * сервер; здесь только показ рядом с условиями расчётов.
+ */
+export interface SideMoney {
+    /** Подпись строки, если не «Заказчик» / «Перевозчик»: заказчику — «Экспедитор». */
+    title?: string;
+    name?: string | null;
+    gross: number;
+    net: number;
+    vat: number;
+    vatRate: number;
+    debt: number;
+    paid: boolean;
+    /** «Дт» — заплатить должны нам, «Кт» — платим мы. */
+    sign: 'Дт' | 'Кт';
+    /** Условия и форма оплаты, записанные в заявке. */
+    conditions: string[];
+    onPay?: () => void;
+}
+
+/** Одна сторона строкой: кто, ставка, оплачено, сальдо, условия, оплата. */
+function SideRow({ title, side, money, payVerb }: {
+    title: string;
+    side?: SettlementSide | null;
+    money?: SideMoney;
+    payVerb: string;
+}) {
+    const terms = side ? paymentTermsLabel(side.days, side.from, side.banking) : null;
+    const due = side ? dateLabel(side.dueDate) : null;
+    const paidSum = money ? Math.max(0, money.gross - money.debt) : 0;
     return (
-        <div className={nova.item}>
-            <span className={nova.itemIcon}><Receipt size={14} /></span>
-            <span className={nova.itemText}>
-                <span className={nova.itemLabel}>
-                    {title}{side.name ? ` · ${side.name}` : ''}
-                </span>
-                <span className={nova.itemDesc}>
-                    {vatLabel(side.vatPayer, side.vatRate)}
-                    {terms ? ` · ${payVerb} ${terms}` : ' · срок оплаты не указан'}
-                    {due && ` · до ${due}`}
-                    {!due && side.dueDependsOn && ` · дату посчитаем после ${side.dueDependsOn}`}
-                </span>
+        <div className={card.sideRow}>
+            <span>
+                <b style={{ fontWeight: 500 }}>{money?.title || title}</b>
+                <span className={card.muted}> · {money?.name || side?.name || '—'}</span>
+            </span>
+            <span className={card.n}>
+                {money ? (
+                    <>
+                        {fmt(money.gross)} ₸
+                        {/* Без НДС — одна строка: три одинаковые суммы «с НДС»,
+                            «без НДС» и «НДС 0 %» сбивали с толку (владелец, 29.10.2026). */}
+                        <span className={card.sub}>
+                            {money.vat || money.vatRate
+                                ? `без НДС ${fmt(money.net)} · НДС ${money.vatRate}% ${fmt(money.vat)}`
+                                : 'без НДС'}
+                        </span>
+                    </>
+                ) : '—'}
+            </span>
+            <span className={card.n}>
+                {money ? (
+                    <>
+                        {fmt(paidSum)} ₸
+                        <span className={card.sub}>{money.paid ? 'оплачено' : 'не оплачено'}</span>
+                    </>
+                ) : '—'}
+            </span>
+            <span className={card.n}>
+                {/* Красным — только непогашенный остаток: ноль — хорошая новость. */}
+                {money ? (money.debt > 0 ? <b className={card.neg}>{money.sign} {fmt(money.debt)} ₸</b> : '0 ₸') : '—'}
+            </span>
+            <span className={card.sideTerms}>
+                {side && (
+                    <>
+                        {vatLabel(side.vatPayer, side.vatRate)}
+                        {terms ? ` · ${payVerb} ${terms}` : ' · срок оплаты не указан'}
+                        {due && ` · до ${due}`}
+                        {!due && side.dueDependsOn && ` · дату посчитаем после ${side.dueDependsOn}`}
+                    </>
+                )}
+                {money?.conditions.length ? <span className={card.sub}>{money.conditions.join(' · ')}</span> : null}
+            </span>
+            <span className={card.n}>
+                {money?.onPay && (
+                    <button type="button" className={card.lnk} onClick={money.onPay}>Внести оплату</button>
+                )}
             </span>
         </div>
     );
@@ -64,23 +130,32 @@ export default function OrderSettlementsCard({
     settlements,
     mayAccount,
     onChanged,
+    money,
+    title = 'Расчёты по рейсу',
 }: {
     orderId: string;
     settlements: OrderSettlements | null;
     /** Право «Бухгалтерия»: без него блок только читают. */
     mayAccount: boolean;
     onChanged: () => void;
+    /** Ставки, оплата и сальдо сторон — строкой рядом с условиями. */
+    money?: { customer?: SideMoney; carrier?: SideMoney };
+    title?: string;
 }) {
     const [busy, setBusy] = useState(false);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState<any>(null);
 
-    if (!settlements) return null;
+    const showCustomer = !!settlements?.customer.companyId || !!money?.customer;
+    const showCarrier = !!settlements?.carrier.companyId || !!money?.carrier;
+    if (!settlements && !showCustomer && !showCarrier) return null;
 
-    const { customer, carrier } = settlements;
-    const hasSides = !!customer.companyId || !!carrier.companyId;
+    const customer = settlements?.customer ?? null;
+    const carrier = settlements?.carrier ?? null;
+    const hasSides = showCustomer || showCarrier;
 
     const startEdit = () => {
+        if (!customer || !carrier) return;
         setDraft({
             hasVat: customer.vatPayer ?? false,
             vatRate: customer.vatRate ?? 0,
@@ -124,77 +199,90 @@ export default function OrderSettlementsCard({
     };
 
     /** Откуда взялась отметка проверки — на экране это разные вещи. */
-    const confirmedNote = settlements.source === 'PERSON'
+    const confirmedNote = settlements?.source === 'PERSON'
         ? `Проверил${settlements.confirmedByName ? `: ${settlements.confirmedByName}` : ''}`
             + `${settlements.confirmedAt ? `, ${dayjs(settlements.confirmedAt).format('DD.MM.YYYY')}` : ''}`
-        : settlements.source === 'CARDS'
+        : settlements?.source === 'CARDS'
             ? 'Условия взяты из карточек контрагентов'
-            : settlements.source === 'LEGACY'
+            : settlements?.source === 'LEGACY'
                 ? 'Заявка заведена до появления проверки — приняты как есть'
                 : null;
 
     return (
-        <section className={nova.card} style={{ marginBottom: 14 }}>
-            <div className={nova.cardHead}>
-                {settlements.confirmed ? <BadgeCheck size={14} /> : <CircleAlert size={14} />}
-                <h2 className={nova.cardTitle}>Расчёты по рейсу</h2>
-                <span className={nova.chip}>
-                    {settlements.confirmed ? 'проверено' : 'ждёт проверки'}
-                </span>
-            </div>
+        <section className={card.section} aria-label={title}>
+            <h2 className={card.head}>
+                {title}
+                {settlements && (
+                    <span className={cn(card.tag, !settlements.confirmed && card.tagWarn)}>
+                        {settlements.confirmed ? 'проверено' : 'ждёт проверки'}
+                    </span>
+                )}
+                {settlements && !editing && (
+                    <span className={card.headRight}>
+                        {confirmedNote}
+                        {mayAccount && (
+                            <button type="button" className={card.lnk} onClick={startEdit}>Исправить</button>
+                        )}
+                    </span>
+                )}
+            </h2>
 
-            <div className={nova.cardBody}>
+            <div>
                 {!hasSides && (
-                    <div className={nova.empty}>
+                    <div className={cn(card.list, card.empty)}>
                         В рейсе пока нет ни заказчика, ни перевозчика — рассчитываться не с кем.
                     </div>
                 )}
 
                 {hasSides && !editing && (
                     <>
-                        <div className={nova.list}>
-                            {customer.companyId && (
-                                <SideRow title="Заказчик" side={customer} payVerb="платит" />
-                            )}
-                            {carrier.companyId && (
-                                <SideRow title="Перевозчик" side={carrier} payVerb="платим" />
-                            )}
+                        <div className={card.scroll}>
+                            <div className={cn(card.list, card.sides)}>
+                                <div className={cn(card.sideRow, card.sideHead)}>
+                                    <span>Сторона</span>
+                                    <span className={card.n}>Ставка</span>
+                                    <span className={card.n}>Оплачено</span>
+                                    <span className={card.n}>Сальдо</span>
+                                    <span style={{ paddingLeft: 8 }}>Срок и условия</span>
+                                    <span />
+                                </div>
+                                {showCustomer && (
+                                    <SideRow title="Заказчик" side={customer} money={money?.customer} payVerb="платит" />
+                                )}
+                                {showCarrier && (
+                                    <SideRow title="Перевозчик" side={carrier} money={money?.carrier} payVerb="платим" />
+                                )}
+                            </div>
                         </div>
 
-                        {settlements.invoiceTiming && (
-                            <div className={nova.itemDesc} style={{ marginTop: 8 }}>
+                        {settlements?.invoiceTiming && (
+                            <p className={card.note}>
                                 Счёт заказчику выставляем: {invoiceTimingLabel(settlements.invoiceTiming)}
+                            </p>
+                        )}
+
+                        {settlements && settlements.missing.length > 0 && (
+                            <div className={`${card.ask} ${card.askNeed}`} style={{ marginTop: 12, marginBottom: 0 }}>
+                                <span className={cn(card.dot, card.dotNeed)} aria-hidden />
+                                <span style={{ fontSize: 13 }}>
+                                    {settlements.missing.map((line) => <div key={line}>{line}</div>)}
+                                    <span className={card.muted}>
+                                        Пока это не заполнено, договор нельзя заверить печатью, а счёт — выставить.
+                                    </span>
+                                </span>
+                                <span />
                             </div>
                         )}
 
-                        {settlements.missing.length > 0 && (
-                            <div className={nova.itemDesc} style={{ marginTop: 10, lineHeight: 1.5 }}>
-                                {settlements.missing.map((line) => <div key={line}>• {line}</div>)}
-                                <div style={{ marginTop: 4 }}>
-                                    Пока это не заполнено, договор нельзя заверить печатью, а счёт —
-                                    выставить.
-                                </div>
-                            </div>
-                        )}
-
-                        {confirmedNote && (
-                            <div className={nova.itemDesc} style={{ marginTop: 8 }}>{confirmedNote}</div>
-                        )}
-
-                        {mayAccount && (
+                        {settlements && mayAccount && !settlements.confirmed && (
                             <div className={nova.heroActions} style={{ marginTop: 12 }}>
-                                {!settlements.confirmed && (
-                                    <button
-                                        type="button"
-                                        className={`${nova.action} ${nova.actionPrimary}`}
-                                        onClick={() => !busy && confirm()}
-                                    >
-                                        {busy ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />}
-                                        Подтвердить расчёты
-                                    </button>
-                                )}
-                                <button type="button" className={nova.action} onClick={startEdit}>
-                                    Исправить
+                                <button
+                                    type="button"
+                                    className={`${nova.action} ${nova.actionPrimary}`}
+                                    onClick={() => !busy && confirm()}
+                                >
+                                    {busy ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />}
+                                    Подтвердить расчёты
                                 </button>
                             </div>
                         )}
@@ -204,7 +292,7 @@ export default function OrderSettlementsCard({
                 {editing && draft && (
                     <div style={{ display: 'grid', gap: 14 }}>
                         <div style={{ display: 'grid', gap: 8 }}>
-                            <b style={{ fontSize: 13 }}>Заказчик{customer.name ? ` · ${customer.name}` : ''}</b>
+                            <b style={{ fontSize: 13 }}>Заказчик{customer?.name ? ` · ${customer.name}` : ''}</b>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                 <Select
                                     style={{ width: 140 }}
@@ -248,7 +336,7 @@ export default function OrderSettlementsCard({
                         </div>
 
                         <div style={{ display: 'grid', gap: 8 }}>
-                            <b style={{ fontSize: 13 }}>Перевозчик{carrier.name ? ` · ${carrier.name}` : ''}</b>
+                            <b style={{ fontSize: 13 }}>Перевозчик{carrier?.name ? ` · ${carrier.name}` : ''}</b>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                 <Select
                                     style={{ width: 140 }}

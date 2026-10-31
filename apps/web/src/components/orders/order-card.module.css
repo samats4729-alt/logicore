@@ -1,0 +1,920 @@
+/*
+ * Карточка рейса, «вариант 5» (макет владельца «Заявка — вкладки», 31.10.2026).
+ *
+ * Белый фон и ровные списки; на каждой вкладке одна главная вещь — в серой
+ * плашке (маршрут, сальдо и маржа, «куда уходит цена рейса»). Люди и деньги
+ * рейса — серой панелью над вкладками, видна с любой вкладки. Цвет —
+ * только со смыслом: оранжевая точка «нужно сделать», красное — долг,
+ * зелёное — приход и WhatsApp, синее — ссылки.
+ *
+ * Цвета — токенами `--nova-*`: у каждого есть тёмный вариант, и тёмная тема
+ * кабинета работает без отдельных правил.
+ */
+
+/* ---------- общее ---------- */
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.muted {
+    color: var(--nova-fg-3);
+}
+
+.num {
+    font-variant-numeric: tabular-nums;
+}
+
+.neg {
+    color: var(--nova-neg);
+}
+
+.pos {
+    color: var(--nova-pos);
+}
+
+/* Действие словом: синее, без рамки. Кнопка, а не ссылка — со своим именем. */
+.lnk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--nova-accent);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.lnk:hover {
+    text-decoration: underline;
+}
+
+.lnk:disabled,
+.lnk[aria-disabled='true'] {
+    color: var(--nova-fg-3);
+    cursor: default;
+    text-decoration: none;
+}
+
+.lnkDanger {
+    color: var(--nova-neg);
+}
+
+/* ---------- серая плашка: главная вещь вкладки ---------- */
+
+.hero {
+    background: var(--nova-surface-2);
+    border-radius: 16px;
+    padding: 20px 24px;
+    min-width: 0;
+}
+
+/* ---------- раздел: заголовок 13 серым и ровный список ---------- */
+
+.section {
+    min-width: 0;
+}
+
+.head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nova-fg-2);
+}
+
+.headRight {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-weight: 400;
+    color: var(--nova-fg-3);
+}
+
+.list {
+    border-top: 1px solid var(--nova-border);
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: baseline;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--nova-border-2);
+    font-size: 14px;
+    color: var(--nova-fg);
+}
+
+.row:last-child {
+    border-bottom: 0;
+}
+
+.rowStrong {
+    font-weight: 600;
+}
+
+.k {
+    color: var(--nova-fg-3);
+}
+
+.n {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.sub {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--nova-fg-3);
+}
+
+.empty {
+    padding: 14px 0;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.note {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--nova-fg-3);
+}
+
+/* ---------- точки: нужно сделать / готово / ещё не время ---------- */
+
+.dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+    align-self: center;
+    justify-self: center;
+}
+
+.dotNeed {
+    background: var(--nova-warn);
+    box-shadow: 0 0 0 3px var(--nova-warn-soft);
+}
+
+.dotOk {
+    background: var(--nova-fg);
+}
+
+.dotNone {
+    border: 1.5px solid var(--nova-border);
+    box-sizing: border-box;
+}
+
+/* ---------- плашка «нужно решить»: одной строкой ---------- */
+
+.ask {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+    column-gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 10px 16px;
+    border: 1px solid var(--nova-border);
+    border-radius: 14px;
+    font-size: 14px;
+    color: var(--nova-fg);
+}
+
+.askNeed {
+    border-color: color-mix(in srgb, var(--nova-warn) 40%, transparent);
+}
+
+.askActs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ---------- полоса оплаты ---------- */
+
+.bar {
+    display: flex;
+    height: 6px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--nova-border);
+}
+
+.bar > b {
+    display: block;
+    height: 100%;
+    background: var(--nova-fg);
+}
+
+/* ---------- шапка ---------- */
+
+.stage {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+}
+
+/* ---------- панель: водитель · заказчик · стороны · деньги ---------- */
+
+.panel {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 20px;
+    background: var(--nova-surface-2);
+    border-radius: 16px;
+}
+
+.pcol {
+    min-width: 0;
+    padding: 16px 20px;
+}
+
+.pcol + .pcol {
+    border-left: 1px solid var(--nova-border);
+}
+
+@media (max-width: 1180px) {
+    .panel {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pcol:nth-child(3) {
+        border-left: 0;
+    }
+
+    .pcol:nth-child(n + 3) {
+        border-top: 1px solid var(--nova-border);
+    }
+}
+
+@media (max-width: 640px) {
+    .panel {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pcol + .pcol {
+        border-left: 0;
+        border-top: 1px solid var(--nova-border);
+    }
+}
+
+.role {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.who {
+    margin-top: 2px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    overflow-wrap: anywhere;
+}
+
+.whoSub {
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    overflow-wrap: anywhere;
+}
+
+.contacts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+.contacts a {
+    color: var(--nova-accent);
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.wa {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--nova-pos-soft);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.contacts a.wa {
+    color: var(--nova-pos);
+}
+
+.copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--nova-fg-3);
+    cursor: pointer;
+}
+
+.copy:hover {
+    background: var(--nova-hover);
+    color: var(--nova-fg);
+}
+
+.acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 10px;
+}
+
+.chipWarn {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--nova-warn-soft);
+    color: var(--nova-warn);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Стороны сделки — парами «роль — кто», одна под другой. */
+.party + .party {
+    margin-top: 10px;
+}
+
+.party .who {
+    font-size: 14px;
+}
+
+/* Деньги рейса в панели: подпись слева, сумма справа. */
+.money {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0 12px;
+    padding: 3px 0;
+    font-size: 13px;
+    color: var(--nova-fg-2);
+}
+
+.money > span {
+    white-space: nowrap;
+}
+
+.money b {
+    margin-left: auto;
+    font-weight: 600;
+    color: var(--nova-fg);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.moneyMain b {
+    font-size: 15px;
+}
+
+.money b.pos {
+    color: var(--nova-pos);
+}
+
+.money b.neg {
+    color: var(--nova-neg);
+}
+
+/* ---------- маршрут ---------- */
+
+.route {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 1.2fr) minmax(0, 1fr);
+    gap: 28px;
+    align-items: center;
+}
+
+.end {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.endRight {
+    align-items: flex-end;
+    text-align: right;
+}
+
+.city {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--nova-fg);
+    overflow-wrap: anywhere;
+}
+
+.when {
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
+
+.addr {
+    font-size: 14px;
+    color: var(--nova-fg-3);
+    overflow-wrap: anywhere;
+}
+
+.line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.lineBar {
+    flex: 1;
+    height: 2px;
+    background: var(--nova-fg);
+}
+
+.lineBarRest {
+    background: var(--nova-border);
+}
+
+.lineGap {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    white-space: nowrap;
+}
+
+.pin {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--nova-fg);
+    flex: none;
+}
+
+.pinOut {
+    background: none;
+    border: 3px solid var(--nova-fg);
+    box-sizing: border-box;
+}
+
+/* Маршрут из трёх и больше точек — списком: лента врала бы про порядок. */
+.points {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.point {
+    display: grid;
+    grid-template-columns: 14px 140px minmax(0, 1fr) auto;
+    column-gap: 14px;
+    align-items: baseline;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--nova-border);
+    font-size: 14px;
+}
+
+.point:last-child {
+    border-bottom: 0;
+}
+
+.point .pin {
+    width: 10px;
+    height: 10px;
+    align-self: center;
+}
+
+.point .pinOut {
+    border-width: 2px;
+}
+
+/* ---------- груз ---------- */
+
+.cargoTitle {
+    margin: 4px 0 2px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--nova-fg);
+    overflow-wrap: anywhere;
+}
+
+.cargoLine {
+    margin: 0 0 12px;
+    font-size: 15px;
+    color: var(--nova-fg-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.adr {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--nova-neg-soft);
+    color: var(--nova-neg);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* ---------- финансы: сальдо и маржа ---------- */
+
+.figures {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 32px;
+}
+
+.figure {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.figureLabel {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.figureValue {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
+
+.figureNote {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.figureValue.pos,
+.legendValue.pos {
+    color: var(--nova-pos);
+}
+
+.figureValue.neg,
+.legendValue.neg {
+    color: var(--nova-neg);
+}
+
+@media (max-width: 900px) {
+    .figures {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+}
+
+/* Таблица расчётов со сторонами: широкая — прокрутка внутри, не у страницы. */
+.scroll {
+    overflow-x: auto;
+}
+
+.sides {
+    min-width: 940px;
+}
+
+.sideRow {
+    display: grid;
+    grid-template-columns: 220px 190px 130px 150px minmax(0, 1fr) 110px;
+    column-gap: 20px;
+    align-items: baseline;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--nova-border-2);
+    font-size: 14px;
+    color: var(--nova-fg);
+}
+
+.sideRow:last-child {
+    border-bottom: 0;
+}
+
+.sideTerms {
+    padding-left: 8px;
+    font-size: 13px;
+    color: var(--nova-fg-2);
+}
+
+.sideHead {
+    padding: 8px 0;
+    font-size: 12px;
+    color: var(--nova-fg-3);
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    margin-left: 6px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--nova-border-2);
+    color: var(--nova-fg-2);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    vertical-align: 1px;
+}
+
+.tagWarn {
+    background: var(--nova-warn-soft);
+    color: var(--nova-warn);
+}
+
+.tagNeg {
+    background: var(--nova-neg-soft);
+    color: var(--nova-neg);
+}
+
+/* Строка документа или задачи: точка · что · состояние · действие. */
+.task {
+    display: grid;
+    grid-template-columns: 8px 220px minmax(0, 1fr) auto;
+    column-gap: 16px;
+    align-items: baseline;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--nova-border-2);
+    font-size: 14px;
+    color: var(--nova-fg);
+}
+
+.task:last-child {
+    border-bottom: 0;
+}
+
+.task > .dot {
+    align-self: center;
+}
+
+/* ---------- движение денег ---------- */
+
+.move {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) 160px 72px;
+    column-gap: 14px;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--nova-border-2);
+    font-size: 14px;
+    color: var(--nova-fg);
+}
+
+.move:last-child {
+    border-bottom: 0;
+}
+
+.moveOff {
+    color: var(--nova-fg-3);
+    text-decoration: line-through;
+}
+
+.moveActs {
+    display: flex;
+    justify-content: flex-end;
+    gap: 2px;
+}
+
+.iconBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--nova-fg-3);
+    cursor: pointer;
+}
+
+.iconBtn:hover {
+    background: var(--nova-hover);
+    color: var(--nova-fg);
+}
+
+.iconBtnDanger:hover {
+    color: var(--nova-neg);
+}
+
+/* ---------- парк: куда уходит цена рейса ---------- */
+
+.split {
+    display: flex;
+    gap: 2px;
+    height: 14px;
+    margin-top: 12px;
+}
+
+.split > b {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    min-width: 3px;
+}
+
+.legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px 16px;
+    margin-top: 14px;
+}
+
+.legendItem {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.legendLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.legendLabel > i {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex: none;
+}
+
+.legendValue {
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
+}
+
+/* Лесенка расчёта: итоговые строки жирные, вычеты — с отступом. */
+.ladder {
+    display: grid;
+    grid-template-columns: minmax(0, 360px) 150px minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: baseline;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--nova-border-2);
+    font-size: 14px;
+    color: var(--nova-fg);
+}
+
+.ladder:last-child {
+    border-bottom: 0;
+}
+
+.ladderTotal {
+    font-weight: 600;
+}
+
+.ladderStep > span:first-child {
+    padding-left: 20px;
+    color: var(--nova-fg-2);
+}
+
+.ladderStep > span:nth-child(2) {
+    color: var(--nova-fg-2);
+}
+
+.ladderNote {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--nova-fg-3);
+}
+
+/* ---------- история ---------- */
+
+.day {
+    margin: 16px 0 4px;
+    font-size: 13px;
+    color: var(--nova-fg-3);
+}
+
+.event {
+    display: grid;
+    grid-template-columns: 56px 20px minmax(0, 1fr) minmax(120px, 240px);
+    column-gap: 12px;
+    align-items: baseline;
+    padding: 8px 0;
+    font-size: 14px;
+    color: var(--nova-fg);
+}
+
+.eventTime {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.eventMark {
+    position: relative;
+    align-self: stretch;
+    display: flex;
+    justify-content: center;
+}
+
+.eventMark::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    bottom: -8px;
+    width: 2px;
+    background: var(--nova-border-2);
+}
+
+.eventMark > span {
+    position: relative;
+    margin-top: 5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--nova-border);
+    box-shadow: 0 0 0 3px var(--nova-bg);
+}
+
+.eventMarkStatus > span {
+    background: var(--nova-fg);
+}
+
+.eventWho {
+    font-size: 13px;
+    color: var(--nova-fg-3);
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.eventWhoSystem {
+    font-style: italic;
+}
+
+@media (max-width: 760px) {
+    .row,
+    .task {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 2px;
+    }
+
+    .task > .dot {
+        display: none;
+    }
+
+    .route {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+    }
+
+    .endRight {
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .event {
+        grid-template-columns: 48px 16px minmax(0, 1fr);
+    }
+
+    .eventWho {
+        grid-column: 3;
+        text-align: left;
+    }
+
+    .move {
+        grid-template-columns: 52px minmax(0, 1fr) auto;
+    }
+
+    .moveActs {
+        grid-column: 2 / -1;
+        justify-content: flex-start;
+    }
+}

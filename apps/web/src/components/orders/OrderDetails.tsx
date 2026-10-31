@@ -2,76 +2,42 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { Tooltip } from 'antd';
-import {
-    ChevronDown,
-    Copy,
-    FileText,
-    Loader2,
-    MapPin,
-    Package,
-    Route,
-    Truck,
-    UserPlus,
-    Users,
-    Wallet,
-} from 'lucide-react';
+import { Copy, Loader2 } from 'lucide-react';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { resolveCompanyName, shortenCompanyName } from '@/lib/company-helper';
 import { adrLabel, loadingLabel, packagingLabel, palletsSummary, totalPallets } from '@/lib/cargo';
 import type { ParkOrderCalc } from '@/lib/exchange';
-import styles from './order-details.module.css';
+import styles from './order-card.module.css';
 
 /**
- * Карточка рейса: вкладка «Маршрут и груз» и колонка справа.
+ * Карточка рейса: вкладка «Маршрут и груз» и панель над вкладками.
  *
- * По макету «LogiCore на shadcn Nova» (владелец, 08.10.2026): слева — куда
- * едем и что везём (`OrderDetails`), справа рядом с любой вкладкой — кто
- * везёт, за сколько и для кого (`OrderSideCards`).
+ * «Вариант 5» макета владельца «Заявка — вкладки» (31.10.2026): белый фон и
+ * ровные списки, на вкладке одна главная вещь в серой плашке — маршрут.
+ * Водитель, стороны сделки и деньги рейса — серой панелью над вкладками
+ * (`OrderSideCards`), её видно с любой вкладки, как раньше колонку справа.
  *
  * Маршрут показан лентой, как табло: откуда — куда одной строкой. Точки
  * одноцветные: закрашенная — погрузка, полая — выгрузка. Цвет берётся у
- * текста, поэтому в тёмной теме они белые, и настраивать это отдельно не
- * нужно. Ленту рисуем для прямого рейса из двух точек; там, где точек
- * больше, лента врала бы про порядок — такой маршрут идёт списком.
+ * текста, поэтому в тёмной теме они белые. Ленту рисуем для прямого рейса из
+ * двух точек; там, где точек больше, лента врала бы про порядок — такой
+ * маршрут идёт списком.
  *
  * Незаполненные поля груза не занимают место: они свёрнуты в одну строку,
- * а в шапке видно «заполнено 4 из 14». Пустое поле — это не новость, но
+ * а в заголовке видно «заполнено 4 из 14». Пустое поле — это не новость, но
  * знать, сколько их, менеджеру нужно.
  */
 
 const dash = '—';
 
-/** Пара «подпись — значение». Подпись мелкая и сверху: читают значение. */
+/** Пара «подпись — значение» строкой списка. */
 function Row({ label, children }: { label: string; children: ReactNode }) {
     return (
         <div className={styles.row}>
-            <span className={styles.rowLabel}>{label}</span>
-            <span className={styles.rowValue}>{children}</span>
+            <span className={styles.k}>{label}</span>
+            <span>{children}</span>
         </div>
-    );
-}
-
-function Card({
-    title,
-    icon,
-    hint,
-    children,
-}: {
-    title: string;
-    icon: ReactNode;
-    hint?: string;
-    children: ReactNode;
-}) {
-    return (
-        <section className={styles.card}>
-            <div className={styles.cardHead}>
-                {icon}
-                <h2 className={styles.cardTitle}>{title}</h2>
-                {hint ? <span className={styles.cardHint}>{hint}</span> : null}
-            </div>
-            {children}
-        </section>
     );
 }
 
@@ -117,19 +83,44 @@ function pointWhen(pt: any) {
     return pt.expectedDate ? dayjs(pt.expectedDate).format('DD.MM.YYYY, HH:mm') : null;
 }
 
+/** Ссылка WhatsApp по номеру: только цифры, как ждёт wa.me. */
+const whatsappHref = (phone: string) => `https://wa.me/${String(phone).replace(/[^\d]/g, '')}`;
+
+/** Телефон, копирование и WhatsApp — одинаково у водителя и заказчика. */
+function Phone({ phone, copied }: { phone: string; copied: string }) {
+    return (
+        <>
+            <a href={`tel:${phone}`}>{phone}</a>
+            <button
+                type="button"
+                className={styles.copy}
+                title="Скопировать номер"
+                aria-label="Скопировать номер"
+                onClick={() => {
+                    navigator.clipboard?.writeText(String(phone));
+                    toast.success(copied);
+                }}
+            >
+                <Copy size={13} />
+            </button>
+            <a href={whatsappHref(phone)} target="_blank" rel="noreferrer" className={styles.wa} title="Написать в WhatsApp">
+                WhatsApp
+            </a>
+        </>
+    );
+}
+
 export interface OrderDetailsProps {
     order: any;
     fmt: (n: number) => string;
     palletLines: any[];
 }
 
+/** Ключи груза, которые идут сводкой под названием, а не строками списка. */
+const CARGO_SUMMARY = ['weight', 'volume', 'places', 'body'];
+
 /**
- * Левая колонка вкладки «Маршрут и груз»: куда едем и что везём.
- *
- * Две карточки, как в макете «LogiCore на shadcn Nova» (владелец,
- * 08.10.2026): «Маршрут» и «Груз». Раньше это была одна широкая карточка
- * «Рейс» с перегородкой посередине — в узкой колонке рядом с водителем и
- * деньгами она не помещалась.
+ * Вкладка «Маршрут и груз»: куда едем и что везём.
  */
 export default function OrderDetails({ order, fmt, palletLines }: OrderDetailsProps) {
     const [showEmpty, setShowEmpty] = useState(false);
@@ -192,7 +183,7 @@ export default function OrderDetails({ order, fmt, palletLines }: OrderDetailsPr
                     // Полная расшифровка класса длинная и ломает колонку —
                     // держим её в подсказке.
                     <Tooltip title={order.adrClass ? adrLabel(order.adrClass) : 'Класс не указан'}>
-                        <span className={`${styles.chip} ${styles.chipDanger}`}>
+                        <span className={styles.adr}>
                             ДОПОГ{order.adrClass ? ` · класс ${order.adrClass}` : ''}
                         </span>
                     </Tooltip>
@@ -210,82 +201,95 @@ export default function OrderDetails({ order, fmt, palletLines }: OrderDetailsPr
     const filled = cargoFields.filter((f) => f.value);
     const empty = cargoFields.filter((f) => !f.value);
 
+    // Название груза — заголовком, вес, объём, места и кузов — одной строкой
+    // под ним; остальное — строками. Число мест без слова читалось бы
+    // загадкой, поэтому голому числу подпись добавляется.
+    const title = filled.find((f) => f.key === 'cargo');
+    const summary = CARGO_SUMMARY
+        .map((key) => filled.find((f) => f.key === key))
+        .filter(Boolean)
+        .map((f) => (f!.key === 'places' && typeof f!.value === 'number' ? `${f!.value} мест` : f!.value));
+    const rows = filled.filter((f) => f.key !== 'cargo' && !CARGO_SUMMARY.includes(f.key));
+
     return (
         <div className={styles.stack}>
-            <Card
-                title="Маршрут"
-                icon={<Route size={14} />}
-                hint={points.length ? `${points.length} ${plural(points.length, ['точка', 'точки', 'точек'])}${duration ? ` · ${duration}` : ''}` : undefined}
-            >
-                <div className={styles.cardBody}>
-                    {points.length === 0 ? (
-                        <div className={styles.empty}>Точки маршрута не указаны</div>
-                    ) : asRibbon ? (
-                        <div className={styles.ribbon}>
-                            <div className={styles.ribbonEnd}>
-                                <b>{pointCity(first)}</b>
-                                <span className={styles.ribbonWhen}>{pointWhen(first) || 'дата не указана'}</span>
-                                <span className={styles.ribbonAddr}>{first.location?.address || dash}</span>
-                            </div>
-                            <div className={styles.ribbonMid} aria-hidden>
-                                <span className={styles.dot} />
-                                <span className={styles.ribbonBar} />
-                                {duration ? <span className={styles.ribbonGap}>{duration}</span> : null}
-                                <span className={styles.ribbonBar} />
-                                <span className={`${styles.dot} ${styles.dotOut}`} />
-                            </div>
-                            <div className={`${styles.ribbonEnd} ${styles.ribbonEndRight}`}>
-                                <b>{pointCity(last)}</b>
-                                <span className={styles.ribbonWhen}>{pointWhen(last) || 'дата не указана'}</span>
-                                <span className={styles.ribbonAddr}>{last.location?.address || dash}</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <ol className={styles.route}>
-                            {points.map((pt: any, i: number) => (
-                                <li
-                                    key={pt.id || i}
-                                    className={`${styles.point} ${pt.pointType === 'DELIVERY' ? styles.pointOut : ''}`}
-                                >
-                                    <span className={styles.dot} />
-                                    <div className={styles.pointBody}>
-                                        <div className={styles.pointHead}>
-                                            <b>
-                                                <span className={styles.pointKind}>{pointKind(pt)}</span>
-                                                {pointCity(pt)}
-                                            </b>
-                                            {pointWhen(pt) && (
-                                                <span className={styles.pointDate}>{pointWhen(pt)}</span>
-                                            )}
-                                        </div>
-                                        <div className={styles.pointAddress}>{pt.location?.address || dash}</div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ol>
+            <section className={styles.hero} aria-label="Маршрут">
+                <h2 className={styles.head}>
+                    Маршрут
+                    {points.length > 0 && (
+                        <span className={styles.headRight}>
+                            {points.length} {plural(points.length, ['точка', 'точки', 'точек'])}
+                            {duration ? ` · ${duration}` : ''}
+                        </span>
                     )}
-                </div>
-            </Card>
+                </h2>
+                {points.length === 0 ? (
+                    <div className={styles.empty}>Точки маршрута не указаны</div>
+                ) : asRibbon ? (
+                    <div className={styles.route}>
+                        <div className={styles.end}>
+                            <span className={styles.role}>{pointKind(first)}</span>
+                            <span className={styles.city}>{pointCity(first)}</span>
+                            <span className={styles.when}>{pointWhen(first) || 'дата не указана'}</span>
+                            <span className={styles.addr}>{first.location?.address || dash}</span>
+                        </div>
+                        <div className={styles.line} aria-hidden>
+                            <span className={styles.pin} />
+                            <span className={styles.lineBar} />
+                            {duration ? <span className={styles.lineGap}>{duration}</span> : null}
+                            <span className={`${styles.lineBar} ${styles.lineBarRest}`} />
+                            <span className={`${styles.pin} ${styles.pinOut}`} />
+                        </div>
+                        <div className={`${styles.end} ${styles.endRight}`}>
+                            <span className={styles.role}>{pointKind(last)}</span>
+                            <span className={styles.city}>{pointCity(last)}</span>
+                            <span className={styles.when}>{pointWhen(last) || 'дата не указана'}</span>
+                            <span className={styles.addr}>{last.location?.address || dash}</span>
+                        </div>
+                    </div>
+                ) : (
+                    <ol className={styles.points}>
+                        {points.map((pt: any, i: number) => (
+                            <li key={pt.id || i} className={styles.point}>
+                                <span className={`${styles.pin} ${pt.pointType === 'DELIVERY' ? styles.pinOut : ''}`} />
+                                <span className={styles.k}>{pointKind(pt)}</span>
+                                <span>
+                                    <b>{pointCity(pt)}</b>
+                                    <span className={styles.sub}>{pt.location?.address || dash}</span>
+                                </span>
+                                <span className={styles.n}>{pointWhen(pt) || ''}</span>
+                            </li>
+                        ))}
+                    </ol>
+                )}
+            </section>
 
-            <Card title="Груз" icon={<Package size={14} />} hint={`заполнено ${filled.length} из ${cargoFields.length}`}>
-                <div className={styles.cardBody}>
-                    <div className={styles.grid}>
-                        {filled.map((f) => (
+            <section className={styles.section} aria-label="Груз">
+                <h2 className={styles.head}>
+                    Груз
+                    <span className={styles.headRight}>заполнено {filled.length} из {cargoFields.length}</span>
+                </h2>
+                {title && <p className={styles.cargoTitle}>{title.value}</p>}
+                {summary.length > 0 && <p className={styles.cargoLine}>{summary.join(' · ')}</p>}
+                {(rows.length > 0 || (showEmpty && empty.length > 0)) && (
+                    <div className={styles.list}>
+                        {rows.map((f) => (
                             <Row key={f.key} label={f.label}>{f.value}</Row>
                         ))}
                         {showEmpty && empty.map((f) => (
-                            <Row key={f.key} label={f.label}>{dash}</Row>
+                            <Row key={f.key} label={f.label}><span className={styles.muted}>{dash}</span></Row>
                         ))}
                     </div>
+                )}
 
-                    {empty.length > 0 && (
-                        <button type="button" className={styles.fold} onClick={() => setShowEmpty((v) => !v)}>
-                            <ChevronDown size={13} className={showEmpty ? styles.foldOpen : undefined} />
+                {empty.length > 0 && (
+                    <div style={{ paddingTop: 10 }}>
+                        <button type="button" className={styles.lnk} onClick={() => setShowEmpty((v) => !v)}>
                             {showEmpty ? 'Скрыть незаполненные' : `Показать незаполненные (${empty.length})`}
                         </button>
-                    )}
-                </div>
-            </Card>
+                    </div>
+                )}
+            </section>
         </div>
     );
 }
@@ -312,12 +316,13 @@ export interface OrderSideCardsProps {
 }
 
 /**
- * Правая колонка карточки рейса: кто везёт, за сколько и для кого.
+ * Панель над вкладками: кто везёт, для кого, кто ведёт и за сколько.
  *
- * Стоит рядом с любой вкладкой (владелец, 08.10.2026, по макету): водитель
- * и деньги нужны и в документах, и в финансах, а раньше они жили только на
- * первой вкладке. Доверенность ушла в шапку карточки — кнопкой
- * «Доверенность» рядом с остальными действиями.
+ * Четыре колонки — водитель, заказчик, стороны сделки, деньги рейса. Видна
+ * с любой вкладки: водитель и деньги нужны и в документах, и в финансах.
+ * Деньги здесь у всех, кто видит рейс, а не только у бухгалтерии: менеджер
+ * без права «Бухгалтерия» вкладки «Финансы» не видит, и ставки с маржой ему
+ * иначе взять негде.
  */
 export function OrderSideCards({
     order,
@@ -370,99 +375,141 @@ export function OrderSideCards({
     const carrierIsMe = parkCalc?.source === 'TRIP';
     const ownDriver = hasDriver && !!order.forwarderId && order.forwarderId === user?.companyId
         && !order.subForwarder && !(order.partner && order.partnerId !== order.forwarderId);
+    const canReplace = order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
 
     return (
-        <div className={styles.stack}>
-            <Card title="Водитель и машина" icon={<Truck size={14} />}>
-                <div className={styles.cardBody}>
-                    {hasDriver ? (
-                        <>
-                            <div className={styles.driver}>
-                                <div className={styles.driverName}>{driverName || dash}</div>
-                                <div className={styles.driverSub}>
-                                    {driverPlate || 'машина не указана'}
-                                    {driverTrailer ? ` · прицеп ${driverTrailer}` : ' · без прицепа'}
-                                </div>
-                                {driverPhone ? (
-                                    <div className={styles.phone}>
-                                        <a href={`tel:${driverPhone}`}>{driverPhone}</a>
-                                        <a
-                                            href={`https://wa.me/${String(driverPhone).replace(/[^\d]/g, '')}`}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className={styles.wa}
-                                            title="Написать в WhatsApp"
-                                        >
-                                            WhatsApp
-                                        </a>
-                                        <button
-                                            type="button"
-                                            className={styles.copy}
-                                            title="Скопировать номер"
-                                            onClick={() => {
-                                                navigator.clipboard?.writeText(String(driverPhone));
-                                                toast.success('Номер водителя скопирован');
-                                            }}
-                                        >
-                                            <Copy size={13} />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className={styles.phone}>
-                                        <span className={styles.muted}>телефон не указан</span>
-                                    </div>
-                                )}
-                            </div>
-
-                            <button
-                                type="button"
-                                className={`${styles.act} ${styles.actPrimary} ${styles.actWide}`}
-                                disabled={driverLinkLoading}
-                                onClick={openDriverLink}
-                            >
-                                {driverLinkLoading
-                                    ? <Loader2 size={14} className="animate-spin" />
-                                    : <MapPin size={14} />}
+        <section className={styles.panel} aria-label="Водитель, стороны и деньги рейса">
+            <div className={styles.pcol}>
+                <div className={styles.role}>{carrierIsMe ? 'Водитель парка' : 'Водитель'}</div>
+                {hasDriver ? (
+                    <>
+                        <div className={styles.who}>{driverName || dash}</div>
+                        <div className={styles.whoSub}>
+                            {driverPlate || 'машина не указана'}
+                            {driverTrailer ? ` · прицеп ${driverTrailer}` : ' · без прицепа'}
+                        </div>
+                        <div className={styles.contacts}>
+                            {driverPhone
+                                ? <Phone phone={driverPhone} copied="Номер водителя скопирован" />
+                                : <span className={styles.muted}>телефон не указан</span>}
+                        </div>
+                        <div className={styles.acts}>
+                            <button type="button" className={styles.lnk} disabled={driverLinkLoading} onClick={openDriverLink}>
+                                {driverLinkLoading && <Loader2 size={13} className="animate-spin" />}
                                 Ссылка для водителя
                             </button>
-
-                            <div className={styles.acts}>
-                                {/* В пути менять можно — сломалась машина. В
-                                    завершённом или отменённом рейсе нельзя:
-                                    кнопка там вела только к отказу сервера. */}
-                                {order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
-                                    <button type="button" className={styles.act} onClick={openAssignModal}>
-                                        <UserPlus size={13} /> Заменить водителя
-                                    </button>
-                                )}
-                                <button type="button" className={styles.act} onClick={onOpenDocuments}>
-                                    <FileText size={13} />
-                                    Документы рейса{documentsCount > 0 ? ` (${documentsCount})` : ''}
+                            {/* В пути менять можно — сломалась машина. В
+                                завершённом или отменённом рейсе нельзя:
+                                кнопка там вела только к отказу сервера. */}
+                            {canReplace && (
+                                <button type="button" className={styles.lnk} onClick={openAssignModal} aria-label="Заменить водителя">
+                                    Заменить
                                 </button>
-                            </div>
-                        </>
-                    ) : (
-                        <div className={styles.noDriver}>
-                            <span className={`${styles.chip} ${styles.chipWarn}`}>Водитель не назначен</span>
-                            <button
-                                type="button"
-                                className={`${styles.act} ${styles.actPrimary} ${styles.actWide}`}
-                                onClick={openAssignModal}
-                            >
-                                <UserPlus size={14} /> Назначить водителя
-                            </button>
-                            <button type="button" className={`${styles.act} ${styles.actWide}`} onClick={onOpenDocuments}>
-                                <FileText size={13} />
+                            )}
+                            <button type="button" className={styles.lnk} onClick={onOpenDocuments}>
                                 Документы рейса{documentsCount > 0 ? ` (${documentsCount})` : ''}
                             </button>
                         </div>
-                    )}
-                </div>
-            </Card>
+                    </>
+                ) : (
+                    <>
+                        <div style={{ marginTop: 6 }}><span className={styles.chipWarn}>Водитель не назначен</span></div>
+                        <div className={styles.acts}>
+                            <button type="button" className={styles.lnk} onClick={openAssignModal}>
+                                Назначить водителя
+                            </button>
+                            <button type="button" className={styles.lnk} onClick={onOpenDocuments}>
+                                Документы рейса{documentsCount > 0 ? ` (${documentsCount})` : ''}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
 
-            <Card title="Деньги рейса" icon={<Wallet size={14} />}>
-                <div className={styles.cardBody}>
-                    <div className={styles.money}>
+            <div className={styles.pcol}>
+                <div className={styles.role}>
+                    Заказчик{order.customerCompanyId && order.customerCompanyId === user?.companyId ? ' · моя компания' : ''}
+                </div>
+                <div className={styles.who}>
+                    {resolveCompanyName(order.customerCompanyId, partners, order.customerCompany?.name)}
+                </div>
+                {order.customer && (
+                    <>
+                        <div className={styles.whoSub}>{order.customer.firstName} {order.customer.lastName}</div>
+                        {order.customer.phone && (
+                            <div className={styles.contacts}>
+                                <Phone phone={order.customer.phone} copied="Номер заказчика скопирован" />
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            <div className={styles.pcol}>
+                <div className={styles.party}>
+                    <div className={styles.role}>{carrierIsMe ? 'Перевозчик' : 'Экспедитор'}</div>
+                    <div className={styles.who}>
+                        {resolveCompanyName(order.forwarderId || order.partnerId, partners, order.forwarder?.name || order.partner?.name)}
+                    </div>
+                    {carrierIsMe && driverName && <div className={styles.whoSub}>водитель парка · {driverName}</div>}
+                </div>
+
+                {/* Везёт свой водитель — перевозчик своя же компания, как в журнале заявок. */}
+                {!carrierIsMe && ownDriver && (
+                    <div className={styles.party}>
+                        <div className={styles.role}>Перевозчик</div>
+                        <div className={styles.who}>{resolveCompanyName(order.forwarderId, partners, order.forwarder?.name)}</div>
+                        {driverName && <div className={styles.whoSub}>свой водитель · {driverName}</div>}
+                    </div>
+                )}
+
+                {order.subForwarder && (
+                    <div className={styles.party}>
+                        <div className={styles.role}>Перевозчик</div>
+                        <div className={styles.who}>{resolveCompanyName(order.subForwarderId, partners, order.subForwarder.name)}</div>
+                    </div>
+                )}
+
+                {/* Водитель другой компании (парка с биржи, ИП-субподрядчика) — она
+                    перевозчик по документам, а не экспедитор заявки (15.10.2026). */}
+                {!order.subForwarder && order.partner && order.partnerId !== order.forwarderId && (
+                    <div className={styles.party}>
+                        <div className={styles.role}>Перевозчик</div>
+                        <div className={styles.who}>{resolveCompanyName(order.partnerId, partners, order.partner.name)}</div>
+                    </div>
+                )}
+
+                {order.responsibleManager && (
+                    <div className={styles.party}>
+                        <div className={styles.role}>Менеджер</div>
+                        <div className={styles.whoSub}>
+                            {order.responsibleManager.firstName} {order.responsibleManager.lastName}
+                        </div>
+                    </div>
+                )}
+
+                {(order.responsibles || []).map((r: any) => (
+                    <div key={r.id} className={styles.party}>
+                        <div className={styles.role}>
+                            Ответственный · {r.company?.name ? shortenCompanyName(r.company.name) : 'компания'}
+                        </div>
+                        <div className={styles.contacts} style={{ marginTop: 2 }}>
+                            <span>{r.user?.lastName} {r.user?.firstName}</span>
+                            {r.companyId === user?.companyId
+                                && ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '') && (
+                                    <button type="button" className={styles.lnk} onClick={openTransferModal}>
+                                        Передать
+                                    </button>
+                                )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <div className={styles.pcol}>
+                <div className={styles.role}>Деньги рейса</div>
+                <div style={{ marginTop: 6 }}>
+                    <div className={`${styles.money} ${styles.moneyMain}`}>
                         <span>Ставка заказчика</span>
                         <b>{customerPrice != null ? `${fmt(customerPrice)} ${sign(customerCurrency)}` : dash}</b>
                     </div>
@@ -485,121 +532,48 @@ export function OrderSideCards({
                                 <span>Налоги по ГПХ</span>
                                 <b>{fmt(park.opv + park.vosms + park.so + park.ipn)} ₸</b>
                             </div>
-                            <div className={`${styles.money} ${styles.moneyBig}`}>
+                            <div className={`${styles.money} ${styles.moneyMain}`}>
                                 <span>Остаётся парку</span>
-                                <b>
+                                <b className={park.parkFee >= 0 ? styles.pos : styles.neg}>
                                     {fmt(park.parkFee)} ₸
-                                    {park.customerPrice ? (
-                                        <span className={styles.moneyPct}>
-                                            {' · '}{(park.parkFee / park.customerPrice * 100).toFixed(1).replace('.', ',')}%
-                                        </span>
-                                    ) : null}
+                                    {park.customerPrice
+                                        ? ` · ${(park.parkFee / park.customerPrice * 100).toFixed(1).replace('.', ',')}%`
+                                        : ''}
                                 </b>
                             </div>
                         </>
                     )}
 
                     {!iAmCustomerOnly && !park && (
-                        <div className={styles.money}>
+                        <div className={`${styles.money} ${styles.moneyMain}`}>
                             <span>Ставка перевозчику</span>
                             <b>{carrierPrice != null ? `${fmt(carrierPrice)} ${sign(carrierCurrency)}` : dash}</b>
                         </div>
                     )}
 
                     {!iAmCustomerOnly && !park && margin != null && (
-                        <div className={`${styles.money} ${styles.moneyBig}`}>
+                        <div className={`${styles.money} ${styles.moneyMain}`}>
                             <span>Маржа</span>
-                            <b>
+                            <b className={margin >= 0 ? styles.pos : styles.neg}>
                                 {fmt(margin)} {sign(customerCurrency)}
-                                {customerPrice ? (
-                                    <span className={styles.moneyPct}>
-                                        {' · '}{(margin / customerPrice * 100).toFixed(1).replace('.', ',')}%
-                                    </span>
-                                ) : null}
+                                {customerPrice ? ` · ${(margin / customerPrice * 100).toFixed(1).replace('.', ',')}%` : ''}
                             </b>
                         </div>
                     )}
 
                     {!iAmCustomerOnly && !park && margin == null && customerPrice != null && carrierPrice != null && (
-                        <div className={styles.note}>
+                        <p className={styles.note}>
                             Ставки в разных валютах — маржа считается по курсу на вкладке «Финансы».
-                        </div>
+                        </p>
                     )}
 
                     {customerPrice == null && carrierPrice == null && (
-                        <div className={styles.note}>
+                        <p className={styles.note}>
                             Ставки в заявке не указаны. Пока их нет, счёт выставить не с чего.
-                        </div>
+                        </p>
                     )}
                 </div>
-            </Card>
-
-            <Card title="Стороны сделки" icon={<Users size={14} />}>
-                <div className={styles.cardBody}>
-                    <div className={styles.rows}>
-                        <Row label="Заказчик">
-                            <b>{resolveCompanyName(order.customerCompanyId, partners, order.customerCompany?.name)}</b>
-                            {order.customer && (
-                                <>
-                                    <br />
-                                    {order.customer.firstName} {order.customer.lastName}
-                                    {order.customer.phone && (
-                                        <> · <a href={`tel:${order.customer.phone}`}>{order.customer.phone}</a></>
-                                    )}
-                                </>
-                            )}
-                        </Row>
-
-                        <Row label={carrierIsMe ? 'Перевозчик' : 'Экспедитор'}>
-                            <b>{resolveCompanyName(order.forwarderId || order.partnerId, partners, order.forwarder?.name || order.partner?.name)}</b>
-                            {carrierIsMe && driverName && <><br />водитель парка · {driverName}</>}
-                        </Row>
-
-                        {/* Везёт свой водитель — перевозчик своя же компания, как в журнале заявок. */}
-                        {!carrierIsMe && ownDriver && (
-                            <Row label="Перевозчик">
-                                <b>{resolveCompanyName(order.forwarderId, partners, order.forwarder?.name)}</b>
-                                {driverName && <><br />свой водитель · {driverName}</>}
-                            </Row>
-                        )}
-
-                        {order.subForwarder && (
-                            <Row label="Перевозчик">
-                                <b>{resolveCompanyName(order.subForwarderId, partners, order.subForwarder.name)}</b>
-                            </Row>
-                        )}
-
-                        {/* Водитель другой компании (парка с биржи, ИП-субподрядчика) — она
-                            перевозчик по документам, а не экспедитор заявки (15.10.2026). */}
-                        {!order.subForwarder && order.partner && order.partnerId !== order.forwarderId && (
-                            <Row label="Перевозчик">
-                                <b>{resolveCompanyName(order.partnerId, partners, order.partner.name)}</b>
-                            </Row>
-                        )}
-
-                        {order.responsibleManager && (
-                            <Row label="Менеджер">
-                                {order.responsibleManager.firstName} {order.responsibleManager.lastName}
-                            </Row>
-                        )}
-
-                        {(order.responsibles || []).map((r: any) => (
-                            <Row
-                                key={r.id}
-                                label={`Ответственный · ${r.company?.name ? shortenCompanyName(r.company.name) : 'компания'}`}
-                            >
-                                <b>{r.user?.lastName} {r.user?.firstName}</b>
-                                {r.companyId === user?.companyId
-                                    && ['COMPANY_ADMIN', 'FORWARDER'].includes(user?.role || '') && (
-                                        <button type="button" className={styles.link} onClick={openTransferModal}>
-                                            Передать
-                                        </button>
-                                    )}
-                            </Row>
-                        ))}
-                    </div>
-                </div>
-            </Card>
-        </div>
+            </div>
+        </section>
     );
 }

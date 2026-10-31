@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import dayjs, { type Dayjs } from 'dayjs';
-import { FileCheck2, FileClock, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { paymentTermsLabel, type OrderSettlements, type SettlementSide } from '@/lib/settlement-terms';
-import nova from '@/components/nova/nova.module.css';
+import { cn } from '@/lib/utils';
+import card from './order-card.module.css';
 import { DateField } from '@/components/ui/DateField';
 
 /**
@@ -57,21 +58,20 @@ function OriginalsRow({ side, title, sideKey, busy, picking, setPicking, save }:
     save: (side: 'customer' | 'carrier', date: Dayjs | null) => void;
 }) {
     const marked = dateLabel(side.originalsAt);
+    // Оранжевая точка — отметка нужна для денег: без неё не считается дата
+    // платежа. Чёрная — отмечено. Пустая — отметка только для архива.
+    const needed = !marked && side.from === 'ORIGINALS' && !!paymentTermsLabel(side.days, side.from);
     return (
         // Якорь для ИИ-гида: отметку об оригиналах спрашивают чаще всего, а
         // лежит она не на виду — во вкладке «Документы» рейса.
-        <div className={nova.item} data-guide={`originals-${sideKey}`}>
-            <span className={nova.itemIcon}>
-                {marked ? <FileCheck2 size={14} /> : <FileClock size={14} />}
+        <div className={card.task} data-guide={`originals-${sideKey}`}>
+            <span className={cn(card.dot, marked ? card.dotOk : needed ? card.dotNeed : card.dotNone)} aria-hidden />
+            <span style={{ fontWeight: 500 }}>{title}</span>
+            <span>
+                {marked ? `Отмечено ${marked}` : 'Нет отметки'}
+                <span className={card.muted}> · {consequence(side, !!marked)}</span>
             </span>
-            <span className={nova.itemText}>
-                <span className={nova.itemLabel}>
-                    {title}
-                    {marked ? ` · ${marked}` : ' · нет отметки'}
-                </span>
-                <span className={nova.itemDesc}>{consequence(side, !!marked)}</span>
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {busy === sideKey && <Loader2 size={14} className="animate-spin" />}
                 {picking === sideKey ? (
                     <DateField
@@ -94,7 +94,7 @@ function OriginalsRow({ side, title, sideKey, busy, picking, setPicking, save }:
                         {!marked && (
                             <button
                                 type="button"
-                                className={nova.action}
+                                className={card.lnk}
                                 onClick={() => save(sideKey, dayjs())}
                             >
                                 Сегодня
@@ -102,7 +102,7 @@ function OriginalsRow({ side, title, sideKey, busy, picking, setPicking, save }:
                         )}
                         <button
                             type="button"
-                            className={nova.action}
+                            className={card.lnk}
                             onClick={() => setPicking(sideKey)}
                         >
                             {marked ? 'Изменить' : 'Другой день'}
@@ -110,7 +110,7 @@ function OriginalsRow({ side, title, sideKey, busy, picking, setPicking, save }:
                         {marked && (
                             <button
                                 type="button"
-                                className={nova.action}
+                                className={card.lnk}
                                 onClick={() => save(sideKey, null)}
                             >
                                 Снять
@@ -163,13 +163,10 @@ export default function OrderOriginalsCard({
     const rowProps = { busy, picking, setPicking, save };
 
     return (
-        <section className={nova.card} style={{ marginBottom: 14 }}>
-            <div className={nova.cardHead}>
-                <FileCheck2 size={14} />
-                <h2 className={nova.cardTitle}>Оригиналы накладных</h2>
-            </div>
-            <div className={nova.cardBody}>
-                <div className={nova.list}>
+        <section className={card.section}>
+            <h2 className={card.head}>Оригиналы накладных</h2>
+            <div>
+                <div className={card.list}>
                     <OriginalsRow
                         sideKey="carrier"
                         side={carrier}
