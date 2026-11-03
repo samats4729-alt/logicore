@@ -132,6 +132,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
        у него свой кабинет: водители, их рейсы, приглашение — без заявок,
        биржи и денег перевозчика. Парк подтверждает владелец платформы. */
     const [isPark, setIsPark] = useState(false);
+    const [parkKnown, setParkKnown] = useState(false);
     const { theme, setTheme } = useTheme();
     // Новые отклики на свои заявки на бирже — значок у «Заявок» и «Биржи» с
     // любой страницы кабинета (владелец, 15.10.2026).
@@ -157,6 +158,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             if (!alive) return;
             setExchangeOn(st.enabled);
             setIsPark(st.enabled && st.isPark);
+            setParkKnown(true);
         });
         return () => { alive = false; };
     }, [user?.companyId]);
@@ -289,6 +291,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     { key: '/company/calculator', label: 'Калькулятор рейса' },
                     // Водителей без ИП рассчитывает парк — остальным пункт не нужен (владелец, 29.10.2026).
                     ...(isPark ? [{ key: '/company/driver-calculator', label: 'Расчёт водителя без ИП' }] : []),
+                    // Обычной компании — свой калькулятор: ГСМ, налоги, цена заказчику (шеф, 03.11.2026).
+                    ...(parkKnown && !isPark ? [{ key: '/company/fuel-tax-calculator', label: 'ГСМ и налоги' }] : []),
                 ],
             });
         }

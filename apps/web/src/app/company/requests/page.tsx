@@ -19,9 +19,14 @@ export default function RequestsPage() {
     const router = useRouter();
     // Расчёт водителя без ИП — только парку, по тому же признаку, что раздел «Управление парком».
     const [isPark, setIsPark] = useState(false);
+    const [parkKnown, setParkKnown] = useState(false);
     useEffect(() => {
         let alive = true;
-        exchangeStatus().then((st) => { if (alive) setIsPark(st.enabled && st.isPark); });
+        exchangeStatus().then((st) => {
+            if (!alive) return;
+            setIsPark(st.enabled && st.isPark);
+            setParkKnown(true);
+        });
         return () => { alive = false; };
     }, []);
 
@@ -56,6 +61,17 @@ export default function RequestsPage() {
                         >
                             <Calculator size={15} />
                             Водитель без ИП
+                        </button>
+                    )}
+                    {/* Обычной компании: ГСМ, налоги и цена заказчику (шеф, 03.11.2026). */}
+                    {parkKnown && !isPark && (
+                        <button
+                            type="button"
+                            className={styles.action}
+                            onClick={() => router.push('/company/fuel-tax-calculator')}
+                        >
+                            <Calculator size={15} />
+                            ГСМ и налоги
                         </button>
                     )}
                 </div>
