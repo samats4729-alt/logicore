@@ -205,7 +205,7 @@ export default function ParkTripsPage() {
                                                     <div className="whitespace-nowrap text-[11.5px] text-muted-foreground">
                                                         {t.settlement.base != null && <div>ставка водителя {moneyShort(t.settlement.base)}</div>}
                                                         <div>на руки {moneyShort(t.settlement.driverTotal)}</div>
-                                                        {t.settlement.scheme === 2 && <div>топливо {moneyShort(t.settlement.fuelEstimate)}</div>}
+                                                        {(t.settlement.scheme ?? 0) >= 2 && <div>топливо {moneyShort(t.settlement.fuelEstimate)}</div>}
                                                         <div>парку {moneyShort(t.settlement.parkFee)}</div>
                                                     </div>
                                                 )}
@@ -230,7 +230,7 @@ export default function ParkTripsPage() {
                                             <TripResponsibleSelect orderId={t.id} current={t.responsible ?? null} staff={staff} onChanged={assigned(t.id)} />
                                         )}
                                         {t.settlement && (
-                                            <div className="text-[12px] text-muted-foreground">водителю на руки {moneyShort(t.settlement.driverTotal)}{t.settlement.scheme === 2 ? ` · топливо ${moneyShort(t.settlement.fuelEstimate)}` : ''} · парку {moneyShort(t.settlement.parkFee)}</div>
+                                            <div className="text-[12px] text-muted-foreground">водителю на руки {moneyShort(t.settlement.driverTotal)}{(t.settlement.scheme ?? 0) >= 2 ? ` · топливо ${moneyShort(t.settlement.fuelEstimate)}` : ''} · парку {moneyShort(t.settlement.parkFee)}</div>
                                         )}
                                         {t.settlement && <div className="text-[12px]"><TaxBreakdown s={t.settlement} /></div>}
                                         <div className="flex items-center justify-between gap-2">
@@ -257,8 +257,9 @@ export default function ParkTripsPage() {
 }
 
 /**
- * Налоги рейса (шеф, 16.10.2026: «сколько ИПН, ОПВ, ОСМС, соцотчисления»):
- * ОПВ удержано у водителя, остальное платит парк.
+ * Налоги рейса (шеф, 16.10.2026: «сколько ИПН, ОПВ, ОСМС, соцотчисления»).
+ * С 03.11.2026 все четыре удержаны из начисления; в рейсах раньше у водителя
+ * удержан только ОПВ, остальное платит парк.
  */
 function TaxBreakdown({ s }: { s: ParkTrip['settlement'] }) {
     if (!s || s.gross == null) return <span className="text-muted-foreground">—</span>;
@@ -267,7 +268,11 @@ function TaxBreakdown({ s }: { s: ParkTrip['settlement'] }) {
         <div className="space-y-0.5 tabular-nums">
             <div>ОПВ {moneyShort(s.opv)} · ОСМС {moneyShort(s.vosms)} · СО {moneyShort(s.so)} · ИПН {moneyShort(s.ipn)}</div>
             <div className="text-[11.5px] text-muted-foreground">
-                {s.scheme === 2 ? `ОПВ — из денег водителя; ОСМС, СО, ИПН — за счёт парка (${moneyShort(parkPays)})` : 'по прежнему расчёту'}
+                {s.scheme === 3
+                    ? `всего ${moneyShort((s.opv ?? 0) + parkPays)} — удержано из начисления ${moneyShort(s.gross)}`
+                    : s.scheme === 2
+                        ? `ОПВ — из денег водителя; ОСМС, СО, ИПН — за счёт парка (${moneyShort(parkPays)})`
+                        : 'по прежнему расчёту'}
                 {s.preliminary ? ' · предварительный' : ''}
             </div>
         </div>

@@ -15,19 +15,18 @@ describe('Калькулятор водителя без ИП', () => {
     }
     const req = { user: { companyId: 'c-1' } };
 
-    it('пример шефа: 100 000, топливо 27 000, с вычетом, без НДС → на руки 65 700, заказчику 115 219,50', async () => {
+    it('ставка 100 000, топливо 27 000, с вычетом, без НДС → на руки 73 000, заказчику 125 866,40', async () => {
         const { controller } = build();
         const r = await controller.driver(req, { amount: '100000', fuel: '27000', deduction: 'true', vat: 'false' });
-        expect(r.calc.driverTotal).toBe(65700);
-        expect(r.calc.customerPrice).toBe(115219.5);
+        expect(r.calc).toMatchObject({ driverTotal: 73000, gross: 87424, customerPrice: 125866.4 });
         expect(r.ratesFrom).toBe('PARK');
     });
 
     it('от суммы «на руки» — та же сумма водителю', async () => {
         const { controller } = build();
-        const r = await controller.driver(req, { from: 'onHand', amount: '65700', fuel: '27000', deduction: 'true', vat: 'false' });
-        expect(r.calc.driverTotal).toBe(65700);
-        expect(r.calc.customerPrice).toBe(115219.5);
+        const r = await controller.driver(req, { from: 'onHand', amount: '73000', fuel: '27000', deduction: 'true', vat: 'false' });
+        expect(r.calc.driverTotal).toBe(73000);
+        expect(r.calc.customerPrice).toBe(125866.4);
     });
 
     it('топливо по километрам — по стандартной цене литра', async () => {
@@ -52,7 +51,7 @@ describe('Калькулятор водителя без ИП', () => {
         const { controller } = build(false);
         const r = await controller.driver({ user: { companyId: 'c-own', role: 'ADMIN' } }, { amount: '100000', fuel: '27000', deduction: 'true', vat: 'false' });
         expect(r.ratesFrom).toBe('DEFAULT');
-        expect(r.calc.driverTotal).toBe(65700);
+        expect(r.calc.driverTotal).toBe(73000);
     });
 
     it('сумма меньше топлива — понятный отказ', async () => {

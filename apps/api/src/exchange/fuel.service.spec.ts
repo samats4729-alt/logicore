@@ -78,6 +78,16 @@ describe('Топливо рейса водителя парка', () => {
         expect(v.toPay).toBe(196600);
     });
 
+    it('обратный расчёт сводится топливом так же; наружу — схема 2, приложение других значений не знает', async () => {
+        const { service } = build(tripRow({
+            exchangeSettlement: { scheme: 3, driverTotal: 456525, workNet: 456525, fuelEstimate: 293475, distanceKm: 2795, driverId: 'd-1' },
+            exchangeFuelIssues: [{ id: 'i-1', amount: 60000, method: 'STATION', note: null, createdAt: new Date() }],
+            exchangeFuelReceipts: [{ id: 'r-1', amount: 52000, status: 'ACCEPTED', rejectReason: null, createdAt: new Date(), decidedAt: new Date(), fileKey: 'uploads/r.jpg' }],
+        }));
+        const v = await service.forDriver('u-driver', 'order-1');
+        expect(v).toMatchObject({ scheme: 2, withoutReceipt: 8000, ownMoney: 0, toPay: 448525 });
+    });
+
     it('парк выдал предоплату сам: переводом водителю, отмечено как выдача без запроса', async () => {
         const { service, prisma } = build(tripRow({
             exchangeSettlement: { scheme: 2, driverTotal: 246600, workNet: 246600, fuelEstimate: 126000, distanceKm: 1200, driverId: 'd-1' },

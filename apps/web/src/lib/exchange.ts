@@ -379,7 +379,7 @@ export interface ParkTrip {
     /** Расчёт «на руки» (рейсы с 12.10.2026): итог водителю, топливо, доли парка и LogiCore. */
     settlement?: {
         driverTotal: number; fuelEstimate: number; parkFee: number; platformFee: number;
-        /** Ставка водителя до вычетов: топливо и оплата за работу до ОПВ; у прежних рейсов — нет. */
+        /** Ставка водителя: топливо и сумма на руки (до 03.11.2026 — топливо и оплата до ОПВ); у прежних рейсов — нет. */
         base?: number | null;
         /** 2 — схема шефа (16.10.2026), 1 — прежняя. Разбивка налогов по рейсу. */
         scheme?: number; gross?: number; opv?: number; vosms?: number; so?: number; ipn?: number; preliminary?: boolean;
@@ -429,8 +429,12 @@ export interface ParkOffer {
  */
 export interface ParkOrderCalc {
     source: 'TRIP' | 'OWN';
-    /** 1 — прежняя схема (до 16.10.2026): «на руки» вместе с топливом. */
-    scheme: 1 | 2;
+    /**
+     * 3 — обратный расчёт (03.11.2026): все налоги удержаны из начисления;
+     * 2 — рейс до 03.11.2026: у водителя только ОПВ, остальное платит парк;
+     * 1 — до 16.10.2026: «на руки» вместе с топливом.
+     */
+    scheme: 1 | 2 | 3;
     driverName: string | null;
     distanceKm: number | null;
     preliminary: boolean;
@@ -567,7 +571,7 @@ export interface ParkRegistryLine {
     loadingDate: string | null;
     completedAt: string | null;
     driver: { id: string; name: string; iin: string | null };
-    /** Ставка водителя — до вычетов: топливо (ГСМ) и оплата за работу до ОПВ. */
+    /** Ставка водителя: топливо (ГСМ) и сумма на руки (до 03.11.2026 — топливо и оплата до ОПВ). */
     driverRate: number;
     driverTotal: number;
     fuelEstimate: number;
