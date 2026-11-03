@@ -3,15 +3,15 @@ import { OrderStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { kzCurrentMonth } from '../common/utils/business-date';
 import { LngLat, estimateRoadKm, pointOf, roadDistanceKm } from './route-distance';
-import { Settlement, SettlementRates, TaxPosition, fromBase, fromCustomerPrice, fromOnHand, fuelEstimate, fuelPerKmOf, money, monthlyDeduction, withPosition } from './settlement-calc';
+import { SOCIAL_LIMITS, Settlement, SettlementRates, TaxPosition, fromBase, fromCustomerPrice, fromOnHand, fuelEstimate, fuelPerKmOf, money, monthlyDeduction, withPosition } from './settlement-calc';
 
 /** Доля LogiCore по умолчанию, % от суммы с налогами — меняется в админке (ключ платформы). */
 export const PLATFORM_FEE_KEY = 'exchange_platform_fee_pct';
 const PLATFORM_FEE_DEFAULT = 5;
 
 /**
- * Настройки парка по умолчанию — схема шефа (16.10.2026): комиссия 10 % со всей
- * суммы (в ней доля LogiCore 5 %), топливо 30 л на 100 км по 350 ₸ (лето),
+ * Настройки парка по умолчанию: комиссия 10 % со всей суммы с налогами
+ * (в ней доля LogiCore 5 %), топливо 30 л на 100 км по 350 ₸ (лето),
  * ИПН 10 % и 15 % выше 8 500 МРП в год. НДС 16 % — только у плательщиков НДС.
  */
 export const PARK_DEFAULTS = {
@@ -39,9 +39,10 @@ export type SettlementCalc = Settlement & Omit<SettlementContext, 'position'>;
 
 /** Строки расчёта водителя без ИП, которые парк видит в заявке. */
 export interface ParkOrderLines {
-    /** Топливо + оплата за работу. */
+    /** Ставка за рейс. Схема 3: топливо + на руки; схема 2: топливо + оплата за работу. */
     base: number;
     fuel: number;
+    /** Начислено по ГПХ. */
     gross: number;
     opv: number;
     driverTotal: number;
@@ -63,8 +64,12 @@ export interface ParkOrderLines {
  */
 export interface ParkOrderCalc {
     source: 'TRIP' | 'OWN';
-    /** 1 — рейс по прежней схеме (до 16.10.2026): «на руки» вместе с топливом. */
-    scheme: 1 | 2;
+    /**
+     * 3 — обратный расчёт (03.11.2026): все налоги удержаны из начисления;
+     * 2 — рейс до 03.11.2026: у водителя только ОПВ, остальное платит парк;
+     * 1 — до 16.10.2026: «на руки» вместе с топливом.
+     */
+    scheme: 1 | 2 | 3;
     driverName: string | null;
     distanceKm: number | null;
     preliminary: boolean;
@@ -139,6 +144,7 @@ export class ExchangeSettlementService {
             deductionMrp: p.deductionMrp, mrp: p.mrp,
             vatPct: p.vatPayer ? p.vatPct : 0,
             ipnHighPct: p.ipnHighPct, ipnThresholdMrp: p.ipnThresholdMrp,
+            ...SOCIAL_LIMITS,
         };
         const fuelPerKm = fuelPerKmOf(p.fuelConsumption, p.fuelPriceSummer, p.fuelPriceWinter, p.fuelSeason);
         // Расход на 100 км — чтобы показать водителю лимит топлива и в литрах.
@@ -158,28 +164,36 @@ export class ExchangeSettlementService {
                 where: { driverId: driver.id, parkCompanyId: driver.parkCompanyId, order: { status: { not: OrderStatus.CANCELLED } } },
                 select: {
                     taxMonth: true, orderId: true, deductionAmount: true, deductionApplied: true, ipnBase: true,
+                    gross: true, opv: true,
                     order: { select: { driverId: true } }, driver: { select: { userId: true } },
                 },
             }),
         ]);
         const trips = rows
             .filter((r) => !r.order.driverId || r.order.driverId === r.driver.userId)
-            .map((r) => ({ taxMonth: r.taxMonth, orderId: r.orderId, deduction: r.deductionApplied ? num(r.deductionAmount) : 0, ipnBase: num(r.ipnBase) }));
+            .map((r) => ({
+                taxMonth: r.taxMonth, orderId: r.orderId, deduction: r.deductionApplied ? num(r.deductionAmount) : 0, ipnBase: num(r.ipnBase),
+                gross: num(r.gross), opv: num(r.opv),
+            }));
         return { ...settings, deductionRequested: !!me?.deductionRequested, trips };
     }
 
     /**
      * Налоговое положение водителя для рейса orderId (его самого не считаем —
      * его и пересчитываем): остаток вычета в месяце — только если водитель
-     * написал заявление и парк вычет не выключил; доход с начала года.
+     * написал заявление и парк вычет не выключил; доход с начала года; сколько
+     * базы взносов ушло на другие рейсы месяца — предел у них месячный.
      */
     position(base: Awaited<ReturnType<ExchangeSettlementService['driverBase']>>, taxMonth: string, orderId: string): TaxPosition {
         const others = base.trips.filter((t) => t.orderId !== orderId);
         const year = taxMonth.slice(0, 4);
-        const spent = others.filter((t) => t.taxMonth === taxMonth).reduce((sum, t) => money(sum + t.deduction), 0);
+        const month = others.filter((t) => t.taxMonth === taxMonth);
+        const spent = month.reduce((sum, t) => money(sum + t.deduction), 0);
         const deductionLeft = base.applyDeduction && base.deductionRequested ? Math.max(0, money(monthlyDeduction(base.rates) - spent)) : 0;
         const yearIpnBase = others.filter((t) => t.taxMonth.startsWith(year)).reduce((sum, t) => money(sum + t.ipnBase), 0);
-        return { deductionLeft, yearIpnBase };
+        const monthVosmsBase = month.reduce((sum, t) => money(sum + t.gross), 0);
+        const monthSoBase = month.reduce((sum, t) => money(sum + t.gross - t.opv), 0);
+        return { deductionLeft, yearIpnBase, monthSoBase, monthVosmsBase };
     }
 
     /**
@@ -245,10 +259,11 @@ export class ExchangeSettlementService {
     /**
      * Расчёт отклика на момент выбора исполнителя: вычет и годовой доход — как
      * у водителя сейчас; цена компании и сумма водителю — как в отклике.
-     * Отклик по прежней схеме (до 16.10.2026) фиксируется как был.
+     * Отклик по самой старой схеме (до 16.10.2026) фиксируется как был.
      */
     atAccept(offered: SettlementCalc, ctx: SettlementContext): SettlementCalc {
-        if ((offered as { scheme?: number }).scheme !== 2) return { ...offered, preliminary: ctx.preliminary };
+        const scheme = (offered as { scheme?: number }).scheme;
+        if (scheme !== 2 && scheme !== 3) return { ...offered, preliminary: ctx.preliminary };
         return { ...offered, ...withPosition(offered, offered.rates, ctx.position), preliminary: ctx.preliminary };
     }
 
@@ -288,7 +303,7 @@ export class ExchangeSettlementService {
             const gross = num(trip.gross);
             return {
                 source: 'TRIP',
-                scheme: trip.scheme === 2 ? 2 : 1,
+                scheme: trip.scheme === 3 ? 3 : trip.scheme === 2 ? 2 : 1,
                 driverName: order.assignedDriverName,
                 distanceKm: trip.distanceKm,
                 preliminary: trip.preliminary,
@@ -321,7 +336,7 @@ export class ExchangeSettlementService {
         const ctx = this.contextFromRow(base, order);
         const rates = { ...ctx.rates, vatPct: order.hasVat ? num(order.vatRate) : 0 };
         const view = {
-            source: 'OWN' as const, scheme: 2 as const, driverName: order.assignedDriverName,
+            source: 'OWN' as const, scheme: 3 as const, driverName: order.assignedDriverName,
             distanceKm: ctx.distanceKm, preliminary: ctx.preliminary, rates: ratesView(rates),
         };
         const price = order.currency === 'KZT' ? order.customerPrice : order.customerPriceBase;
@@ -348,7 +363,8 @@ export class ExchangeSettlementService {
 
     /** Зафиксировать расчёт рейса — когда компания выбрала водителя. */
     fixData(orderId: string, driver: { id: string; parkCompanyId: string }, c: SettlementCalc): Prisma.ExchangeTripSettlementUncheckedCreateInput {
-        const scheme2 = (c as { scheme?: number }).scheme === 2;
+        const scheme = (c as { scheme?: number }).scheme;
+        const current = scheme === 2 || scheme === 3;
         return {
             orderId, driverId: driver.id, parkCompanyId: driver.parkCompanyId, taxMonth: c.taxMonth,
             distanceKm: c.distanceKm, fuelPerKm: c.fuelPerKm, fuelEstimate: c.fuel,
@@ -356,7 +372,7 @@ export class ExchangeSettlementService {
             so: c.so, parkCost: c.parkCost, platformFee: c.platformFee, parkFee: c.parkFee, customerPrice: c.customerPrice,
             deductionApplied: c.deductionApplied, deductionAmount: c.deductionAmount,
             vat: c.vat ?? 0, preliminary: c.preliminary ?? true,
-            scheme: scheme2 ? 2 : 1, base: scheme2 ? c.base : null, ipnBase: scheme2 ? c.ipnBase : 0,
+            scheme: current ? scheme : 1, base: current ? c.base : null, ipnBase: current ? c.ipnBase : 0,
             rates: c.rates as unknown as Prisma.InputJsonValue,
         };
     }

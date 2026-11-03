@@ -133,17 +133,19 @@ export class ExchangeFuelService {
                 })),
             },
             /**
-             * Схема расчёта: 2 — шефа (16.10.2026): на руки без топлива, топливо
-             * сводится чеками (дали без чека — вычитается, заправился за свои —
+             * Как сводится топливо: 2 — на руки без топлива, топливо сводится
+             * чеками (дали без чека — вычитается, заправился за свои —
              * возвращается); 1 — прежняя: итог с топливом минус выданное.
+             * Обратный расчёт (схема 3) сводится так же: здесь это тоже 2 —
+             * приложение водителя и кабинет понимают только эти два значения.
              */
-            scheme: s?.scheme ?? null,
+            scheme: s == null ? null : s.scheme >= 2 ? 2 : 1,
             /** Перечислить водителю в конце. */
-            toPay: s == null ? null : s.scheme === 2 ? payoutOf(num(s.workNet), issuedAll, accepted).toPay : money(num(s.driverTotal) - issuedAll),
+            toPay: s == null ? null : s.scheme >= 2 ? payoutOf(num(s.workNet), issuedAll, accepted).toPay : money(num(s.driverTotal) - issuedAll),
             /** Дали на топливо, а чека нет: по схеме шефа — вычитается из выплаты, по прежней — облагается. */
             withoutReceipt: money(Math.max(0, issued - accepted)),
             /** Чеков больше, чем дали: водитель заправлялся за свои — парк возвращает (схема шефа). */
-            ownMoney: s?.scheme === 2 ? money(Math.max(0, accepted - issued)) : 0,
+            ownMoney: s != null && s.scheme >= 2 ? money(Math.max(0, accepted - issued)) : 0,
             /** Выплату запросили — топливо по рейсу больше не меняется. */
             locked: !!row.driverPayoutItem,
         };

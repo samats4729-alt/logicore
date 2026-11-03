@@ -134,7 +134,7 @@ export class ExchangeParkService {
                 /** Расчёт «на руки» — у рейсов после 12.10.2026; у прежних — пусто. */
                 settlement: r.exchangeSettlement ? {
                     driverTotal: Number(r.exchangeSettlement.driverTotal),
-                    /** Ставка водителя до вычетов — топливо и оплата за работу до ОПВ (31.10.2026). */
+                    /** Ставка водителя — топливо и сумма на руки (до 03.11.2026 — топливо и оплата до ОПВ). */
                     base: r.exchangeSettlement.base != null ? Number(r.exchangeSettlement.base) : null,
                     fuelEstimate: Number(r.exchangeSettlement.fuelEstimate),
                     parkFee: Number(r.exchangeSettlement.parkFee),

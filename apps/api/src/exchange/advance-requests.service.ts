@@ -232,13 +232,13 @@ export class ExchangeAdvanceRequestsService {
             this.available({ id: orderId, partnerId: parkId }),
             this.prisma.exchangeTripSettlement.findUnique({
                 where: { orderId },
-                select: { parkCompanyId: true, base: true, fuelEstimate: true, gross: true, opv: true, vosms: true, so: true, ipn: true },
+                select: { parkCompanyId: true, scheme: true, base: true, fuelEstimate: true, gross: true, opv: true, vosms: true, so: true, ipn: true },
             }),
         ]);
         if (!limit || !s || s.parkCompanyId !== parkId) return null;
-        // Ставка водителя — до вычетов: топливо и оплата за работу до ОПВ.
+        // Ставка за рейс; у рейсов без неё в расчёте — топливо и оплата за работу.
         const rate = s.base != null ? num(s.base) : money(num(s.fuelEstimate) + num(s.gross));
-        return { ...limit, rate, gross: num(s.gross), taxes: { opv: num(s.opv), vosms: num(s.vosms), so: num(s.so), ipn: num(s.ipn) } };
+        return { ...limit, scheme: s.scheme, rate, gross: num(s.gross), taxes: { opv: num(s.opv), vosms: num(s.vosms), so: num(s.so), ipn: num(s.ipn) } };
     }
 
     async openCount(parkId: string) {

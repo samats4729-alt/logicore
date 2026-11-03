@@ -139,8 +139,8 @@ export class ExchangePayoutsService {
             const r = s.rates as unknown as SettlementRates;
             const f = fuel.get(t.id) ?? { issued: 0, receipts: 0 };
             const itemRates = { commissionPct: r.parkPct, opvPct: r.opvPct, vosmsPct: r.vosmsPct, ipnPct: r.ipnPct, soPct: r.soPct };
-            if (s.scheme === 2) {
-                // Схема шефа: налоги посчитаны при выборе исполнителя и не меняются;
+            if (s.scheme >= 2) {
+                // Налоги посчитаны при выборе исполнителя и не меняются;
                 // на руки как договорились, топливо сводится чеками.
                 const p = payoutOf(num(s.workNet), f.issued, f.receipts);
                 return {

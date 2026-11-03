@@ -1,29 +1,36 @@
 /**
- * Расчёт рейса водителя парка без ИП — схема шефа (16.10.2026, с ответами налоговиков).
+ * Расчёт рейса водителя парка без ИП — обратный расчёт (шеф, 03.11.2026,
+ * файл «raschet_ispravlennyi»; схема 3).
  *
- * Заказчик выставляет на бирже сумму сделки (пример — 100 000). Дальше:
+ * Водитель получает оговорённую сумму чистыми, а все налоги удерживаются из
+ * начисления по ГПХ — поэтому начисление поднимается так, чтобы после них
+ * осталось ровно это:
  *
- *  1. топливо — по расчёту: км × расход на 100 км × цена литра (лето/зима из
- *     настроек парка). Его оплачивает парк; перерасход и экономия — на парке,
- *     сумму водителю они не меняют;
- *  2. оплата водителю за работу = сумма − топливо (73 000);
- *  3. ОПВ 10 % удерживается из неё — водителю на руки остаётся остальное (65 700);
- *  4. ОСМС 2 % — платит парк, от оплаты за работу;
- *  5. СО 5 % — платит парк, от оплаты за работу за вычетом ОПВ;
- *  6. ИПН — платит парк. Облагается оплата за работу минус то, что удержано
- *     у водителя (только ОПВ — налоговики: «вычитать можно только удержанное»),
- *     минус базовый вычет, если водитель написал заявление (копится за месяц).
- *     Шкала прогрессивная: выше порога годового дохода — повышенная ставка;
- *  7. сумма + ОСМС + СО + ИПН → плюс 10 % комиссии со всей суммы (в них
- *     доля LogiCore — 5 %, половина) → плюс НДС, если парк его плательщик.
+ *  1. ставка за рейс = топливо + на руки. Топливо — по расчёту: км × расход на
+ *     100 км × цена литра. Его оплачивает парк; перерасход и экономия — на
+ *     парке, сумму водителю они не меняют;
+ *  2. начисление по ГПХ — наименьшее, при котором после налогов остаётся ровно
+ *     «на руки». Предел СО учтён: формула из файла его не видела и на больших
+ *     суммах давала водителю больше оговорённого;
+ *  3. ОПВ 10 % от начисления;
+ *  4. ОСМС 2 % от начисления (база не выше 20 МЗП в месяц);
+ *  5. СО 5 % от начисления минус ОПВ (база не выше 7 МЗП в месяц). Нижнего
+ *     предела нет: для ГПХ его отменили с 2026 года;
+ *  6. ИПН от начисления минус ОПВ, ОСМС, СО и базовый вычет, если водитель
+ *     написал заявление. Шкала прогрессивная: выше порога годового дохода —
+ *     повышенная ставка;
+ *  7. себестоимость = топливо + начисление → плюс 10 % комиссии (в них доля
+ *     LogiCore — 5 %) → плюс НДС, если парк его плательщик.
  *
- * 100 000, топливо 27 000, с вычетом, без НДС → водителю 65 700, заказчику 115 219,50.
+ * Ставка 750 000, топливо 293 475 → на руки 456 525, начислено 607 486,
+ * налоги 150 961, с НДС 16 % заказчику 1 149 626,24.
  *
- * Деньги считаются в целых тиынах: каждая доля округляется до тиына один раз.
- * Пределы взносов (от МЗП) не применяются — открытый вопрос бухгалтеру парка.
+ * Налоги — целыми тенге, как в файле; комиссия и цена — до тиына. Деньги
+ * считаются в целых тиынах.
  *
- * Ниже — прежняя схема 12.10.2026 (`actualPayout`): по ней досчитываются
- * выплаты рейсов, зафиксированных до 16.10.
+ * Ниже — прежние схемы, по ним досчитываются уже поданные отклики и рейсы:
+ * схема 2 (16.10.2026: у водителя только ОПВ, остальное парк платит сам) и
+ * схема 1 (12.10.2026, `actualPayout`).
  */
 export interface SettlementRates {
     opvPct: number;
@@ -43,7 +50,14 @@ export interface SettlementRates {
     ipnHighPct?: number;
     /** Порог годового облагаемого дохода, МРП. */
     ipnThresholdMrp?: number;
+    /** МЗП, ₸, и пределы базы взносов в месяц, в МЗП. Нет — без предела (снимки ставок прежних рейсов). */
+    mzp?: number;
+    soCapMzp?: number;
+    vosmsCapMzp?: number;
 }
+
+/** МЗП 2026 года и пределы взносов. Меняются законом раз в год — тогда и здесь. */
+export const SOCIAL_LIMITS = { mzp: 85000, soCapMzp: 7, vosmsCapMzp: 20 };
 
 /** Что у водителя уже было в этом парке до этого рейса. */
 export interface TaxPosition {
@@ -51,28 +65,32 @@ export interface TaxPosition {
     deductionLeft: number;
     /** Облагаемый ИПН доход с начала года, ₸ — для прогрессивной шкалы. */
     yearIpnBase: number;
+    /** База СО и ОСМС по другим рейсам месяца, ₸: предел взносов — на месяц у одного парка. */
+    monthSoBase?: number;
+    monthVosmsBase?: number;
 }
 
 export interface Settlement {
-    scheme: 2;
-    /** Сумма сделки до налогов и комиссии: топливо + оплата за работу. */
+    /** 3 — обратный расчёт (03.11.2026); 2 — у водителя только ОПВ (16.10.2026). */
+    scheme: 2 | 3;
+    /** Ставка за рейс. Схема 3: топливо + на руки; схема 2: топливо + оплата за работу. */
     base: number;
     fuel: number;
-    /** Оплата водителю за работу (доход по ГПХ). */
+    /** Начислено по ГПХ — доход водителя. */
     gross: number;
-    /** ОПВ — удерживается у водителя. */
+    /** ОПВ. */
     opv: number;
-    /** На руки водителю: оплата за работу минус ОПВ. */
+    /** На руки водителю. */
     workNet: number;
     /** То же, что workNet: «на руки» — так поле называется в отклике и рейсе. */
     driverTotal: number;
-    /** За счёт парка. */
+    /** Схема 3: удерживаются из начисления; схема 2: за счёт парка. */
     vosms: number;
     so: number;
     ipn: number;
     /** Облагаемый ИПН доход рейса (копится за год). */
     ipnBase: number;
-    /** Сколько парк отдаёт по рейсу: топливо, водителю, в бюджет. */
+    /** Себестоимость рейса: топливо и начисление (схема 2: топливо, оплата и налоги парка). */
     parkCost: number;
     /** 10 % со всей суммы: доля LogiCore + доля парка. */
     commission: number;
@@ -116,7 +134,93 @@ function ipnOf(taxable: number, r: SettlementRates, yearBase: number): number {
     return share(low, r.ipnPct) + share(taxable - low, high);
 }
 
-/** Полный расчёт от оплаты за работу (в тиынах). */
+/** Доля суммы в тиынах, округлённая до целого тенге: налоги платятся целыми. */
+function shareTenge(tiyn: number, pct: number | undefined): number {
+    const bp = Math.round((pct ?? 0) * 100);
+    return Math.round((tiyn * bp) / 1000000) * 100;
+}
+
+/** Сколько базы взноса осталось в месяце, в тиынах: нет предела — вся. */
+function capped(amount: number, capMzp: number | undefined, mzp: number | undefined, used: number | undefined): number {
+    if (!capMzp || !mzp) return amount;
+    return Math.min(amount, Math.max(0, toT(capMzp * mzp) - toT(used ?? 0)));
+}
+
+/** Налоги с начисления (схема 3), всё в тиынах. */
+function withheldT(gross: number, r: SettlementRates, pos: TaxPosition) {
+    const opv = shareTenge(gross, r.opvPct);
+    const vosms = shareTenge(capped(gross, r.vosmsCapMzp, r.mzp, pos.monthVosmsBase), r.vosmsPct);
+    const so = shareTenge(capped(Math.max(0, gross - opv), r.soCapMzp, r.mzp, pos.monthSoBase), r.soPct);
+    const rest = Math.max(0, gross - opv - vosms - so);
+    const used = Math.min(Math.max(0, toT(pos.deductionLeft)), rest);
+    const ipnBase = rest - used;
+    const ipn = Math.round(ipnOf(ipnBase, r, toT(pos.yearIpnBase)) / 100) * 100;
+    return { opv, vosms, so, used, ipnBase, ipn, total: opv + vosms + so + ipn };
+}
+
+/**
+ * Наименьшее начисление, после налогов с которого остаётся ровно net.
+ *
+ * Налоги — целые тенге, поэтому начисление отличается от «на руки» на целое
+ * число тенге: перебираем только такие суммы. С каждым шагом «на руки» растёт
+ * не больше чем на тенге, поэтому нужная сумма не перескакивается; налоги чуть
+ * скачут от округления — от найденного места смотрим соседние.
+ */
+function grossForNetT(net: number, r: SettlementRates, pos: TaxPosition): number {
+    if (net <= 0) return 0;
+    const netOf = (g: number) => g - withheldT(g, r, pos).total;
+    let lo = net;
+    let step = Math.max(100, Math.ceil(net / 100) * 100);
+    let hi = net + step;
+    for (let i = 0; netOf(hi) < net; i++) {
+        if (i > 40) throw new RangeError('Налоги в настройках парка не оставляют водителю ничего — проверьте ставки');
+        step *= 2;
+        hi = net + step;
+    }
+    while (hi - lo > 100) {
+        const mid = lo + Math.floor((hi - lo) / 200) * 100;
+        if (netOf(mid) < net) lo = mid;
+        else hi = mid;
+    }
+    for (let g = Math.max(net, hi - 500); g <= hi + 500; g += 100) {
+        if (netOf(g) === net) return g;
+    }
+    return hi;
+}
+
+/** Полный расчёт от начисления (схема 3, в тиынах). */
+function fromGrossT(gross: number, fuel: number, r: SettlementRates, pos: TaxPosition): Settlement {
+    const w = withheldT(gross, r, pos);
+    const net = gross - w.total;
+    const subtotal = fuel + gross;
+    const commission = share(subtotal, r.parkPct);
+    const platformFee = Math.min(share(subtotal, r.platformPct), commission);
+    const priceNoVat = subtotal + commission;
+    const vat = share(priceNoVat, r.vatPct);
+    return {
+        scheme: 3,
+        base: fromT(fuel + net),
+        fuel: fromT(fuel),
+        gross: fromT(gross),
+        opv: fromT(w.opv),
+        workNet: fromT(net),
+        driverTotal: fromT(net),
+        vosms: fromT(w.vosms),
+        so: fromT(w.so),
+        ipn: fromT(w.ipn),
+        ipnBase: fromT(w.ipnBase),
+        parkCost: fromT(subtotal),
+        commission: fromT(commission),
+        platformFee: fromT(platformFee),
+        parkFee: fromT(commission - platformFee),
+        vat: fromT(vat),
+        customerPrice: fromT(priceNoVat + vat),
+        deductionApplied: w.used > 0,
+        deductionAmount: fromT(w.used),
+    };
+}
+
+/** Схема 2 (16.10.2026) — от оплаты за работу, в тиынах: для откликов, поданных до 03.11.2026. */
 function costsT(gross: number, fuel: number, r: SettlementRates, pos: TaxPosition): Settlement {
     const opv = share(gross, r.opvPct);
     const workNet = gross - opv;
@@ -154,12 +258,12 @@ function costsT(gross: number, fuel: number, r: SettlementRates, pos: TaxPositio
     };
 }
 
-/** Заказчик выставил сумму сделки → всё остальное. */
+/** Заказчик выставил ставку за рейс → всё остальное: на руки — ставка минус топливо. */
 export function fromBase(base: number, fuel: number, r: SettlementRates, pos: TaxPosition): Settlement {
     if (base <= fuel) {
         throw new RangeError(`Сумма должна быть больше топлива по расчёту — ${Math.round(fuel).toLocaleString('ru-RU')} ₸`);
     }
-    return costsT(toT(base) - toT(fuel), toT(fuel), r, pos);
+    return fromGrossT(grossForNetT(toT(base) - toT(fuel), r, pos), toT(fuel), r, pos);
 }
 
 /**
@@ -168,24 +272,24 @@ export function fromBase(base: number, fuel: number, r: SettlementRates, pos: Ta
  * а водитель парка везёт без ИП (владелец, 29.10.2026: «все расчёты без ИП
  * должны быть в заявке»).
  *
- * Обратный ход `fromBase`: наибольшая оплата за работу, при которой цена не
- * выше заданной. Остаток в тиын-другой от округления — доле парка, чтобы
- * строки расчёта сходились с ценой заявки до тиына.
+ * Обратный ход `fromBase`: наибольшее начисление в целых тенге, при котором
+ * цена не выше заданной. Остаток от округления — доле парка, чтобы строки
+ * расчёта сходились с ценой заявки до тиына.
  */
 export function fromCustomerPrice(price: number, fuel: number, r: SettlementRates, pos: TaxPosition): Settlement {
     const total = toT(price);
     const fuelT = toT(fuel);
-    if (total <= 0 || toT(costsT(0, fuelT, r, pos).customerPrice) > total) {
+    if (total <= 0 || toT(fromGrossT(0, fuelT, r, pos).customerPrice) > total) {
         throw new RangeError(`Цена для заказчика меньше топлива с комиссией — топливо по расчёту ${Math.round(fuel).toLocaleString('ru-RU')} ₸`);
     }
     let lo = 0;
-    let hi = total;
+    let hi = Math.floor(total / 100);
     while (lo < hi) {
         const mid = Math.ceil((lo + hi) / 2);
-        if (toT(costsT(mid, fuelT, r, pos).customerPrice) <= total) lo = mid;
+        if (toT(fromGrossT(mid * 100, fuelT, r, pos).customerPrice) <= total) lo = mid;
         else hi = mid - 1;
     }
-    const s = costsT(lo, fuelT, r, pos);
+    const s = fromGrossT(lo * 100, fuelT, r, pos);
     const rest = total - toT(s.customerPrice);
     if (!rest) return s;
     return {
@@ -196,21 +300,10 @@ export function fromCustomerPrice(price: number, fuel: number, r: SettlementRate
     };
 }
 
-/**
- * Водитель назвал, сколько хочет на руки (без топлива — его оплачивает парк) →
- * оплата за работу такая, чтобы после ОПВ осталось ровно это.
- */
+/** Водитель назвал, сколько хочет на руки (без топлива — его оплачивает парк) → начисление под эту сумму. */
 export function fromOnHand(onHand: number, fuel: number, r: SettlementRates, pos: TaxPosition): Settlement {
     if (onHand <= 0) throw new RangeError('Укажите, сколько хотите получить на руки');
-    const net = toT(onHand);
-    const guess = Math.floor(net / (1 - r.opvPct / 100));
-    let found = -1;
-    for (let g = Math.max(0, guess - 50); g <= guess + 50; g++) {
-        const got = g - share(g, r.opvPct);
-        if (got === net) { found = g; break; }
-        if (got > net && found < 0) found = g;
-    }
-    return costsT(found >= 0 ? found : Math.ceil(net / (1 - r.opvPct / 100)), toT(fuel), r, pos);
+    return fromGrossT(grossForNetT(toT(onHand), r, pos), toT(fuel), r, pos);
 }
 
 /**
@@ -220,8 +313,10 @@ export function fromOnHand(onHand: number, fuel: number, r: SettlementRates, pos
  * Разница налога ложится на долю парка.
  */
 export function withPosition(s: Settlement, r: SettlementRates, pos: TaxPosition): Settlement {
-    const fresh = costsT(toT(s.gross), toT(s.fuel), r, pos);
-    if (fresh.ipn === s.ipn && fresh.deductionAmount === s.deductionAmount) return s;
+    const fresh = s.scheme === 3
+        ? fromGrossT(grossForNetT(toT(s.driverTotal), r, pos), toT(s.fuel), r, pos)
+        : costsT(toT(s.gross), toT(s.fuel), r, pos);
+    if (fresh.gross === s.gross && fresh.ipn === s.ipn && fresh.deductionAmount === s.deductionAmount) return s;
     const priceNoVat = toT(s.customerPrice) - toT(s.vat);
     // Доля LogiCore — от согласованной цены, как в отклике; разница налога — только у парка.
     const parkFee = priceNoVat - toT(fresh.parkCost) - toT(s.platformFee);
@@ -229,7 +324,7 @@ export function withPosition(s: Settlement, r: SettlementRates, pos: TaxPosition
 }
 
 /**
- * Сколько перечислить водителю по итогам рейса (схема 2). На руки — как
+ * Сколько перечислить водителю по итогам рейса (схемы 2 и 3). На руки — как
  * договорились; топливо — забота парка: деньги, выданные водителю на
  * топливо, засчитываются чеками; не хватает чеков — эта разница из выплаты
  * вычитается, чеков больше выданного — водитель заправлялся за свои, парк

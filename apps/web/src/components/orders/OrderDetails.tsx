@@ -472,7 +472,7 @@ export function OrderSideCards({
 
                 {/* Водитель другой компании (парка с биржи, ИП-субподрядчика) — она
                     перевозчик по документам, а не экспедитор заявки (15.10.2026). */}
-                {!order.subForwarder && order.partner && order.partnerId !== order.forwarderId && (
+                {!carrierIsMe && !order.subForwarder && order.partner && order.partnerId !== order.forwarderId && (
                     <div className={styles.party}>
                         <div className={styles.role}>Перевозчик</div>
                         <div className={styles.who}>{resolveCompanyName(order.partnerId, partners, order.partner.name)}</div>

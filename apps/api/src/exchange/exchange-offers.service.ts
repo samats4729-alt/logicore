@@ -154,8 +154,8 @@ export class ExchangeOffersService {
     /**
      * Водитель парка откликается суммой на руки (без топлива — его оплачивает
      * парк) или соглашается на цену компании — тогда на руки = её сумма минус
-     * топливо и ОПВ (схема шефа, 16.10.2026). В отклик пишем цену для компании
-     * — с налогами парка, 10 % комиссии и НДС — и весь расчёт на этот момент.
+     * топливо (обратный расчёт, 03.11.2026). В отклик пишем цену для компании —
+     * с налогами, 10 % комиссии и НДС — и весь расчёт на этот момент.
      */
     private async driverCalc(driver: { id: string; parkCompanyId: string }, order: { id: string; exchangePrice: Prisma.Decimal | null }, dto: MakeOfferDto): Promise<SettlementCalc> {
         const ctx = await this.settlement.context(driver, order.id);

@@ -78,10 +78,8 @@ describe('Биржа · водитель: лента', () => {
         const { service, prisma } = build();
         const feed = await service.feed('u-1');
         expect(prisma.order.findMany.mock.calls[0][0].where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
-        // Схема шефа: 400 000 − топливо 126 000 (1 200 км × 30 л × 350 ₸) = 274 000 за работу,
-        // минус ОПВ 27 400 — на руки 246 600. Без заявления на вычет ИПН со всего.
-        // Схема шефа: 400 000 − топливо 126 000 − ОПВ 27 400 = 246 600 на руки.
-        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 246600, orderNumber: '7A-0042' });
+        // Обратный расчёт: 400 000 − топливо 126 000 (1 200 км × 30 л × 350 ₸) = 274 000 на руки.
+        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 274000, orderNumber: '7A-0042' });
     });
 
     it('водителю — сумма за рейс с расшифровкой: на руки, топливо, ОПВ; налоги парка, комиссия и цена компании скрыты', async () => {
@@ -94,29 +92,30 @@ describe('Биржа · водитель: лента', () => {
         const [load] = await service.feed('u-1');
         const card = await service.card('u-1', 'order-1');
         for (const v of [load, card]) {
-            // Шеф, 27.10.2026: 400 000 за рейс = 246 600 на руки + 126 000 топливо + 27 400 ОПВ.
-            expect(v.price).toBe(246600);
-            expect(v.trip).toEqual({ total: 400000, onHand: 246600, fuel: 126000, opv: 27400 });
+            // Шеф, 27.10.2026: сумма за рейс — на руки, топливо и пенсионные, всё деньги водителя.
+            // Начислено 364 603 → ОПВ 36 460.
+            expect(v.price).toBe(274000);
+            expect(v.trip).toEqual({ total: 436460, onHand: 274000, fuel: 126000, opv: 36460 });
             // Топливо — лимит на заправку: 1 200 км × 30 л на 100 км = 360 л.
             expect(v.fuel).toEqual({ amount: 126000, liters: 360 });
-            expect(v.opvPct).toBe(10);
+            // Долю ОПВ не отдаём: приложение считало бы по ней пенсионные по-старому.
+            expect(v).not.toHaveProperty('opvPct');
             expect(v).not.toHaveProperty('breakdown');
             // Что платит парк сверху (ВОСМС, СО, ИПН), комиссия и цена для
-            // компании с НДС (564 591,72) — водителю по-прежнему не отдаются.
+            // компании с НДС (626 009,43) — водителю по-прежнему не отдаются.
             const json = JSON.stringify(v);
-            for (const hidden of ['customerPrice', 'commission', 'parkFee', 'platformFee', 'vosms', 'ipn', '"so"', 'vat', 'gross', '564591']) {
+            for (const hidden of ['customerPrice', 'commission', 'parkFee', 'platformFee', 'vosms', 'ipn', '"so"', 'vat', 'gross', '626009']) {
                 expect(json).not.toContain(hidden);
             }
         }
     });
 
-    it('договорная цена — суммы за рейс нет, но топливо и доля ОПВ есть: по ним расшифруется свой отклик', async () => {
+    it('договорная цена — суммы за рейс нет, но топливо есть', async () => {
         const { service, prisma } = build();
         prisma.order.findMany.mockResolvedValue([boardRow({ exchangePrice: null })]);
         const [load] = await service.feed('u-1');
         expect(load.trip).toBeNull();
         expect(load.fuel).toEqual({ amount: 126000, liters: 360 });
-        expect(load.opvPct).toBe(10);
     });
 
     it('договорная цена — суммы на руки нет', async () => {

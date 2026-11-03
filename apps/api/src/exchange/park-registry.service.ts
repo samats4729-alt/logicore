@@ -163,7 +163,7 @@ export class ExchangeParkRegistryService {
         const item = r.order.driverPayoutItem;
         // Выплата запрошена — суммы из неё (их и выгружали в 1С); нет — оценка по текущим чекам.
         // Схема шефа: налоги зафиксированы при выборе исполнителя, топливо сводится чеками.
-        const live = item ? null : r.scheme === 2
+        const live = item ? null : r.scheme >= 2
             ? { gross: num(r.gross), opv: num(r.opv), vosms: num(r.vosms), ipn: num(r.ipn), so: num(r.so), ...payoutOf(num(r.workNet), f.issued, f.receipts) }
             : actualPayout(num(r.driverTotal), f.issued, f.receipts, r.rates as unknown as SettlementRates, num(r.deductionAmount));
         const a = item ? {
@@ -171,14 +171,17 @@ export class ExchangeParkRegistryService {
             toPay: item.toPay != null ? num(item.toPay) : num(item.net),
             fuelIssued: num(item.fuelIssued), fuelReceipts: num(item.fuelReceipts),
         } : { gross: live!.gross, opv: live!.opv, vosms: live!.vosms, ipn: live!.ipn, so: live!.so, toPay: live!.toPay, fuelIssued: live!.fuelIssued, fuelReceipts: live!.fuelReceipts };
-        // Удержано у водителя: по схеме шефа — только ОПВ (ОСМС и ИПН платит парк); по прежней — ОПВ, ВОСМС, ИПН.
-        const withheld = r.scheme === 2 ? a.opv : money(a.opv + a.vosms + a.ipn);
+        // Удержано у водителя. Обратный расчёт (03.11.2026) — все налоги из начисления;
+        // схема 2 — только ОПВ, остальное парк платил сам; самая старая — без СО.
+        const withheld = r.scheme === 3 ? money(a.opv + a.vosms + a.ipn + a.so)
+            : r.scheme === 2 ? a.opv
+                : money(a.opv + a.vosms + a.ipn);
         const payStatus: PayStatus = item ? item.payout.status
             : r.order.status === OrderStatus.COMPLETED ? 'TO_REQUEST' : 'IN_TRIP';
         const pickup = r.order.routePoints.find((p) => p.pointType !== 'DELIVERY');
         // Топливо парк оплачивает по чекам; по довезённому рейсу видно, уложились ли в расчёт.
         const done = r.order.status === OrderStatus.COMPLETED || !!item;
-        const fuelDiff = r.scheme === 2 && done ? money(num(r.fuelEstimate) - a.fuelReceipts) : 0;
+        const fuelDiff = r.scheme >= 2 && done ? money(num(r.fuelEstimate) - a.fuelReceipts) : 0;
         return {
             orderId: r.orderId,
             orderNumber: r.order.orderNumber,
@@ -186,7 +189,7 @@ export class ExchangeParkRegistryService {
             loadingDate: pickup?.expectedDate ?? null,
             completedAt: r.order.completedAt,
             driver: { id: r.driver.id, name: nameOf(r.driver), iin: r.driver.iin },
-            driverRate: r.scheme === 2
+            driverRate: r.scheme >= 2
                 ? (r.base != null ? num(r.base) : money(num(r.fuelEstimate) + num(r.gross)))
                 : num(r.driverTotal),
             driverTotal: num(r.driverTotal),
@@ -196,7 +199,8 @@ export class ExchangeParkRegistryService {
             advanceIssued: f.advances,
             fuelReceipts: a.fuelReceipts,
             gross: a.gross, opv: a.opv, vosms: a.vosms, ipn: a.ipn, withheld, so: a.so,
-            toBudget: money(withheld + a.so),
+            // В бюджет уходят все четыре, кто бы их ни нёс.
+            toBudget: money(a.opv + a.vosms + a.ipn + a.so),
             deductionAmount: num(r.deductionAmount),
             toPay: a.toPay,
             paid: item?.payout.status === 'PAID' ? a.toPay : 0,
@@ -227,7 +231,7 @@ export class ExchangeParkRegistryService {
             'Довезён': date(l.completedAt),
             'ФИО': l.driver.name,
             'ИИН': l.driver.iin ?? '',
-            'Ставка водителя (до ГСМ и ОПВ)': l.driverRate,
+            'Ставка водителя': l.driverRate,
             'На руки по договорённости': l.driverTotal,
             'Выдано на топливо': l.fuelIssued,
             'Предоплата водителю': l.advanceIssued,
@@ -237,7 +241,7 @@ export class ExchangeParkRegistryService {
             'ВОСМС': l.vosms,
             'ИПН': l.ipn,
             'Удержано всего': l.withheld,
-            'СО (за счёт парка)': l.so,
+            'СО': l.so,
             'В бюджет всего': l.toBudget,
             'Вычет ИПН': l.deductionAmount,
             'К перечислению водителю': l.toPay,
@@ -260,7 +264,7 @@ export class ExchangeParkRegistryService {
             'ВОСМС': d.vosms,
             'ИПН': d.ipn,
             'Удержано всего': d.withheld,
-            'СО (за счёт парка)': d.so,
+            'СО': d.so,
             'В бюджет всего': d.toBudget,
             'Вычет ИПН за месяц': d.deductionAmount,
             'К перечислению': d.toPay,

@@ -52,7 +52,7 @@ export function ParkPriceSplit({ data }: { data: ParkOrderCalc }) {
         { label: 'ОСМС, СО, ИПН', value: c.vosms + c.so + c.ipn, color: оттенок(30) },
         { label: 'Топливо (ГСМ)', value: c.fuel, color: оттенок(50) },
         { label: `ОПВ ${data.rates.opvPct}%`, value: c.opv, color: оттенок(70) },
-        { label: data.scheme === 2 ? 'На руки водителю' : 'На руки, с топливом', value: c.driverTotal, color: 'var(--nova-fg)' },
+        { label: data.scheme === 1 ? 'На руки, с топливом' : 'На руки водителю', value: c.driverTotal, color: 'var(--nova-fg)' },
     ];
     const total = parts.reduce((sum, p) => sum + Math.max(0, p.value), 0) || 1;
     return (
@@ -105,7 +105,7 @@ function Step({ label, value, note, total, minus }: {
     return (
         <div className={cn(card.ladder, total && card.ladderTotal, minus && card.ladderStep)}>
             <span>{label}</span>
-            <span className={card.n}>{minus ? минус(value) : тенге(value)}</span>
+            <span className={card.n}>{minus && value ? минус(value) : тенге(value)}</span>
             <span className={card.ladderNote}>{note}</span>
         </div>
     );
@@ -120,7 +120,6 @@ function Step({ label, value, note, total, minus }: {
 export function ParkOrderCalcCard({ data, onOpenFuel }: { data: ParkOrderCalc; onOpenFuel?: () => void }) {
     const c = data.calc;
     const r = data.rates;
-    const km = data.distanceKm ? `по расчёту, ≈ ${Math.round(data.distanceKm).toLocaleString('ru-RU')} км · ` : '';
     return (
         <section className={card.section} aria-label="Расчёт водителя без ИП">
             <h2 className={card.head}>
@@ -148,26 +147,7 @@ export function ParkOrderCalcCard({ data, onOpenFuel }: { data: ParkOrderCalc; o
                         minus
                         note={<>из комиссии остаётся парку <b className={card.pos}>{тенге(c.parkFee)}</b> · LogiCore {тенге(c.platformFee)}</>}
                     />
-                    <Step
-                        label="ОСМС, СО, ИПН — платит парк"
-                        value={c.vosms + c.so + c.ipn}
-                        minus
-                        note={`ОСМС ${r.vosmsPct}% ${тенге(c.vosms)} · СО ${r.soPct}% ${тенге(c.so)} · ИПН ${r.ipnPct}% ${тенге(c.ipn)}`
-                            + (c.deductionAmount > 0 ? `, вычет ${тенге(c.deductionAmount)}` : '')}
-                    />
-                    <Step label="Ставка водителя, до вычетов" value={c.base} total note="сколько запросил водитель, до ГСМ и ОПВ" />
-                    <Step
-                        label="Топливо (ГСМ) — оплачивает парк"
-                        value={c.fuel}
-                        minus
-                        note={data.distanceKm
-                            ? `${km}на заправке или переводом водителю, чеки — на БИН парка`
-                            : 'Не посчитано: у точек маршрута нет координат или адрес погрузки и выгрузки один. Вся сумма без налогов и комиссии ушла в оплату водителю.'}
-                    />
-                    <Step label="Оплата за работу по договору ГПХ" value={c.gross} />
-                    <Step label={`ОПВ ${r.opvPct}% — удерживается`} value={c.opv} minus note="из оплаты водителя" />
-                    <Step label={data.scheme === 2 ? 'На руки водителю' : 'На руки водителю, с топливом'} value={c.driverTotal} total />
-                    <Step label="Налоги по ГПХ, всего" value={налоги(c)} note="ОПВ, ОСМС, СО, ИПН" />
+                    {data.scheme === 3 ? <Withheld data={data} c={c} /> : <ParkPays data={data} c={c} />}
                 </div>
             )}
             <p className={card.note}>
@@ -176,6 +156,72 @@ export function ParkOrderCalcCard({ data, onOpenFuel }: { data: ParkOrderCalc; o
                     : 'Своя заявка парка: из цены для заказчика по ставкам парка. Изменится цена — пересчитается и расчёт.'}
             </p>
         </section>
+    );
+}
+
+/**
+ * Обратный расчёт (шеф, 03.11.2026): начисление поднято под сумму на руки, все
+ * налоги удержаны из него. Лесенка идёт от себестоимости через начисление к
+ * сумме на руки, ставка — отдельной строкой: топливо плюс на руки.
+ */
+function Withheld({ data, c }: { data: ParkOrderCalc; c: NonNullable<ParkOrderCalc['calc']> }) {
+    const r = data.rates;
+    const km = data.distanceKm ? `по расчёту, ≈ ${Math.round(data.distanceKm).toLocaleString('ru-RU')} км · ` : '';
+    return (
+        <>
+            <Step label="Себестоимость рейса" value={c.fuel + c.gross} total note="топливо и начисление по ГПХ" />
+            <Step
+                label="Топливо (ГСМ) — оплачивает парк"
+                value={c.fuel}
+                minus
+                note={data.distanceKm
+                    ? `${km}на заправке или переводом водителю, чеки — на БИН парка`
+                    : 'Не посчитано: у точек маршрута нет координат или адрес погрузки и выгрузки один.'}
+            />
+            <Step label="Начислено по ГПХ" value={c.gross} total note="поднято так, чтобы после налогов осталась сумма на руки" />
+            <Step label={`ОПВ ${r.opvPct}%`} value={c.opv} minus note="от начисления" />
+            <Step label={`ОСМС ${r.vosmsPct}%`} value={c.vosms} minus note="от начисления" />
+            <Step label={`СО ${r.soPct}%`} value={c.so} minus note="от начисления минус ОПВ" />
+            <Step
+                label={`ИПН ${r.ipnPct}%`}
+                value={c.ipn}
+                minus
+                note={`от начисления минус ОПВ, ОСМС, СО${c.deductionAmount > 0 ? ` и вычет ${тенге(c.deductionAmount)}` : ''}`}
+            />
+            <Step label="На руки водителю" value={c.driverTotal} total />
+            <Step label="Ставка водителя" value={c.base} note="на руки и топливо" />
+            <Step label="Налоги по ГПХ, всего" value={налоги(c)} note="ОПВ, ОСМС, СО, ИПН — удержаны из начисления" />
+        </>
+    );
+}
+
+/** Рейс, зафиксированный до 03.11.2026: у водителя только ОПВ, ОСМС, СО и ИПН платит парк. */
+function ParkPays({ data, c }: { data: ParkOrderCalc; c: NonNullable<ParkOrderCalc['calc']> }) {
+    const r = data.rates;
+    const km = data.distanceKm ? `по расчёту, ≈ ${Math.round(data.distanceKm).toLocaleString('ru-RU')} км · ` : '';
+    return (
+        <>
+            <Step
+                label="ОСМС, СО, ИПН — платит парк"
+                value={c.vosms + c.so + c.ipn}
+                minus
+                note={`ОСМС ${r.vosmsPct}% ${тенге(c.vosms)} · СО ${r.soPct}% ${тенге(c.so)} · ИПН ${r.ipnPct}% ${тенге(c.ipn)}`
+                    + (c.deductionAmount > 0 ? `, вычет ${тенге(c.deductionAmount)}` : '')}
+            />
+            <Step label="Ставка водителя, до вычетов" value={c.base} total note="сколько запросил водитель, до ГСМ и ОПВ" />
+            <Step
+                label="Топливо (ГСМ) — оплачивает парк"
+                value={c.fuel}
+                minus
+                note={data.distanceKm
+                    ? `${km}на заправке или переводом водителю, чеки — на БИН парка`
+                    : 'Не посчитано: у точек маршрута нет координат или адрес погрузки и выгрузки один. Вся сумма без налогов и комиссии ушла в оплату водителю.'}
+            />
+            <Step label="Оплата за работу по договору ГПХ" value={c.gross} />
+            <Step label={`ОПВ ${r.opvPct}% — удерживается`} value={c.opv} minus note="из оплаты водителя" />
+            <Step label={data.scheme === 2 ? 'На руки водителю' : 'На руки водителю, с топливом'} value={c.driverTotal} total />
+            <Step label="Налоги по ГПХ, всего" value={налоги(c)} note="ОПВ, ОСМС, СО, ИПН" />
+        </>
     );
 }
 
@@ -194,7 +240,7 @@ function Given({ label, value, minus, total, need, note, action }: {
         <div className={cn(card.task, total && card.rowStrong)} style={style}>
             <span className={cn(card.dot, need && card.dotNeed)} aria-hidden={!need} />
             <span>{label}</span>
-            <span className={card.n}>{minus ? минус(value) : тенге(value)}</span>
+            <span className={card.n}>{minus && value ? минус(value) : тенге(value)}</span>
             <span className={card.ladderNote}>{note}</span>
             <span>{action}</span>
         </div>

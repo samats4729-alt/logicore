@@ -227,6 +227,24 @@ describe('Выплата водителю парка: рейс по расчёт
         });
     });
 
+    it('обратный расчёт: в выплату идут начисление и все налоги рейса, перечислить — на руки с поправкой на топливо', async () => {
+        const { service, prisma, fuel } = build();
+        prisma.order.findMany.mockResolvedValue([{
+            id: 'o-3', orderNumber: '000000031', driverCost: 1149626.24, completedAt: new Date(), routePoints: [],
+            exchangeSettlement: {
+                scheme: 3, driverTotal: 456525, workNet: 456525, gross: 607486, opv: 60749, vosms: 12150, ipn: 50725, so: 27337,
+                deductionAmount: 0, preliminary: true,
+                rates: { opvPct: 10, vosmsPct: 2, ipnPct: 10, soPct: 5, platformPct: 5, parkPct: 10, deductionMrp: 30, mrp: 4325 },
+            },
+        }]);
+        fuel.totals.mockResolvedValue(new Map([['o-3', { issued: 60000, receipts: 52000 }]]));
+        prisma.driverPayout.create.mockImplementation(async (args: any) => ({ id: 'p-3', net: args.data.net, toPay: args.data.toPay }));
+        await service.request('u-1');
+        expect(prisma.driverPayout.create.mock.calls[0][0].data.items.create[0]).toMatchObject({
+            orderId: 'o-3', gross: 607486, opv: 60749, vosms: 12150, ipn: 50725, so: 27337, net: 456525, toPay: 448525,
+        });
+    });
+
     it('в приложении «к выплате» — сколько перечислят, а не доход за работу', async () => {
         const { service, prisma, fuel } = build();
         prisma.order.findMany.mockResolvedValue([

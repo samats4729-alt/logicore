@@ -6,7 +6,7 @@ import { removeExchangeFile } from './exchange-files';
 import { EXCHANGE_ORDER_SELECT, ExchangeOrderRow, ON_EXCHANGE, byLoadingDate, exchangeView, matches, notPast } from './exchange-orders';
 import { PUBLISHER_HAS_ACCESS } from './exchange-access';
 import { ExchangeSettlementService } from './settlement.service';
-import { litersFor } from './settlement-calc';
+import { litersFor, money } from './settlement-calc';
 
 /** Рейс идёт: водитель назначен и ещё не довёз. */
 export const ACTIVE_ORDER: OrderStatus[] = [
@@ -51,9 +51,9 @@ export class ExchangeDriverLoadsService {
     }
 
     /**
-     * Заявка глазами водителя парка (схема шефа, 16.10.2026): сумма заказчика
-     * минус топливо — оплата за работу; из неё удерживается ОПВ, остальное —
-     * на руки. ОСМС, СО и ИПН платит парк; 10 % комиссии и НДС — сверху.
+     * Заявка глазами водителя парка (обратный расчёт, 03.11.2026): сумма
+     * заказчика минус топливо — на руки. Налоги удерживаются из начисления,
+     * которое поднято под эту сумму; 10 % комиссии и НДС — сверху.
      */
     private forDriver(base: Awaited<ReturnType<ExchangeSettlementService['driverBase']>>, row: ExchangeOrderRow) {
         const view = exchangeView(row);
@@ -69,16 +69,21 @@ export class ExchangeDriverLoadsService {
              * + ОПВ. Видя только «на руки», водитель не понимал, что топливо и
              * пенсионные тоже его, и не соглашался на рейс. Налоги, которые
              * платит парк (ВОСМС, СО, ИПН), комиссия и цена для компании
-             * водителю по-прежнему не отдаются (Q14).
+             * водителю по-прежнему не отдаются (Q14). Пенсионные теперь сверх
+             * ставки, но для водителя это те же его деньги — приложение
+             * складывает три части, поэтому и сумма из трёх.
              */
-            trip: calc ? { total: calc.base, onHand: calc.driverTotal, fuel: calc.fuel, opv: calc.opv } : null,
+            trip: calc ? { total: money(calc.driverTotal + calc.fuel + calc.opv), onHand: calc.driverTotal, fuel: calc.fuel, opv: calc.opv } : null,
             /**
              * Топливо по километражу — лимит на заправку: на эту сумму водитель
              * заправляется по рейсу. Литры — по расходу парка на 100 км.
-             * Вместе с долей ОПВ — чтобы расшифровать и свою сумму отклика.
+             *
+             * Долю ОПВ больше не отдаём: приложение считало по ней пенсионные
+             * со своей суммы как 10 % от «на руки + ОПВ», а при обратном расчёте
+             * они другие. Без доли оно пишет «топливо и пенсионные добавятся
+             * сверху» — верно и без пересборки.
              */
             fuel: ctx.fuel > 0 ? { amount: ctx.fuel, liters: litersFor(ctx.distanceKm, base.fuelConsumption) } : null,
-            opvPct: ctx.rates.opvPct,
         };
     }
 

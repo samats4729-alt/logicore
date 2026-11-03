@@ -62,6 +62,18 @@ describe('Реестр бухгалтера парка за месяц', () => {
         expect(t(r.totals.toBudget)).toBe(t(r.lines[0].toBudget) + t(r.lines[1].toBudget));
     });
 
+    it('обратный расчёт: все четыре налога удержаны из начисления и уходят в бюджет, ставка — топливо и на руки', async () => {
+        const row = settlementRow({ scheme: 3, base: 750000, fuelEstimate: 293475, driverTotal: 456525, workNet: 456525, gross: 607486, opv: 60749, vosms: 12150, ipn: 50725, so: 27337 });
+        const r = await build([row]).service.month('park-1', '2026-10');
+        expect(r.lines[0]).toMatchObject({ driverRate: 750000, gross: 607486, withheld: 150961, so: 27337, toBudget: 150961 });
+    });
+
+    it('рейс до перехода: в бюджет всё равно все четыре, хотя у водителя удержан только ОПВ', async () => {
+        const row = settlementRow({ scheme: 2, base: 100000, fuelEstimate: 27000, workNet: 65700, gross: 73000, opv: 7300, vosms: 1460, ipn: 6570, so: 3285 });
+        const r = await build([row]).service.month('park-1', '2026-10');
+        expect(r.lines[0]).toMatchObject({ withheld: 7300, toBudget: 18615 });
+    });
+
     it('итог месяца парка: прибыль = комиссия + экономия топлива по довезённым рейсам (схема шефа)', async () => {
         const { service } = build([settlementRow({ scheme: 2, fuelEstimate: 125000, parkFee: 5237.25, workNet: 65700, gross: 73000, opv: 7300, vosms: 1460, ipn: 0, so: 3285 })]);
         const r = await service.month('park-1', '2026-10');

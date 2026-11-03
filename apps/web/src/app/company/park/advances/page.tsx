@@ -278,16 +278,26 @@ function TripSplit({ trip, kind, stacked }: { trip: AdvanceTrip; kind: AdvanceKi
                 capLabel={`Предоплата — до ${trip.pct} %`}
                 head={(
                     <>
-                        <SplitLine label="Ставка водителя, до вычетов" value={trip.rate} />
+                        <SplitLine label={trip.scheme === 3 ? 'Ставка водителя' : 'Ставка водителя, до вычетов'} value={trip.rate} />
                         <SplitLine label="Водителю на руки за рейс" value={trip.onHand} />
                     </>
                 )}
             />
             <div className="rounded-lg border border-solid border-border px-3 py-2">
                 <div className="mb-1 font-semibold">Налоги по ГПХ</div>
-                <SplitLine label="Оплата за работу" value={trip.gross} />
-                <SplitLine label="ОПВ — из оплаты водителя" value={t.opv} />
-                <SplitLine label="ОСМС, СО, ИПН — платит парк" value={t.vosms + t.so + t.ipn} />
+                {trip.scheme === 3 ? (
+                    <>
+                        <SplitLine label="Начислено по ГПХ" value={trip.gross} />
+                        <SplitLine label="ОПВ" value={t.opv} />
+                        <SplitLine label="ОСМС, СО, ИПН — удержаны из начисления" value={t.vosms + t.so + t.ipn} />
+                    </>
+                ) : (
+                    <>
+                        <SplitLine label="Оплата за работу" value={trip.gross} />
+                        <SplitLine label="ОПВ — из оплаты водителя" value={t.opv} />
+                        <SplitLine label="ОСМС, СО, ИПН — платит парк" value={t.vosms + t.so + t.ipn} />
+                    </>
+                )}
                 <div className="text-muted-foreground tabular-nums">ОСМС {тенге(t.vosms)} · СО {тенге(t.so)} · ИПН {тенге(t.ipn)}</div>
             </div>
         </div>

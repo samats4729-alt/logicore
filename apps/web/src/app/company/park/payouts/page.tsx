@@ -387,10 +387,10 @@ function RejectDialog({ payout, onClose, onDone }: { payout: ParkPayout | null; 
 
 const RATE_FIELDS: { key: 'commissionPct' | 'opvPct' | 'vosmsPct' | 'ipnPct' | 'soPct'; label: string; hint: string }[] = [
     { key: 'commissionPct', label: 'Комиссия', hint: 'сверху со всей суммы с налогами; в ней доля LogiCore' },
-    { key: 'opvPct', label: 'ОПВ', hint: 'удерживается из денег водителя' },
-    { key: 'vosmsPct', label: 'ОСМС', hint: 'платит парк, от оплаты за работу' },
-    { key: 'ipnPct', label: 'ИПН', hint: 'платит парк: с оплаты за работу минус ОПВ и вычет' },
-    { key: 'soPct', label: 'СО', hint: 'платит парк: от оплаты за работу минус ОПВ' },
+    { key: 'opvPct', label: 'ОПВ', hint: 'от начисления' },
+    { key: 'vosmsPct', label: 'ОСМС', hint: 'от начисления' },
+    { key: 'ipnPct', label: 'ИПН', hint: 'от начисления минус ОПВ, ОСМС, СО и вычет' },
+    { key: 'soPct', label: 'СО', hint: 'от начисления минус ОПВ' },
 ];
 
 /** Ставки удержаний — парк задаёт со своим бухгалтером. */
@@ -561,8 +561,8 @@ function RatesCard({ onChanged }: { onChanged: () => void }) {
                 <div className="space-y-2 rounded-lg bg-muted/40 p-3">
                     <div className="text-[12.5px] font-semibold">Как считается рейс водителя без ИП</div>
                     <p className="m-0 text-[12px] text-muted-foreground">
-                        Сумма заказчика на бирже минус топливо — оплата водителю за работу. Из неё удерживается ОПВ, остальное водитель
-                        получает на руки. ОСМС, СО и ИПН платит парк — они прибавляются к сумме, сверху — комиссия со всей суммы
+                        Сумма заказчика на бирже минус топливо — сумма водителю на руки. Начисление по ГПХ поднимается так, чтобы после
+                        ОПВ, ОСМС, СО и ИПН осталась ровно она. Топливо и начисление — себестоимость рейса, сверху — комиссия
                         (в ней доля LogiCore{rates.platformPct != null ? ` ${rates.platformPct}%` : ''}) и НДС, если вы его плательщик.
                         Топливо оплачивает парк: перерасход и экономия — ваши, сумму водителю они не меняют.
                     </p>
