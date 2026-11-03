@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, OrderStatus } from '@prisma/client';
+import { SIGNUP_SOURCE_GOOGLE_ADS } from '../auth/signup-source';
+
+/** Сколько последних регистраций с рекламы показывать в списке. */
+const AD_SIGNUPS_LIMIT = 200;
 
 /**
  * Сводная статистика платформы для админ-панели.
@@ -9,6 +13,41 @@ import { UserRole, OrderStatus } from '@prisma/client';
 @Injectable()
 export class AdminStatsService {
     constructor(private prisma: PrismaService) { }
+
+    /**
+     * Регистрации с рекламы Google: сколько их и кто именно.
+     *
+     * Единственное исключение из «только агрегаты» выше: владельцу нужно
+     * знать, кому звонить, поэтому здесь есть имя и контакты. Адрес закрыт
+     * ролью ADMIN.
+     */
+    async getAdSignups() {
+        const where = { signupSource: SIGNUP_SOURCE_GOOGLE_ADS };
+        const days7Ago = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        const [total, last7Days, withCompany, verified, rows] = await Promise.all([
+            this.prisma.user.count({ where }),
+            this.prisma.user.count({ where: { ...where, createdAt: { gte: days7Ago } } }),
+            this.prisma.user.count({ where: { ...where, companyId: { not: null } } }),
+            this.prisma.user.count({ where: { ...where, company: { verificationStatus: 'VERIFIED' } } }),
+            this.prisma.user.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                take: AD_SIGNUPS_LIMIT,
+                select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    phone: true,
+                    email: true,
+                    createdAt: true,
+                    company: { select: { name: true, bin: true, verificationStatus: true } },
+                },
+            }),
+        ]);
+
+        return { total, last7Days, withCompany, verified, rows };
+    }
 
     async getOverview() {
         const now = new Date();

@@ -3,12 +3,14 @@
 import { useEffect } from 'react';
 import Script from 'next/script';
 import { api } from '@/lib/api';
+import { rememberAdClick } from '@/lib/signup-source';
 
 /**
  * Мониторинг фронтенда:
  * 1) Необработанные JS-ошибки уходят на бэкенд (/monitoring/client-error),
  *    оттуда — в Sentry, если он настроен. Без настроек — просто тихо.
  * 2) Google Analytics подключается только если задан NEXT_PUBLIC_GA_ID.
+ * 3) Переход с рекламы Google запоминается для раздела «Реклама» в админке.
  */
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
@@ -27,6 +29,10 @@ function reportError(message: string, stack?: string) {
 }
 
 export default function ClientMonitoring() {
+    useEffect(() => {
+        rememberAdClick();
+    }, []);
+
     useEffect(() => {
         const onError = (event: ErrorEvent) => {
             reportError(event.message || 'Unhandled error', event.error?.stack);

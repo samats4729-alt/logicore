@@ -8,20 +8,13 @@ import dayjs from 'dayjs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
+import { COMPANY_VERIFICATION_VIEW as STATUS_VIEW } from '@/lib/vocabulary';
 import nova from '@/components/nova/nova.module.css';
 
 const DOCUMENT_LABELS: Record<string, string> = {
     COMPANY_REGISTRATION: 'Справка о госрегистрации',
     DIRECTOR_APPOINTMENT: 'Приказ о назначении руководителя',
     DIRECTOR_ID: 'Удостоверение личности руководителя',
-};
-
-/** Состояние заявки. Цветом — только то, что требует действия или пошло не так. */
-const STATUS_VIEW: Record<string, { label: string; chip?: 'warn' | 'neg' }> = {
-    DRAFT: { label: 'Черновик' },
-    PENDING: { label: 'На проверке', chip: 'warn' },
-    VERIFIED: { label: 'Подтверждена' },
-    REJECTED: { label: 'Отклонена', chip: 'neg' },
 };
 
 /**

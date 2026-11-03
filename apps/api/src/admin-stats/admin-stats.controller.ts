@@ -18,4 +18,11 @@ export class AdminStatsController {
     async getOverview() {
         return this.adminStatsService.getOverview();
     }
+
+    @Get('ads')
+    @Roles(UserRole.ADMIN)
+    @ApiOperation({ summary: 'Кто зарегистрировался, придя с рекламы Google' })
+    async getAdSignups() {
+        return this.adminStatsService.getAdSignups();
+    }
 }

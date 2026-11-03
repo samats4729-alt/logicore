@@ -157,6 +157,10 @@ model User {
   dashboardBlocks       String[]              @default([])
   dashboardCustom       Boolean               @default(false)
 
+  /// Откуда человек пришёл на регистрацию. `GOOGLE_ADS` — с рекламы Google;
+  /// пусто — всё остальное, в том числе все, кто зарегистрировался раньше.
+  signupSource          String?
+
   isActive              Boolean               @default(true)
   isTrackable           Boolean               @default(false)
   createdAt             DateTime              @default(now())

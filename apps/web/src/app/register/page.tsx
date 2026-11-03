@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Form, Input, Button, Typography, Steps, Result, Divider, Checkbox } from 'antd';
 import { UserOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { adSignupSource } from '@/lib/signup-source';
 import { useAuthStore } from '@/store/auth';
 import { GoogleLogin } from '@react-oauth/google';
 import AuthShell from '@/components/AuthShell';
@@ -66,6 +67,7 @@ function RegisterContent() {
                 companyType: 'CUSTOMER',
                 bin: formValues.bin,
                 phone: formValues.phone || '+70000000000',
+                signupSource: adSignupSource(),
             });
 
             setUser(res.data.admin);
@@ -88,7 +90,7 @@ function RegisterContent() {
             const { agreement, ...payload } = values;
             // Регистрируется человек, а не компания: организация создаётся
             // отдельно и проходит проверку документов.
-            const response = await api.post('/auth/register', payload);
+            const response = await api.post('/auth/register', { ...payload, signupSource: adSignupSource() });
 
             setUser(response.data.user);
             setStep(1);
