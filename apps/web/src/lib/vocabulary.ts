@@ -74,6 +74,14 @@ export const EXCHANGE_DRIVER_STATUS_LABELS: Record<string, string> = {
     BLOCKED: 'Заблокирован',
 };
 
+/** Проверка организации. Цветом — только то, что требует действия или пошло не так. */
+export const COMPANY_VERIFICATION_VIEW: Record<string, { label: string; chip?: 'warn' | 'neg' }> = {
+    DRAFT: { label: 'Черновик' },
+    PENDING: { label: 'На проверке', chip: 'warn' },
+    VERIFIED: { label: 'Подтверждена' },
+    REJECTED: { label: 'Отклонена', chip: 'neg' },
+};
+
 export const QUOTE_REQUEST_STATUS_LABELS: Record<string, string> = {
     NEW: 'Новый',
     IN_PROGRESS: 'В работе',

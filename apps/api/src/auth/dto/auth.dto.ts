@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../password-policy';
-import { IsString, IsEmail, IsNotEmpty, MinLength, Matches, Length } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, IsOptional, MaxLength, MinLength, Matches, Length } from 'class-validator';
 
 export class LoginEmailDto {
     @ApiProperty({ example: 'admin@logcomp.kz' })
@@ -50,6 +50,12 @@ export class RegisterUserDto {
     @IsString()
     @IsNotEmpty()
     phone: string;
+
+    @ApiProperty({ description: 'Откуда пришёл человек', required: false, example: 'GOOGLE_ADS' })
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    signupSource?: string;
 }
 
 export class RegisterCompanyDto {

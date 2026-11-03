@@ -7,6 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { IdentityService } from '../identity/identity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { сВключениемОтдела } from './effective-permissions';
+import { normalizeSignupSource } from './signup-source';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
@@ -445,6 +446,7 @@ export class AuthService {
         firstName: string;
         lastName: string;
         phone: string;
+        signupSource?: string;
     }) {
         const existingUser = await this.prisma.user.findUnique({ where: { email: data.email } });
         if (existingUser) {
@@ -467,6 +469,7 @@ export class AuthService {
                 // компании нет, роль ни на что не влияет: все рабочие
                 // разделы закрыты гейтом подтверждения.
                 role: UserRole.COMPANY_ADMIN,
+                signupSource: normalizeSignupSource(data.signupSource),
             },
         });
 
@@ -805,6 +808,7 @@ export class AuthService {
         companyType: 'CUSTOMER' | 'FORWARDER';
         bin: string;
         phone: string;
+        signupSource?: string;
     }): Promise<{ company: any; admin: any; accessToken: string }> {
         const googleData = await this.verifyGoogleToken(googleToken);
 
@@ -871,6 +875,7 @@ export class AuthService {
                     lastName: googleData.lastName,
                     role: userRole,
                     companyId: company.id,
+                    signupSource: normalizeSignupSource(data.signupSource),
                 },
             });
 

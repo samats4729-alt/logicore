@@ -23,6 +23,7 @@ import {
     CheckCircleOutlined,
     FolderOpenOutlined,
     ShopOutlined,
+    RiseOutlined,
 } from '@ant-design/icons';
 import { Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -87,6 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         // Сколько LogiCore заработала на каждом парке — счёт парку выставляется вручную (Q19).
         ...(exchangeOn ? [{ key: '/admin/parks/earnings', icon: <DollarOutlined />, label: 'Заработок на парках' }] : []),
         { key: '/admin/users', icon: <TeamOutlined />, label: 'Пользователи' },
+        { key: '/admin/ads', icon: <RiseOutlined />, label: 'Реклама' },
         { key: '/admin/orders', icon: <FileTextOutlined />, label: 'Заявки' },
         { key: '/admin/tracking', icon: <AimOutlined />, label: 'Мониторинг' },
         { key: '/admin/documents', icon: <FolderOpenOutlined />, label: 'Документы' },
