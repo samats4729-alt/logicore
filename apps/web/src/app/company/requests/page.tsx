@@ -68,10 +68,10 @@ export default function RequestsPage() {
                         <button
                             type="button"
                             className={styles.action}
-                            onClick={() => router.push('/company/fuel-tax-calculator')}
+                            onClick={() => router.push('/company/fuel-calculator')}
                         >
                             <Calculator size={15} />
-                            ГСМ и налоги
+                            Калькулятор ГСМ
                         </button>
                     )}
                 </div>
