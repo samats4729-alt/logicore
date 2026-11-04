@@ -291,8 +291,8 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
                     { key: '/company/calculator', label: 'Калькулятор рейса' },
                     // Водителей без ИП рассчитывает парк — остальным пункт не нужен (владелец, 29.10.2026).
                     ...(isPark ? [{ key: '/company/driver-calculator', label: 'Расчёт водителя без ИП' }] : []),
-                    // Обычной компании — свой калькулятор: ГСМ, налоги, цена заказчику (шеф, 03.11.2026).
-                    ...(parkKnown && !isPark ? [{ key: '/company/fuel-tax-calculator', label: 'ГСМ и налоги' }] : []),
+                    // Обычной компании — свой калькулятор: на руки, ГСМ и ОПВ.
+                    ...(parkKnown && !isPark ? [{ key: '/company/fuel-calculator', label: 'Калькулятор ГСМ' }] : []),
                 ],
             });
         }
