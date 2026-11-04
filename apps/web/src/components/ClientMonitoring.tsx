@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import Script from 'next/script';
 import { api } from '@/lib/api';
 import { rememberAdClick } from '@/lib/signup-source';
@@ -9,11 +10,18 @@ import { rememberAdClick } from '@/lib/signup-source';
  * Мониторинг фронтенда:
  * 1) Необработанные JS-ошибки уходят на бэкенд (/monitoring/client-error),
  *    оттуда — в Sentry, если он настроен. Без настроек — просто тихо.
- * 2) Google Analytics подключается только если задан NEXT_PUBLIC_GA_ID.
+ * 2) Google Analytics и метка Google Рекламы подключаются только если задан
+ *    NEXT_PUBLIC_GA_ID, то есть на рабочем сайте, а не на стендах.
  * 3) Переход с рекламы Google запоминается для раздела «Реклама» в админке.
  */
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
+
+/** Кабинет Google Рекламы LogiCore (783-001-8498). Номер открытый, он виден в коде страницы. */
+const GOOGLE_ADS_ID = 'AW-18553265353';
+
+/** Сюда человек попадает сразу после регистрации: по этой странице Google считает заявку. */
+const SIGNUP_DONE_PATH = '/company/onboarding';
 
 let reportedCount = 0;
 
@@ -29,9 +37,24 @@ function reportError(message: string, stack?: string) {
 }
 
 export default function ClientMonitoring() {
+    const pathname = usePathname();
+    const previousPathname = useRef(pathname);
+
     useEffect(() => {
         rememberAdClick();
     }, []);
+
+    // Форма регистрации переходит дальше без перезагрузки страницы, а метка
+    // Google сама видит только полную загрузку. Без этого сообщения Google не
+    // узнал бы о регистрации. При полной загрузке метка считает страницу сама,
+    // поэтому сообщаем только о переходе, иначе заявка посчиталась бы дважды.
+    useEffect(() => {
+        if (previousPathname.current === pathname) return;
+        previousPathname.current = pathname;
+        if (pathname !== SIGNUP_DONE_PATH) return;
+        const { gtag } = window as unknown as { gtag?: (...args: unknown[]) => void };
+        gtag?.('event', 'page_view', { send_to: GOOGLE_ADS_ID, page_location: window.location.href });
+    }, [pathname]);
 
     useEffect(() => {
         const onError = (event: ErrorEvent) => {
@@ -60,7 +83,8 @@ export default function ClientMonitoring() {
                         {`window.dataLayer = window.dataLayer || [];
                         function gtag(){dataLayer.push(arguments);}
                         gtag('js', new Date());
-                        gtag('config', ${JSON.stringify(GA_ID)});`}
+                        gtag('config', ${JSON.stringify(GA_ID)});
+                        gtag('config', ${JSON.stringify(GOOGLE_ADS_ID)});`}
                     </Script>
                 </>
             )}
