@@ -18,7 +18,7 @@ interface DriverCalc {
     vosms: number;
     so: number;
     ipn: number;
-    /** Себестоимость рейса: топливо и начисление. */
+    /** Себестоимость рейса: топливо, начисление и ИПН. */
     parkCost: number;
     commission: number;
     platformFee: number;
@@ -200,18 +200,18 @@ export default function DriverCalculatorPage() {
                                     </div>
                                 </div>
                                 <dl className="m-0 divide-y divide-solid divide-border rounded-xl border border-solid border-border [&>*]:border-x-0">
-                                    <Line label="Ставка за рейс (топливо + на руки)" value={c.base} />
+                                    <Line label="Ставка за рейс" value={c.base} />
                                     <Line label="Топливо" value={c.fuel} />
                                     <Line label="Начислено по ГПХ" value={c.gross} />
                                     <Line label={`ОПВ ${r.opvPct}% — на пенсионный счёт водителя`} value={-c.opv} />
                                     <Line label={`ОСМС ${r.vosmsPct}%`} value={-c.vosms} />
                                     <Line label={`СО ${r.soPct}%`} value={-c.so} />
-                                    <Line
-                                        label={`ИПН ${r.ipnPct}%${c.deductionAmount > 0 ? `, с вычетом ${тенге(c.deductionAmount)}` : ''}`}
-                                        value={-c.ipn}
-                                    />
                                     <Line label="На руки водителю" value={c.driverTotal} strong />
-                                    <Line label="Себестоимость рейса (топливо + начисление)" value={c.parkCost} />
+                                    <Line
+                                        label={`ИПН ${r.ipnPct}% — за счёт парка${c.deductionAmount > 0 ? `, с вычетом ${тенге(c.deductionAmount)}` : ''}`}
+                                        value={c.ipn}
+                                    />
+                                    <Line label="Себестоимость рейса (топливо + начисление + ИПН)" value={c.parkCost} />
                                     <Line label={`Комиссия ${r.parkPct}% (в ней LogiCore ${r.platformPct}%)`} value={c.commission} />
                                     {c.vat > 0 && <Line label={`НДС ${r.vatPct}%`} value={c.vat} />}
                                     <Line label="Цена для заказчика" value={c.customerPrice} strong />

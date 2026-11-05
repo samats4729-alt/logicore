@@ -285,7 +285,13 @@ function TripSplit({ trip, kind, stacked }: { trip: AdvanceTrip; kind: AdvanceKi
             />
             <div className="rounded-lg border border-solid border-border px-3 py-2">
                 <div className="mb-1 font-semibold">Налоги по ГПХ</div>
-                {trip.scheme === 3 ? (
+                {trip.scheme === 4 ? (
+                    <>
+                        <SplitLine label="Начислено по ГПХ" value={trip.gross} />
+                        <SplitLine label="ОПВ, ОСМС, СО — удержаны из начисления" value={t.opv + t.vosms + t.so} />
+                        <SplitLine label="ИПН — платит парк" value={t.ipn} />
+                    </>
+                ) : trip.scheme === 3 ? (
                     <>
                         <SplitLine label="Начислено по ГПХ" value={trip.gross} />
                         <SplitLine label="ОПВ" value={t.opv} />

@@ -65,11 +65,12 @@ export interface ParkOrderLines {
 export interface ParkOrderCalc {
     source: 'TRIP' | 'OWN';
     /**
-     * 3 — обратный расчёт (03.11.2026): все налоги удержаны из начисления;
+     * 4 — с 04.11.2026: ОПВ, ОСМС и СО удержаны из начисления, ИПН платит парк;
+     * 3 — с 03.11.2026: все налоги удержаны из начисления;
      * 2 — рейс до 03.11.2026: у водителя только ОПВ, остальное платит парк;
      * 1 — до 16.10.2026: «на руки» вместе с топливом.
      */
-    scheme: 1 | 2 | 3;
+    scheme: 1 | 2 | 3 | 4;
     driverName: string | null;
     distanceKm: number | null;
     preliminary: boolean;
@@ -263,7 +264,7 @@ export class ExchangeSettlementService {
      */
     atAccept(offered: SettlementCalc, ctx: SettlementContext): SettlementCalc {
         const scheme = (offered as { scheme?: number }).scheme;
-        if (scheme !== 2 && scheme !== 3) return { ...offered, preliminary: ctx.preliminary };
+        if (scheme !== 2 && scheme !== 3 && scheme !== 4) return { ...offered, preliminary: ctx.preliminary };
         return { ...offered, ...withPosition(offered, offered.rates, ctx.position), preliminary: ctx.preliminary };
     }
 
@@ -303,7 +304,7 @@ export class ExchangeSettlementService {
             const gross = num(trip.gross);
             return {
                 source: 'TRIP',
-                scheme: trip.scheme === 3 ? 3 : trip.scheme === 2 ? 2 : 1,
+                scheme: trip.scheme === 4 ? 4 : trip.scheme === 3 ? 3 : trip.scheme === 2 ? 2 : 1,
                 driverName: order.assignedDriverName,
                 distanceKm: trip.distanceKm,
                 preliminary: trip.preliminary,
@@ -336,7 +337,7 @@ export class ExchangeSettlementService {
         const ctx = this.contextFromRow(base, order);
         const rates = { ...ctx.rates, vatPct: order.hasVat ? num(order.vatRate) : 0 };
         const view = {
-            source: 'OWN' as const, scheme: 3 as const, driverName: order.assignedDriverName,
+            source: 'OWN' as const, scheme: 4 as const, driverName: order.assignedDriverName,
             distanceKm: ctx.distanceKm, preliminary: ctx.preliminary, rates: ratesView(rates),
         };
         const price = order.currency === 'KZT' ? order.customerPrice : order.customerPriceBase;
@@ -364,7 +365,7 @@ export class ExchangeSettlementService {
     /** Зафиксировать расчёт рейса — когда компания выбрала водителя. */
     fixData(orderId: string, driver: { id: string; parkCompanyId: string }, c: SettlementCalc): Prisma.ExchangeTripSettlementUncheckedCreateInput {
         const scheme = (c as { scheme?: number }).scheme;
-        const current = scheme === 2 || scheme === 3;
+        const current = scheme === 2 || scheme === 3 || scheme === 4;
         return {
             orderId, driverId: driver.id, parkCompanyId: driver.parkCompanyId, taxMonth: c.taxMonth,
             distanceKm: c.distanceKm, fuelPerKm: c.fuelPerKm, fuelEstimate: c.fuel,

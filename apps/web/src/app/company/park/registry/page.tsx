@@ -191,7 +191,7 @@ export default function ParkRegistryPage() {
                                     <TableRow className="border-0 border-b border-solid border-border hover:bg-transparent">
                                         <TableHead className="h-9">Рейс</TableHead>
                                         <TableHead className="h-9">Водитель</TableHead>
-                                        <TableHead className="h-9 text-right" title="Сумма на руки и топливо; в рейсах до 03.11.2026 — ещё и ОПВ">Ставка водителя</TableHead>
+                                        <TableHead className="h-9 text-right" title="Ставка за рейс, до вычетов">Ставка водителя</TableHead>
                                         <TableHead className="h-9 text-right">На руки</TableHead>
                                         <TableHead className="h-9 text-right">Топливо</TableHead>
                                         <TableHead className="h-9 text-right">Предоплата</TableHead>

@@ -79,7 +79,7 @@ describe('Биржа · водитель: лента', () => {
         const feed = await service.feed('u-1');
         expect(prisma.order.findMany.mock.calls[0][0].where).toMatchObject({ exchangeClosedAt: null, driverId: null, partnerId: null });
         // Обратный расчёт: 400 000 − топливо 126 000 (1 200 км × 30 л × 350 ₸) = 274 000 на руки.
-        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 274000, orderNumber: '7A-0042' });
+        expect(feed[0]).toMatchObject({ from: 'Шымкент', to: 'Алматы', price: 246600, orderNumber: '7A-0042' });
     });
 
     it('водителю — сумма за рейс с расшифровкой: на руки, топливо, ОПВ; налоги парка, комиссия и цена компании скрыты', async () => {
@@ -94,8 +94,8 @@ describe('Биржа · водитель: лента', () => {
         for (const v of [load, card]) {
             // Шеф, 27.10.2026: сумма за рейс — на руки, топливо и пенсионные, всё деньги водителя.
             // Начислено 364 603 → ОПВ 36 460.
-            expect(v.price).toBe(274000);
-            expect(v.trip).toEqual({ total: 436460, onHand: 274000, fuel: 126000, opv: 36460 });
+            expect(v.price).toBe(246600);
+            expect(v.trip).toEqual({ total: 402133, onHand: 246600, fuel: 126000, opv: 29533 });
             // Топливо — лимит на заправку: 1 200 км × 30 л на 100 км = 360 л.
             expect(v.fuel).toEqual({ amount: 126000, liters: 360 });
             // Долю ОПВ не отдаём: приложение считало бы по ней пенсионные по-старому.
