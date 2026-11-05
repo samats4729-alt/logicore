@@ -43,7 +43,6 @@ const PUBLIC_ROUTES: Record<string, string> = {
     'AuthController.register': 'регистрация',
     'AuthController.registerCompany': 'регистрация компании',
     'AuthController.googleLogin': 'вход через Google',
-    'AuthController.googleRegister': 'регистрация через Google',
     'AuthController.getInvitation': 'приглашение по ссылке — человека ещё нет в системе',
     'AuthController.registerInvitedUser': 'регистрация по приглашению',
     'AuthController.lookupCompany': 'подстановка реквизитов по БИН при регистрации',
