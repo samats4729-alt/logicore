@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Form, Input, Button, Typography, Steps, Result, Divider, Checkbox } from 'antd';
 import { UserOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
+import { getDeviceId } from '@/lib/device-id';
 import { adSignupSource } from '@/lib/signup-source';
 import { useAuthStore } from '@/store/auth';
-import { GoogleLogin } from '@react-oauth/google';
+import type { CredentialResponse } from '@react-oauth/google';
 import AuthShell from '@/components/AuthShell';
+import GoogleButton from '@/components/GoogleButton';
 import { toast } from 'sonner';
 import Loader from '@/components/ui/Loader';
 
@@ -23,61 +25,49 @@ function RegisterContent() {
     const [form] = Form.useForm();
     const [googleToken, setGoogleToken] = useState<string | null>(null);
 
+    const fillFromGoogle = (token: string, data: { email?: string; firstName?: string; lastName?: string }) => {
+        setGoogleToken(token);
+        // Поле почты называется `email`. Пока сюда писали `adminEmail`,
+        // почта из Google не подставлялась никуда: человек видел пустое
+        // поле и вводил её заново — с опечаткой это уже другой аккаунт.
+        form.setFieldsValue({
+            email: data.email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+        });
+        toast.info('Почта взята из Google. Добавьте телефон и пароль');
+    };
+
     // Если пришли с /login?google=1 — подхватываем данные Google
     useEffect(() => {
         if (searchParams.get('google') === '1') {
             const token = sessionStorage.getItem('googleToken');
             const dataStr = sessionStorage.getItem('googleData');
             if (token && dataStr) {
-                setGoogleToken(token);
-                const data = JSON.parse(dataStr);
-                // Поле почты называется `email`. Пока сюда писали `adminEmail`,
-                // почта из Google не подставлялась никуда: человек видел пустое
-                // поле и вводил её заново — с опечаткой это уже другой аккаунт.
-                form.setFieldsValue({
-                    email: data.email,
-                    firstName: data.firstName,
-                    lastName: data.lastName,
-                });
-                toast.info('Почта взята из Google. Добавьте телефон и пароль');
+                fillFromGoogle(token, JSON.parse(dataStr));
             }
         }
     }, [searchParams]);
 
-    const handleGoogleRegisterSuccess = async (credentialResponse: any) => {
-        if (!form.getFieldValue('agreement')) {
-            toast.warning('Сначала примите условия Публичной оферты и Политики конфиденциальности');
-            return;
-        }
-        // Проверяем что телефон заполнен
-        const phone = form.getFieldValue('phone');
-        if (!phone) {
-            toast.warning('Сначала укажите номер телефона');
-            return;
-        }
-
-        const token = credentialResponse.credential;
-        setGoogleToken(token);
+    // Кнопка делает то же, что и на странице входа. Отдельная регистрация через
+    // Google просила название и БИН, которых в этой форме давно нет, поэтому
+    // любой новый человек получал отказ «Компания с таким БИН уже зарегистрирована».
+    const handleGoogleSuccess = async ({ credential }: CredentialResponse) => {
+        if (!credential) return;
         setLoading(true);
         try {
-            const formValues = form.getFieldsValue();
-            const res = await api.post('/auth/google/register', {
-                token,
-                companyName: formValues.companyName,
-                companyType: 'CUSTOMER',
-                bin: formValues.bin,
-                phone: formValues.phone || '+70000000000',
-                signupSource: adSignupSource(),
-            });
-
-            setUser(res.data.admin);
-            setStep(2);
-
-            setTimeout(() => {
-                router.push('/company');
-            }, 2000);
+            const res = await api.post('/auth/google', { token: credential, deviceId: getDeviceId() });
+            if (res.data.needsRegistration) {
+                fillFromGoogle(credential, res.data.googleData);
+                return;
+            }
+            // Этот человек уже есть в системе: просто впускаем. Страница входа
+            // сама отправит его в нужный раздел по роли.
+            setUser(res.data.user);
+            toast.success('Вход через Google выполнен успешно');
+            router.push('/login');
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Ошибка регистрации через Google');
+            toast.error(error.response?.data?.message || 'Ошибка входа через Google');
         } finally {
             setLoading(false);
         }
@@ -220,38 +210,23 @@ function RegisterContent() {
                                     <a href="/privacy" target="_blank" rel="noopener noreferrer">Политики конфиденциальности</a>
                                 </Checkbox>
                             </Form.Item>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <Button size="large" onClick={() => setStep(0)} style={{ flex: 1 }}>
-                                    Назад
-                                </Button>
-                                <Button type="primary" htmlType="submit" loading={loading} size="large" style={{ flex: 2 }}>
-                                    Зарегистрировать
-                                </Button>
-                            </div>
+                            <Button type="primary" htmlType="submit" loading={loading} size="large" block>
+                                Зарегистрировать
+                            </Button>
                             <Divider plain style={{ margin: '12px 0', fontSize: 13, color: '#999' }}>или</Divider>
                             <div id="google-register-button" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                                <GoogleLogin
-                                    onSuccess={handleGoogleRegisterSuccess}
-                                    onError={() => {
-                                        toast.error('Ошибка входа через Google');
-                                    }}
-                                    theme="outline"
-                                    size="large"
-                                    width="470px"
-                                />
+                                <GoogleButton onSuccess={handleGoogleSuccess} />
                             </div>
                         </div>
                     </Form>
                 )}
 
-                {step < 2 && (
-                    <div style={{ textAlign: 'center', marginTop: 24 }}>
-                        <Text type="secondary">
-                            Уже есть аккаунт?{' '}
-                            <a onClick={() => router.push('/login')}>Войти</a>
-                        </Text>
-                    </div>
-                )}
+                <div style={{ textAlign: 'center', marginTop: 24 }}>
+                    <Text type="secondary">
+                        Уже есть аккаунт?{' '}
+                        <a onClick={() => router.push('/login')}>Войти</a>
+                    </Text>
+                </div>
         </AuthShell>
     );
 }

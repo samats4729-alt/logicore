@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Form, Input, Button, Typography, Divider } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { GoogleLogin } from '@react-oauth/google';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
+import { getDeviceId } from '@/lib/device-id';
 import AuthShell from '@/components/AuthShell';
-import { v4 as uuidv4 } from 'uuid';
+import GoogleButton from '@/components/GoogleButton';
 import { toast } from 'sonner';
 
 const { Text } = Typography;
@@ -42,16 +42,6 @@ export default function LoginPage() {
             }
         }
     }, [hydrated, router]);
-
-    // Device ID для Single Session Policy
-    const getDeviceId = () => {
-        let deviceId = localStorage.getItem('deviceId');
-        if (!deviceId) {
-            deviceId = uuidv4();
-            localStorage.setItem('deviceId', deviceId);
-        }
-        return deviceId;
-    };
 
     // Email Login (Admin, Customer, etc.)
     const handleEmailLogin = async (values: { email: string; password: string }) => {
@@ -177,15 +167,7 @@ export default function LoginPage() {
                 </Form>
                 <Divider plain style={{ margin: '8px 0', fontSize: 13, color: '#999' }}>или</Divider>
                 <div id="google-login-button" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                    <GoogleLogin
-                        onSuccess={handleGoogleSuccess}
-                        onError={() => {
-                            toast.error('Ошибка входа через Google');
-                        }}
-                        theme="outline"
-                        size="large"
-                        width="370px"
-                    />
+                    <GoogleButton onSuccess={handleGoogleSuccess} />
                 </div>
 
                 <div style={{ textAlign: 'center', marginTop: 16 }}>

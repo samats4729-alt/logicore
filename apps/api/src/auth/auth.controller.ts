@@ -123,28 +123,6 @@ export class AuthController {
         return result;
     }
 
-    @Post('google/register')
-    @HttpCode(HttpStatus.CREATED)
-    @ApiOperation({ summary: 'Регистрация через Google' })
-    async googleRegister(@Body() dto: {
-        token: string;
-        companyName: string;
-        companyType: 'CUSTOMER' | 'FORWARDER';
-        bin: string;
-        phone: string;
-        signupSource?: string;
-    }, @Res({ passthrough: true }) response: Response) {
-        const result = await this.authService.registerWithGoogle(dto.token, {
-            companyName: dto.companyName,
-            companyType: dto.companyType,
-            bin: dto.bin,
-            phone: dto.phone,
-            signupSource: dto.signupSource,
-        });
-        setAuthCookie(response, result.accessToken);
-        return result;
-    }
-
     @Post('me')
     @UseGuards(JwtAuthGuard)
     @AllowWithoutCompany()
