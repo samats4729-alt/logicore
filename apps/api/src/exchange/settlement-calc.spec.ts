@@ -17,36 +17,55 @@ const NO_DEDUCTION: TaxPosition = { deductionLeft: 0, yearIpnBase: 0 };
 /** В тиыны — сверять суммы без дробей. */
 const t = (v: number) => Math.round(v * 100);
 
-/** Начисление минус все налоги — ровно на руки; топливо и начисление — себестоимость. */
+/** Начисление минус ОПВ, ОСМС и СО — ровно на руки; топливо, начисление и ИПН — себестоимость. */
 const expectConsistent = (s: Settlement) => {
-    expect(t(s.gross) - t(s.opv) - t(s.vosms) - t(s.so) - t(s.ipn)).toBe(t(s.driverTotal));
-    expect(t(s.base)).toBe(t(s.fuel) + t(s.driverTotal));
-    expect(t(s.parkCost)).toBe(t(s.fuel) + t(s.gross));
+    expect(t(s.gross) - t(s.opv) - t(s.vosms) - t(s.so)).toBe(t(s.driverTotal));
+    expect(t(s.parkCost)).toBe(t(s.fuel) + t(s.gross) + t(s.ipn));
     expect(t(s.platformFee) + t(s.parkFee)).toBe(t(s.commission));
     expect(t(s.parkCost) + t(s.commission) + t(s.vat)).toBe(t(s.customerPrice));
 };
 
-describe('Расчёт водителя без ИП — обратный расчёт (шеф, 03.11.2026)', () => {
-    describe('файл шефа: ставка 750 000, топливо 293 475', () => {
+describe('Расчёт водителя без ИП — ИПН за счёт парка (владелец, 04.11.2026)', () => {
+    describe('файл Алматы — Астана: ставка 500 000, топливо 130 000', () => {
         const FILE = {
-            scheme: 3, base: 750000, fuel: 293475, gross: 607486,
-            opv: 60749, vosms: 12150, so: 27337, ipn: 50725, ipnBase: 507250,
-            workNet: 456525, driverTotal: 456525,
-            parkCost: 900961, commission: 90096.1, platformFee: 45048.05, parkFee: 45048.05,
-            vat: 158569.14, customerPrice: 1149626.24,
+            scheme: 4, base: 500000, fuel: 130000, gross: 398802,
+            opv: 39880, vosms: 7976, so: 17946, ipn: 33300, ipnBase: 333000,
+            workNet: 333000, driverTotal: 333000,
+            parkCost: 562102, commission: 56210, platformFee: 28105.1, parkFee: 28104.9,
+            vat: 98930, customerPrice: 717242,
             deductionApplied: false, deductionAmount: 0,
         };
 
         it('от ставки — все строки как в файле', () => {
-            expect(fromBase(750000, 293475, WITH_VAT, NO_DEDUCTION)).toEqual(FILE);
+            expect(fromBase(500000, 130000, WITH_VAT, NO_DEDUCTION)).toEqual(FILE);
         });
 
         it('от суммы на руки — та же сделка', () => {
-            expect(fromOnHand(456525, 293475, WITH_VAT, NO_DEDUCTION)).toEqual(FILE);
+            expect(fromOnHand(333000, 130000, WITH_VAT, NO_DEDUCTION)).toEqual(FILE);
         });
 
         it('от цены для заказчика — та же сделка', () => {
-            expect(fromCustomerPrice(1149626.24, 293475, WITH_VAT, NO_DEDUCTION)).toEqual(FILE);
+            expect(fromCustomerPrice(717242, 130000, WITH_VAT, NO_DEDUCTION)).toEqual(FILE);
+        });
+
+        it('формулы файла на других суммах дают то же самое', () => {
+            const round = (v: number) => Math.round(v + Number.EPSILON);
+            // Выше 700 000 начинается предел СО, а файл его не видит.
+            for (let base = 150000; base < 700000; base += 13579) {
+                const net = round((base - 130000) * 0.9);
+                const gross = round(net / 0.835);
+                const opv = round(gross * 0.1);
+                const so = round((gross - opv) * 0.05);
+                const vosms = round(gross * 0.02);
+                // Файл сам себя проверяет: иногда округление уводит на тенге, тогда важнее точная сумма на руки.
+                if (gross - opv - so - vosms !== net) continue;
+                const ipn = round(net * 0.1);
+                const cost = 130000 + gross + ipn;
+                const noVat = cost + round(cost * 0.1);
+                expect(fromBase(base, 130000, WITH_VAT, NO_DEDUCTION)).toMatchObject({
+                    driverTotal: net, gross, opv, so, vosms, ipn, parkCost: cost, customerPrice: noVat + round(noVat * 0.16),
+                });
+            }
         });
     });
 
@@ -66,9 +85,13 @@ describe('Расчёт водителя без ИП — обратный рас�
             }
         });
 
-        it('налоги — целыми тенге', () => {
-            const s = fromOnHand(300000, 0, RATES, NO_DEDUCTION);
-            for (const tax of [s.opv, s.vosms, s.so, s.ipn]) expect(Number.isInteger(tax)).toBe(true);
+        it('налоги, комиссия и НДС — целыми тенге', () => {
+            const s = fromOnHand(300000, 0, WITH_VAT, NO_DEDUCTION);
+            for (const sum of [s.opv, s.vosms, s.so, s.ipn, s.commission, s.vat]) expect(Number.isInteger(sum)).toBe(true);
+        });
+
+        it('от ставки: на руки — остаток после топлива минус доля ОПВ', () => {
+            expect(fromBase(750000, 293475, RATES, NO_DEDUCTION).driverTotal).toBe(410873);
         });
 
         it('сумма не больше топлива — понятный отказ', () => {
@@ -129,10 +152,10 @@ describe('Расчёт водителя без ИП — обратный рас�
     });
 
     describe('вычет копится за месяц', () => {
-        it('уменьшает ИПН, а не сумму водителю', () => {
+        it('уменьшает ИПН парка, а не сумму водителю и не начисление', () => {
             const without = fromOnHand(456525, 0, RATES, NO_DEDUCTION);
             const withIt = fromOnHand(456525, 0, RATES, WITH_DEDUCTION);
-            expect(withIt).toMatchObject({ driverTotal: 456525, deductionApplied: true, deductionAmount: 129750 });
+            expect(withIt).toMatchObject({ driverTotal: 456525, gross: without.gross, deductionApplied: true, deductionAmount: 129750 });
             expect(withIt.ipn).toBeLessThan(without.ipn);
             expect(withIt.customerPrice).toBeLessThan(without.customerPrice);
             expectConsistent(withIt);
@@ -140,7 +163,7 @@ describe('Расчёт водителя без ИП — обратный рас�
 
         it('маленький рейс берёт часть вычета, ИПН нет, остаток — следующему', () => {
             const first = fromBase(100000, 27000, RATES, WITH_DEDUCTION);
-            expect(first).toMatchObject({ driverTotal: 73000, ipn: 0, ipnBase: 0 });
+            expect(first).toMatchObject({ driverTotal: 65700, ipn: 0, ipnBase: 0 });
             expect(first.deductionAmount).toBeLessThan(129750);
             const second = fromBase(300000, 27000, RATES, { deductionLeft: 129750 - first.deductionAmount, yearIpnBase: first.ipnBase });
             expect(t(first.deductionAmount) + t(second.deductionAmount)).toBe(t(129750));
@@ -149,8 +172,8 @@ describe('Расчёт водителя без ИП — обратный рас�
         it('пока отклик ждал, вычет ушёл на другой рейс: цена заказчика и сумма водителю те же, разница — в доле парка', () => {
             const offered = fromOnHand(456525, 293475, WITH_VAT, WITH_DEDUCTION);
             const now = withPosition(offered, WITH_VAT, NO_DEDUCTION);
-            expect(now).toMatchObject({ customerPrice: offered.customerPrice, driverTotal: 456525, platformFee: offered.platformFee, vat: offered.vat, deductionAmount: 0 });
-            expect(now.gross).toBeGreaterThan(offered.gross);
+            expect(now).toMatchObject({ scheme: 4, base: offered.base, customerPrice: offered.customerPrice, driverTotal: 456525, gross: offered.gross, platformFee: offered.platformFee, vat: offered.vat, deductionAmount: 0 });
+            expect(now.ipn).toBeGreaterThan(offered.ipn);
             expect(now.parkFee).toBeLessThan(offered.parkFee);
             expect(t(now.parkCost) + t(now.platformFee) + t(now.parkFee) + t(now.vat)).toBe(t(now.customerPrice));
         });
@@ -162,9 +185,9 @@ describe('Расчёт водителя без ИП — обратный рас�
     });
 
     describe('от цены для заказчика — своя заявка парка', () => {
-        it('цена прежняя — на руки выходит из неё: 1 047 291,52 → 396 255', () => {
+        it('цена прежняя — на руки выходит из неё: 1 047 291,52 → 406 354', () => {
             const s = fromCustomerPrice(1047291.52, 293475, WITH_VAT, NO_DEDUCTION);
-            expect(s).toMatchObject({ gross: 527286, opv: 52729, vosms: 10546, so: 23728, ipn: 44028, driverTotal: 396255, customerPrice: 1047291.52 });
+            expect(s).toMatchObject({ gross: 486651, opv: 48665, vosms: 9733, so: 21899, ipn: 40635, driverTotal: 406354, customerPrice: 1047291.52 });
         });
 
         it('строки сходятся с ценой до тиына — и с НДС, и без', () => {
@@ -172,9 +195,9 @@ describe('Расчёт водителя без ИП — обратный рас�
                 for (const price of [150000, 400000, 87654.32]) {
                     const s = fromCustomerPrice(price, 12000, r, NO_DEDUCTION);
                     expect(t(s.customerPrice)).toBe(t(price));
-                    expect(t(s.fuel) + t(s.gross) + t(s.commission) + t(s.vat)).toBe(t(price));
+                    expect(t(s.fuel) + t(s.gross) + t(s.ipn) + t(s.commission) + t(s.vat)).toBe(t(price));
                     expect(t(s.platformFee) + t(s.parkFee)).toBe(t(s.commission));
-                    expect(t(s.gross) - t(s.opv) - t(s.vosms) - t(s.so) - t(s.ipn)).toBe(t(s.driverTotal));
+                    expect(t(s.gross) - t(s.opv) - t(s.vosms) - t(s.so)).toBe(t(s.driverTotal));
                 }
             }
         });
@@ -202,6 +225,28 @@ describe('Расчёт водителя без ИП — обратный рас�
             expect(payoutOf(65700, 27000, 25000).toPay).toBe(63700);
             expect(payoutOf(65700, 20000, 27000).toPay).toBe(72700);
         });
+    });
+});
+
+describe('Схема 3 (отклики, поданные 03.11.2026): все налоги удержаны из начисления', () => {
+    const OFFERED: Settlement = {
+        scheme: 3, base: 750000, fuel: 293475, gross: 607486,
+        opv: 60749, vosms: 12150, so: 27337, ipn: 50725, ipnBase: 507250,
+        workNet: 456525, driverTotal: 456525,
+        parkCost: 900961, commission: 90096.1, platformFee: 45048.05, parkFee: 45048.05,
+        vat: 158569.14, customerPrice: 1149626.24,
+        deductionApplied: false, deductionAmount: 0,
+    };
+
+    it('ничего не поменялось — расчёт отклика как был', () => {
+        expect(withPosition(OFFERED, WITH_VAT, NO_DEDUCTION)).toBe(OFFERED);
+    });
+
+    it('появился вычет: считается по схеме 3, на руки и цена те же, разница — в доле парка', () => {
+        const now = withPosition(OFFERED, WITH_VAT, WITH_DEDUCTION);
+        expect(now).toMatchObject({ scheme: 3, driverTotal: 456525, customerPrice: 1149626.24, deductionAmount: 129750 });
+        expect(now.gross).toBeLessThan(OFFERED.gross);
+        expect(now.parkFee).toBeGreaterThan(OFFERED.parkFee);
     });
 });
 

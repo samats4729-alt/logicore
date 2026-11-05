@@ -5,7 +5,8 @@
  * остальных налогов в этом коде нет. Ничего не сохраняет и не отправляет.
  */
 
-const OPV = 0.1;
+/** Доля ОПВ, %. На руки — целыми тенге, ОПВ — остаток, чтобы сумма сходилась. */
+const OPV_PCT = 10;
 
 export interface FuelCalcInput {
     total: number;
@@ -33,6 +34,6 @@ export function calculateFuel(input: FuelCalcInput): FuelCalcResult | null {
     const fuel = fuelOf(input.km, input.consumption, input.price);
     const diff = input.total - fuel;
     if (!(diff > 0)) return null;
-    const opv = Math.round(diff * OPV);
-    return { liters: (input.km * input.consumption) / 100, fuel, opv, onHand: diff - opv };
+    const onHand = Math.round((diff * (100 - OPV_PCT)) / 100);
+    return { liters: (input.km * input.consumption) / 100, fuel, opv: diff - onHand, onHand };
 }

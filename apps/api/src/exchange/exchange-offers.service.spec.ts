@@ -192,7 +192,7 @@ describe('Биржа: выбор исполнителя', () => {
     });
 });
 
-describe('Биржа: отклик водителя парка — обратный расчёт (03.11.2026)', () => {
+describe('Биржа: отклик водителя парка — ИПН за счёт парка (04.11.2026)', () => {
     const PARK_DRIVER = { id: 'd-1', status: 'APPROVED', kind: 'PARK', parkCompanyId: 'park-1' };
     const PARK_OFFER = (saved: any) => offerRow({
         price: saved.price, driverTotal: saved.driverTotal, calc: saved.calc,
@@ -205,22 +205,22 @@ describe('Биржа: отклик водителя парка — обратн�
         const own = await service.offerAsDriver('u-driver', 'order-1', { price: 400000 });
         expect(own.price).toBe(400000);
         const saved = prisma.exchangeOffer.upsert.mock.calls[0][0].create;
-        // 400 000 на руки, топливо 126 000, вычет целиком: начислено 515 003, налоги 115 003.
-        expect(saved.price).toBe(705103.3);
+        // 400 000 на руки, топливо 126 000, вычет целиком: начислено 479 042, ИПН парка 27 025.
+        expect(saved.price).toBe(695274);
         expect(saved.driverTotal).toBe(400000);
         expect(saved.calc).toMatchObject({
-            scheme: 3, base: 526000, fuel: 126000, gross: 515003, opv: 51500, vosms: 10300, so: 23175, ipn: 30028,
+            scheme: 4, base: 570444, fuel: 126000, gross: 479042, opv: 47904, vosms: 9581, so: 21557, ipn: 27025,
             deductionApplied: true, taxMonth: '2026-10',
         });
     });
 
-    it('«согласен» на цену компании — на руки = её сумма минус топливо', async () => {
+    it('«согласен» на цену компании — на руки = её сумма минус топливо и доля ОПВ', async () => {
         const { service, prisma, drivers } = build();
         drivers.approvedDriver.mockResolvedValue(PARK_DRIVER);
         prisma.order.findFirst.mockResolvedValue(openOrder({ exchangePrice: 400000 }));
         const agreed = await service.offerAsDriver('u-driver', 'order-1', { agree: true });
-        expect(agreed.price).toBe(274000);
-        expect(prisma.exchangeOffer.upsert.mock.calls[0][0].create.price).toBe(520672.9);
+        expect(agreed.price).toBe(246600);
+        expect(prisma.exchangeOffer.upsert.mock.calls[0][0].create.price).toBe(476317);
     });
 
     it('цена компании не покрывает топливо — согласиться нельзя, понятный отказ', async () => {
@@ -235,7 +235,7 @@ describe('Биржа: отклик водителя парка — обратн�
         drivers.approvedDriver.mockResolvedValue(PARK_DRIVER);
         prisma.exchangeDriver.findUnique.mockResolvedValue({ id: 'd-1', deductionRequested: false });
         await service.offerAsDriver('u-driver', 'order-1', { price: 400000 });
-        expect(prisma.exchangeOffer.upsert.mock.calls[0][0].create.calc).toMatchObject({ gross: 532268, ipn: 44444, deductionApplied: false });
+        expect(prisma.exchangeOffer.upsert.mock.calls[0][0].create.calc).toMatchObject({ gross: 479042, ipn: 40000, deductionApplied: false });
     });
 
     it('предел СО — месячный: другие рейсы водителя в этом месяце его съедают', async () => {
@@ -273,11 +273,11 @@ describe('Биржа: отклик водителя парка — обратн�
         await service.offerAsDriver('u-driver', 'order-1', { price: 400000 });
         prisma.exchangeOffer.findFirst.mockResolvedValue(PARK_OFFER(prisma.exchangeOffer.upsert.mock.calls[0][0].create));
         await service.accept(OUR, 'u-manager', 'order-1', 'offer-1');
-        expect(tx.order.updateMany.mock.calls[0][0].data).toMatchObject({ driverCost: 705103.3, partnerId: 'park-1' });
+        expect(tx.order.updateMany.mock.calls[0][0].data).toMatchObject({ driverCost: 695274, partnerId: 'park-1' });
         expect(tx.exchangeTripSettlement.upsert.mock.calls[0][0].create).toMatchObject({
-            orderId: 'order-1', driverId: 'd-1', parkCompanyId: 'park-1', scheme: 3, base: 526000,
-            driverTotal: 400000, workNet: 400000, gross: 515003, customerPrice: 705103.3, taxMonth: '2026-10',
-            deductionAmount: 129750, ipnBase: 300278, vat: 0, preliminary: true,
+            orderId: 'order-1', driverId: 'd-1', parkCompanyId: 'park-1', scheme: 4, base: 570444,
+            driverTotal: 400000, workNet: 400000, gross: 479042, customerPrice: 695274, taxMonth: '2026-10',
+            deductionAmount: 129750, ipnBase: 270250, vat: 0, preliminary: true,
         });
     });
 
@@ -293,8 +293,8 @@ describe('Биржа: отклик водителя парка — обратн�
         }]);
         await service.accept(OUR, 'u-manager', 'order-1', 'offer-1');
         const fixed = tx.exchangeTripSettlement.upsert.mock.calls[0][0].create;
-        expect(fixed).toMatchObject({ customerPrice: 705103.3, driverTotal: 400000, gross: 532268, deductionApplied: false, deductionAmount: 0, ipn: 44444 });
-        // 705 103,30 − себестоимость 658 268 − доля LogiCore 32 050,15.
-        expect(fixed.parkFee).toBe(14785.15);
+        expect(fixed).toMatchObject({ customerPrice: 695274, driverTotal: 400000, gross: 479042, deductionApplied: false, deductionAmount: 0, ipn: 40000 });
+        // 695 274 − себестоимость 645 042 − доля LogiCore 31 603,35.
+        expect(fixed.parkFee).toBe(18628.65);
     });
 });

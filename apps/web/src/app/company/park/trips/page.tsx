@@ -258,8 +258,8 @@ export default function ParkTripsPage() {
 
 /**
  * Налоги рейса (шеф, 16.10.2026: «сколько ИПН, ОПВ, ОСМС, соцотчисления»).
- * С 03.11.2026 все четыре удержаны из начисления; в рейсах раньше у водителя
- * удержан только ОПВ, остальное платит парк.
+ * С 04.11.2026 ОПВ, ОСМС и СО удержаны из начисления, ИПН платит парк; с 03.11.2026
+ * удержаны все четыре; в рейсах раньше у водителя удержан только ОПВ, остальное платит парк.
  */
 function TaxBreakdown({ s }: { s: ParkTrip['settlement'] }) {
     if (!s || s.gross == null) return <span className="text-muted-foreground">—</span>;
@@ -268,7 +268,9 @@ function TaxBreakdown({ s }: { s: ParkTrip['settlement'] }) {
         <div className="space-y-0.5 tabular-nums">
             <div>ОПВ {moneyShort(s.opv)} · ОСМС {moneyShort(s.vosms)} · СО {moneyShort(s.so)} · ИПН {moneyShort(s.ipn)}</div>
             <div className="text-[11.5px] text-muted-foreground">
-                {s.scheme === 3
+                {s.scheme === 4
+                    ? `удержано ${moneyShort((s.opv ?? 0) + (s.vosms ?? 0) + (s.so ?? 0))} из начисления ${moneyShort(s.gross)}; ИПН — за счёт парка`
+                    : s.scheme === 3
                     ? `всего ${moneyShort((s.opv ?? 0) + parkPays)} — удержано из начисления ${moneyShort(s.gross)}`
                     : s.scheme === 2
                         ? `ОПВ — из денег водителя; ОСМС, СО, ИПН — за счёт парка (${moneyShort(parkPays)})`

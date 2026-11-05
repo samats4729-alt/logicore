@@ -72,7 +72,7 @@ export interface RegistryLine {
     opv: number;
     vosms: number;
     ipn: number;
-    /** Удержано из дохода водителя: схема шефа — ОПВ; прежняя — ОПВ + ВОСМС + ИПН. */
+    /** Удержано из дохода водителя: с 04.11.2026 — ОПВ, ОСМС, СО; раньше — см. `line`. */
     withheld: number;
     /** СО — платит парк от себя. */
     so: number;
@@ -171,9 +171,10 @@ export class ExchangeParkRegistryService {
             toPay: item.toPay != null ? num(item.toPay) : num(item.net),
             fuelIssued: num(item.fuelIssued), fuelReceipts: num(item.fuelReceipts),
         } : { gross: live!.gross, opv: live!.opv, vosms: live!.vosms, ipn: live!.ipn, so: live!.so, toPay: live!.toPay, fuelIssued: live!.fuelIssued, fuelReceipts: live!.fuelReceipts };
-        // Удержано у водителя. Обратный расчёт (03.11.2026) — все налоги из начисления;
-        // схема 2 — только ОПВ, остальное парк платил сам; самая старая — без СО.
-        const withheld = r.scheme === 3 ? money(a.opv + a.vosms + a.ipn + a.so)
+        // Удержано у водителя. С 04.11.2026 — ОПВ, ОСМС и СО, ИПН платит парк; схема 3 —
+        // все четыре; схема 2 — только ОПВ, остальное парк платил сам; самая старая — без СО.
+        const withheld = r.scheme === 4 ? money(a.opv + a.vosms + a.so)
+            : r.scheme === 3 ? money(a.opv + a.vosms + a.ipn + a.so)
             : r.scheme === 2 ? a.opv
                 : money(a.opv + a.vosms + a.ipn);
         const payStatus: PayStatus = item ? item.payout.status

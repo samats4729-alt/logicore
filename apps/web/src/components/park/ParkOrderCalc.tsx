@@ -28,7 +28,7 @@ export function useParkOrderCalc(orderId: string, reloadKey?: unknown): ParkOrde
     return data;
 }
 
-/** Всё, что парк платит в бюджет по рейсу: ОПВ из оплаты водителя, остальное — сам. */
+/** Всё, что парк платит в бюджет по рейсу: удержанное у водителя и своё. */
 const налоги = (c: NonNullable<ParkOrderCalc['calc']>) => c.opv + c.vosms + c.so + c.ipn;
 
 /** Оттенок текста — серые доли полосы, которые сами перекрашиваются в тёмной теме. */
@@ -147,7 +147,7 @@ export function ParkOrderCalcCard({ data, onOpenFuel }: { data: ParkOrderCalc; o
                         minus
                         note={<>из комиссии остаётся парку <b className={card.pos}>{тенге(c.parkFee)}</b> · LogiCore {тенге(c.platformFee)}</>}
                     />
-                    {data.scheme === 3 ? <Withheld data={data} c={c} /> : <ParkPays data={data} c={c} />}
+                    {data.scheme === 4 ? <IpnByPark data={data} c={c} /> : data.scheme === 3 ? <Withheld data={data} c={c} /> : <ParkPays data={data} c={c} />}
                 </div>
             )}
             <p className={card.note}>
@@ -159,25 +159,59 @@ export function ParkOrderCalcCard({ data, onOpenFuel }: { data: ParkOrderCalc; o
     );
 }
 
+/** Топливо в лесенке: сколько и как его оплачивают. */
+function FuelStep({ data, c }: { data: ParkOrderCalc; c: NonNullable<ParkOrderCalc['calc']> }) {
+    const km = data.distanceKm ? `по расчёту, ≈ ${Math.round(data.distanceKm).toLocaleString('ru-RU')} км · ` : '';
+    return (
+        <Step
+            label="Топливо (ГСМ) — оплачивает парк"
+            value={c.fuel}
+            minus
+            note={data.distanceKm
+                ? `${km}на заправке или переводом водителю, чеки — на БИН парка`
+                : 'Не посчитано: у точек маршрута нет координат или адрес погрузки и выгрузки один.'}
+        />
+    );
+}
+
 /**
- * Обратный расчёт (шеф, 03.11.2026): начисление поднято под сумму на руки, все
- * налоги удержаны из него. Лесенка идёт от себестоимости через начисление к
- * сумме на руки, ставка — отдельной строкой: топливо плюс на руки.
+ * Расчёт с 04.11.2026: ОПВ, ОСМС и СО удержаны из начисления, ИПН платит парк.
+ * Лесенка идёт от себестоимости через начисление к сумме на руки, ставка —
+ * отдельной строкой.
+ */
+function IpnByPark({ data, c }: { data: ParkOrderCalc; c: NonNullable<ParkOrderCalc['calc']> }) {
+    const r = data.rates;
+    return (
+        <>
+            <Step label="Себестоимость рейса" value={c.fuel + c.gross + c.ipn} total note="топливо, начисление по ГПХ и ИПН" />
+            <FuelStep data={data} c={c} />
+            <Step
+                label={`ИПН ${r.ipnPct}% — за счёт парка`}
+                value={c.ipn}
+                minus
+                note={`от начисления минус ОПВ, ОСМС, СО${c.deductionAmount > 0 ? ` и вычет ${тенге(c.deductionAmount)}` : ''}`}
+            />
+            <Step label="Начислено по ГПХ" value={c.gross} total note="после ОПВ, ОСМС и СО остаётся сумма на руки" />
+            <Step label={`ОПВ ${r.opvPct}%`} value={c.opv} minus note="от начисления" />
+            <Step label={`ОСМС ${r.vosmsPct}%`} value={c.vosms} minus note="от начисления" />
+            <Step label={`СО ${r.soPct}%`} value={c.so} minus note="от начисления минус ОПВ" />
+            <Step label="На руки водителю" value={c.driverTotal} total />
+            <Step label="Ставка водителя" value={c.base} note="на руки до доли ОПВ и топливо" />
+            <Step label="Налоги по ГПХ, всего" value={налоги(c)} note="ОПВ, ОСМС, СО удержаны; ИПН платит парк" />
+        </>
+    );
+}
+
+/**
+ * Рейс, зафиксированный 03.11.2026: начисление поднято под сумму на руки, все
+ * налоги удержаны из него; ставка — топливо плюс на руки.
  */
 function Withheld({ data, c }: { data: ParkOrderCalc; c: NonNullable<ParkOrderCalc['calc']> }) {
     const r = data.rates;
-    const km = data.distanceKm ? `по расчёту, ≈ ${Math.round(data.distanceKm).toLocaleString('ru-RU')} км · ` : '';
     return (
         <>
             <Step label="Себестоимость рейса" value={c.fuel + c.gross} total note="топливо и начисление по ГПХ" />
-            <Step
-                label="Топливо (ГСМ) — оплачивает парк"
-                value={c.fuel}
-                minus
-                note={data.distanceKm
-                    ? `${km}на заправке или переводом водителю, чеки — на БИН парка`
-                    : 'Не посчитано: у точек маршрута нет координат или адрес погрузки и выгрузки один.'}
-            />
+            <FuelStep data={data} c={c} />
             <Step label="Начислено по ГПХ" value={c.gross} total note="поднято так, чтобы после налогов осталась сумма на руки" />
             <Step label={`ОПВ ${r.opvPct}%`} value={c.opv} minus note="от начисления" />
             <Step label={`ОСМС ${r.vosmsPct}%`} value={c.vosms} minus note="от начисления" />
