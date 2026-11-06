@@ -1,69 +1,74 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
-import {
-    ArrowRight,
-    Banknote,
-    Building2,
-    Check,
-    FileText,
-    MapPin,
-    Moon,
-    Sparkles,
-    Sun,
-    Truck,
-    Users,
-} from 'lucide-react';
+import { Menu, Moon, Sun, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/components/ThemeProvider';
-import AssemblyStage from '@/components/landing/AssemblyStage';
 import PaymentMarks from '@/components/public/PaymentMarks';
-import styles from './landing.module.css';
 import Loader from '@/components/ui/Loader';
+import {
+    OrdersJournal,
+    RouteSketch,
+    StepCarrier,
+    StepMoney,
+    StepOrder,
+    StepTracking,
+    TripDocuments,
+} from '@/components/landing/LandingVisuals';
+import styles from './landing.module.css';
 
 /**
  * Главная страница (её содержимое; сама страница — `page.tsx`).
  *
+ * Эталон — холст «Главная страница — макет», согласованный владельцем
+ * 06.11.2026: строгая сетка (название раздела слева, содержимое справа,
+ * тонкие линии), продукт показан настоящими экранами, светлая тема — только
+ * белый и чёрный, тёмная — тёплый серый кабинета. Без ИИ-приёмов: огромных
+ * цифр, плашек над разделами, галочек у каждой строки.
+ *
  * Страница целиком приходит готовой с сервера: поисковик и превью ссылки
- * видят текст сразу, а не одно слово «Загрузка».
- *
- * Собрана на том же языке, что кабинет (`design/finance-hub`): те же
- * токены, та же шапка высотой 58, те же карточки. Вход в систему не должен
- * ощущаться как переход на другой сайт.
- *
- * Первый экран показывает продукт, а не рассказывает о нём: детали журнала
- * заявок лежат врассыпную и собираются в рабочий экран по мере прокрутки.
+ * видят текст сразу, а не одно слово «Загрузка». Все кнопки — настоящие
+ * ссылки, поисковик по ним проходит на регистрацию и вход.
  */
 
-// Карта весит больше всей остальной страницы, поэтому не входит в первую
-// загрузку — подтягивается, когда до раздела долистали.
-const RouteMap = dynamic(() => import('@/components/landing/RouteMap'), {
-    ssr: false,
-    loading: () => <div style={{ aspectRatio: '16 / 7', minHeight: 240 }} />,
-});
+const NAV = [
+    { href: '#как', label: 'Как это работает' },
+    { href: '#возможности', label: 'Возможности' },
+    { href: '#рейс', label: 'Мониторинг' },
+    { href: '#кому', label: 'Кому подходит' },
+    { href: '#тариф', label: 'Тариф' },
+];
+
+const STRIP = 'Оформление заявок · GPS-мониторинг рейсов · Счета и акты выполненных работ · Взаиморасчёты с контрагентами · Несколько юридических лиц · Доверенности и договоры-заявки · Реестр рейсов и оплат · Встроенный помощник';
 
 const STEPS = [
-    { num: '01', title: 'Оформление заявки', text: 'Груз, маршрут и ставки заполняются в одной форме. Реквизиты контрагента подтягиваются по БИН.' },
-    { num: '02', title: 'Назначение перевозчика', text: 'Штатный водитель, партнёр-перевозчик или публикация рейса на бирже грузов.' },
-    { num: '03', title: 'Контроль рейса', text: 'Статусы и координаты транспорта обновляются в реальном времени и видны обеим сторонам.' },
-    { num: '04', title: 'Закрытие расчётов', text: 'Счета, акты и доверенности формируются автоматически, маржа считается по каждому рейсу.' },
+    { title: 'Оформление заявки', text: 'Груз, маршрут и ставки заполняются в одной форме. Реквизиты контрагента подтягиваются по БИН.', Visual: StepOrder },
+    { title: 'Назначение перевозчика', text: 'Штатный водитель, партнёр-перевозчик или публикация рейса на бирже грузов.', Visual: StepCarrier },
+    { title: 'Контроль рейса', text: 'Статусы и координаты транспорта обновляются в реальном времени и видны обеим сторонам.', Visual: StepTracking },
+    { title: 'Закрытие расчётов', text: 'Счета, акты и доверенности формируются автоматически, маржа считается по каждому рейсу.', Visual: StepMoney },
+];
+
+const MONITORING = [
+    'Координаты транспорта и пройденная часть маршрута',
+    'Статусы от погрузки до выгрузки — синхронно у всех участников',
+    'Заказчик видит те же данные, что и логист',
 ];
 
 const FEATURES = [
-    { icon: Truck, title: 'Заявки и биржа грузов', text: 'Оформление заявки, назначение перевозчика и публикация рейса на бирже.' },
-    { icon: MapPin, title: 'GPS-мониторинг', text: 'Положение транспорта на карте и статусы рейса от погрузки до выгрузки.' },
-    { icon: Banknote, title: 'Финансы и взаиморасчёты', text: 'Реестр рейсов, движение денежных средств, прибыль и задолженность по каждому контрагенту.' },
-    { icon: FileText, title: 'Документооборот', text: 'Счета, акты выполненных работ и доверенности формируются автоматически.' },
-    { icon: Building2, title: 'Несколько юридических лиц', text: 'Все организации в одном аккаунте, общий список дел с фильтром по организации.' },
-    { icon: Sparkles, title: 'Встроенный помощник', text: 'Отвечает на вопросы по работе с системой и подсказывает следующий шаг.' },
+    { title: 'Заявки и биржа грузов', text: 'Оформление заявки, назначение перевозчика и публикация рейса на бирже.' },
+    { title: 'GPS-мониторинг', text: 'Положение транспорта на карте и статусы рейса от погрузки до выгрузки.' },
+    { title: 'Финансы и взаиморасчёты', text: 'Реестр рейсов, движение денежных средств, прибыль и задолженность по каждому контрагенту.' },
+    { title: 'Документооборот', text: 'Счета, акты выполненных работ и доверенности формируются автоматически.' },
+    { title: 'Несколько юридических лиц', text: 'Все организации в одном аккаунте, общий список дел с фильтром по организации.' },
+    { title: 'Встроенный помощник', text: 'Отвечает на вопросы по работе с системой и подсказывает следующий шаг.' },
 ];
 
 const AUDIENCES = [
     {
-        icon: Users, title: 'Экспедиторским компаниям', items: [
+        title: 'Экспедиторским компаниям', items: [
             'Заявки, перевозчики и биржа в одном рабочем окне',
             'Маржа рассчитывается по каждому рейсу',
             'Взаиморасчёты и счета без внешних таблиц',
@@ -71,7 +76,7 @@ const AUDIENCES = [
         ],
     },
     {
-        icon: Building2, title: 'Грузовладельцам', items: [
+        title: 'Грузовладельцам', items: [
             'Актуальный статус каждой перевозки',
             'Подтверждение факта выполнения рейса',
             'История перевозок и документы по каждому заказу',
@@ -79,7 +84,7 @@ const AUDIENCES = [
         ],
     },
     {
-        icon: Truck, title: 'Перевозчикам', items: [
+        title: 'Перевозчикам', items: [
             'Заявки от экспедиторов или заказчиков',
             'Назначение своих водителей и транспорта',
             'Подтверждение выполнения рейса',
@@ -99,6 +104,9 @@ const AUDIENCES = [
  * Пункта «сотрудники без ограничения по числу» здесь нет намеренно: платим
  * как раз за каждого сотрудника, и такое обещание рядом с ценой читалось бы
  * как обман.
+ *
+ * Строку о приложении водителя на макете убрали (оно ещё на тестировании),
+ * но с рабочего сайта владелец её снимать пока не велел (06.11.2026).
  */
 const TARIFF_FEATURES = [
     'Заявка на перевозку — от запроса цены до закрытых документов',
@@ -121,6 +129,8 @@ export interface Tariff {
     features: string[];
 }
 
+const money = (n: number) => n.toLocaleString('ru-RU');
+
 export default function HomeLanding({ initialTariff }: { initialTariff: Tariff | null }) {
     const router = useRouter();
     const { isAuthenticated, user } = useAuthStore();
@@ -131,6 +141,8 @@ export default function HomeLanding({ initialTariff }: { initialTariff: Tariff |
     const [tariff, setTariff] = useState<Tariff | null>(initialTariff);
     /** Калькулятор тарифа: сколько сотрудников — столько и платят (задачи шефа, N3). */
     const [seats, setSeats] = useState(5);
+    /** Меню на телефоне: разделы и вход спрятаны за кнопкой в шапке. */
+    const [menuOpen, setMenuOpen] = useState(false);
 
     useBrowserLayoutEffect(() => {
         setHydrated(true);
@@ -163,248 +175,269 @@ export default function HomeLanding({ initialTariff }: { initialTariff: Tariff |
         );
     }
 
+    const isDark = theme === 'dark';
+    const themeLabel = isDark ? 'Светлая тема' : 'Тёмная тема';
+    const paid = !!tariff?.paid;
+    const price = tariff?.pricePerUser ?? 0;
+    const trialDays = tariff?.trialDays ?? 0;
+    const setSeatsSafe = (n: number) => setSeats(Math.min(999, Math.max(1, n)));
+
     return (
         <div className={`lc-nova ${styles.root}`}>
+            <a href="#content" className={styles.skip}>Перейти к содержанию</a>
+
             <header className={styles.head}>
                 <div className={styles.headBand}>
-                    <a href="/" className={styles.brand}>Logi<span>Core</span></a>
+                    <Link href="/" className={styles.brand}>LogiCore</Link>
 
-                    <nav className={styles.links}>
-                        <a className={styles.link} href="#как">Как это работает</a>
-                        <a className={styles.link} href="#возможности">Возможности</a>
-                        <a className={styles.link} href="#рейс">Мониторинг</a>
-                        <a className={styles.link} href="#кому">Кому подходит</a>
-                        <a className={styles.link} href="#тариф">Тариф</a>
+                    <nav className={styles.nav} aria-label="Разделы">
+                        {NAV.map((n) => (
+                            <a key={n.href} href={n.href} className={styles.navLink}>{n.label}</a>
+                        ))}
                     </nav>
 
                     <div className={styles.headRight}>
                         <button
                             type="button"
-                            className={styles.themeBtn}
-                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                            aria-label={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
-                            title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+                            className={styles.iconBtn}
+                            onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                            aria-label={themeLabel}
+                            title={themeLabel}
                         >
-                            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+                            {isDark ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
                         </button>
-                        <button type="button" className={styles.ghost} onClick={() => router.push('/login')}>
-                            Войти
-                        </button>
-                        <button type="button" className={styles.primary} onClick={() => router.push('/register')}>
-                            Зарегистрироваться <ArrowRight size={14} />
+                        <Link href="/login" className={`${styles.btn} ${styles.btnGhost} ${styles.wideOnly}`}>Войти</Link>
+                        <Link href="/register" className={`${styles.btn} ${styles.btnPrimary} ${styles.wideOnly}`}>Зарегистрироваться</Link>
+                        <button
+                            type="button"
+                            className={`${styles.iconBtn} ${styles.burger}`}
+                            onClick={() => setMenuOpen((v) => !v)}
+                            aria-label="Меню"
+                            aria-expanded={menuOpen}
+                            aria-controls="mobile-menu"
+                        >
+                            {menuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
                         </button>
                     </div>
                 </div>
+
+                {menuOpen && (
+                    <nav id="mobile-menu" aria-label="Меню" className={styles.menu}>
+                        {NAV.map((n) => (
+                            <a key={n.href} href={n.href} className={styles.menuLink} onClick={() => setMenuOpen(false)}>
+                                {n.label}
+                            </a>
+                        ))}
+                        <div className={styles.menuBtns}>
+                            <Link href="/login" className={`${styles.menuBtn} ${styles.btnGhost}`}>Войти</Link>
+                            <Link href="/register" className={`${styles.menuBtn} ${styles.menuBtnMain} ${styles.btnPrimary}`}>Зарегистрироваться</Link>
+                        </div>
+                    </nav>
+                )}
             </header>
 
-            {/* ===== Первый экран =====
-                Заголовок живёт внутри сцены, а не отдельным блоком над ней:
-                иначе разлетевшиеся детали начинаются под ним, за краем
-                экрана, и сборку просто не видно. */}
-            <AssemblyStage>
-                <div className={styles.hero}>
-                    <h1 className={styles.title}>
-                        Заявки, транспорт и расчёты — <em>в одной системе</em>
-                    </h1>
-                    <p className={styles.lead}>
-                        LogiCore объединяет оформление заявок, назначение перевозчиков, контроль
-                        рейсов и взаиморасчёты. Данные вводятся один раз и доступны всем
-                        участникам перевозки.
-                    </p>
-                    <div className={styles.heroBtns}>
-                        <button type="button" className={styles.primary} onClick={() => router.push('/register')}>
-                            Зарегистрироваться <ArrowRight size={14} />
-                        </button>
-                        <button type="button" className={styles.ghost} onClick={() => router.push('/login')}>
-                            Войти
-                        </button>
-                    </div>
-                    <div className={styles.trust}>Развёртывание за один рабочий день · Данные хранятся в вашем аккаунте</div>
-                </div>
-            </AssemblyStage>
+            <main id="content">
+                {/* ===== Первый экран: заголовок и сразу продукт ===== */}
+                <section className={`${styles.band} ${styles.hero}`}>
+                    <h1 className={styles.title}>Заявки, транспорт и&nbsp;расчёты — в&nbsp;одной системе</h1>
 
-            {/* ===== Как работает ===== */}
-            <section className={styles.section} id="как">
-                <div className={styles.band}>
-                    <div className={styles.sectionHead}>
+                    <div className={styles.heroRow}>
+                        <p className={styles.lead}>
+                            LogiCore объединяет оформление заявок, назначение перевозчиков, контроль
+                            рейсов и взаиморасчёты. Данные вводятся один раз и доступны всем
+                            участникам перевозки.
+                        </p>
+                        <div className={styles.heroActions}>
+                            <div className={styles.heroBtns}>
+                                <Link href="/register" className={`${styles.btnLg} ${styles.btnPrimary}`}>Зарегистрироваться</Link>
+                                <Link href="/login" className={`${styles.btnLg} ${styles.btnGhost}`}>Войти</Link>
+                            </div>
+                            <span className={styles.trust}>Развёртывание за один рабочий день · Данные хранятся в вашем аккаунте</span>
+                        </div>
+                    </div>
+
+                    <OrdersJournal />
+                </section>
+
+                <div className={styles.strip}>
+                    <p className={styles.band}>{STRIP}</p>
+                </div>
+
+                {/* ===== Как это работает ===== */}
+                <section id="как" className={`${styles.band} ${styles.section}`}>
+                    <div className={styles.aside}>
                         <div className={styles.eyebrow}>Как это работает</div>
-                        <h2 className={styles.sectionTitle}>От оформления заявки до закрытия расчётов — четыре шага</h2>
-                        <p className={styles.sectionLead}>
+                        <h2 className={styles.h2}>От оформления заявки до закрытия расчётов — четыре шага</h2>
+                        <p className={styles.asideText}>
                             Переносить данные вручную не требуется: каждый следующий шаг использует сведения предыдущего.
                         </p>
                     </div>
-                    <div className={styles.steps}>
-                        {STEPS.map((s) => (
-                            <div key={s.num} className={styles.step}>
-                                <div className={styles.stepNum}>{s.num}</div>
-                                <div className={styles.stepTitle}>{s.title}</div>
-                                <div className={styles.stepText}>{s.text}</div>
-                            </div>
+                    <ol className={`${styles.main} ${styles.steps}`}>
+                        {STEPS.map((s, i) => (
+                            <li key={s.title} className={styles.step}>
+                                <div className={styles.stepText}>
+                                    <div className={styles.stepNum}>Шаг {i + 1}</div>
+                                    <h3 className={styles.stepTitle}>{s.title}</h3>
+                                    <p className={styles.stepDesc}>{s.text}</p>
+                                </div>
+                                <s.Visual />
+                            </li>
                         ))}
-                    </div>
-                </div>
-            </section>
+                    </ol>
+                </section>
 
-            {/* ===== Живой рейс ===== */}
-            <section className={`${styles.section} ${styles.sectionMuted}`} id="рейс">
-                <div className={styles.band}>
-                    <div className={styles.mapRow}>
-                        <div className={styles.mapText}>
+                {/* ===== Мониторинг ===== */}
+                <section id="рейс" className={styles.deep}>
+                    <div className={`${styles.band} ${styles.section}`}>
+                        <div className={`${styles.aside} ${styles.deepAside}`}>
                             <div className={styles.eyebrow}>Мониторинг</div>
-                            <h2 className={styles.sectionTitle}>Положение транспорта видно без звонка водителю</h2>
-                            <ul>
-                                <li><Check size={14} className={styles.tick} /> Координаты транспорта и пройденная часть маршрута</li>
-                                <li><Check size={14} className={styles.tick} /> Статусы от погрузки до выгрузки — синхронно у всех участников</li>
-                                <li><Check size={14} className={styles.tick} /> Заказчик видит те же данные, что и логист</li>
+                            <h2 className={styles.h2}>Положение транспорта видно без звонка водителю</h2>
+                            <ul className={styles.deepList}>
+                                {MONITORING.map((m) => <li key={m}>{m}</li>)}
                             </ul>
                         </div>
-                        <RouteMap theme={theme} />
+                        <RouteSketch />
                     </div>
-                </div>
-            </section>
+                </section>
 
-            {/* ===== Возможности ===== */}
-            <section className={styles.section} id="возможности">
-                <div className={styles.band}>
-                    <div className={styles.sectionHead}>
-                        <div className={styles.eyebrow}>Возможности</div>
-                        <h2 className={styles.sectionTitle}>Полный цикл работы экспедитора</h2>
+                {/* ===== Возможности ===== */}
+                <section id="возможности" className={`${styles.band} ${styles.sectionBlock}`}>
+                    <div className={styles.sectionRow}>
+                        <div className={styles.aside}>
+                            <div className={styles.eyebrow}>Возможности</div>
+                            <h2 className={styles.h2}>Полный цикл работы экспедитора</h2>
+                        </div>
+                        <div className={`${styles.main} ${styles.features}`}>
+                            {FEATURES.map((f) => (
+                                <div key={f.title} className={styles.feature}>
+                                    <h3>{f.title}</h3>
+                                    <p>{f.text}</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className={styles.features}>
-                        {FEATURES.map((f) => (
-                            <div key={f.title} className={styles.card}>
-                                <div className={styles.cardIcon}><f.icon size={16} /></div>
-                                <div className={styles.cardTitle}>{f.title}</div>
-                                <div className={styles.cardText}>{f.text}</div>
+                    <TripDocuments />
+                </section>
+
+                {/* ===== Кому подходит ===== */}
+                <section id="кому" className={styles.ruledTop}>
+                    <div className={`${styles.band} ${styles.section}`}>
+                        <div className={styles.aside}>
+                            <div className={styles.eyebrow}>Кому подходит</div>
+                            <h2 className={styles.h2}>Один рейс — три роли и три набора задач</h2>
+                        </div>
+                        <div className={`${styles.main} ${styles.roles}`}>
+                            {AUDIENCES.map((a) => (
+                                <div key={a.title}>
+                                    <h3 className={styles.roleTitle}>{a.title}</h3>
+                                    <ul className={styles.roleList}>
+                                        {a.items.map((item) => <li key={item}>{item}</li>)}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+                {/* ===== Тариф ===== */}
+                <section id="тариф" className={styles.mutedBand}>
+                    <div className={`${styles.band} ${styles.section}`}>
+                        <div className={styles.aside}>
+                            <div className={styles.eyebrow}>Тариф</div>
+                            <h2 className={styles.h2}>Один тариф без ограничений по функциям</h2>
+                            <p className={styles.asideText}>
+                                Все разделы доступны сразу: заявки, документы, взаиморасчёты и мониторинг.
+                                Отдельной платы за модули нет.
+                            </p>
+                        </div>
+
+                        <div className={`${styles.main} ${styles.tariff}`}>
+                            <div className={styles.tariffMain}>
+                                <span className={styles.badge}>
+                                    {paid ? `${trialDays} дней бесплатно` : 'идёт тестирование'}
+                                </span>
+                                {/* Пока цены нет, крупно стоит слово, а не ноль:
+                                    «0 ₸» на витрине читается как «продукт ничего не
+                                    стоит», а сказать надо другое — платить пока не за
+                                    что, потому что идёт тестирование.
+                                    «За сотрудника» — прямо под ценой, а не мелко внизу:
+                                    иначе человек посчитает в уме одну сумму, а в счёте
+                                    увидит другую. */}
+                                <div>
+                                    <div className={styles.price}>{paid ? `${money(price)} ₸` : 'Бесплатно'}</div>
+                                    <div className={styles.per}>{paid ? 'за сотрудника в месяц' : 'на время тестирования'}</div>
+                                </div>
+
+                                {/* Калькулятор: платят за каждого сотрудника, и сумму за
+                                    свою команду человек хочет увидеть сразу, а не
+                                    умножать в уме (задачи шефа, N3). */}
+                                {paid && price > 0 && (
+                                    <div className={styles.calc}>
+                                        <label htmlFor="seats" className={styles.calcLabel}>Сотрудников</label>
+                                        <span className={styles.stepper}>
+                                            <button type="button" aria-label="Меньше сотрудников" onClick={() => setSeatsSafe(seats - 1)}>−</button>
+                                            <input
+                                                id="seats"
+                                                inputMode="numeric"
+                                                value={seats}
+                                                onChange={(e) => {
+                                                    const n = parseInt(e.target.value.replace(/\D/g, ''), 10);
+                                                    setSeatsSafe(Number.isFinite(n) ? n : 1);
+                                                }}
+                                            />
+                                            <button type="button" aria-label="Больше сотрудников" onClick={() => setSeatsSafe(seats + 1)}>+</button>
+                                        </span>
+                                        <b className={styles.calcTotal} aria-live="polite">{money(seats * price)}&nbsp;₸ в месяц</b>
+                                    </div>
+                                )}
+
+                                <Link href="/register" className={`${styles.tariffBtn} ${styles.btnPrimary}`}>
+                                    {paid ? `Попробовать ${trialDays} дней` : 'Зарегистрировать компанию'}
+                                </Link>
+                                <p className={styles.tariffNote}>
+                                    {paid
+                                        ? 'Оплата картой или по счёту на вашу компанию. Продлевать можно заранее — оплаченные дни не сгорают.'
+                                        : 'О переходе на платный тариф предупредим заранее.'}
+                                </p>
+
+                                {/* Значки карт у цены, а не в подвале: вопрос «чем
+                                    платить» возникает, когда человек смотрит на сумму. */}
+                                <div className={styles.payMarks}><PaymentMarks /></div>
                             </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
 
-            {/* ===== Кому подходит ===== */}
-            <section className={`${styles.section} ${styles.sectionMuted}`} id="кому">
-                <div className={styles.band}>
-                    <div className={styles.sectionHead}>
-                        <div className={styles.eyebrow}>Кому подходит</div>
-                        <h2 className={styles.sectionTitle}>Один рейс — три роли и три набора задач</h2>
-                    </div>
-                    <div className={styles.roles}>
-                        {AUDIENCES.map((a) => (
-                            <div key={a.title} className={styles.role}>
-                                <div className={styles.roleHead}><a.icon size={15} /><b>{a.title}</b></div>
-                                <ul className={styles.roleList}>
-                                    {a.items.map((item) => (
-                                        <li key={item}><Check size={13} className={styles.tick} />{item}</li>
+                            <div className={styles.tariffList}>
+                                <div className={styles.tariffListHead}>Что входит</div>
+                                <ul>
+                                    {(tariff?.features?.length ? tariff.features : TARIFF_FEATURES).map((f) => (
+                                        <li key={f}>{f}</li>
                                     ))}
                                 </ul>
                             </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* ===== Тариф ===== */}
-            <section className={styles.section} id="тариф">
-                <div className={styles.band}>
-                    <div className={`${styles.sectionHead} ${styles.tariffHead}`}>
-                        <div className={styles.eyebrow}>Тариф</div>
-                        <h2 className={styles.sectionTitle}>Один тариф без ограничений по функциям</h2>
-                        <p className={styles.sectionLead}>
-                            Все разделы доступны сразу: заявки, документы, взаиморасчёты и мониторинг.
-                            Отдельной платы за модули нет.
-                        </p>
-                    </div>
-
-                    <div className={styles.tariff}>
-                        <span className={styles.tariffBadge}>
-                            {tariff?.paid ? `${tariff.trialDays} дней бесплатно` : 'идёт тестирование'}
-                        </span>
-                        {/* Пока цены нет, крупно стоит слово, а не ноль:
-                            «0 ₸» на витрине читается как «продукт ничего не
-                            стоит», а сказать надо другое — платить пока не за
-                            что, потому что идёт тестирование. */}
-                        <div className={styles.tariffPrice}>
-                            {tariff?.paid ? `${tariff.pricePerUser.toLocaleString('ru-RU')} ₸` : 'Бесплатно'}
-                        </div>
-                        {/* «За пользователя» — не мелким шрифтом внизу, а прямо
-                            под ценой: иначе человек посчитает в уме одну сумму,
-                            а в счёте увидит другую и решит, что его обманули. */}
-                        <div className={styles.tariffPer}>
-                            {tariff?.paid ? 'за сотрудника в месяц' : 'на время тестирования'}
-                        </div>
-
-                        {/* Калькулятор: платят за каждого сотрудника, и
-                            сумму за свою команду человек хочет увидеть
-                            сразу, а не умножать в уме (задачи шефа, N3). */}
-                        {tariff?.paid && tariff.pricePerUser > 0 && (
-                            <div className={styles.tariffCalc}>
-                                <span className={styles.tariffCalcLabel}>Сотрудников</span>
-                                <div className={styles.tariffStepper}>
-                                    <button type="button" aria-label="Меньше сотрудников" onClick={() => setSeats((n) => Math.max(1, n - 1))}>−</button>
-                                    <input
-                                        aria-label="Сколько сотрудников"
-                                        inputMode="numeric"
-                                        value={seats}
-                                        onChange={(e) => {
-                                            const n = parseInt(e.target.value.replace(/\D/g, ''), 10);
-                                            setSeats(Number.isFinite(n) ? Math.min(Math.max(n, 1), 999) : 1);
-                                        }}
-                                    />
-                                    <button type="button" aria-label="Больше сотрудников" onClick={() => setSeats((n) => Math.min(999, n + 1))}>+</button>
-                                </div>
-                                <span className={styles.tariffCalcTotal}>
-                                    {(seats * tariff.pricePerUser).toLocaleString('ru-RU')} ₸ в месяц
-                                </span>
-                            </div>
-                        )}
-
-                        <ul className={styles.tariffList}>
-                            {(tariff?.features?.length ? tariff.features : TARIFF_FEATURES).map((f) => (
-                                <li key={f}><Check size={14} className={styles.tick} />{f}</li>
-                            ))}
-                        </ul>
-
-                        <button type="button" className={styles.tariffBtn} onClick={() => router.push('/register')}>
-                            {tariff?.paid ? `Попробовать ${tariff.trialDays} дней` : 'Зарегистрировать компанию'}
-                        </button>
-
-                        <div className={styles.tariffNote}>
-                            {tariff?.paid
-                                ? 'Оплата картой или по счёту на вашу компанию. Продлевать можно заранее — оплаченные дни не сгорают.'
-                                : 'О переходе на платный тариф предупредим заранее.'}
-                        </div>
-
-                        {/* Значки карт стоят у цены, а не в подвале: вопрос
-                            «чем платить» возникает в ту секунду, когда человек
-                            смотрит на сумму, а не когда домотал до конца
-                            страницы. */}
-                        <PaymentMarks />
-                    </div>
-                </div>
-            </section>
-
-            {/* ===== Призыв ===== */}
-            <section className={styles.section}>
-                <div className={styles.band}>
-                    <div className={styles.cta}>
-                        <h2>Начните работу в LogiCore</h2>
-                        <p>Зарегистрируйте компанию, оформите первую заявку и оцените расчёт маржи. На настройку уходит один рабочий день.</p>
-                        <button type="button" className={styles.ctaBtn} onClick={() => router.push('/register')}>
-                            Зарегистрироваться <ArrowRight size={15} />
-                        </button>
-                    </div>
-
-                    <div className={styles.foot}>
-                        <div>© {new Date().getFullYear()} LogiCore · Казахстан</div>
-                        <div className={styles.footLinks}>
-                            <a href="/terms">Условия</a>
-                            <a href="/privacy">Конфиденциальность</a>
-                            <a href="/login">Войти</a>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
+
+                {/* ===== Призыв ===== */}
+                <section className={styles.inv}>
+                    <div className={`${styles.band} ${styles.cta}`}>
+                        <div className={styles.ctaText}>
+                            <h2>Начните работу в&nbsp;LogiCore</h2>
+                            <p>Зарегистрируйте компанию, оформите первую заявку и оцените расчёт маржи. На настройку уходит один рабочий день.</p>
+                        </div>
+                        <Link href="/register" className={styles.ctaBtn}>Зарегистрироваться</Link>
+                    </div>
+                </section>
+            </main>
+
+            <footer className={`${styles.band} ${styles.foot}`}>
+                <span className={styles.footBrand}>LogiCore</span>
+                <span>© {new Date().getFullYear()} LogiCore · Казахстан</span>
+                <nav className={styles.footLinks} aria-label="Документы">
+                    <Link href="/terms">Условия</Link>
+                    <Link href="/privacy">Конфиденциальность</Link>
+                    <Link href="/login">Войти</Link>
+                </nav>
+            </footer>
         </div>
     );
 }

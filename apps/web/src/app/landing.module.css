@@ -1,32 +1,174 @@
-/* Главная страница — тот же язык, что в кабинете (`design/finance-hub`).
+/* Главная страница.
  *
- * Токены палитры берутся из класса `.lc-nova` на корне страницы: главная и
- * кабинет обязаны выглядеть одинаково, иначе вход в систему ощущается как
- * переход на другой сайт.
+ * Эталон — холст «Главная страница — макет» (06.11.2026): светлая тема —
+ * только белый и чёрный, тёмная — тёплый серый кабинета (#20201f /
+ * #f1f0ec). Цвета заданы здесь же переменными `--l-*` — ровно те, что на
+ * холсте; картинки страницы (`components/landing/LandingVisuals`) берут их
+ * отсюда.
  *
- * Размеры сознательно мелкие. Прошлая главная была набрана заголовками в
- * сто точек и «дышала» на весь экран: с большого монитора это читалось не
- * как уверенность, а как пустота.
+ * Размеры — под экран 1920×1080: владелец счёл прежние заголовки в 92 и 44
+ * точки слишком крупными. Заголовок до 56, разделы 30, текст 14–16,
+ * расстояние между разделами 80.
  */
 
 .root {
-    background: var(--nova-bg);
-    color: var(--nova-fg);
+    --l-bg: #ffffff;
+    --l-fg: #0b0d12;
+    --l-card: #ffffff;
+    --l-muted: #f2f3f5;
+    --l-muted-fg: #5f6672;
+    --l-border: #e7e8ec;
+    --l-primary: #0b0d12;
+    --l-primary-fg: #ffffff;
+    --l-inv: #0b0d12;
+    --l-inv-fg: #ffffff;
+    --l-inv-muted: #a1a6b0;
+    --l-fc: #ffffff;
+    --l-fc-fg: #0b0d12;
+    --l-fc-muted: #5f6672;
+    --l-fc-line: #e7e8ec;
+    --l-deep: #0b0d12;
+    --l-deep-fg: #f1f0ec;
+    --l-deep-muted: #a1a6b0;
+    --l-deep-line: #24272e;
+    --l-deep-soft: #121419;
+    --l-ok-bg: #d1fae5;
+    --l-ok-fg: #065f46;
+    --l-pos: #047857;
+    --l-neg: #d92d20;
+    --l-input-border: #7c8390;
+    --l-shadow: 0 1px 2px rgba(11, 13, 18, 0.06), 0 6px 18px rgba(11, 13, 18, 0.06);
+    --l-shadow-big: 0 30px 80px rgba(11, 13, 18, 0.14);
+    --l-paper-shadow: 0 1px 2px rgba(11, 13, 18, 0.08), 0 16px 36px rgba(11, 13, 18, 0.14);
+
+    position: relative;
+    min-height: 100vh;
+    background: var(--l-bg);
+    color: var(--l-fg);
     font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     letter-spacing: -0.011em;
     -webkit-font-smoothing: antialiased;
-    min-height: 100vh;
-    /* Именно `clip`, а не `hidden`. `hidden` делает корень прокручиваемым
-       ящиком, и `position: sticky` внутри перестаёт держаться: сцена сборки
-       просто уезжала вверх, не успев собраться. `clip` так же обрезает
-       вылезшее вбок, но ящиком не становится. */
+    /* `clip`, а не `hidden`: с `hidden` корень становится прокручиваемым
+       ящиком, и липкая шапка перестаёт держаться. */
     overflow-x: clip;
 }
 
-.band {
-    max-width: 1160px;
-    margin: 0 auto;
-    padding: 0 24px;
+[data-theme='dark'] .root {
+    --l-bg: #20201f;
+    --l-fg: #f1f0ec;
+    --l-card: #1a1a19;
+    --l-muted: #2a2a27;
+    --l-muted-fg: #a9a8a1;
+    --l-border: #343430;
+    --l-primary: #f1f0ec;
+    --l-primary-fg: #0b0d12;
+    --l-inv: #f1f0ec;
+    --l-inv-fg: #20201f;
+    --l-inv-muted: #5f5e58;
+    --l-fc: #20201f;
+    --l-fc-fg: #f1f0ec;
+    --l-fc-muted: #a9a8a1;
+    --l-fc-line: #343430;
+    --l-deep: #161615;
+    --l-deep-fg: #f1f0ec;
+    --l-deep-muted: #a9a8a1;
+    --l-deep-line: #2f2f2c;
+    --l-deep-soft: #1c1c1a;
+    --l-ok-bg: rgba(91, 207, 149, 0.14);
+    --l-ok-fg: #5bcf95;
+    --l-pos: #5bcf95;
+    --l-neg: #ff8478;
+    --l-input-border: #77766f;
+    --l-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.25);
+    --l-shadow-big: 0 30px 80px rgba(0, 0, 0, 0.45);
+    --l-paper-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.band,
+.headBand {
+    max-width: 1440px;
+    margin-inline: auto;
+    padding-inline: clamp(16px, 3vw, 48px);
+    box-sizing: border-box;
+}
+
+/* Скрытая ссылка «Перейти к содержанию» — появляется по клавише Tab. */
+.skip {
+    position: absolute;
+    left: 16px;
+    top: -200px;
+    z-index: 60;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 18px;
+    border-radius: 10px;
+    background: var(--l-primary);
+    color: var(--l-primary-fg);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.skip:focus {
+    top: 12px;
+}
+
+/* ===== Кнопки ===== */
+
+.btn,
+.btnLg,
+.menuBtn,
+.tariffBtn,
+.ctaBtn {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.btn {
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 9px;
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+.btnLg {
+    height: 42px;
+    padding: 0 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.btnPrimary {
+    background: var(--l-primary);
+    color: var(--l-primary-fg);
+}
+
+.btnLg.btnPrimary,
+.menuBtn.btnPrimary {
+    font-weight: 600;
+}
+
+.btnGhost {
+    border: 1px solid var(--l-border);
+    background: var(--l-card);
+    color: var(--l-fg);
+}
+
+.btnPrimary:hover,
+.ctaBtn:hover {
+    opacity: 0.86;
+}
+
+.btnGhost:hover {
+    background: var(--l-muted);
 }
 
 /* ===== Шапка ===== */
@@ -35,73 +177,49 @@
     position: sticky;
     top: 0;
     z-index: 50;
-    height: 58px;
-    display: flex;
-    align-items: center;
-    background: color-mix(in srgb, var(--nova-surface) 82%, transparent);
-    backdrop-filter: saturate(180%) blur(14px);
-    -webkit-backdrop-filter: saturate(180%) blur(14px);
-    border-bottom: 1px solid var(--nova-border);
+    background: var(--l-bg);
+    border-bottom: 1px solid var(--l-border);
 }
 
 .headBand {
-    max-width: 1160px;
-    margin: 0 auto;
-    padding: 0 24px;
-    width: 100%;
+    height: 56px;
     display: flex;
     align-items: center;
-    gap: 18px;
-    min-width: 0;
-}
-
-.headBand > * {
-    min-width: 0;
+    gap: 20px;
 }
 
 .brand {
     font-family: Unbounded, Inter, sans-serif;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
     letter-spacing: -0.05em;
-    color: var(--nova-fg);
-    white-space: nowrap;
+    color: var(--l-fg);
     text-decoration: none;
-    flex-shrink: 0;
+    white-space: nowrap;
 }
 
-/* Логотип одним цветом: в светлой теме тёмный, в тёмной светлый. Синий
-   в марке спорил с синим в ссылках и акцентах. */
-.brand span {
-    color: var(--nova-fg);
-}
-
-.links {
+.nav {
     display: flex;
-    align-items: center;
     gap: 2px;
-    overflow-x: auto;
-    scrollbar-width: none;
+    min-width: 0;
 }
 
-.links::-webkit-scrollbar {
-    display: none;
-}
-
-.link {
-    padding: 7px 12px;
-    border-radius: 999px;
-    font-size: 13px;
+.navLink {
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 11px;
+    border-radius: 9px;
+    font-size: 13.5px;
     font-weight: 500;
-    color: var(--nova-fg-2);
+    color: var(--l-muted-fg);
     text-decoration: none;
     white-space: nowrap;
-    flex-shrink: 0;
 }
 
-.link:hover {
-    background: var(--nova-hover);
-    color: var(--nova-fg);
+.navLink:hover {
+    background: var(--l-muted);
+    color: var(--l-fg);
 }
 
 .headRight {
@@ -109,646 +227,628 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
 }
 
-.themeBtn {
-    width: 34px;
-    height: 34px;
-    display: grid;
-    place-items: center;
-    border-radius: 999px;
-    border: 1px solid var(--nova-border);
-    background: var(--nova-surface);
-    color: var(--nova-fg-2);
-    cursor: pointer;
-    padding: 0;
-}
-
-.themeBtn:hover {
-    background: var(--nova-hover);
-    color: var(--nova-fg);
-}
-
-.ghost {
-    height: 34px;
-    padding: 0 14px;
-    border-radius: 10px;
-    border: 1px solid var(--nova-border);
-    background: var(--nova-surface);
-    color: var(--nova-fg);
-    font: 500 13px/1 Inter, sans-serif;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.ghost:hover {
-    background: var(--nova-hover);
-}
-
-.primary {
-    display: inline-flex;
+.iconBtn {
+    width: 36px;
+    height: 36px;
+    box-sizing: border-box;
+    border-radius: 9px;
+    border: 1px solid var(--l-border);
+    background: var(--l-card);
+    color: var(--l-fg);
+    display: flex;
     align-items: center;
-    gap: 7px;
-    height: 34px;
-    padding: 0 15px;
-    border-radius: 10px;
-    border: 1px solid var(--nova-primary);
-    background: var(--nova-primary);
-    color: var(--nova-primary-fg);
-    font: 600 13px/1 Inter, sans-serif;
+    justify-content: center;
+    padding: 0;
     cursor: pointer;
-    white-space: nowrap;
 }
 
-.primary:hover {
-    opacity: .9;
+.iconBtn:hover {
+    background: var(--l-muted);
+}
+
+.burger {
+    display: none;
+    width: 40px;
+    height: 40px;
+}
+
+.menu {
+    display: none;
+    flex-direction: column;
+    padding: 4px 16px 18px;
+    border-top: 1px solid var(--l-border);
+    background: var(--l-bg);
+}
+
+.menuLink {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--l-border);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--l-fg);
+    text-decoration: none;
+}
+
+.menuBtns {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.menuBtn {
+    flex: 1;
+    height: 44px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.menuBtnMain {
+    flex: 1.4;
+}
+
+/* Посередине (планшет, узкое окно) пункты разделов уже налезают на кнопки
+   входа — прячем их раньше. */
+@media (max-width: 1100px) {
+    .nav {
+        display: none;
+    }
+}
+
+/* Телефон: разделы и вход — за кнопкой меню. */
+@media (max-width: 760px) {
+    .wideOnly {
+        display: none;
+    }
+
+    .burger {
+        display: flex;
+    }
+
+    .menu {
+        display: flex;
+    }
 }
 
 /* ===== Первый экран ===== */
 
-/* Без подложки. Она была нужна, пока части страницы лежали видимой
-   россыпью и текст читался сквозь них. Теперь части проявляются только по
-   мере сборки, и плашка под заголовком — лишняя коробка на экране. */
 .hero {
-    text-align: center;
-    padding: 0 8px;
-    max-width: 620px;
-}
-
-.badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    height: 27px;
-    padding: 0 12px;
-    border-radius: 999px;
-    border: 1px solid var(--nova-border);
-    background: var(--nova-surface);
-    font-size: 12px;
-    color: var(--nova-fg-2);
-}
-
-.badge i {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--nova-pos);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--nova-pos) 22%, transparent);
+    padding-block: 56px 72px;
 }
 
 .title {
+    margin: 0;
+    max-width: 920px;
     font-family: Unbounded, Inter, sans-serif;
-    font-size: clamp(28px, 4.4vw, 46px);
+    font-size: clamp(30px, 2.9vw, 56px);
     font-weight: 600;
-    letter-spacing: -0.05em;
-    line-height: 1.08;
-    margin: 16px auto 0;
-    max-width: 15ch;
-    color: var(--nova-fg);
+    letter-spacing: -0.055em;
+    line-height: 1.02;
+    color: var(--l-fg);
 }
 
-/* Вторая половина заголовка тем же цветом, что первая: цветная подсветка
-   смысла здесь не добавляла. */
-.title em {
-    font-style: normal;
-    color: var(--nova-fg);
+.heroRow {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid var(--l-border);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px 64px;
 }
 
 .lead {
-    font-size: clamp(14px, 1.5vw, 16px);
+    margin: 0;
+    flex: 1 1 420px;
+    max-width: 600px;
+    font-size: 16px;
     line-height: 1.55;
-    color: var(--nova-fg-3);
-    margin: 14px auto 0;
-    max-width: 54ch;
+    color: var(--l-muted-fg);
+}
+
+.heroActions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
 }
 
 .heroBtns {
     display: flex;
-    justify-content: center;
-    gap: 10px;
-    margin-top: 22px;
     flex-wrap: wrap;
+    gap: 10px;
 }
 
 .trust {
-    margin-top: 16px;
-    font-size: 12.5px;
-    color: var(--nova-fg-3);
+    font-size: 13.5px;
+    color: var(--l-muted-fg);
 }
 
-/* ===== Разделы ===== */
+/* Строка возможностей под первым экраном — стоит, а не бежит. */
+.strip {
+    border-top: 1px solid var(--l-border);
+    border-bottom: 1px solid var(--l-border);
+}
+
+.strip p {
+    margin-block: 0;
+    padding-block: 22px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--l-muted-fg);
+}
+
+/* ===== Разделы: название слева, содержимое справа ===== */
 
 .section {
-    padding: 64px 0;
+    padding-block: 80px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px 64px;
 }
 
-.sectionMuted {
-    background: var(--nova-surface-2);
-    border-top: 1px solid var(--nova-border-2);
-    border-bottom: 1px solid var(--nova-border-2);
+.sectionBlock {
+    padding-block: 80px;
+}
+
+.sectionRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px 64px;
+}
+
+/* Липкая шапка не должна закрывать начало раздела при переходе по ссылке. */
+.root section[id] {
+    scroll-margin-top: 56px;
+}
+
+.aside {
+    flex: 1 1 320px;
+    max-width: 380px;
+}
+
+.main {
+    flex: 999 1 640px;
+    min-width: 0;
 }
 
 .eyebrow {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: 9.5px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--nova-fg-3);
-}
-
-.sectionTitle {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: clamp(20px, 2.6vw, 27px);
-    font-weight: 600;
-    letter-spacing: -0.045em;
-    line-height: 1.15;
-    margin: 8px 0 0;
-    color: var(--nova-fg);
-}
-
-.sectionLead {
     font-size: 14px;
-    color: var(--nova-fg-3);
-    margin: 10px 0 0;
-    max-width: 60ch;
+    font-weight: 500;
+    color: var(--l-muted-fg);
 }
 
-.sectionHead {
-    margin-bottom: 26px;
+.h2 {
+    margin: 16px 0 0;
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: clamp(22px, 1.6vw, 30px);
+    font-weight: 600;
+    letter-spacing: -0.05em;
+    line-height: 1.1;
 }
 
-/* ===== Шаги ===== */
+.asideText {
+    margin: 20px 0 0;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--l-muted-fg);
+}
+
+/* ===== Как это работает ===== */
 
 .steps {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
 }
 
 .step {
-    background: var(--nova-surface);
-    border: 1px solid var(--nova-border);
-    border-radius: var(--nova-radius);
-    box-shadow: var(--nova-shadow);
-    padding: 16px;
-    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px 48px;
+    padding: 22px 0;
+    border-top: 1px solid var(--l-border);
 }
 
-.stepNum {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: 10.5px;
-    font-weight: 600;
-    color: var(--nova-accent);
-    letter-spacing: 0.04em;
+.step:first-child {
+    border-top-color: var(--l-fg);
 }
 
-.stepTitle {
-    font-size: 14.5px;
-    font-weight: 650;
-    color: var(--nova-fg);
-    margin-top: 8px;
+.step:last-child {
+    border-bottom: 1px solid var(--l-border);
 }
 
 .stepText {
-    font-size: 12.5px;
+    flex: 1 1 300px;
+}
+
+.stepNum {
+    font-size: 13px;
+    color: var(--l-muted-fg);
+}
+
+.stepTitle {
+    margin: 4px 0 0;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.stepDesc {
+    margin: 10px 0 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--l-muted-fg);
+}
+
+/* ===== Мониторинг — тёмный блок ===== */
+
+.deep {
+    background: var(--l-deep);
+    color: var(--l-deep-fg);
+}
+
+.deepAside {
+    display: flex;
+    flex-direction: column;
+}
+
+.deepAside .eyebrow {
+    color: var(--l-deep-muted);
+}
+
+.deepList {
+    list-style: none;
+    margin: 28px 0 0;
+    padding: 0;
+    font-size: 14.5px;
     line-height: 1.5;
-    color: var(--nova-fg-3);
-    margin-top: 5px;
+}
+
+.deepList li {
+    padding: 16px 0;
+    border-top: 1px solid var(--l-deep-line);
+}
+
+.deepList li:last-child {
+    border-bottom: 1px solid var(--l-deep-line);
 }
 
 /* ===== Возможности ===== */
 
 .features {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0 48px;
 }
 
-.card {
-    background: var(--nova-surface);
-    border: 1px solid var(--nova-border);
-    border-radius: var(--nova-radius);
-    box-shadow: var(--nova-shadow);
-    padding: 16px;
-    transition: transform .18s ease, box-shadow .18s ease;
+.feature {
+    padding: 24px 0 28px;
+    border-top: 1px solid var(--l-border);
 }
 
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 2px 4px rgba(16, 24, 40, .06), 0 14px 30px -16px rgba(16, 24, 40, .28);
+.feature:nth-child(-n + 2) {
+    border-top-color: var(--l-fg);
 }
 
-.cardIcon {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    background: var(--nova-accent-soft);
-    color: var(--nova-accent);
-    margin-bottom: 11px;
+.feature h3 {
+    margin: 0;
+    font-size: 15.5px;
+    font-weight: 600;
 }
 
-.cardTitle {
-    font-size: 14.5px;
-    font-weight: 650;
-    color: var(--nova-fg);
-}
-
-.cardText {
-    font-size: 12.5px;
-    line-height: 1.5;
-    color: var(--nova-fg-3);
-    margin-top: 5px;
-}
-
-/* ===== Карта ===== */
-
-.mapRow {
-    display: grid;
-    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
-    gap: 20px;
-    align-items: center;
-}
-
-.mapText ul {
-    margin: 14px 0 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-}
-
-.mapText li {
-    display: flex;
-    gap: 9px;
-    font-size: 13px;
-    color: var(--nova-fg-2);
-    line-height: 1.45;
-}
-
-.tick {
-    color: var(--nova-pos);
-    flex-shrink: 0;
-    margin-top: 2px;
+.feature p {
+    margin: 8px 0 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--l-muted-fg);
 }
 
 /* ===== Кому подходит ===== */
 
+.ruledTop {
+    border-top: 1px solid var(--l-border);
+}
+
 .roles {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 32px 40px;
+    font-size: 14px;
+    line-height: 1.45;
 }
 
-.role {
-    background: var(--nova-surface);
-    border: 1px solid var(--nova-border);
-    border-radius: var(--nova-radius);
-    box-shadow: var(--nova-shadow);
-    overflow: hidden;
-}
-
-.roleHead {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 12px 14px;
-    background: var(--nova-surface-2);
-    border-bottom: 1px solid var(--nova-border-2);
-}
-
-.roleHead b {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: 12.5px;
-    font-weight: 500;
-    letter-spacing: -0.03em;
-    color: var(--nova-fg);
-}
-
-.roleHead svg {
-    color: var(--nova-fg-2);
+.roleTitle {
+    margin: 0;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--l-fg);
+    font-size: 15.5px;
+    font-weight: 600;
 }
 
 .roleList {
-    margin: 0;
-    padding: 10px 14px 14px;
     list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    margin: 0;
+    padding: 0;
 }
 
 .roleList li {
-    display: flex;
-    gap: 8px;
-    font-size: 12.5px;
-    line-height: 1.45;
-    color: var(--nova-fg-2);
+    padding: 11px 0;
+    border-bottom: 1px solid var(--l-border);
 }
 
-/* ===== Призыв ===== */
+/* ===== Тариф ===== */
 
-.cta {
-    background: var(--nova-primary);
-    color: var(--nova-primary-fg);
-    border-radius: 18px;
-    padding: 38px 28px;
-    text-align: center;
-}
-
-.cta h2 {
-    font-family: Unbounded, Inter, sans-serif;
-    font-size: clamp(20px, 2.6vw, 28px);
-    font-weight: 600;
-    letter-spacing: -0.045em;
-    margin: 0;
-}
-
-.cta p {
-    font-size: 14px;
-    opacity: .72;
-    margin: 10px auto 0;
-    max-width: 48ch;
-}
-
-.ctaBtn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    height: 40px;
-    margin-top: 20px;
-    padding: 0 20px;
-    border-radius: 11px;
-    border: 0;
-    background: var(--nova-primary-fg);
-    color: var(--nova-primary);
-    font: 650 14px/1 Inter, sans-serif;
-    cursor: pointer;
-}
-
-.ctaBtn:hover {
-    opacity: .9;
-}
-
-/* ===== Тариф =====
-
-   Цена приходит с сервера, а не написана здесь: владелец платформы меняет её
-   в админке, и страницу ради этого не пересобирают. Пока идёт тестирование,
-   сервер отдаёт ноль — и блок честно говорит, что это временно. */
-
-.tariffHead {
-    text-align: center;
-}
-
-.tariffHead p {
-    margin-left: auto;
-    margin-right: auto;
+.mutedBand {
+    background: var(--l-muted);
 }
 
 .tariff {
-    max-width: 420px;
-    margin: 0 auto;
-    background: var(--nova-surface);
-    border: 1px solid var(--nova-border);
-    border-radius: var(--nova-radius);
-    box-shadow: var(--nova-shadow);
-    padding: 26px 24px;
-    text-align: center;
-}
-
-.tariffBadge {
-    display: inline-flex;
-    align-items: center;
-    height: 22px;
-    padding: 0 10px;
-    border-radius: 999px;
-    border: 1px solid var(--nova-border);
-    background: var(--nova-surface-2);
-    color: var(--nova-fg-2);
-    font-size: 11.5px;
-    font-weight: 600;
-}
-
-.tariffPrice {
-    margin-top: 14px;
-    font-size: 38px;
-    font-weight: 700;
-    letter-spacing: -0.045em;
-    font-variant-numeric: tabular-nums;
-    color: var(--nova-fg);
-    line-height: 1.05;
-}
-
-.tariffPer {
-    font-size: 13px;
-    color: var(--nova-fg-3);
-    margin-top: 4px;
-}
-
-/* Калькулятор тарифа: сотрудники × цена (задачи шефа, N3). */
-.tariffCalc {
-    margin-top: 16px;
-    padding: 12px;
-    border-radius: 12px;
-    border: 1px solid var(--nova-border);
-    background: var(--nova-surface-2);
+    border-radius: 20px;
+    border: 1px solid var(--l-border);
+    background: var(--l-card);
+    box-shadow: var(--l-shadow);
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
     flex-wrap: wrap;
-}
-
-.tariffCalcLabel {
-    font-size: 13px;
-    color: var(--nova-fg-2);
-}
-
-.tariffStepper {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid var(--nova-border);
-    border-radius: 10px;
-    background: var(--nova-surface);
     overflow: hidden;
 }
 
-.tariffStepper button {
-    width: 32px;
-    height: 32px;
-    border: 0;
-    background: transparent;
-    color: var(--nova-fg);
-    font-size: 17px;
-    cursor: pointer;
-    font-family: inherit;
-}
-
-.tariffStepper button:hover {
-    background: var(--nova-surface-2);
-}
-
-.tariffStepper input {
-    width: 48px;
-    height: 32px;
-    border: 0;
-    border-left: 1px solid var(--nova-border);
-    border-right: 1px solid var(--nova-border);
-    background: transparent;
-    color: var(--nova-fg);
-    text-align: center;
-    font-size: 14px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    font-family: inherit;
-    outline: none;
-}
-
-.tariffCalcTotal {
-    font-size: 15px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    color: var(--nova-fg);
-}
-
-.tariffList {
-    list-style: none;
-    padding: 0;
-    margin: 18px 0 0;
+.tariffMain {
+    flex: 1 1 340px;
+    padding: 28px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 9px;
-    text-align: left;
+    gap: 18px;
+    border-right: 1px solid var(--l-border);
 }
 
-.tariffList li {
+.badge {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 9px;
+    border-radius: 8px;
+    background: var(--l-ok-bg);
+    color: var(--l-ok-fg);
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.price {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.per {
+    margin-top: 8px;
+    font-size: 15px;
+    color: var(--l-muted-fg);
+}
+
+.calc {
     display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 13px;
-    color: var(--nova-fg-2);
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 14px;
+}
+
+.calcLabel {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.stepper {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 10px;
+    border: 1px solid var(--l-input-border);
+    background: var(--l-card);
+    overflow: hidden;
+}
+
+.stepper button {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--l-fg);
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.stepper button:hover {
+    background: var(--l-muted);
+}
+
+.stepper input {
+    width: 52px;
+    height: 44px;
+    box-sizing: border-box;
+    border: 0;
+    border-left: 1px solid var(--l-input-border);
+    border-right: 1px solid var(--l-input-border);
+    border-radius: 0;
+    background: transparent;
+    color: var(--l-fg);
+    text-align: center;
+    font: 600 15px Inter, sans-serif;
+}
+
+.calcTotal {
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
 }
 
 .tariffBtn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    height: 40px;
-    margin-top: 20px;
-    padding: 0 20px;
-    border-radius: 11px;
-    border: 0;
-    background: var(--nova-primary);
-    color: var(--nova-primary-fg);
-    font: 650 14px/1 Inter, sans-serif;
-    cursor: pointer;
-}
-
-.tariffBtn:hover {
-    opacity: .9;
+    height: 44px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
 }
 
 .tariffNote {
-    font-size: 12px;
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--l-muted-fg);
+}
+
+/* Значки карт — общий компонент страниц входа; здесь они слева, без
+   верхнего отступа и с подписью покрупнее. */
+.payMarks > * {
+    justify-content: flex-start;
+    gap: 10px;
+    margin-top: 0;
+}
+
+.payMarks > * > span:first-child {
+    font-size: 13px;
+    color: var(--l-muted-fg);
+}
+
+.tariffList {
+    flex: 1 1 340px;
+    padding: 22px 28px;
+    box-sizing: border-box;
+    font-size: 15px;
     line-height: 1.5;
-    color: var(--nova-fg-3);
-    margin-top: 12px;
+}
+
+.tariffListHead {
+    padding-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--l-muted-fg);
+}
+
+.tariffList ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tariffList li {
+    padding: 11px 0;
+    border-top: 1px solid var(--l-border);
+}
+
+/* ===== Призыв — чёрный блок ===== */
+
+.inv {
+    background: var(--l-inv);
+    color: var(--l-inv-fg);
+}
+
+.cta {
+    padding-block: 80px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 32px 80px;
+}
+
+.ctaText {
+    flex: 1 1 520px;
+    max-width: 900px;
+}
+
+.ctaText h2 {
+    margin: 0;
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: clamp(26px, 2.3vw, 42px);
+    font-weight: 600;
+    letter-spacing: -0.055em;
+    line-height: 1.02;
+}
+
+.ctaText p {
+    margin: 24px 0 0;
+    max-width: 600px;
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--l-inv-muted);
+}
+
+.ctaBtn {
+    height: 46px;
+    padding: 0 24px;
+    border-radius: 12px;
+    background: var(--l-inv-fg);
+    color: var(--l-inv);
+    font-size: 16px;
+    font-weight: 600;
 }
 
 /* ===== Подвал ===== */
 
 .foot {
-    border-top: 1px solid var(--nova-border);
-    padding: 22px 0 30px;
+    padding-block: 28px 36px;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
     flex-wrap: wrap;
-    font-size: 12.5px;
-    color: var(--nova-fg-3);
+    align-items: center;
+    gap: 12px 28px;
+    font-size: 14px;
+    color: var(--l-muted-fg);
+}
+
+.footBrand {
+    font-family: Unbounded, Inter, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    color: var(--l-fg);
 }
 
 .footLinks {
+    margin-left: auto;
     display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
+    gap: 22px;
 }
 
 .footLinks a {
-    color: var(--nova-fg-3);
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--l-muted-fg);
     text-decoration: none;
 }
 
 .footLinks a:hover {
-    color: var(--nova-fg);
+    color: var(--l-fg);
 }
 
-/* ===== Узкие экраны ===== */
+/* ===== Телефон ===== */
 
-@media (max-width: 1000px) {
-    .steps,
-    .features,
-    .roles {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .mapRow {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-}
-
-@media (max-width: 640px) {
-    .band,
-    .headBand {
-        padding: 0 16px;
-    }
-
-    .links {
-        display: none;
-    }
-
-    /* «Войти» остаётся на телефоне: половина заходящих — уже с аккаунтом, и
-       им незачем искать вход в подвале. Обе кнопки помещаются, если ужать
-       поля и убрать стрелку — она здесь ничего не сообщает. */
-    .headRight {
-        gap: 6px;
-    }
-
-    .themeBtn {
-        width: 30px;
-        height: 30px;
-    }
-
-    .ghost,
-    .primary {
-        height: 30px;
-        padding: 0 11px;
-        font-size: 12px;
-    }
-
-    .primary svg {
-        display: none;
-    }
-
-    .section {
-        padding: 44px 0;
-    }
-
+@media (max-width: 760px) {
     .hero {
-        padding: 34px 0 14px;
+        padding-block: 36px 48px;
     }
 
-    .steps,
-    .features,
-    .roles {
-        grid-template-columns: minmax(0, 1fr);
+    .section,
+    .sectionBlock,
+    .cta {
+        padding-block: 56px;
+    }
+
+    .tariffMain {
+        border-right: 0;
+        border-bottom: 1px solid var(--l-border);
+    }
+
+    .footLinks {
+        margin-left: 0;
+        flex-wrap: wrap;
+        gap: 0 22px;
     }
 }
