@@ -1,14 +1,25 @@
 import type { Metadata } from 'next';
 import { AntdProvider } from './providers';
+import { HOME_TITLE, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/seo';
 import ClientMonitoring from '@/components/ClientMonitoring';
 import './globals.css';
 
+// Значок сайта и картинка для превью ссылки лежат рядом файлами
+// (`icon.svg`, `apple-icon.png`, `favicon.ico`, `opengraph-image.png`) —
+// Next.js сам ставит на них ссылки на каждой странице.
 export const metadata: Metadata = {
+    metadataBase: new URL(SITE_URL),
     title: 'LogiCore - Система управления логистикой',
-    description: 'Управление перевозками, отслеживание грузов, документооборот',
-    icons: {
-        icon: '/favicon.png',
+    description: SITE_DESCRIPTION,
+    applicationName: SITE_NAME,
+    openGraph: {
+        type: 'website',
+        siteName: SITE_NAME,
+        locale: 'ru_RU',
+        title: HOME_TITLE,
+        description: SITE_DESCRIPTION,
     },
+    twitter: { card: 'summary_large_image' },
 };
 
 export default function RootLayout({
