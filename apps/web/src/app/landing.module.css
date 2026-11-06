@@ -336,32 +336,31 @@
     padding-top: 22px;
     border-top: 1px solid var(--l-border);
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: flex-start;
-    justify-content: space-between;
-    gap: 20px 64px;
+    gap: 12px;
 }
 
 .lead {
     margin: 0;
-    flex: 1 1 420px;
     max-width: 600px;
     font-size: 16px;
     line-height: 1.55;
     color: var(--l-muted-fg);
 }
 
-.heroActions {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-}
-
+/* На компьютере эти кнопки уже есть в шапке — здесь только на телефоне. */
 .heroBtns {
-    display: flex;
+    display: none;
     flex-wrap: wrap;
     gap: 10px;
+    margin-top: 8px;
+}
+
+@media (max-width: 760px) {
+    .heroBtns {
+        display: flex;
+    }
 }
 
 .trust {

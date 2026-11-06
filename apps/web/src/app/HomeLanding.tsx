@@ -241,19 +241,22 @@ export default function HomeLanding({ initialTariff }: { initialTariff: Tariff |
                 <section className={`${styles.band} ${styles.hero}`}>
                     <h1 className={styles.title}>Заявки, транспорт и&nbsp;расчёты — в&nbsp;одной системе</h1>
 
+                    {/* «Зарегистрироваться» и «Войти» здесь только на телефоне:
+                        на компьютере те же кнопки стоят в шапке, на одном экране
+                        с этими, и читались как повтор (владелец, 06.11.2026).
+                        На телефоне шапка прячет их за меню — без этих кнопок
+                        человек с рекламы не увидел бы, куда нажать. */}
                     <div className={styles.heroRow}>
                         <p className={styles.lead}>
                             LogiCore объединяет оформление заявок, назначение перевозчиков, контроль
                             рейсов и взаиморасчёты. Данные вводятся один раз и доступны всем
                             участникам перевозки.
                         </p>
-                        <div className={styles.heroActions}>
-                            <div className={styles.heroBtns}>
-                                <Link href="/register" className={`${styles.btnLg} ${styles.btnPrimary}`}>Зарегистрироваться</Link>
-                                <Link href="/login" className={`${styles.btnLg} ${styles.btnGhost}`}>Войти</Link>
-                            </div>
-                            <span className={styles.trust}>Развёртывание за один рабочий день · Данные хранятся в вашем аккаунте</span>
+                        <div className={styles.heroBtns}>
+                            <Link href="/register" className={`${styles.btnLg} ${styles.btnPrimary}`}>Зарегистрироваться</Link>
+                            <Link href="/login" className={`${styles.btnLg} ${styles.btnGhost}`}>Войти</Link>
                         </div>
+                        <span className={styles.trust}>Развёртывание за один рабочий день · Данные хранятся в вашем аккаунте</span>
                     </div>
 
                     <OrdersJournal />
