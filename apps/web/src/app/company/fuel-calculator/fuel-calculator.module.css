@@ -1,6 +1,6 @@
 /*
- * Калькулятор ГСМ: ввод слева, справа серая плашка с общей суммой и три строки
- * под ней. Цвета — токенами `--nova-*`: у каждого есть тёмный вариант, и тёмная
+ * Калькулятор ГСМ и налогов: ввод слева, справа серая плашка с суммой на руки и
+ * ровный список расчёта. Цвета — токенами `--nova-*`: у каждого есть тёмный вариант, и тёмная
  * тема кабинета работает без отдельных правил.
  */
 
@@ -48,6 +48,15 @@
     gap: 12px;
 }
 
+.check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--nova-fg-2);
+    cursor: pointer;
+}
+
 .hero {
     margin-bottom: 8px;
     padding: 20px 24px;
@@ -55,9 +64,24 @@
     background: var(--nova-surface-2);
 }
 
+.heroTop {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 16px;
+}
+
 .heroLabel {
     font-size: 13px;
     color: var(--nova-fg-3);
+}
+
+.heroSide {
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--nova-fg);
 }
 
 .big {
@@ -85,14 +109,18 @@
     font-size: 14px;
 }
 
+.list {
+    border-top: 1px solid var(--nova-border);
+}
+
 .row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 2px 16px;
     align-items: baseline;
-    padding: 12px 0;
+    padding: 10px 0;
     border-bottom: 1px solid var(--nova-border-2);
-    font-size: 15px;
+    font-size: 14px;
     color: var(--nova-fg);
 }
 
@@ -100,20 +128,29 @@
     border-bottom: 0;
 }
 
+.rowTotal {
+    font-weight: 600;
+}
+
 .rowMain {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 700;
+}
+
+.rowStep > span:first-child,
+.rowStep > .why {
+    padding-left: 16px;
+}
+
+.rowStep > span:first-child,
+.rowStep > .sum {
+    color: var(--nova-fg-2);
 }
 
 .sum {
     text-align: right;
     white-space: nowrap;
-    font-weight: 600;
     font-variant-numeric: tabular-nums;
-}
-
-.rowMain .sum {
-    font-weight: 700;
 }
 
 .why {
